@@ -1,0 +1,63 @@
+README.md
+  s_bd26c92121ea25::t_829d7894dcd1f6 1-98
+apps/connect/.dev.vars.example
+  s_03d49a3d87fe39::t_d33802e5ec9b43 1-14
+apps/connect/src/github.ts
+  s_03d49a3d87fe39::t_6e72c32cd48536 1-128
+apps/connect/vitest.config.ts
+  s_03d49a3d87fe39::t_328366c86b9588 1-2
+apps/connect/wrangler.jsonc
+  s_bd26c92121ea25::t_98eac2709a8008 1-20
+apps/gardener/test/setup.test.ts
+  s_bd26c92121ea25::t_85743b9c5d2f32 1-18
+apps/gardener/wrangler.jsonc
+  s_bd26c92121ea25::t_9ffc875e1430b7 1-41
+package.json
+  s_bd26c92121ea25::t_91a1147cdbbaff 1-26
+packages/contracts/package.json
+  s_03d49a3d87fe39::t_472d15d70e15ce 1-21
+packages/contracts/src/repository.ts
+  s_03d49a3d87fe39::t_51e18192fa3781 1-29
+packages/contracts/src/workflows.ts
+  s_03d49a3d87fe39::t_d7c238f2460c37 1-56
+packages/core/package.json
+  s_03d49a3d87fe39::t_d590401a46f822 1-20
+packages/core/src/stable.ts
+  s_03d49a3d87fe39::t_fef822eb110280 1-32
+pnpm-lock.yaml
+  s_6762cea1ca168f::t_b24a5aa3f46661 1-1892
+wrangler.jsonc
+  s_bd26c92121ea25::t_be2b83b5c152a3 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95db478d54d47131922d4f69615e42e0f6b38c97",
+  "prompts": {},
+  "sessions": {
+    "s_03d49a3d87fe39": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a06224-4f02-7b74-ad76-26a8c6c34fa8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_6762cea1ca168f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a06252-6050-7b49-a859-8da15295ab40",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_bd26c92121ea25": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a038dd-a7c8-7c95-bc90-8dca9074b3e0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
