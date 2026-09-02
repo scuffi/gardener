@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gardener",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/hooks/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gardener",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [{ "binding": "RUN_QUEUE", "queue": "gardener-runs" }],
+    "consumers": [
+      {
+        "queue": "gardener-runs",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "gardener-runs-dlq"
+      }
+    ]
+  },
+  "ai": { "binding": "AI" },
+  "vars": {
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "CONNECT_ISSUER": "https://gardener-connect.agents-b8a.workers.dev",
+    "CONNECT_URL": "https://gardener-connect.agents-b8a.workers.dev",
+    "LOCAL_DEV_BYPASS": "false"
+  },
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@gardener/connect",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply gardener-connect --local",
+    "db:migrate": "wrangler d1 migrations apply gardener-connect --remote",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "build": "wrangler deploy --dry-run --outdir dist"
+  },
+  "dependencies": {
+    "@gardener/contracts": "workspace:*",
+    "hono": "4.13.5",
+    "jose": "6.2.10",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260902.1",
+    "@types/node": "26.4.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.128.0"
+  }
+}

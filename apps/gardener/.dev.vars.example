@@ -1,0 +1,5 @@
+# Copy to .dev.vars for local development. Never commit the real values.
+GARDENER_INSTANCE_TOKEN=gdn_local-dev.replace-with-bootstrap-token
+CONNECT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+# Local-only dashboard access. Keep false in deployed environments.
+LOCAL_DEV_BYPASS=true

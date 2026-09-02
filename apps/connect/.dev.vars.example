@@ -1,0 +1,14 @@
+# Copy to .dev.vars. Never commit real values.
+ADMIN_BOOTSTRAP_SECRET=replace-with-at-least-32-random-bytes
+GITHUB_CLIENT_ID=Iv1.example
+GITHUB_CLIENT_SECRET=replace-me
+GITHUB_APP_ID=123456
+GITHUB_APP_SLUG=gardener-connect
+GITHUB_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+GITHUB_WEBHOOK_SECRET=replace-with-random-secret
+CONNECT_JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+CONNECT_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+CONNECT_JWT_KID=connect-2026-01
+CONNECT_ISSUER=http://localhost:8787
+CONNECT_AUDIENCE=gardener-connect
+GITHUB_OAUTH_CALLBACK_URL=http://localhost:8787/v1/auth/github/callback

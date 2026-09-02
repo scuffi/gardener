@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cloudflare-runtime:
+        patterns:
+          - "@cloudflare/*"
+          - "wrangler"
+          - "agents"
+      application-runtime:
+        patterns:
+          - "hono"
+          - "jose"
+          - "zod"
+      test-tooling:
+        patterns:
+          - "typescript"
+          - "vitest"
+          - "@types/*"

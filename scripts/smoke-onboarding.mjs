@@ -1,0 +1,191 @@
+#!/usr/bin/env node
+import { createSign, generateKeyPairSync } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+const project = resolve(import.meta.dirname, "..");
+const appDirectory = join(project, "apps", "gardener");
+const appPort = 8810;
+const connectPort = 8811;
+const debugPort = 9310;
+const appUrl = `http://127.0.0.1:${appPort}`;
+const connectUrl = `http://127.0.0.1:${connectPort}`;
+const instance = "simulated-showcase";
+const instanceToken = `gdn_${instance}.simulationtokenabcdefghijklmnopqrstuvwxyz`;
+const chromeBinary = process.env.CHROME_BIN || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const temporary = await mkdtemp(join(tmpdir(), "gardener-onboarding-"));
+const devVars = join(appDirectory, ".dev.vars");
+const screenshots = {
+  account: join(temporary, "01-account.png"),
+  repositories: join(temporary, "02-repositories.png"),
+  automation: join(temporary, "03-automation.png"),
+  live: join(temporary, "04-live.png"),
+};
+
+const base64url = (value) => Buffer.from(value).toString("base64url");
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const publicPem = publicKey.export({ type: "spki", format: "pem" });
+
+function identityToken() {
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "simulation" }));
+  const payload = base64url(JSON.stringify({
+    iss: connectUrl,
+    aud: instance,
+    typ: "gardener-identity",
+    sub: "424242",
+    githubLogin: "showcase-owner",
+    iat: now,
+    exp: now + 3600,
+  }));
+  const input = `${header}.${payload}`;
+  const signature = createSign("RSA-SHA256").update(input).end().sign(privateKey).toString("base64url");
+  return `${input}.${signature}`;
+}
+
+const fixtureIdentity = identityToken();
+const connect = createServer(async (request, response) => {
+  const url = new URL(request.url || "/", connectUrl);
+  const reply = (status, body) => {
+    response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
+    response.end(JSON.stringify(body));
+  };
+  if (url.pathname === "/v1/instances/claim" && request.method === "POST") return reply(200, { claimed: true, instanceId: instance });
+  if (url.pathname === "/v1/auth/github/start" && request.method === "POST") return reply(200, { authorizationUrl: `${appUrl}/#identity_token=${fixtureIdentity}` });
+  if (url.pathname === "/v1/installations/setup" && request.method === "POST") return reply(200, { installationUrl: `${appUrl}/?installation=complete` });
+  if (url.pathname === "/v1/repositories" && request.method === "GET") return reply(200, { repositories: [
+    { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
+    { provider: "github", id: "repo-2", installationId: "installation-1", owner: "cloudflare", name: "agents", defaultBranch: "main" },
+  ] });
+  return reply(404, { error: `Simulation has no ${request.method} ${url.pathname}` });
+});
+
+const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+const stopProcess = async (child) => {
+  if (!child) return;
+  try { process.kill(-child.pid, "SIGTERM"); } catch {}
+  await sleep(350);
+  try { process.kill(-child.pid, "SIGKILL"); } catch {}
+};
+const listen = (server, port) => new Promise((resolvePromise, reject) => {
+  server.once("error", reject);
+  server.listen(port, "127.0.0.1", resolvePromise);
+});
+const close = (server) => new Promise((resolvePromise) => server.close(resolvePromise));
+
+let worker;
+let chrome;
+let socket;
+try {
+  await listen(connect, connectPort);
+  await writeFile(devVars, `GARDENER_INSTANCE_TOKEN=${instanceToken}\nCONNECT_PUBLIC_KEY=${String(publicPem).replaceAll("\n", "\\n")}\n`, { mode: 0o600 });
+  worker = spawn("pnpm", [
+    "exec", "wrangler", "dev", "--port", String(appPort), "--local", "--persist-to", join(temporary, "state"),
+    "--var", "AI_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "--var", `CONNECT_ISSUER:${connectUrl}`,
+    "--var", `CONNECT_URL:${connectUrl}`,
+    "--var", "LOCAL_DEV_BYPASS:false",
+  ], { cwd: appDirectory, detached: true, stdio: "ignore" });
+
+  let ready = false;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try { if ((await fetch(`${appUrl}/api/health`)).ok) { ready = true; break; } } catch {}
+    await sleep(200);
+  }
+  if (!ready) throw new Error("Gardener did not start");
+
+  chrome = spawn(chromeBinary, [
+    "--headless=new", "--no-sandbox", "--disable-gpu", `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${join(temporary, "chrome")}`, "about:blank",
+  ], { detached: true, stdio: "ignore" });
+  let debugging = false;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try { if ((await fetch(`http://127.0.0.1:${debugPort}/json/version`)).ok) { debugging = true; break; } } catch {}
+    await sleep(100);
+  }
+  if (!debugging) throw new Error(`Chrome DevTools did not start. Set CHROME_BIN if Chrome is installed elsewhere.`);
+
+  const target = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?${encodeURIComponent(appUrl)}`, { method: "PUT" })).json();
+  socket = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolvePromise, reject) => { socket.onopen = resolvePromise; socket.onerror = reject; });
+  let sequence = 0;
+  const pending = new Map();
+  const exceptions = [];
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.id && pending.has(message.id)) {
+      const [resolvePromise, reject] = pending.get(message.id);
+      pending.delete(message.id);
+      message.error ? reject(new Error(message.error.message)) : resolvePromise(message.result);
+    }
+    if (message.method === "Runtime.exceptionThrown") exceptions.push(message.params.exceptionDetails.text || "Browser exception");
+  };
+  const command = (method, params = {}) => new Promise((resolvePromise, reject) => {
+    const id = ++sequence;
+    pending.set(id, [resolvePromise, reject]);
+    socket.send(JSON.stringify({ id, method, params }));
+  });
+  const evaluate = async (expression) => {
+    const result = await command("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || "Browser evaluation failed");
+    return result.result.value;
+  };
+  const waitFor = async (expression, label) => {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (await evaluate(expression)) return;
+      await sleep(100);
+    }
+    throw new Error(`Timed out waiting for ${label}`);
+  };
+  const screenshot = async (destination) => {
+    const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    await writeFile(destination, Buffer.from(capture.data, "base64"));
+  };
+
+  await command("Runtime.enable");
+  await command("Page.enable");
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await command("Page.navigate", { url: appUrl });
+  await waitFor(`document.querySelector('#setup-primary')?.dataset.action === 'signin'`, "account step");
+  await screenshot(screenshots.account);
+
+  await evaluate(`document.querySelector('#setup-primary').click()`);
+  await waitFor(`document.querySelector('#setup-primary')?.dataset.action === 'install'`, "repository step");
+  await screenshot(screenshots.repositories);
+
+  await evaluate(`document.querySelector('#setup-primary').click()`);
+  await waitFor(`document.querySelector('#setup-primary')?.dataset.action === 'activate'`, "automation step");
+  await screenshot(screenshots.automation);
+
+  await evaluate(`document.querySelector('[data-profile="safe"]').click(); document.querySelector('#setup-primary').click()`);
+  await waitFor(`!document.querySelector('#operating-dashboard').classList.contains('hidden')`, "live dashboard");
+  await screenshot(screenshots.live);
+
+  const finalState = await evaluate(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/state',{headers:{authorization:'Bearer '+token}});return r.json()})()`);
+  const policies = Object.fromEntries(finalState.policies.map((policy) => [policy.operation_kind, policy.mode]));
+  const result = {
+    passed: exceptions.length === 0,
+    steps: ["account", "repositories", "automation", "live"],
+    repositories: finalState.setup.activeRepositories,
+    completed: finalState.setup.completed,
+    paused: finalState.globalPaused,
+    workflowEnabled: Boolean(finalState.workflows[0]?.enabled),
+    safeProfile: { labels: policies["issue.label.add"], comments: policies["issue.comment.create"], close: policies["issue.close"] },
+    browserExceptions: exceptions,
+    screenshots,
+  };
+  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled") {
+    throw new Error(`Onboarding assertions failed: ${JSON.stringify(result)}`);
+  }
+  console.log(JSON.stringify(result, null, 2));
+} finally {
+  socket?.close();
+  await stopProcess(chrome);
+  await stopProcess(worker);
+  if (connect.listening) await close(connect);
+  await rm(devVars, { force: true });
+  if (process.env.KEEP_SMOKE_ARTIFACTS !== "true") await rm(temporary, { recursive: true, force: true });
+}

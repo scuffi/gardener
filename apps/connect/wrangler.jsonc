@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gardener-connect",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-02",
+  "observability": { "enabled": true },
+  "vars": {
+    "CONNECT_ISSUER": "https://gardener-connect.agents-b8a.workers.dev",
+    "CONNECT_AUDIENCE": "gardener-connect",
+    "GITHUB_OAUTH_CALLBACK_URL": "https://gardener-connect.agents-b8a.workers.dev/v1/auth/github/callback",
+    "GITHUB_APP_SLUG": "gardener-connect",
+    "DEPLOY_REPOSITORY_URL": "https://github.com/scuffi/gardener"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "gardener-connect",
+    "database_id": "488873c4-ca28-4e3a-be58-1bbb2ba485cd",
+    "migrations_dir": "migrations"
+  }]
+}

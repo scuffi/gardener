@@ -1,0 +1,26 @@
+{
+  "name": "gardener",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "build:deploy": "wrangler deploy --dry-run --outdir dist/deploy",
+    "check": "pnpm versions:check && pnpm typecheck && pnpm test && pnpm build && pnpm build:deploy",
+    "dev": "pnpm --filter @gardener/app dev",
+    "dev:connect": "pnpm --filter @gardener/connect dev",
+    "deploy": "wrangler deploy",
+    "deploy:connect": "pnpm --filter @gardener/connect deploy",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "smoke:onboarding": "node scripts/smoke-onboarding.mjs",
+    "versions:check": "node scripts/check-versions.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260902.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.128.0"
+  }
+}
