@@ -29,24 +29,31 @@ const base64url = (value) => Buffer.from(value).toString("base64url");
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const publicPem = publicKey.export({ type: "spki", format: "pem" });
 
-function identityToken() {
+function signToken(claims) {
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "simulation" }));
-  const payload = base64url(JSON.stringify({
-    iss: connectUrl,
-    aud: instance,
-    typ: "gardener-identity",
-    sub: "424242",
-    githubLogin: "showcase-owner",
-    iat: now,
-    exp: now + 3600,
-  }));
+  const payload = base64url(JSON.stringify({ iss: connectUrl, aud: instance, iat: now, exp: now + 3600, ...claims }));
   const input = `${header}.${payload}`;
   const signature = createSign("RSA-SHA256").update(input).end().sign(privateKey).toString("base64url");
   return `${input}.${signature}`;
 }
 
-const fixtureIdentity = identityToken();
+const fixtureIdentity = signToken({ typ: "gardener-identity", sub: "424242", githubLogin: "showcase-owner" });
+const fixtureEvent = signToken({
+  typ: "gardener-event",
+  event: {
+    schemaVersion: "v1",
+    id: "github:simulation-delivery-1",
+    deliveryId: "simulation-delivery-1",
+    instanceId: instance,
+    kind: "github.issue",
+    action: "opened",
+    occurredAt: new Date().toISOString(),
+    repository: { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
+    issue: { id: "issue-42", number: 42, title: "Bug: worker crashes on launch", body: "The worker fails immediately after startup.", state: "open", labels: [], author: "octocat", htmlUrl: "https://github.com/cloudflare/workers-sdk/issues/42" },
+  },
+});
+const executedOperations = [];
 const connect = createServer(async (request, response) => {
   const url = new URL(request.url || "/", connectUrl);
   const reply = (status, body) => {
@@ -60,6 +67,14 @@ const connect = createServer(async (request, response) => {
     { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
     { provider: "github", id: "repo-2", installationId: "installation-1", owner: "cloudflare", name: "agents", defaultBranch: "main" },
   ] });
+  if (url.pathname === "/v1/grants" && request.method === "POST") return reply(200, { grant: "simulation-grant" });
+  if (url.pathname === "/v1/operations" && request.method === "POST") {
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const operation = JSON.parse(body).operation;
+    executedOperations.push(operation);
+    return reply(200, { schemaVersion: "v1", operationId: operation.id, status: "applied", provider: "github", externalId: "simulation-receipt", appliedAt: new Date().toISOString() });
+  }
   return reply(404, { error: `Simulation has no ${request.method} ${url.pathname}` });
 });
 
@@ -84,7 +99,7 @@ try {
   await writeFile(devVars, `GARDENER_INSTANCE_TOKEN=${instanceToken}\nCONNECT_PUBLIC_KEY=${String(publicPem).replaceAll("\n", "\\n")}\n`, { mode: 0o600 });
   worker = spawn("pnpm", [
     "exec", "wrangler", "dev", "--port", String(appPort), "--local", "--persist-to", join(temporary, "state"),
-    "--var", "AI_MODEL:@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "--var", "AI_MODEL:gardener/deterministic-smoke",
     "--var", `CONNECT_ISSUER:${connectUrl}`,
     "--var", `CONNECT_URL:${connectUrl}`,
     "--var", "LOCAL_DEV_BYPASS:false",
@@ -164,7 +179,13 @@ try {
   await waitFor(`!document.querySelector('#operating-dashboard').classList.contains('hidden')`, "live dashboard");
   await screenshot(screenshots.live);
 
+  const delivery = await evaluate(`(async()=>{const r=await fetch('/hooks/connect',{method:'POST',headers:{authorization:'Bearer ${fixtureEvent}'}});return {status:r.status,body:await r.json()}})()`);
+  if (delivery.status !== 202 || !delivery.body.runs?.[0]) throw new Error(`Simulated event was not accepted: ${JSON.stringify(delivery)}`);
+  const runId = delivery.body.runs[0];
+  await waitFor(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/runs/${runId}',{headers:{authorization:'Bearer '+token}});if(!r.ok)return false;const body=await r.json();return body.run.status==='completed'&&body.proposals?.[0]?.status==='executed'})()`, "automatic typed operation");
+
   const finalState = await evaluate(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/state',{headers:{authorization:'Bearer '+token}});return r.json()})()`);
+  const runDetail = await evaluate(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/runs/${runId}',{headers:{authorization:'Bearer '+token}});return r.json()})()`);
   const policies = Object.fromEntries(finalState.policies.map((policy) => [policy.operation_kind, policy.mode]));
   const result = {
     passed: exceptions.length === 0,
@@ -174,10 +195,11 @@ try {
     paused: finalState.globalPaused,
     workflowEnabled: Boolean(finalState.workflows[0]?.enabled),
     safeProfile: { labels: policies["issue.label.add"], comments: policies["issue.comment.create"], close: policies["issue.close"] },
+    eventFlow: { accepted: delivery.status === 202, runStatus: runDetail.run.status, proposalStatus: runDetail.proposals[0]?.status, operationKind: executedOperations[0]?.kind },
     browserExceptions: exceptions,
     screenshots,
   };
-  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled") {
+  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
     throw new Error(`Onboarding assertions failed: ${JSON.stringify(result)}`);
   }
   console.log(JSON.stringify(result, null, 2));

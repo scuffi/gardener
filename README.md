@@ -82,7 +82,7 @@ pnpm check
 pnpm smoke:onboarding
 ```
 
-`smoke:onboarding` launches a local Connect simulator, a fresh local Gardener Worker, and headless Chrome. It drives the real account → repository picker → automation profile → live dashboard flow, verifies two synchronized repositories and the safe policy preset, and creates no GitHub App or remote Cloudflare resource. Set `CHROME_BIN` when Chrome is installed outside the standard macOS path.
+`smoke:onboarding` launches a local Connect simulator, a fresh local Gardener Worker, and headless Chrome. It drives the real account → repository picker → automation profile → live dashboard flow, verifies two synchronized repositories and the safe policy preset, delivers a signed issue webhook, processes the Queue run with the deterministic test adapter, and confirms an automatic typed label operation reached simulated Connect. It creates no GitHub App or remote Cloudflare resource. Set `CHROME_BIN` when Chrome is installed outside the standard macOS path.
 
 The `check` command:
 

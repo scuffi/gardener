@@ -1,5 +1,6 @@
 import type { AgentResult, ConnectEvent } from "@gardener/contracts";
 import {
+  DeterministicMockAgentRuntime,
   WorkersAiIssueGardenerRuntime,
   parseIssueClassification,
   type IssueClassification,
@@ -16,7 +17,10 @@ export async function runIssueGardener(input: {
   event: ConnectEvent;
   instructions: string;
 }): Promise<AgentResult> {
-  const runtime = new WorkersAiIssueGardenerRuntime(input.ai);
+  // Reserved for the local browser smoke harness; deployment configs always select a hosted Workers AI model.
+  const runtime = input.model === "gardener/deterministic-smoke"
+    ? new DeterministicMockAgentRuntime()
+    : new WorkersAiIssueGardenerRuntime(input.ai);
   const handle = await runtime.start({
     schemaVersion: "v1",
     runId: input.runId,

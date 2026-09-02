@@ -56,6 +56,18 @@ describe("issue gardener runtime", () => {
     expect(result.usage).toMatchObject({ model: "test-model", inputTokens: 100, outputTokens: 40 });
   });
 
+  it("uses the deterministic adapter only for the reserved smoke model", async () => {
+    const result = await runIssueGardener({
+      ai: { run: async () => { throw new Error("Workers AI must not be called"); } },
+      model: "gardener/deterministic-smoke",
+      runId: "smoke-run",
+      event: { ...event, issue: { ...event.issue, labels: [] } },
+      instructions: "Classify the issue.",
+    });
+    expect(result.summary).toContain("Classified issue #7 as bug");
+    expect(result.proposals[0]?.operation.kind).toBe("issue.label.add");
+  });
+
   it("rejects labels outside the v1 allowlist", () => {
     expect(() => parseAiClassification({ summary: "x", labels: ["pwned"], comment: null, rationale: "x" })).toThrow();
   });
