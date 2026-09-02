@@ -7,8 +7,11 @@
   "vars": {
     "CONNECT_ISSUER": "https://gardener-connect.agents-b8a.workers.dev",
     "CONNECT_AUDIENCE": "gardener-connect",
+    "CONNECT_JWT_KID": "connect-dev-2026-09-02",
     "GITHUB_OAUTH_CALLBACK_URL": "https://gardener-connect.agents-b8a.workers.dev/v1/auth/github/callback",
-    "GITHUB_APP_SLUG": "gardener-connect",
+    "GITHUB_CLIENT_ID": "Iv23liKcEXMZUHopJ1bc",
+    "GITHUB_APP_ID": "4807814",
+    "GITHUB_APP_SLUG": "gardener-connect-dev",
     "DEPLOY_REPOSITORY_URL": "https://github.com/scuffi/gardener"
   },
   "d1_databases": [{
