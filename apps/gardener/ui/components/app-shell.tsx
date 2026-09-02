@@ -1,0 +1,168 @@
+import { Button } from "@cloudflare/kumo/components/button";
+import {
+  CheckSquareIcon, DatabaseIcon, GearIcon, GitBranchIcon, HouseIcon, ListChecksIcon,
+  LockSimpleIcon, PauseIcon, PlayIcon, ShieldCheckIcon, PlantIcon, XIcon, ListIcon,
+  type Icon,
+} from "@phosphor-icons/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { useGardener } from "../app-context";
+import { gardenerApi } from "../lib/api";
+import { isEnabled } from "../lib/format";
+import { ConfirmDialog } from "./confirm-dialog";
+import { useNotifications } from "./notifications";
+import { ThemeToggle } from "../theme";
+import { StatusBadge } from "./ui";
+
+interface NavItem { to: string; label: string; icon: Icon; badge?: number }
+interface NavGroup { label: string; items: NavItem[] }
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const { state, health, authenticated } = useGardener();
+  const { notify } = useNotifications();
+  const queryClient = useQueryClient();
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const setupComplete = Boolean(state?.setup.completed);
+  const paused = Boolean(state?.globalPaused);
+  const approvals = state?.approvals.length ?? 0;
+  const activeRepositories = state?.repositories.filter((repository) => isEnabled(repository.active)).length ?? 0;
+
+  const pauseMutation = useMutation({
+    mutationFn: () => gardenerApi.setPaused(!paused),
+    onSuccess: async ({ globalPaused }) => {
+      await queryClient.invalidateQueries({ queryKey: ["state"] });
+      setPauseOpen(false);
+      notify({
+        tone: "success",
+        title: globalPaused ? "Automation paused" : "Automation resumed",
+        description: globalPaused ? "No new runs or GitHub writes will start." : "Gardener is listening for supported repository events.",
+      });
+    },
+    onError: (error: Error) => notify({ tone: "error", title: "Unable to update automation", description: error.message }),
+  });
+
+  useEffect(() => setMobileOpen(false), [location.pathname]);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    closeButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        requestAnimationFrame(() => menuButtonRef.current?.focus());
+        return;
+      }
+      if (event.key !== "Tab" || !sidebarRef.current) return;
+      const focusable = [...sidebarRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen]);
+
+  const closeMobileNavigation = () => {
+    setMobileOpen(false);
+    requestAnimationFrame(() => menuButtonRef.current?.focus());
+  };
+
+  const groups: NavGroup[] = [
+    { label: "Workspace", items: [
+      { to: "/overview", label: "Overview", icon: HouseIcon },
+      { to: "/repositories", label: "Repositories", icon: GitBranchIcon },
+    ] },
+    { label: "Automation", items: [
+      { to: "/workflows", label: "Workflows", icon: ListChecksIcon },
+      { to: "/policies", label: "Policies", icon: ShieldCheckIcon },
+    ] },
+    { label: "Monitor", items: [
+      { to: "/runs", label: "Runs", icon: DatabaseIcon },
+      { to: "/approvals", label: "Approvals", icon: CheckSquareIcon, badge: approvals },
+    ] },
+    { label: "System", items: [{ to: "/settings", label: "Settings", icon: GearIcon }] },
+  ];
+
+  const navigation = <>
+    {groups.map((group) => <div className="nav-group" key={group.label}>
+      <p className="nav-group__label">{group.label}</p>
+      <div className="nav-group__items">
+        {group.items.map((item) => {
+          const locked = !setupComplete && item.to !== "/overview";
+          if (locked) return <div className="nav-item nav-item--locked" key={item.to} aria-disabled="true">
+            <item.icon size={17} aria-hidden="true" /><span>{item.label}</span><LockSimpleIcon size={12} aria-hidden="true" />
+          </div>;
+          return <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-item${isActive ? " nav-item--active" : ""}`}>
+            <item.icon size={17} aria-hidden="true" /><span>{item.label}</span>
+            {item.badge ? <span className="nav-badge" aria-label={`${item.badge} pending`}>{item.badge}</span> : null}
+          </NavLink>;
+        })}
+      </div>
+    </div>)}
+  </>;
+
+  return <div className="app-shell" data-route={location.pathname}>
+    <a className="skip-link" href="#main-content">Skip to content</a>
+    <div ref={sidebarRef} id="mobile-navigation" className={`sidebar${mobileOpen ? " sidebar--open" : ""}`} aria-label="Application navigation" role={mobileOpen ? "dialog" : "complementary"} aria-modal={mobileOpen || undefined}>
+      <div className="sidebar__header">
+        <NavLink to="/overview" className="brand" aria-label="Gardener overview">
+          <span className="brand__mark"><PlantIcon size={20} weight="bold" aria-hidden="true" /></span>
+          <span><strong>Gardener</strong><small>Repository automation</small></span>
+        </NavLink>
+        <button ref={closeButtonRef} className="sidebar__close" onClick={closeMobileNavigation} aria-label="Close navigation"><XIcon size={20} /></button>
+      </div>
+      <nav className="sidebar__nav">{navigation}</nav>
+      <div className="sidebar__footer">
+        <div className="deployment-summary">
+          <StatusBadge tone={health?.ok ? "success" : "warning"}>{health?.ok ? "Deployment healthy" : "Setup incomplete"}</StatusBadge>
+          <p>{activeRepositories} {activeRepositories === 1 ? "repository" : "repositories"} connected</p>
+        </div>
+        <p className="cloudflare-credit"><span className="cloudflare-dot" aria-hidden="true" /> Runs on Cloudflare Workers</p>
+      </div>
+    </div>
+    {mobileOpen ? <button className="sidebar-backdrop" tabIndex={-1} aria-label="Close navigation" onClick={closeMobileNavigation} /> : null}
+
+    <div className="app-frame" inert={mobileOpen || undefined}>
+      <header className="app-bar">
+        <button ref={menuButtonRef} className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="mobile-navigation"><ListIcon size={21} /></button>
+        <div className="app-bar__context">
+          <PlantIcon size={18} weight="bold" aria-hidden="true" />
+          <span>{setupComplete ? "Gardener" : "Setup"}</span>
+        </div>
+        <div className="app-bar__actions">
+          <ThemeToggle />
+          {setupComplete ? <Button
+            variant={paused ? "primary" : "secondary-destructive"}
+            icon={paused ? PlayIcon : PauseIcon}
+            onClick={() => setPauseOpen(true)}
+          >{paused ? "Resume automation" : "Pause automation"}</Button> : null}
+          {authenticated && state?.viewer ? <div className="account-chip" title={`Signed in as ${state.viewer.login}`}>
+            <span>{state.viewer.login.slice(0, 1).toUpperCase()}</span><strong>{state.viewer.login}</strong>
+          </div> : null}
+        </div>
+      </header>
+      <main id="main-content" className="main-content">{children}</main>
+    </div>
+
+    <ConfirmDialog
+      open={pauseOpen}
+      onOpenChange={setPauseOpen}
+      title={paused ? "Resume automation?" : "Pause all automation?"}
+      description={paused
+        ? "Gardener will start new runs for supported repository events. Your current policy settings remain in effect."
+        : "New runs and GitHub writes will stop. Received events and existing audit records remain available."}
+      confirmLabel={paused ? "Resume automation" : "Pause automation"}
+      confirmTone={paused ? "primary" : "destructive"}
+      loading={pauseMutation.isPending}
+      onConfirm={() => pauseMutation.mutateAsync()}
+    />
+  </div>;
+}

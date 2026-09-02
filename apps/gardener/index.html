@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f7f8" />
+    <meta name="description" content="Policy-controlled repository automation running in your Cloudflare account." />
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem("gardener.theme") || "system";
+          const mode = stored === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : stored;
+          document.documentElement.dataset.mode = mode;
+          document.documentElement.dataset.themePreference = stored;
+          document.querySelector('meta[name="theme-color"]').content = mode === "dark" ? "#0d0f12" : "#f6f7f8";
+        } catch {}
+      })();
+    </script>
+    <title>Gardener</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/ui/main.tsx"></script>
+  </body>
+</html>

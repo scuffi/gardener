@@ -10,7 +10,7 @@
     "check": "pnpm versions:check && pnpm typecheck && pnpm test && pnpm build && pnpm build:deploy",
     "dev": "pnpm --filter @gardener/app dev",
     "dev:connect": "pnpm --filter @gardener/connect dev",
-    "deploy": "wrangler deploy",
+    "deploy": "pnpm --filter @gardener/app build && wrangler deploy",
     "deploy:connect": "pnpm --filter @gardener/connect deploy",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",

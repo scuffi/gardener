@@ -7,9 +7,12 @@ allowBuilds:
   workerd: true
 
 # These packages were explicitly version-checked against npm and are required
-# to keep the Worker runtime/tooling current despite the global release-age gate.
+# to keep runtime, product UI, and test tooling current despite the release-age gate.
 minimumReleaseAgeExclude:
   - "@cloudflare/workers-types"
   - "@types/node"
   - miniflare
   - wrangler
+  - "@cloudflare/kumo@2.13.0"
+  - "@cloudflare/vite-plugin@1.54.3"
+  - "@testing-library/user-event@14.6.7"

@@ -197,10 +197,10 @@ app.get("/api/state", async (c) => {
     getSetting(c.env.DB, "setup_profile"),
     c.env.DB.prepare("SELECT id, name, version, enabled, trigger_kind, updated_at FROM workflows ORDER BY name").all(),
     c.env.DB.prepare("SELECT operation_kind, mode, updated_at FROM operation_policies ORDER BY operation_kind").all(),
-    c.env.DB.prepare("SELECT id, owner, name, active, updated_at FROM repositories ORDER BY owner, name").all(),
+    c.env.DB.prepare("SELECT id, owner, name, default_branch, active, updated_at FROM repositories ORDER BY owner, name").all(),
     c.env.DB
       .prepare(
-        "SELECT r.id, r.status, r.summary, r.usage, r.error, r.created_at, r.completed_at, w.name AS workflow_name, " +
+        "SELECT r.id, r.status, r.workflow_version, r.summary, r.usage, r.error, r.created_at, r.started_at, r.completed_at, w.name AS workflow_name, " +
           "e.action, repo.owner, repo.name FROM runs r JOIN workflows w ON w.id = r.workflow_id " +
           "JOIN events e ON e.id = r.event_id JOIN repositories repo ON repo.id = e.repository_id " +
           "ORDER BY r.created_at DESC LIMIT 50",
@@ -208,7 +208,8 @@ app.get("/api/state", async (c) => {
       .all(),
     c.env.DB
       .prepare(
-        "SELECT p.id, p.operation_kind, p.rationale, p.operation, p.created_at, r.summary, repo.owner, repo.name " +
+        "SELECT p.id, p.run_id, p.operation_kind, p.policy_mode, p.rationale, p.operation, p.created_at, " +
+          "r.summary, e.action, e.resource_id, repo.owner, repo.name " +
           "FROM proposals p JOIN runs r ON r.id = p.run_id JOIN events e ON e.id = r.event_id " +
           "JOIN repositories repo ON repo.id = e.repository_id WHERE p.status = 'pending' " +
           "ORDER BY p.created_at DESC LIMIT 50",
@@ -288,6 +289,24 @@ app.post("/api/workflows/:id/status", async (c) => {
   if ((result.meta.changes ?? 0) === 0) return c.json({ error: "Workflow not found" }, 404);
   await audit(c.env.DB, c.get("actor"), enabled ? "workflow.enabled" : "workflow.disabled", "workflow", id);
   return c.json({ id, enabled });
+});
+
+app.put("/api/policies", async (c) => {
+  const { policies } = z.object({
+    policies: z.array(z.object({ operation: z.string().min(1).max(100), mode: policyModeSchema }).strict()).min(1).max(50),
+  }).strict().parse(await c.req.json());
+  const uniqueOperations = new Set(policies.map((policy) => policy.operation));
+  if (uniqueOperations.size !== policies.length) return c.json({ error: "Duplicate policy operation" }, 400);
+  const known = await c.env.DB.prepare("SELECT operation_kind FROM operation_policies").all<{ operation_kind: string }>();
+  const knownOperations = new Set(known.results.map((policy) => policy.operation_kind));
+  if (policies.some((policy) => !knownOperations.has(policy.operation))) return c.json({ error: "Unknown operation" }, 400);
+
+  await c.env.DB.batch(policies.flatMap((policy) => [
+    c.env.DB.prepare("UPDATE operation_policies SET mode = ?, updated_at = CURRENT_TIMESTAMP WHERE operation_kind = ?").bind(policy.mode, policy.operation),
+    c.env.DB.prepare("INSERT INTO audit_records (actor, action, resource_type, resource_id, detail) VALUES (?, 'policy.updated', 'operation', ?, ?)")
+      .bind(c.get("actor"), policy.operation, JSON.stringify({ mode: policy.mode })),
+  ]));
+  return c.json({ policies });
 });
 
 app.put("/api/policies/:operation", async (c) => {

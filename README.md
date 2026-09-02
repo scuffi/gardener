@@ -17,6 +17,8 @@ This repository contains both deployment boundaries:
 
 GitHub credentials never enter the customer Worker, browser, model prompt, or agent workspace. See [`docs/architecture.md`](docs/architecture.md) and [`SECURITY.md`](SECURITY.md).
 
+The hosted Connect service is the simplest path. Organizations that want to own the GitHub App, keys, connector data, and availability can follow the advanced [self-hosted Connect guide](docs/self-hosted-connect.md); the Gardener application and security contracts remain the same.
+
 ## User deployment
 
 Once the managed Connect Worker is running:
