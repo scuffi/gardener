@@ -23,7 +23,7 @@ export interface Workflow {
   updated_at?: string;
 }
 export interface Policy { operation_kind: string; mode: PolicyMode; updated_at?: string }
-export interface Repository { id: string; owner: string; name: string; active: Flag; updated_at?: string; default_branch?: string | null }
+export interface Repository { id: string; owner: string; name: string; active: Flag; paused: boolean; updated_at?: string; default_branch?: string | null }
 export interface Run {
   id: string;
   status: string;

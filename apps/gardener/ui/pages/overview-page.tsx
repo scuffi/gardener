@@ -1,15 +1,14 @@
-import { Banner } from "@cloudflare/kumo/components/banner";
-import { ArrowRightIcon, CheckCircleIcon, CheckSquareIcon, GitBranchIcon, ListChecksIcon, PauseCircleIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, CheckSquareIcon, GitBranchIcon, ListChecksIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useGardener } from "../app-context";
 import { isEnabled } from "../lib/format";
 import type { Run } from "../lib/types";
 import { RunDetailDialog, RunTable } from "../components/run-table";
-import { AutomationTrace, Metric, PageHeader, SectionHeader, StatusBadge, Surface } from "../components/ui";
+import { Metric, PageHeader, SectionHeader, Surface } from "../components/ui";
 
 export function OverviewPage() {
-  const { state, health } = useGardener();
+  const { state } = useGardener();
   const [selectedRun, setSelectedRun] = useState<Run | null>(null);
   if (!state) return null;
   const repositories = state.repositories.filter((repository) => isEnabled(repository.active)).length;
@@ -22,23 +21,6 @@ export function OverviewPage() {
       title="Overview"
       description="Monitor repository automation, review pending actions, and verify your Cloudflare deployment."
     />
-
-    {state.globalPaused ? <Banner
-      variant="alert"
-      icon={<PauseCircleIcon size={20} weight="fill" />}
-      title="Automation is paused"
-      description="New runs and GitHub writes are stopped. Received events and audit records remain available."
-    /> : !health?.ok ? <Banner
-      variant="error"
-      icon={<WarningCircleIcon size={20} weight="fill" />}
-      title="Deployment needs attention"
-      description="One or more required Cloudflare services are unavailable. Review Deployment health in Settings before relying on automation."
-      action={<Link to="/settings">Review deployment health</Link>}
-    /> : <div className="runtime-status">
-      <div className="runtime-status__signal"><span aria-hidden="true" /><CheckCircleIcon size={21} weight="fill" aria-hidden="true" /></div>
-      <div className="runtime-status__copy"><div><strong>Automation is active across your repositories</strong><StatusBadge tone="success">Live</StatusBadge></div><p>Listening for opened and reopened issue events across {repositories} connected {repositories === 1 ? "repository" : "repositories"}.</p></div>
-      <AutomationTrace />
-    </div>}
 
     <div className="metric-grid">
       <Metric icon={CheckSquareIcon} label="Pending approvals" value={approvals} detail={approvals ? "Action required" : "Nothing waiting"} tone={approvals ? "warning" : "default"} />

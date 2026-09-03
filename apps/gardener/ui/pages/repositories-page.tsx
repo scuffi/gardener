@@ -34,13 +34,13 @@ export function RepositoriesPage() {
     />
     <Surface padded={false}>
       {state.repositories.length ? <><div className="mobile-data-list">{state.repositories.map((repository) => <article className="mobile-data-card" key={repository.id}>
-        <div className="mobile-data-card__title"><span className="cell-with-icon"><GitBranchIcon size={17} aria-hidden="true" /><strong className="repo-name">{repository.owner}/{repository.name}</strong></span><StatusBadge tone={isEnabled(repository.active) ? "success" : "error"}>{isEnabled(repository.active) ? "Connected" : "Access removed"}</StatusBadge></div>
+        <div className="mobile-data-card__title"><span className="cell-with-icon"><GitBranchIcon size={17} aria-hidden="true" /><strong className="repo-name">{repository.owner}/{repository.name}</strong></span><StatusBadge tone={!isEnabled(repository.active) ? "error" : repository.paused ? "warning" : "success"}>{!isEnabled(repository.active) ? "Access removed" : repository.paused ? "Paused" : "Connected"}</StatusBadge></div>
         <dl><div><dt>Default branch</dt><dd><code>{repository.default_branch ?? "—"}</code></dd></div><div><dt>Last synchronized</dt><dd>{formatRelativeTime(repository.updated_at)}</dd></div></dl>
       </article>)}</div><div className="table-scroll desktop-data-table" tabIndex={0} aria-label="Connected repositories"><table className="data-table">
         <thead><tr><th>Repository</th><th>Access</th><th>Default branch</th><th>Last synchronized</th></tr></thead>
         <tbody>{state.repositories.map((repository) => <tr key={repository.id}>
           <td><span className="cell-with-icon"><GitBranchIcon size={17} aria-hidden="true" /><strong className="repo-name">{repository.owner}/{repository.name}</strong></span></td>
-          <td><StatusBadge tone={isEnabled(repository.active) ? "success" : "error"}>{isEnabled(repository.active) ? "Connected" : "Access removed"}</StatusBadge></td>
+          <td><StatusBadge tone={!isEnabled(repository.active) ? "error" : repository.paused ? "warning" : "success"}>{!isEnabled(repository.active) ? "Access removed" : repository.paused ? "Paused" : "Connected"}</StatusBadge></td>
           <td><code>{repository.default_branch ?? "—"}</code></td>
           <td>{formatRelativeTime(repository.updated_at)}</td>
         </tr>)}</tbody>

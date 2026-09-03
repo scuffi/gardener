@@ -16,3 +16,4 @@ minimumReleaseAgeExclude:
   - "@cloudflare/kumo@2.13.0"
   - "@cloudflare/vite-plugin@1.54.3"
   - "@testing-library/user-event@14.6.7"
+  - "@types/react-dom@19.2.6"

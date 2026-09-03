@@ -53,6 +53,10 @@ export const gardenerApi = {
     method: "POST",
     body: JSON.stringify({ paused }),
   }),
+  setRepositoryPaused: (id: string, paused: boolean) => api<{ id: string; paused: boolean }>(`/api/repositories/${encodeURIComponent(id)}/pause`, {
+    method: "PUT",
+    body: JSON.stringify({ paused }),
+  }),
   setWorkflow: (id: string, enabled: boolean) => api<{ id: string; enabled: boolean }>(`/api/workflows/${encodeURIComponent(id)}/status`, {
     method: "POST",
     body: JSON.stringify({ enabled }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConnectEvent } from "../src/domain";
-import { workflowMatchesEvent } from "../src/db";
+import { repositoryPauseSetting, workflowMatchesEvent } from "../src/db";
 
 const event: ConnectEvent = {
   schemaVersion: "v1",
@@ -32,5 +32,9 @@ describe("compiled workflow triggers", () => {
   it("fails closed for malformed or broad plans", () => {
     expect(workflowMatchesEvent("not json", event)).toBe(false);
     expect(workflowMatchesEvent('{"triggers":["github.issue"]}', event)).toBe(false);
+  });
+
+  it("scopes repository pause settings by provider repository id", () => {
+    expect(repositoryPauseSetting("repo-1")).toBe("repository_paused:repo-1");
   });
 });

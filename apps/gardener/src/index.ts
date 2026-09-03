@@ -9,7 +9,7 @@ import {
   listConnectedRepositories,
 } from "./connect";
 import { ensureDatabase } from "./database";
-import { audit, createRunsForEvent, getSetting, ingestEvent, policySnapshot, setSetting } from "./db";
+import { audit, createRunsForEvent, getSetting, ingestEvent, pauseScope, policySnapshot, repositoryPauseSetting, setSetting } from "./db";
 import {
   operationSchema,
   policyModeSchema,
@@ -93,9 +93,9 @@ app.post("/hooks/connect", async (c) => {
     kind: event.kind,
     action: event.action,
   });
-  const paused = (await getSetting(c.env.DB, "global_paused")) !== "false";
-  const runs = paused ? [] : await createRunsForEvent(c.env, event);
-  return c.json({ accepted: true, duplicate: false, paused, runs }, 202);
+  const pausedBy = await pauseScope(c.env.DB, event.repository.id);
+  const runs = pausedBy ? [] : await createRunsForEvent(c.env, event);
+  return c.json({ accepted: true, duplicate: false, paused: Boolean(pausedBy), pausedBy, runs }, 202);
 });
 
 app.get("/api/auth/start", async (c) => {
@@ -231,13 +231,14 @@ app.get("/api/runs", async (c) => {
 });
 
 app.get("/api/state", async (c) => {
-  const [paused, onboardingCompleted, setupProfile, workflows, policies, repositories, runs, approvals, audits] = await Promise.all([
+  const [paused, onboardingCompleted, setupProfile, workflows, policies, repositories, repositoryPauses, runs, approvals, audits] = await Promise.all([
     getSetting(c.env.DB, "global_paused"),
     getSetting(c.env.DB, "onboarding_completed"),
     getSetting(c.env.DB, "setup_profile"),
     c.env.DB.prepare("SELECT id, name, version, enabled, trigger_kind, updated_at FROM workflows ORDER BY name").all(),
     c.env.DB.prepare("SELECT operation_kind, mode, updated_at FROM operation_policies ORDER BY operation_kind").all(),
     c.env.DB.prepare("SELECT id, owner, name, default_branch, active, updated_at FROM repositories ORDER BY owner, name").all(),
+    c.env.DB.prepare("SELECT key, value FROM settings WHERE key LIKE 'repository_paused:%'").all<{ key: string; value: string }>(),
     c.env.DB
       .prepare(
         "SELECT r.id, r.status, r.workflow_version, r.summary, r.usage, r.error, r.created_at, r.started_at, r.completed_at, w.name AS workflow_name, " +
@@ -260,6 +261,7 @@ app.get("/api/state", async (c) => {
       .all(),
   ]);
 
+  const pausedRepositories = new Set(repositoryPauses.results.filter((setting) => setting.value === "true").map((setting) => setting.key.slice("repository_paused:".length)));
   return c.json({
     globalPaused: paused !== "false",
     viewer: { login: c.get("actorLogin") },
@@ -270,7 +272,7 @@ app.get("/api/state", async (c) => {
     },
     workflows: workflows.results,
     policies: policies.results,
-    repositories: repositories.results,
+    repositories: repositories.results.map((repository) => ({ ...repository, paused: pausedRepositories.has(String(repository.id)) })),
     runs: runs.results,
     approvals: approvals.results,
     audits: audits.results,
@@ -317,6 +319,16 @@ app.post("/api/settings/pause", async (c) => {
   await setSetting(c.env.DB, "global_paused", String(paused));
   await audit(c.env.DB, c.get("actor"), paused ? "system.paused" : "system.resumed", "instance", instanceId(c.env));
   return c.json({ globalPaused: paused });
+});
+
+app.put("/api/repositories/:id/pause", async (c) => {
+  const id = c.req.param("id");
+  const { paused } = z.object({ paused: z.boolean() }).strict().parse(await c.req.json());
+  const repository = await c.env.DB.prepare("SELECT owner, name FROM repositories WHERE id = ? AND active = 1").bind(id).first<{ owner: string; name: string }>();
+  if (!repository) return c.json({ error: "Active repository not found" }, 404);
+  await setSetting(c.env.DB, repositoryPauseSetting(id), String(paused));
+  await audit(c.env.DB, c.get("actor"), paused ? "repository.paused" : "repository.resumed", "repository", id, { owner: repository.owner, name: repository.name });
+  return c.json({ id, paused });
 });
 
 app.post("/api/workflows/:id/status", async (c) => {
@@ -374,29 +386,31 @@ app.post("/api/approvals/:id/reject", async (c) => {
 
 app.post("/api/approvals/:id/approve", async (c) => {
   const id = c.req.param("id");
-  if ((await getSetting(c.env.DB, "global_paused")) !== "false") {
-    return c.json({ error: "Instance is paused; resume before executing an approval" }, 409);
+  const row = await c.env.DB
+    .prepare("SELECT p.operation, p.run_id, r.event_id, e.repository_id FROM proposals p JOIN runs r ON r.id = p.run_id JOIN events e ON e.id = r.event_id WHERE p.id = ? AND p.status = 'pending'")
+    .bind(id)
+    .first<{ operation: string; run_id: string; event_id: string; repository_id: string }>();
+  if (!row) return c.json({ error: "Proposal is not pending" }, 409);
+  const initiallyPausedBy = await pauseScope(c.env.DB, row.repository_id);
+  if (initiallyPausedBy) {
+    return c.json({ error: initiallyPausedBy === "global" ? "Gardener is paused; resume before executing an approval" : "This repository is paused; resume it before executing an approval" }, 409);
   }
+
   const claimed = await c.env.DB
     .prepare("UPDATE proposals SET status = 'executing', decided_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'")
     .bind(id)
     .run();
   if ((claimed.meta.changes ?? 0) === 0) return c.json({ error: "Proposal is not pending" }, 409);
 
-  const row = await c.env.DB
-    .prepare("SELECT p.operation, p.run_id, r.event_id FROM proposals p JOIN runs r ON r.id = p.run_id WHERE p.id = ?")
-    .bind(id)
-    .first<{ operation: string; run_id: string; event_id: string }>();
-  if (!row) return c.json({ error: "Proposal not found" }, 404);
-
   try {
     const operation = operationSchema.parse(JSON.parse(row.operation));
-    if ((await getSetting(c.env.DB, "global_paused")) !== "false") {
+    const pausedBy = await pauseScope(c.env.DB, row.repository_id);
+    if (pausedBy) {
       await c.env.DB
         .prepare("UPDATE proposals SET status = 'pending', decided_at = NULL WHERE id = ? AND status = 'executing'")
         .bind(id)
         .run();
-      return c.json({ error: "Instance was paused before execution" }, 409);
+      return c.json({ error: pausedBy === "global" ? "Gardener was paused before execution" : "Repository was paused before execution" }, 409);
     }
     const receipt = await executeThroughConnect(c.env, row.run_id, row.event_id, operation);
     await c.env.DB
@@ -422,25 +436,28 @@ interface RunRow {
   envelope: string;
   instructions: string;
   attempt_count: number;
+  repository_id: string;
 }
 
 async function processRun(env: Env, runId: string): Promise<void> {
-  if ((await getSetting(env.DB, "global_paused")) !== "false") {
-    await env.DB
-      .prepare("UPDATE runs SET status = 'cancelled', error = 'Instance paused', completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'queued'")
-      .bind(runId)
-      .run();
-    return;
-  }
-
   const row = await env.DB
     .prepare(
-      "SELECT r.id, r.status, r.policy_snapshot, r.attempt_count, e.envelope, w.instructions FROM runs r " +
+      "SELECT r.id, r.status, r.policy_snapshot, r.attempt_count, e.envelope, e.repository_id, w.instructions FROM runs r " +
         "JOIN events e ON e.id = r.event_id JOIN workflows w ON w.id = r.workflow_id WHERE r.id = ?",
     )
     .bind(runId)
     .first<RunRow>();
   if (!row || row.status !== "queued") return;
+
+  const pausedBy = await pauseScope(env.DB, row.repository_id);
+  if (pausedBy) {
+    const message = pausedBy === "global" ? "Gardener paused" : "Repository paused";
+    await env.DB
+      .prepare("UPDATE runs SET status = 'cancelled', error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'queued'")
+      .bind(message, runId)
+      .run();
+    return;
+  }
 
   const claimed = await env.DB
     .prepare(
@@ -484,9 +501,10 @@ async function processRun(env: Env, runId: string): Promise<void> {
       }
 
       if (mode === "automatic") {
-        if ((await getSetting(env.DB, "global_paused")) !== "false") {
+        const pausedBeforeExecution = await pauseScope(env.DB, event.repository.id);
+        if (pausedBeforeExecution) {
           executionErrors += 1;
-          const message = "Instance paused before automatic execution";
+          const message = pausedBeforeExecution === "global" ? "Gardener paused before automatic execution" : "Repository paused before automatic execution";
           await env.DB
             .prepare("UPDATE proposals SET status = 'failed', error = ?, decided_at = CURRENT_TIMESTAMP WHERE operation_id = ?")
             .bind(message, operation.id)

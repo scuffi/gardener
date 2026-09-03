@@ -16,6 +16,16 @@ export async function setSetting(db: D1Database, key: string, value: string): Pr
     .run();
 }
 
+export function repositoryPauseSetting(repositoryId: string): string {
+  return `repository_paused:${repositoryId}`;
+}
+
+export type PauseScope = "global" | "repository";
+export async function pauseScope(db: D1Database, repositoryId: string): Promise<PauseScope | null> {
+  if ((await getSetting(db, "global_paused")) !== "false") return "global";
+  return (await getSetting(db, repositoryPauseSetting(repositoryId))) === "true" ? "repository" : null;
+}
+
 export async function policySnapshot(db: D1Database): Promise<Record<string, PolicyMode>> {
   const { results } = await db
     .prepare("SELECT operation_kind, mode FROM operation_policies ORDER BY operation_kind")

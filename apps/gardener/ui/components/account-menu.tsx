@@ -24,14 +24,14 @@ export function AccountMenu() {
     <DropdownMenu.Trigger
       id="account-menu-trigger"
       type="button"
-      className="account-menu-trigger"
+      className="account-menu-trigger account-menu-trigger--sidebar"
       aria-label={`Open account menu for ${login}`}
     >
       <span className="account-avatar" aria-hidden="true">{login.slice(0, 1).toUpperCase()}</span>
       <span className="account-menu-trigger__copy"><strong>{login}</strong><small>GitHub connected</small></span>
       <CaretDownIcon className="account-menu-trigger__caret" size={13} aria-hidden="true" />
     </DropdownMenu.Trigger>
-    <DropdownMenu.Content align="end" sideOffset={8} className="account-menu-content" data-account-menu>
+    <DropdownMenu.Content side="top" align="start" sideOffset={8} className="account-menu-content" data-account-menu>
       <DropdownMenu.Group>
         <DropdownMenu.Label className="account-menu-identity">
           <span className="account-avatar" aria-hidden="true">{login.slice(0, 1).toUpperCase()}</span>

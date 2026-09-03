@@ -1,52 +1,27 @@
-import { Button } from "@cloudflare/kumo/components/button";
 import {
   CheckSquareIcon, DatabaseIcon, GearIcon, GitBranchIcon, HouseIcon, ListChecksIcon,
-  LockSimpleIcon, PauseIcon, PlayIcon, ShieldCheckIcon, PlantIcon, XIcon, ListIcon,
+  LockSimpleIcon, ShieldCheckIcon, PlantIcon, XIcon, ListIcon,
   type Icon,
 } from "@phosphor-icons/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useGardener } from "../app-context";
-import { gardenerApi } from "../lib/api";
-import { isEnabled } from "../lib/format";
 import { AccountMenu } from "./account-menu";
-import { ConfirmDialog } from "./confirm-dialog";
-import { useNotifications } from "./notifications";
+import { AutomationMenu } from "./automation-menu";
 import { ThemeToggle } from "../theme";
-import { StatusBadge } from "./ui";
 
 interface NavItem { to: string; label: string; icon: Icon; badge?: number }
 interface NavGroup { label: string; items: NavItem[] }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { state, health, authenticated } = useGardener();
-  const { notify } = useNotifications();
-  const queryClient = useQueryClient();
+  const { state, authenticated } = useGardener();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [pauseOpen, setPauseOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const setupComplete = Boolean(state?.setup.completed);
-  const paused = Boolean(state?.globalPaused);
   const approvals = state?.approvals.length ?? 0;
-  const activeRepositories = state?.repositories.filter((repository) => isEnabled(repository.active)).length ?? 0;
-
-  const pauseMutation = useMutation({
-    mutationFn: () => gardenerApi.setPaused(!paused),
-    onSuccess: async ({ globalPaused }) => {
-      await queryClient.invalidateQueries({ queryKey: ["state"] });
-      setPauseOpen(false);
-      notify({
-        tone: "success",
-        title: globalPaused ? "Automation paused" : "Automation resumed",
-        description: globalPaused ? "No new runs or GitHub writes will start." : "Gardener is listening for supported repository events.",
-      });
-    },
-    onError: (error: Error) => notify({ tone: "error", title: "Unable to update automation", description: error.message }),
-  });
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
   useEffect(() => {
@@ -122,11 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <nav className="sidebar__nav">{navigation}</nav>
       <div className="sidebar__footer">
-        <div className="deployment-summary">
-          <StatusBadge tone={health?.ok ? "success" : "warning"}>{health?.ok ? "Deployment healthy" : "Setup incomplete"}</StatusBadge>
-          <p>{activeRepositories} {activeRepositories === 1 ? "repository" : "repositories"} connected</p>
-        </div>
-        <p className="cloudflare-credit"><span className="cloudflare-dot" aria-hidden="true" /> Runs on Cloudflare Workers</p>
+        {authenticated ? <AccountMenu /> : null}
       </div>
     </div>
     {mobileOpen ? <button className="sidebar-backdrop" tabIndex={-1} aria-label="Close navigation" onClick={closeMobileNavigation} /> : null}
@@ -140,28 +111,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <div className="app-bar__actions">
           <ThemeToggle />
-          {setupComplete ? <Button
-            variant={paused ? "primary" : "secondary-destructive"}
-            icon={paused ? PlayIcon : PauseIcon}
-            onClick={() => setPauseOpen(true)}
-          >{paused ? "Resume automation" : "Pause automation"}</Button> : null}
-          {authenticated ? <AccountMenu /> : null}
+          {setupComplete ? <AutomationMenu /> : null}
         </div>
       </header>
       <main id="main-content" className="main-content">{children}</main>
     </div>
 
-    <ConfirmDialog
-      open={pauseOpen}
-      onOpenChange={setPauseOpen}
-      title={paused ? "Resume automation?" : "Pause all automation?"}
-      description={paused
-        ? "Gardener will start new runs for supported repository events. Your current policy settings remain in effect."
-        : "New runs and GitHub writes will stop. Received events and existing audit records remain available."}
-      confirmLabel={paused ? "Resume automation" : "Pause automation"}
-      confirmTone={paused ? "primary" : "destructive"}
-      loading={pauseMutation.isPending}
-      onConfirm={() => pauseMutation.mutateAsync()}
-    />
   </div>;
 }

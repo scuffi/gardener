@@ -24,8 +24,10 @@ const screenshots = {
   repositories: join(temporary, "02-repositories.png"),
   automation: join(temporary, "03-automation.png"),
   live: join(temporary, "04-live.png"),
-  accountMenu: join(temporary, "05-account-menu.png"),
-  accountMenuMobile: join(temporary, "05-account-menu-mobile.png"),
+  automationMenu: join(temporary, "05-automation-menu.png"),
+  automationMenuMobile: join(temporary, "05-automation-menu-mobile.png"),
+  accountMenu: join(temporary, "06-account-menu.png"),
+  accountMenuMobile: join(temporary, "06-account-menu-mobile.png"),
 };
 
 const base64url = (value) => Buffer.from(value).toString("base64url");
@@ -42,20 +44,24 @@ function signToken(claims) {
 }
 
 const fixtureIdentity = signToken({ typ: "gardener-identity", sub: "424242", githubLogin: "showcase-owner" });
-const fixtureEvent = signToken({
-  typ: "gardener-event",
-  event: {
-    schemaVersion: "v1",
-    id: "github:simulation-delivery-1",
-    deliveryId: "simulation-delivery-1",
-    instanceId: instance,
-    kind: "github.issue",
-    action: "opened",
-    occurredAt: new Date().toISOString(),
-    repository: { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
-    issue: { id: "issue-42", number: 42, title: "Bug: worker crashes on launch", body: "The worker fails immediately after startup.", state: "open", labels: [], author: "octocat", htmlUrl: "https://github.com/cloudflare/workers-sdk/issues/42" },
-  },
-});
+function issueEventToken(delivery, issueNumber) {
+  return signToken({
+    typ: "gardener-event",
+    event: {
+      schemaVersion: "v1",
+      id: `github:${delivery}`,
+      deliveryId: delivery,
+      instanceId: instance,
+      kind: "github.issue",
+      action: "opened",
+      occurredAt: new Date().toISOString(),
+      repository: { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
+      issue: { id: `issue-${issueNumber}`, number: issueNumber, title: "Bug: worker crashes on launch", body: "The worker fails immediately after startup.", state: "open", labels: [], author: "octocat", htmlUrl: `https://github.com/cloudflare/workers-sdk/issues/${issueNumber}` },
+    },
+  });
+}
+const fixturePausedEvent = issueEventToken("simulation-paused-delivery", 41);
+const fixtureEvent = issueEventToken("simulation-delivery-1", 42);
 const executedOperations = [];
 const connect = createServer(async (request, response) => {
   const url = new URL(request.url || "/", connectUrl);
@@ -189,6 +195,21 @@ try {
   await evaluate(`document.querySelector('[data-profile="safe"]').click(); document.querySelector('#setup-primary').click()`);
   await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "live dashboard");
   await screenshot(screenshots.live);
+
+  await evaluate(`document.querySelector('#automation-menu-trigger').click()`);
+  await waitFor(`Boolean(document.querySelector('[data-automation-menu]'))`, "automation menu");
+  await screenshot(screenshots.automationMenu);
+  await evaluate(`document.querySelector('[data-repository-id="repo-1"]').click()`);
+  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.repositories.find((repository)=>repository.id==='repo-1')?.paused===true)`, "repository pause");
+  const pausedDelivery = await evaluate(`(async()=>{const r=await fetch('/hooks/connect',{method:'POST',headers:{authorization:'Bearer ${fixturePausedEvent}'}});return {status:r.status,body:await r.json()}})()`);
+  if (pausedDelivery.status !== 202 || !pausedDelivery.body.paused || pausedDelivery.body.pausedBy !== 'repository' || pausedDelivery.body.runs?.length) throw new Error(`Paused repository accepted a run: ${JSON.stringify(pausedDelivery)}`);
+  await evaluate(`(()=>{if(!document.querySelector('[data-automation-menu]'))document.querySelector('#automation-menu-trigger').click();return true})()`);
+  await waitFor(`Boolean(document.querySelector('[data-repository-id="repo-1"]'))`, "repository resume control");
+  await evaluate(`document.querySelector('[data-repository-id="repo-1"]').click()`);
+  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.repositories.find((repository)=>repository.id==='repo-1')?.paused===false)`, "repository resume");
+  await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+
   await evaluate(`document.querySelector('#account-menu-trigger').click()`);
   await waitFor(`Boolean(document.querySelector('[data-account-menu]'))`, "account menu");
   await screenshot(screenshots.accountMenu);
@@ -198,6 +219,14 @@ try {
   await command("Page.reload");
   await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "mobile dashboard");
   await sleep(250);
+  await evaluate(`document.querySelector('#automation-menu-trigger').click()`);
+  await waitFor(`Boolean(document.querySelector('[data-automation-menu]'))`, "mobile automation menu");
+  await screenshot(screenshots.automationMenuMobile);
+  await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await evaluate(`document.querySelector('.mobile-menu').click()`);
+  await waitFor(`document.querySelector('#mobile-navigation').classList.contains('sidebar--open')`, "mobile navigation");
+  await waitFor(`Math.abs(document.querySelector('#mobile-navigation').getBoundingClientRect().x) < 1`, "mobile navigation transition");
   await evaluate(`document.querySelector('#account-menu-trigger').click()`);
   await waitFor(`Boolean(document.querySelector('[data-account-menu]'))`, "mobile account menu");
   await screenshot(screenshots.accountMenuMobile);
@@ -223,11 +252,12 @@ try {
     paused: finalState.globalPaused,
     workflowEnabled: Boolean(finalState.workflows[0]?.enabled),
     safeProfile: { labels: policies["issue.label.add"], comments: policies["issue.comment.create"], close: policies["issue.close"] },
+    repositoryPause: { enforced: pausedDelivery.body.pausedBy === "repository", resumed: finalState.repositories.find((repository) => repository.id === "repo-1")?.paused === false },
     eventFlow: { accepted: delivery.status === 202, runStatus: runDetail.run.status, proposalStatus: runDetail.proposals[0]?.status, operationKind: executedOperations[0]?.kind },
     browserExceptions: exceptions,
     screenshots,
   };
-  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
+  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || !result.repositoryPause.enforced || !result.repositoryPause.resumed || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
     throw new Error(`Onboarding assertions failed: ${JSON.stringify(result)}`);
   }
   console.log(JSON.stringify(result, null, 2));
