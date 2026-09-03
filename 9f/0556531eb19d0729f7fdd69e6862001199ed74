@@ -1,0 +1,29 @@
+apps/connect/package.json
+  s_83a29251dfe610::t_e1cec2e16d966d 25
+apps/gardener/package.json
+  s_83a29251dfe610::t_32f71fd9a5a861 37,39,46
+package.json
+  s_83a29251dfe610::t_7e1bf2da679a3a 23
+packages/contracts/package.json
+  s_83a29251dfe610::t_0982a61d26434a 19
+packages/core/package.json
+  s_83a29251dfe610::t_8d0a28355cec85 6-8,20
+pnpm-lock.yaml
+  s_83a29251dfe610::t_debba7186c6b13 18-19,49-50,111,115-117,122-123,143-144,147,162-163,178-179,1028-1029,1178-1179,1189-1190,1561-1563,1784-1786,1910-1912,1917-1923,1926,2607,2615,2644,2721,2723-2724,2726,2730,3046-3049,3302,3412,3420,3422,3424-3426,3429,3433
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9f0556531eb19d0729f7fdd69e6862001199ed74",
+  "prompts": {},
+  "sessions": {
+    "s_83a29251dfe610": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a06203-7eff-772e-86a2-71f2bdeae66a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
