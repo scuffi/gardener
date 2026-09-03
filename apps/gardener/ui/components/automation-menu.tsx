@@ -1,3 +1,4 @@
+import { Button } from "@cloudflare/kumo/components/button";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { CaretDownIcon, PauseIcon, PlayIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -47,10 +48,12 @@ export function AutomationMenu() {
   if (!state?.setup.completed) return null;
 
   return <DropdownMenu>
-    <DropdownMenu.Trigger id="automation-menu-trigger" type="button" className={`automation-menu-trigger${active ? " is-active" : " is-paused"}`} aria-label={`${status}. Open automation controls`}>
-      <span className="automation-menu-trigger__dot" aria-hidden="true" />
-      <span>{status}</span>
-      <CaretDownIcon size={13} aria-hidden="true" />
+    <DropdownMenu.Trigger>
+      <Button id="automation-menu-trigger" type="button" variant="secondary" className={`automation-menu-trigger${active ? " is-active" : " is-paused"}`} aria-label={`${status}. Open automation controls`}>
+        <span className="automation-menu-trigger__dot" aria-hidden="true" />
+        <span>{status}</span>
+        <CaretDownIcon size={13} aria-hidden="true" />
+      </Button>
     </DropdownMenu.Trigger>
     <DropdownMenu.Content align="end" sideOffset={8} className="automation-menu-content" data-automation-menu>
       <DropdownMenu.Group>

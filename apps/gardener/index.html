@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f6f7f8" />
+    <meta name="theme-color" content="#fcfcfc" />
     <meta name="description" content="Policy-controlled repository automation running in your Cloudflare account." />
     <script>
       (() => {
@@ -12,7 +12,7 @@
           const mode = stored === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : stored;
           document.documentElement.dataset.mode = mode;
           document.documentElement.dataset.themePreference = stored;
-          document.querySelector('meta[name="theme-color"]').content = mode === "dark" ? "#0d0f12" : "#f6f7f8";
+          document.querySelector('meta[name="theme-color"]').content = mode === "dark" ? "#0f0f0f" : "#fcfcfc";
         } catch {}
       })();
     </script>

@@ -1,8 +1,9 @@
 import { TooltipProvider } from "@cloudflare/kumo/components/tooltip";
+import { LinkProvider, type LinkComponentProps } from "@cloudflare/kumo/utils";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode } from "react";
+import { forwardRef, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, Link as RouterLink } from "react-router-dom";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import { App } from "./app";
@@ -17,6 +18,11 @@ const queryClient = new QueryClient({
     mutations: { retry: false },
   },
 });
+
+const AppLink = forwardRef<HTMLAnchorElement, LinkComponentProps>(({ href, to: _to, ...props }, ref) => (
+  <RouterLink ref={ref} to={href ?? ""} {...props} />
+));
+AppLink.displayName = "AppLink";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing application root");
@@ -34,7 +40,9 @@ async function render(): Promise<void> {
           <TooltipProvider>
             <NotificationsProvider>
               <BrowserRouter>
-                <App />
+                <LinkProvider component={AppLink}>
+                  <App />
+                </LinkProvider>
               </BrowserRouter>
             </NotificationsProvider>
           </TooltipProvider>

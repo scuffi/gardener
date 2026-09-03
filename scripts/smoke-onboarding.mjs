@@ -23,11 +23,22 @@ const screenshots = {
   accountMobile: join(temporary, "01-account-mobile.png"),
   repositories: join(temporary, "02-repositories.png"),
   automation: join(temporary, "03-automation.png"),
+  automationMobile: join(temporary, "03-automation-mobile.png"),
   live: join(temporary, "04-live.png"),
+  liveLight: join(temporary, "04-live-light.png"),
+  liveDark: join(temporary, "04-live-dark.png"),
+  liveTablet: join(temporary, "04-live-tablet.png"),
   automationMenu: join(temporary, "05-automation-menu.png"),
   automationMenuMobile: join(temporary, "05-automation-menu-mobile.png"),
   accountMenu: join(temporary, "06-account-menu.png"),
   accountMenuMobile: join(temporary, "06-account-menu-mobile.png"),
+  repositoriesPage: join(temporary, "07-repositories-page.png"),
+  workflowsPage: join(temporary, "08-workflows-page.png"),
+  policiesPage: join(temporary, "09-policies-page.png"),
+  approvalsPage: join(temporary, "10-approvals-page.png"),
+  runsPage: join(temporary, "11-runs-page.png"),
+  runDialog: join(temporary, "12-run-dialog.png"),
+  settingsPage: join(temporary, "13-settings-page.png"),
 };
 
 const base64url = (value) => Buffer.from(value).toString("base64url");
@@ -62,6 +73,7 @@ function issueEventToken(delivery, issueNumber) {
 }
 const fixturePausedEvent = issueEventToken("simulation-paused-delivery", 41);
 const fixtureEvent = issueEventToken("simulation-delivery-1", 42);
+const fixtureApprovalEvent = issueEventToken("simulation-approval-delivery", 43);
 const executedOperations = [];
 const connect = createServer(async (request, response) => {
   const url = new URL(request.url || "/", connectUrl);
@@ -172,6 +184,11 @@ try {
     const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     await writeFile(destination, Buffer.from(capture.data, "base64"));
   };
+  const openPage = async (label, path) => {
+    await evaluate(`([...document.querySelectorAll('[data-sidebar="menu-button"]')].find((item)=>item.textContent.trim().startsWith(${JSON.stringify(label)}))).click()`);
+    await waitFor(`location.pathname === ${JSON.stringify(path)} && document.querySelector('h1')?.textContent === ${JSON.stringify(label)} && document.querySelector('[data-sidebar="menu-button"][aria-current="page"]')?.textContent.trim().startsWith(${JSON.stringify(label)})`, `${label} page`);
+    await sleep(150);
+  };
 
   await command("Runtime.enable");
   await command("Page.enable");
@@ -191,10 +208,30 @@ try {
   await evaluate(`document.querySelector('#setup-primary').click()`);
   await waitFor(`document.querySelector('#setup-primary')?.dataset.action === 'activate'`, "automation step");
   await screenshot(screenshots.automation);
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  await screenshot(screenshots.automationMobile);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
 
   await evaluate(`document.querySelector('[data-profile="safe"]').click(); document.querySelector('#setup-primary').click()`);
   await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "live dashboard");
+  await sleep(200);
+  await waitFor(`!document.querySelector('[data-starting-style]')`, "activation notice transition");
   await screenshot(screenshots.live);
+  await evaluate(`localStorage.setItem('gardener.theme','light')`);
+  await command("Page.reload");
+  await waitFor(`document.documentElement.dataset.mode === 'light' && Boolean(document.querySelector('#operating-dashboard'))`, "light dashboard");
+  await screenshot(screenshots.liveLight);
+  await evaluate(`localStorage.setItem('gardener.theme','dark')`);
+  await command("Page.reload");
+  await waitFor(`document.documentElement.dataset.mode === 'dark' && Boolean(document.querySelector('#operating-dashboard'))`, "dark dashboard");
+  await screenshot(screenshots.liveDark);
+  await command("Emulation.setDeviceMetricsOverride", { width: 820, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
+  await screenshot(screenshots.liveTablet);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
 
   await evaluate(`document.querySelector('#automation-menu-trigger').click()`);
   await waitFor(`Boolean(document.querySelector('[data-automation-menu]'))`, "automation menu");
@@ -225,7 +262,7 @@ try {
   await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
   await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
   await evaluate(`document.querySelector('.mobile-menu').click()`);
-  await waitFor(`document.querySelector('#mobile-navigation').classList.contains('sidebar--open')`, "mobile navigation");
+  await waitFor(`document.querySelector('#mobile-navigation')?.dataset.state === 'expanded'`, "mobile navigation");
   await waitFor(`Math.abs(document.querySelector('#mobile-navigation').getBoundingClientRect().x) < 1`, "mobile navigation transition");
   await evaluate(`document.querySelector('#account-menu-trigger').click()`);
   await waitFor(`Boolean(document.querySelector('[data-account-menu]'))`, "mobile account menu");
@@ -240,6 +277,34 @@ try {
   if (delivery.status !== 202 || !delivery.body.runs?.[0]) throw new Error(`Simulated event was not accepted: ${JSON.stringify(delivery)}`);
   const runId = delivery.body.runs[0];
   await waitFor(`(async()=>{const r=await fetch('/api/runs/${runId}');if(!r.ok)return false;const body=await r.json();return body.run.status==='completed'&&body.proposals?.[0]?.status==='executed'})()`, "automatic typed operation");
+  const approvalPolicy = await evaluate(`(async()=>{const r=await fetch('/api/policies/issue.label.add',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'approval'})});return {status:r.status,body:await r.json()}})()`);
+  if (approvalPolicy.status !== 200) throw new Error(`Unable to prepare approval visual state: ${JSON.stringify(approvalPolicy)}`);
+  const approvalDelivery = await evaluate(`(async()=>{const r=await fetch('/hooks/connect',{method:'POST',headers:{authorization:'Bearer ${fixtureApprovalEvent}'}});return {status:r.status,body:await r.json()}})()`);
+  if (approvalDelivery.status !== 202 || !approvalDelivery.body.runs?.[0]) throw new Error(`Approval event was not accepted: ${JSON.stringify(approvalDelivery)}`);
+  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.approvals.length > 0)`, "pending approval visual state");
+  const restoredPolicy = await evaluate(`(async()=>{const r=await fetch('/api/policies/issue.label.add',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'automatic'})});return {status:r.status,body:await r.json()}})()`);
+  if (restoredPolicy.status !== 200) throw new Error(`Unable to restore safe policy: ${JSON.stringify(restoredPolicy)}`);
+  await command("Page.reload");
+  await waitFor(`Boolean(document.querySelector('#operating-dashboard')) && Boolean(document.querySelector('.table-primary-link'))`, "refreshed completed and pending runs");
+
+  await openPage("Repositories", "/repositories");
+  await screenshot(screenshots.repositoriesPage);
+  await openPage("Workflows", "/workflows");
+  await screenshot(screenshots.workflowsPage);
+  await openPage("Policies", "/policies");
+  await screenshot(screenshots.policiesPage);
+  await openPage("Approvals", "/approvals");
+  await screenshot(screenshots.approvalsPage);
+  await openPage("Runs", "/runs");
+  await screenshot(screenshots.runsPage);
+  await evaluate(`document.querySelector('.table-primary-link').click()`);
+  await waitFor(`Boolean(document.querySelector('.run-dialog'))`, "run detail dialog");
+  await waitFor(`[...document.querySelectorAll('.run-dialog')].some((dialog)=>!dialog.hasAttribute('data-starting-style')&&!dialog.hasAttribute('data-ending-style')&&Number.parseFloat(getComputedStyle(dialog).opacity) > 0.99)`, "run detail dialog transition");
+  await screenshot(screenshots.runDialog);
+  await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await openPage("Settings", "/settings");
+  await screenshot(screenshots.settingsPage);
 
   const finalState = await evaluate(`fetch('/api/state').then((response)=>response.json())`);
   const runDetail = await evaluate(`fetch('/api/runs/${runId}').then((response)=>response.json())`);

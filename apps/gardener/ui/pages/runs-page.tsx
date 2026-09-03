@@ -1,3 +1,4 @@
+import { Select } from "@cloudflare/kumo/components/select";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useGardener } from "../app-context";
@@ -21,7 +22,7 @@ export function RunsPage() {
     <PageHeader
       title="Runs"
       description="Inspect every workflow execution, model result, proposed operation, failure, and recorded cost."
-      actions={<label className="compact-field"><span>Status</span><select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All runs</option><option value="completed">Completed</option><option value="queued">Queued</option><option value="failed">Failed</option><option value="completed_with_errors">Completed with errors</option></select></label>}
+      actions={<div className="compact-field"><span>Status</span><Select aria-label="Filter runs by status" size="sm" className="run-filter" value={filter} onValueChange={(value) => setFilter(value ?? "all")} items={{ all: "All runs", completed: "Completed", queued: "Queued", failed: "Failed", completed_with_errors: "Completed with errors" }} /></div>}
     />
     <Surface padded={false}><RunTable runs={runs} onSelect={(run) => { setSelectedRun(run); setSearchParams({ selected: run.id }); }} /></Surface>
     <RunDetailDialog run={selectedRun} onClose={() => { setSelectedRun(null); setSearchParams({}); }} />

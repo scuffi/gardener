@@ -1,31 +1,27 @@
-import { CheckCircleIcon, WarningCircleIcon, XIcon } from "@phosphor-icons/react";
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { Toasty, useKumoToastManager } from "@cloudflare/kumo/components/toast";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 
-interface Notice { id: number; title: string; description?: string; tone: "success" | "error" | "info" }
-interface NotificationsValue { notify: (notice: Omit<Notice, "id">) => void }
+interface Notice { title: string; description?: string; tone: "success" | "error" | "info" }
+interface NotificationsValue { notify: (notice: Notice) => void }
 const NotificationsContext = createContext<NotificationsValue | null>(null);
 
-export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const sequence = useRef(0);
-  const dismiss = useCallback((id: number) => setNotices((current) => current.filter((notice) => notice.id !== id)), []);
-  const notify = useCallback((notice: Omit<Notice, "id">) => {
-    const id = ++sequence.current;
-    setNotices((current) => [...current.slice(-2), { ...notice, id }]);
-    if (notice.tone !== "error") window.setTimeout(() => dismiss(id), 4500);
-  }, [dismiss]);
+function NotificationsBridge({ children }: { children: ReactNode }) {
+  const toastManager = useKumoToastManager();
+  const notify = useCallback((notice: Notice) => {
+    toastManager.add({
+      title: notice.title,
+      description: notice.description,
+      variant: notice.tone,
+      priority: notice.tone === "error" ? "high" : "low",
+      timeout: notice.tone === "error" ? 0 : 4_500,
+    });
+  }, [toastManager]);
   const value = useMemo(() => ({ notify }), [notify]);
+  return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
+}
 
-  return <NotificationsContext.Provider value={value}>
-    {children}
-    <div className="toast-region" role="region" aria-label="Notifications" aria-live="polite">
-      {notices.map((notice) => <div key={notice.id} className={`toast toast--${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
-        {notice.tone === "success" ? <CheckCircleIcon size={20} weight="fill" aria-hidden="true" /> : <WarningCircleIcon size={20} weight="fill" aria-hidden="true" />}
-        <div><strong>{notice.title}</strong>{notice.description ? <p>{notice.description}</p> : null}</div>
-        <button type="button" onClick={() => dismiss(notice.id)} aria-label="Dismiss notification"><XIcon size={16} /></button>
-      </div>)}
-    </div>
-  </NotificationsContext.Provider>;
+export function NotificationsProvider({ children }: { children: ReactNode }) {
+  return <Toasty><NotificationsBridge>{children}</NotificationsBridge></Toasty>;
 }
 
 export function useNotifications(): NotificationsValue {

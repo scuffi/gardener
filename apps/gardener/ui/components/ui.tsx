@@ -1,6 +1,8 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
 import { Empty } from "@cloudflare/kumo/components/empty";
+import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { Loader } from "@cloudflare/kumo/components/loader";
 import type { Icon } from "@phosphor-icons/react";
 import { ArrowClockwiseIcon, ArrowRightIcon, CheckCircleIcon, CpuIcon, GithubLogoIcon, ShieldCheckIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { Fragment, useEffect, useRef, type ReactNode } from "react";
@@ -26,7 +28,7 @@ export function SectionHeader({ title, description, actions }: { title: string; 
 }
 
 export function Surface({ children, className = "", padded = true }: { children: ReactNode; className?: string; padded?: boolean }) {
-  return <section className={`surface${padded ? " surface--padded" : ""}${className ? ` ${className}` : ""}`}>{children}</section>;
+  return <LayerCard render={<section />} className={`surface${padded ? " surface--padded" : ""}${className ? ` ${className}` : ""}`}>{children}</LayerCard>;
 }
 
 export type StatusTone = "success" | "warning" | "error" | "info" | "neutral";
@@ -67,7 +69,7 @@ export function EmptyState({ icon: IconComponent, title, description, action, co
 
 export function LoadingState({ label = "Loading" }: { label?: string }) {
   return <div className="loading-state" role="status" aria-live="polite">
-    <span className="spinner" aria-hidden="true" />
+    <Loader size="sm" aria-hidden="true" />
     <span>{label}</span>
   </div>;
 }

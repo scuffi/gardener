@@ -1,3 +1,4 @@
+import { Button } from "@cloudflare/kumo/components/button";
 import { DesktopIcon, MoonIcon, SunIcon, type Icon } from "@phosphor-icons/react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -35,7 +36,7 @@ function storedPreference(): ThemePreference {
 function applyTheme(preference: ThemePreference, resolvedTheme: ResolvedTheme) {
   document.documentElement.dataset.mode = resolvedTheme;
   document.documentElement.dataset.themePreference = preference;
-  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", resolvedTheme === "dark" ? "#0d0f12" : "#f6f7f8");
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", resolvedTheme === "dark" ? "#0f0f0f" : "#fcfcfc");
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -74,13 +75,16 @@ export function ThemeToggle() {
   const { resolvedTheme, setPreference } = useTheme();
   const dark = resolvedTheme === "dark";
   const CurrentIcon = dark ? MoonIcon : SunIcon;
-  return <button
+  return <Button
     type="button"
+    variant="secondary"
+    shape="square"
     className="theme-toggle"
     aria-label={`Switch to ${dark ? "light" : "dark"} theme`}
     title={`${dark ? "Dark" : "Light"} theme`}
+    icon={CurrentIcon}
     onClick={() => setPreference(dark ? "light" : "dark")}
-  ><CurrentIcon size={17} aria-hidden="true" /></button>;
+  />;
 }
 
 export function ThemePicker() {
