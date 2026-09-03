@@ -9,6 +9,12 @@ export function canonicalJson(value: unknown): string {
 }
 
 // Two seeded FNV-1a passes provide a compact, deterministic identifier without a runtime crypto dependency.
+export async function canonicalSha256(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalJson(value));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function stableHash(value: unknown): string {
   const input = canonicalJson(value);
   const pass = (seed: bigint): string => {

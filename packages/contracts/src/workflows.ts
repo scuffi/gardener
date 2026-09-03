@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { workflowConditionSchema } from "./conditions";
+import { issueEventActionSchema, pullRequestEventActionSchema } from "./events";
+import { githubNumericIdSchema } from "./identity";
 import { operationKindSchema } from "./operations";
 import { policySchema } from "./policies";
 
@@ -43,6 +46,92 @@ export const workflowDefinitionSchema = z.object({
   limits: workflowLimitsSchema.default({ runtimeSeconds: 300, inputTokens: 32_000, outputTokens: 8_000, costUsd: 1, retries: 2, operations: 10 }),
 }).strict();
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
+export const workflowDefinitionV1Schema = workflowDefinitionSchema;
+export type WorkflowDefinitionV1 = WorkflowDefinition;
+
+export const workflowTriggerV2Schema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("github.issue"), actions: z.array(issueEventActionSchema).min(1).max(issueEventActionSchema.options.length) }).strict(),
+  z.object({ kind: z.literal("github.pull_request"), actions: z.array(pullRequestEventActionSchema).min(1).max(pullRequestEventActionSchema.options.length) }).strict(),
+  z.object({ kind: z.literal("manual") }).strict(),
+  z.object({ kind: z.literal("schedule"), cron: z.string().trim().min(5).max(100) }).strict(),
+]);
+export type WorkflowTriggerV2 = z.infer<typeof workflowTriggerV2Schema>;
+
+export const workflowRuntimeV2Schema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("workers-ai.issue-gardener"), model: z.literal("deployment-default"), instructions: z.string().min(1).max(50_000) }).strict(),
+  z.object({ kind: z.literal("workers-ai.pull-request-gardener"), model: z.literal("deployment-default"), instructions: z.string().min(1).max(50_000) }).strict(),
+]);
+export type WorkflowRuntimeV2 = z.infer<typeof workflowRuntimeV2Schema>;
+
+export const workflowCapabilitiesV2Schema = z.object({
+  read: z.array(z.enum(["issue", "pull_request", "repository", "checks", "files"])).max(10).default([]),
+  propose: z.array(operationKindSchema).max(operationKindSchema.options.length).default([]),
+}).strict().superRefine((capabilities, context) => {
+  if (new Set(capabilities.read).size !== capabilities.read.length) context.addIssue({ code: "custom", path: ["read"], message: "read capabilities must be unique" });
+  if (new Set(capabilities.propose).size !== capabilities.propose.length) context.addIssue({ code: "custom", path: ["propose"], message: "proposed operations must be unique" });
+});
+export type WorkflowCapabilitiesV2 = z.infer<typeof workflowCapabilitiesV2Schema>;
+
+/** Client-authored no-code content. Server-owned identity, revision, state, hashes, and policy are deliberately absent. */
+export const workflowSpecV2Schema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(1_000).default(""),
+  triggers: z.array(workflowTriggerV2Schema).min(1).max(20),
+  repositoryIds: z.array(githubNumericIdSchema).min(1).max(1_000),
+  condition: workflowConditionSchema.nullable().default(null),
+  runtime: workflowRuntimeV2Schema,
+  capabilities: workflowCapabilitiesV2Schema,
+  workspace: workspaceRequirementsSchema.default({ enabled: false, experimental: false, network: "denied", allowedHosts: [] }),
+  limits: workflowLimitsSchema.default({ runtimeSeconds: 300, inputTokens: 32_000, outputTokens: 8_000, costUsd: 1, retries: 2, operations: 10 }),
+}).strict().superRefine((definition, context) => {
+  if (new Set(definition.repositoryIds).size !== definition.repositoryIds.length) {
+    context.addIssue({ code: "custom", path: ["repositoryIds"], message: "repository ids must be unique" });
+  }
+  const triggerKinds = definition.triggers.map((trigger) => trigger.kind);
+  if (new Set(triggerKinds).size !== triggerKinds.length) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "trigger kinds must be unique" });
+  }
+  for (const [index, trigger] of definition.triggers.entries()) {
+    if ("actions" in trigger && new Set(trigger.actions).size !== trigger.actions.length) {
+      context.addIssue({ code: "custom", path: ["triggers", index, "actions"], message: "trigger actions must be unique" });
+    }
+  }
+});
+export type WorkflowSpecV2 = z.infer<typeof workflowSpecV2Schema>;
+
+/** Server-authored immutable revision envelope for a no-code workflow specification. */
+export const workflowDefinitionV2Schema = z.object({
+  schemaVersion: z.literal("v2"),
+  workflowId: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/),
+  revision: z.number().int().positive(),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  spec: workflowSpecV2Schema,
+}).strict();
+export type WorkflowDefinitionV2 = z.infer<typeof workflowDefinitionV2Schema>;
+
+export const anyWorkflowDefinitionSchema = z.union([workflowDefinitionV1Schema, workflowDefinitionV2Schema]);
+export type AnyWorkflowDefinition = z.infer<typeof anyWorkflowDefinitionSchema>;
+
+export const compiledWorkflowPlanV2Schema = z.object({
+  schemaVersion: z.literal("v2"),
+  planId: z.string().regex(/^plan_[a-f0-9]{64}$/),
+  workflowId: z.string().min(1).max(255),
+  revision: z.number().int().positive(),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  compiledAt: z.iso.datetime(),
+  triggers: z.array(z.string().min(1).max(255)).min(1).max(100),
+  repositoryIds: z.array(githubNumericIdSchema).min(1).max(1_000),
+  condition: workflowConditionSchema.nullable(),
+  runtime: z.object({
+    kind: z.enum(["workers-ai.issue-gardener", "workers-ai.pull-request-gardener"]),
+    resolvedModel: z.string().min(1).max(255),
+    instructions: z.string().min(1).max(50_000),
+  }).strict(),
+  capabilities: workflowCapabilitiesV2Schema,
+  workspace: workspaceRequirementsSchema,
+  limits: workflowLimitsSchema,
+}).strict();
+export type CompiledWorkflowPlanV2 = z.infer<typeof compiledWorkflowPlanV2Schema>;
 
 export const compiledPlanSchema = z.object({
   schemaVersion: z.literal("v1"),

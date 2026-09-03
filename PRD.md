@@ -75,16 +75,23 @@ The setup flow should discover every repository selected during GitHub App insta
 
 Workflow definitions are validated and compiled into immutable plans. Runs execute compiled plans, never mutable source. New workflows and starter packs begin paused.
 
+The dashboard is the primary no-code workflow product. It must showcase useful templates and provide an ordered **When / Where / If / Then / Controls** builder so users can create and change workflows without editing JSON, YAML, prompts, or code. The dashboard and future local coding-agent tools operate on the same versioned representation and management API.
+
 Keep the initial workflow language small and understandable. It needs:
 
 - Event, manual, and scheduled triggers
-- Repository selection
+- Explicit repository selection using immutable repository IDs
+- Typed, bounded conditions with three-valued fail-closed evaluation
+- Distinct event-actor and resource-author identities
+- Extensible capability metadata for future user, team, repository-role, branch, label, check, and time-window controls
 - Instructions
 - Model/runtime selection
 - Read tools
 - Workspace requirements
-- Allowed operations and HIL mode
+- Allowed operations and a restrictive authority ceiling
 - Runtime, token, cost, retry, and operation limits
+
+Workflow conditions only narrow eligibility. They cannot grant operation authority or change instance policy. Security-sensitive identity, team, role, and mutable repository facts are resolved or attested by Connect and rechecked before execution; repository content and model output are never authorization evidence. Unknown or unavailable capabilities fail closed.
 
 The agent harness must be replaceable. Define a small `AgentRuntime` contract for start, status, result, and cancellation. Workflow policy and authorization must not import harness-specific concepts.
 
@@ -177,7 +184,7 @@ The UI should make these questions obvious:
 - Is anything waiting for approval or failing?
 - How do I pause all activity immediately?
 
-Minimum areas: Overview, Repositories, Workflows, Runs, Approvals, Policies, and Settings/Health.
+Minimum areas: Overview, Repositories, Workflows, Runs, Approvals, Policies, and Settings/Health. Workflows include a template showcase, no-code builder, immutable revision history, capability warnings, effective-policy summary, validation, dry-run, and explicit human activation.
 
 ## Delivery order
 

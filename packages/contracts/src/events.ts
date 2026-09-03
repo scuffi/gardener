@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { githubIdentitySchema } from "./identity";
 import { repositoryRefSchema } from "./repository";
 
 export const issueResourceSchema = z.object({
@@ -9,6 +10,7 @@ export const issueResourceSchema = z.object({
   state: z.enum(["open", "closed"]),
   labels: z.array(z.string().min(1).max(100)).max(100).default([]),
   author: z.string().min(1).max(255),
+  authorIdentity: githubIdentitySchema.optional(),
   htmlUrl: z.url(),
   updatedAt: z.iso.datetime().optional(),
 }).strict();
@@ -29,6 +31,7 @@ export const normalizedIssueEventSchema = z.object({
   action: issueEventActionSchema,
   occurredAt: z.iso.datetime(),
   repository: repositoryRefSchema,
+  actor: githubIdentitySchema.optional(),
   issue: issueResourceSchema,
 }).strict();
 
@@ -42,6 +45,7 @@ export const pullRequestResourceSchema = z.object({
   merged: z.boolean().default(false),
   labels: z.array(z.string().min(1).max(100)).max(100).default([]),
   author: z.string().min(1).max(255),
+  authorIdentity: githubIdentitySchema.optional(),
   htmlUrl: z.url(),
   head: z.object({ ref: z.string().min(1).max(255), sha: z.string().regex(/^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/) }).strict(),
   base: z.object({ ref: z.string().min(1).max(255), sha: z.string().regex(/^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/) }).strict(),
@@ -64,6 +68,7 @@ export const normalizedPullRequestEventSchema = z.object({
   action: pullRequestEventActionSchema,
   occurredAt: z.iso.datetime(),
   repository: repositoryRefSchema,
+  actor: githubIdentitySchema.optional(),
   pullRequest: pullRequestResourceSchema,
 }).strict();
 
