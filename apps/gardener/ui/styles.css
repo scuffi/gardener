@@ -64,6 +64,9 @@ p { margin-bottom: 0; }
 
 .app-shell { min-height: 100svh; background: var(--gd-canvas); }
 .gardener-sidebar { --sidebar-bg: var(--gd-surface); --sidebar-active-bg: var(--gd-surface-hover); }
+@media (min-width: 901px) {
+  .gardener-sidebar { position: sticky; top: 0; height: 100svh; min-height: 100svh; align-self: flex-start; }
+}
 .gardener-sidebar__header { height: var(--gd-appbar-height); min-height: var(--gd-appbar-height); padding: 0 14px; }
 .brand { min-width: 0; display: flex; align-items: center; gap: 9px; color: var(--gd-text-strong); text-decoration: none; }
 .brand__mark { position: relative; width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--gd-leaf) 24%, var(--gd-line)); border-radius: var(--gd-radius); color: var(--gd-leaf-strong); background: var(--gd-leaf-tint); }
