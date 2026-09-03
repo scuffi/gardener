@@ -11,8 +11,6 @@ import { consumeReturnedIdentity } from "./lib/api";
 import { ThemeProvider } from "./theme";
 import "./styles.css";
 
-consumeReturnedIdentity();
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { refetchOnWindowFocus: false, staleTime: 10_000 },
@@ -23,18 +21,27 @@ const queryClient = new QueryClient({
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing application root");
 
-createRoot(root).render(
-  <StrictMode>
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <NotificationsProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </NotificationsProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
-  </StrictMode>,
-);
+async function render(): Promise<void> {
+  try {
+    await consumeReturnedIdentity();
+  } catch (error) {
+    console.error("Unable to establish dashboard session", error);
+  }
+  createRoot(root!).render(
+    <StrictMode>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <NotificationsProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </NotificationsProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </StrictMode>,
+  );
+}
+
+void render();

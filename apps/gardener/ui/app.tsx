@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppDataProvider, useGardener } from "./app-context";
 import { AppShell } from "./components/app-shell";
+import { SignInPage } from "./components/sign-in-page";
 import { SetupWizard } from "./components/setup-wizard";
 import { ErrorState, LoadingState } from "./components/ui";
 
@@ -14,12 +15,13 @@ const PoliciesPage = lazy(() => import("./pages/policies-page").then((module) =>
 const SettingsPage = lazy(() => import("./pages/settings-page").then((module) => ({ default: module.SettingsPage })));
 
 function AppRoutes() {
-  const { health, state, loading, error, refresh } = useGardener();
+  const { health, state, loading, error, authenticated, refresh } = useGardener();
   const location = useLocation();
   const setupComplete = Boolean(state?.setup.completed);
 
   if (loading) return <AppShell><div className="page-loading"><LoadingState label={health ? "Loading workspace" : "Checking deployment"} /></div></AppShell>;
   if (error && !health) return <AppShell><ErrorState title="Unable to reach this deployment" message={error.message} onRetry={() => void refresh()} /></AppShell>;
+  if (!authenticated) return <AppShell><SignInPage /></AppShell>;
   if (!setupComplete) {
     return <AppShell>
       {location.pathname !== "/overview" && location.pathname !== "/" ? <Navigate to="/overview" replace /> : null}

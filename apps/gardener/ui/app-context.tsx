@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ApiError, clearSession, gardenerApi, hasSession } from "./lib/api";
+import { ApiError, gardenerApi } from "./lib/api";
 import type { AppState, HealthState } from "./lib/types";
 import { useNotifications } from "./components/notifications";
 
@@ -13,7 +13,6 @@ interface AppContextValue {
   authenticated: boolean;
   refresh: () => Promise<void>;
   signOut: () => void;
-  establishSession: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -23,9 +22,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { notify } = useNotifications();
   const [sessionRevision, setSessionRevision] = useState(0);
   const installationHandled = useRef(false);
-  const sessionPresent = hasSession();
   const healthQuery = useQuery({ queryKey: ["health"], queryFn: gardenerApi.health, retry: 1, staleTime: 30_000 });
-  const authenticated = sessionPresent || Boolean(healthQuery.data?.localDevelopment);
+  const sessionQuery = useQuery({ queryKey: ["session", sessionRevision], queryFn: gardenerApi.session, retry: false });
+  const authenticated = Boolean(sessionQuery.data?.authenticated || healthQuery.data?.localDevelopment);
   const stateQuery = useQuery({
     queryKey: ["state", sessionRevision],
     queryFn: gardenerApi.state,
@@ -35,9 +34,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!(stateQuery.error instanceof ApiError) || stateQuery.error.status !== 401) return;
-    clearSession();
-    setSessionRevision((value) => value + 1);
-    notify({ tone: "error", title: "Dashboard session expired", description: "Connect GitHub again to continue." });
+    queryClient.setQueryData(["session", sessionRevision], { authenticated: false });
+    notify({ tone: "error", title: "Dashboard session expired", description: "Sign in again to continue." });
   }, [stateQuery.error, notify]);
 
   useEffect(() => {
@@ -61,23 +59,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const signOut = useCallback(() => {
-    clearSession();
-    queryClient.removeQueries({ queryKey: ["state"] });
-    setSessionRevision((value) => value + 1);
+    void gardenerApi.signOut().finally(() => {
+      queryClient.removeQueries({ queryKey: ["state"] });
+      setSessionRevision((value) => value + 1);
+    });
   }, [queryClient]);
 
-  const establishSession = useCallback(() => setSessionRevision((value) => value + 1), []);
   const value = useMemo<AppContextValue>(() => ({
     health: healthQuery.data ?? null,
     state: stateQuery.data ?? null,
-    loading: healthQuery.isLoading || (authenticated && stateQuery.isLoading),
+    loading: healthQuery.isLoading || sessionQuery.isLoading || (authenticated && stateQuery.isLoading),
     stateLoading: stateQuery.isLoading,
     error: (healthQuery.error ?? stateQuery.error) as Error | null,
     authenticated,
     refresh,
     signOut,
-    establishSession,
-  }), [healthQuery.data, healthQuery.isLoading, healthQuery.error, stateQuery.data, stateQuery.isLoading, stateQuery.error, authenticated, refresh, signOut, establishSession]);
+  }), [healthQuery.data, healthQuery.isLoading, healthQuery.error, sessionQuery.isLoading, stateQuery.data, stateQuery.isLoading, stateQuery.error, authenticated, refresh, signOut]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

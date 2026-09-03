@@ -1,6 +1,8 @@
-import { createHmac, webcrypto } from "node:crypto";
+import { createHmac, generateKeyPairSync, webcrypto } from "node:crypto";
+import { importPKCS8 } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { constantTimeEqual, sha256, verifyWebhookSignature } from "../src/crypto";
+import { normalizeGitHubAppPrivateKey } from "../src/github";
 import { normalizeIssueEvent } from "../src/index";
 import { grantRequestSchema, operationSchema, parseRepositoryFullName } from "../src/schema";
 
@@ -22,6 +24,15 @@ describe("credential and webhook primitives", () => {
     expect(await verifyWebhookSignature("hook-secret", body, signature)).toBe(true);
     expect(await verifyWebhookSignature("hook-secret", `${body} `, signature)).toBe(false);
     expect(await verifyWebhookSignature("hook-secret", body, null)).toBe(false);
+  });
+
+  it("normalizes GitHub-generated PKCS#1 App keys for Web Crypto", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const pkcs1 = privateKey.export({ format: "pem", type: "pkcs1" }).toString();
+    const pkcs8 = normalizeGitHubAppPrivateKey(pkcs1);
+    expect(pkcs8).toContain("BEGIN PRIVATE KEY");
+    await expect(importPKCS8(pkcs8, "RS256")).resolves.toBeDefined();
+    expect(normalizeGitHubAppPrivateKey(pkcs8)).toBe(pkcs8);
   });
 });
 

@@ -10,8 +10,40 @@ type JsonRecord = Record<string, unknown>;
 function record(value: unknown): value is JsonRecord { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function positiveInteger(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 
+function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const result = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let offset = 0;
+  for (const part of parts) { result.set(part, offset); offset += part.length; }
+  return result;
+}
+
+function asn1(tag: number, value: Uint8Array): Uint8Array {
+  const length = value.length < 128
+    ? new Uint8Array([value.length])
+    : (() => {
+        const bytes: number[] = [];
+        for (let remaining = value.length; remaining > 0; remaining >>>= 8) bytes.unshift(remaining & 0xff);
+        return new Uint8Array([0x80 | bytes.length, ...bytes]);
+      })();
+  return concatBytes(new Uint8Array([tag]), length, value);
+}
+
+/** GitHub-generated App keys are PKCS#1; Web Crypto and jose require PKCS#8. */
+export function normalizeGitHubAppPrivateKey(input: string): string {
+  const pem = input.replace(/\\n/g, "\n").trim();
+  if (pem.includes("-----BEGIN PRIVATE KEY-----")) return `${pem}\n`;
+  if (!pem.includes("-----BEGIN RSA PRIVATE KEY-----")) throw new Error("Unsupported GitHub App private key format");
+  const base64 = pem.replace(/-----BEGIN RSA PRIVATE KEY-----|-----END RSA PRIVATE KEY-----|\s/g, "");
+  const pkcs1 = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+  const version = new Uint8Array([0x02, 0x01, 0x00]);
+  const rsaAlgorithm = new Uint8Array([0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]);
+  const pkcs8 = asn1(0x30, concatBytes(version, rsaAlgorithm, asn1(0x04, pkcs1)));
+  const encoded = btoa(String.fromCharCode(...pkcs8));
+  return `-----BEGIN PRIVATE KEY-----\n${encoded.match(/.{1,64}/g)?.join("\n") ?? encoded}\n-----END PRIVATE KEY-----\n`;
+}
+
 async function appJwt(env: Env): Promise<string> {
-  const key = await importPKCS8(env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"), "RS256");
+  const key = await importPKCS8(normalizeGitHubAppPrivateKey(env.GITHUB_APP_PRIVATE_KEY), "RS256");
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({}).setProtectedHeader({ alg: "RS256", typ: "JWT" }).setIssuer(env.GITHUB_APP_ID)
     .setIssuedAt(now - 60).setExpirationTime(now + 540).sign(key);

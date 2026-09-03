@@ -16,11 +16,11 @@ const profiles: Array<{ id: SetupProfile; name: string; summary: string; policie
 ];
 
 export function SetupWizard() {
-  const { state, health, authenticated, refresh } = useGardener();
+  const { state, health, refresh } = useGardener();
   const { notify } = useNotifications();
   const repositories = state?.setup.activeRepositories ?? 0;
   const [profile, setProfile] = useState<SetupProfile>(state?.setup.profile ?? "safe");
-  const step = !authenticated ? 1 : repositories === 0 ? 2 : 3;
+  const step = repositories === 0 ? 1 : 2;
   const connectReady = Boolean(health?.connectConfigured || health?.localDevelopment);
 
   const installMutation = useMutation({
@@ -41,7 +41,7 @@ export function SetupWizard() {
     <PageHeader
       eyebrow="Customer-owned deployment"
       title="Configure repository automation"
-      description="Connect GitHub, select repositories, and decide which actions Gardener can execute. The runtime and audit data stay in your Cloudflare account."
+      description="Select repository access and decide which actions Gardener can execute. The runtime and audit data stay in your Cloudflare account."
     />
 
     {!connectReady ? <Banner
@@ -53,7 +53,7 @@ export function SetupWizard() {
 
     <Surface className="setup-panel" padded={false}>
       <ol className="setup-progress" aria-label="Setup progress">
-        {["Connect GitHub", "Select repositories", "Set permissions"].map((label, index) => {
+        {["Select repositories", "Set permissions"].map((label, index) => {
           const number = index + 1;
           const complete = number < step;
           const active = number === step;
@@ -66,38 +66,23 @@ export function SetupWizard() {
 
       <div className="setup-content">
         {step === 1 ? <section className="setup-step-content">
-          <div className="setup-icon"><GithubLogoIcon size={28} weight="fill" aria-hidden="true" /></div>
-          <p className="overline">Step 1 of 3</p>
-          <h2>Connect your GitHub account</h2>
-          <p>Sign in to confirm who owns this deployment. The returned dashboard session is temporary and scoped only to this Gardener instance.</p>
-          <Button
-            variant="primary"
-            size="lg"
-            icon={GithubLogoIcon}
-            disabled={!connectReady}
-            onClick={() => { location.href = "/api/auth/start"; }}
-          >Continue to GitHub</Button>
-          {!connectReady ? <p className="field-note field-note--warning">Complete the missing deployment configuration to enable GitHub sign-in.</p> : null}
-        </section> : null}
-
-        {step === 2 ? <section className="setup-step-content">
           <div className="setup-icon"><LockKeyIcon size={28} weight="fill" aria-hidden="true" /></div>
-          <p className="overline">Step 2 of 3</p>
+          <p className="overline">Step 1 of 2</p>
           <h2>Select repository access</h2>
           <p>Install the shared Gardener GitHub App and choose only the repositories it may observe. You can change access later in GitHub.</p>
-          <Button variant="primary" size="lg" icon={GithubLogoIcon} loading={installMutation.isPending} onClick={() => installMutation.mutate()}>
+          <Button id="setup-primary" data-action="install" variant="primary" size="lg" icon={GithubLogoIcon} loading={installMutation.isPending} onClick={() => installMutation.mutate()}>
             Select repositories
           </Button>
         </section> : null}
 
-        {step === 3 ? <section className="setup-step-content setup-step-content--wide">
+        {step === 2 ? <section className="setup-step-content setup-step-content--wide">
           <div className="setup-icon"><ShieldCheckIcon size={28} weight="fill" aria-hidden="true" /></div>
-          <p className="overline">Step 3 of 3</p>
+          <p className="overline">Step 2 of 2</p>
           <h2>Choose initial permissions</h2>
           <p>Start with a preset, then adjust each operation from Policies. Closing and reopening issues remain disabled in every preset.</p>
           <fieldset className="profile-grid">
             <legend className="sr-only">Automation permission preset</legend>
-            {profiles.map((option) => <label key={option.id} className={`profile-card${profile === option.id ? " profile-card--selected" : ""}`}>
+            {profiles.map((option) => <label key={option.id} data-profile={option.id} className={`profile-card${profile === option.id ? " profile-card--selected" : ""}`}>
               <input type="radio" name="profile" value={option.id} checked={profile === option.id} onChange={() => setProfile(option.id)} />
               <span className="profile-card__radio" aria-hidden="true" />
               <span className="profile-card__body">
@@ -107,7 +92,7 @@ export function SetupWizard() {
               </span>
             </label>)}
           </fieldset>
-          <Button variant="primary" size="lg" icon={ArrowRightIcon} loading={activateMutation.isPending} onClick={() => activateMutation.mutate()}>
+          <Button id="setup-primary" data-action="activate" variant="primary" size="lg" icon={ArrowRightIcon} loading={activateMutation.isPending} onClick={() => activateMutation.mutate()}>
             Activate Gardener
           </Button>
         </section> : null}

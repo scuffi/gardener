@@ -1,6 +1,6 @@
 import type { AppState, HealthState, PolicyMode, RunDetail, SetupProfile } from "./types";
 
-const sessionKey = "gardener.identity";
+export interface SessionState { authenticated: boolean; githubLogin?: string }
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -9,36 +9,28 @@ export class ApiError extends Error {
   }
 }
 
-export function consumeReturnedIdentity(): void {
+export async function consumeReturnedIdentity(): Promise<boolean> {
   const hash = new URLSearchParams(window.location.hash.slice(1));
   const returned = hash.get("identity_token") ?? hash.get("token");
-  if (!returned) return;
-  sessionStorage.setItem(sessionKey, returned);
+  if (!returned) return false;
   history.replaceState(null, "", `${location.pathname}${location.search}`);
-}
-
-export function hasSession(): boolean {
-  return Boolean(sessionStorage.getItem(sessionKey));
-}
-
-export function clearSession(): void {
-  sessionStorage.removeItem(sessionKey);
+  await api<SessionState>("/api/auth/session", { method: "POST", body: JSON.stringify({ token: returned }) });
+  return true;
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = sessionStorage.getItem(sessionKey);
   const response = await fetch(path, {
     ...options,
+    credentials: "same-origin",
     headers: {
       ...(options.body ? { "content-type": "application/json" } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
   const body = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) {
     const fallback = response.status === 401
-      ? "Your dashboard session has expired. Connect GitHub again to continue."
+      ? "Your dashboard session has expired. Sign in again to continue."
       : `Request failed (${response.status}).`;
     throw new ApiError(body.error || fallback, response.status);
   }
@@ -47,6 +39,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
 export const gardenerApi = {
   health: () => api<HealthState>("/api/health"),
+  session: () => api<SessionState>("/api/auth/session"),
+  signOut: () => api<{ signedOut: true }>("/api/auth/logout", { method: "POST" }),
   state: () => api<AppState>("/api/state"),
   run: (id: string) => api<RunDetail>(`/api/runs/${encodeURIComponent(id)}`),
   beginInstallation: () => api<{ installationUrl: string }>("/api/install/start", { method: "POST" }),

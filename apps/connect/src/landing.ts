@@ -39,9 +39,9 @@ export function landingPage(): string {
         <div class="card-body">
           <div class="step-label"><strong>Three-step setup</strong><span>No local CLI required</span></div>
           <h2 id="start-title">Deploy Gardener</h2>
-          <p class="card-copy">Confirm your GitHub identity, create a one-time instance token, then let Cloudflare provision the application resources.</p>
+          <p class="card-copy">Confirm your GitHub identity, create a Gardener instance credential, then let Cloudflare provision the application resources.</p>
           <div class="steps">
-            <div class="step"><span class="step-number">1</span><div><strong>Confirm with GitHub</strong><p>Bind the deployment token to your identity.</p></div></div>
+            <div class="step"><span class="step-number">1</span><div><strong>Confirm with GitHub</strong><p>Bind the instance credential to your identity.</p></div></div>
             <div class="step"><span class="step-number">2</span><div><strong>Deploy to Cloudflare</strong><p>Paste one secret; Cloudflare provisions the Worker and bindings.</p></div></div>
             <div class="step"><span class="step-number">3</span><div><strong>Select repositories and permissions</strong><p>Choose access and start with a safe policy preset.</p></div></div>
           </div>
@@ -54,9 +54,9 @@ export function landingPage(): string {
       <section id="result" class="card hidden" aria-labelledby="result-title" tabindex="-1">
         <div class="card-body">
           <div class="success" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg></div>
-          <div class="step-label"><strong>Deployment token created</strong><span>Step 2 of 3</span></div>
+          <div class="step-label"><strong>Instance credential created</strong><span>Step 2 of 3</span></div>
           <h2 id="result-title">Continue to Cloudflare</h2>
-          <p class="card-copy">Copy this one-time token when Cloudflare asks for <code>GARDENER_INSTANCE_TOKEN</code>. It is not stored in plaintext by Gardener Connect.</p>
+          <p class="card-copy">Copy this credential when Cloudflare asks for <code>GARDENER_INSTANCE_TOKEN</code>. Gardener uses it for ongoing server-to-server authentication; Connect stores only its hash.</p>
           <div class="token-label"><span>GARDENER_INSTANCE_TOKEN</span><button id="copy" class="copy" type="button" aria-live="polite">Copy token</button></div>
           <code id="token" class="token"></code>
           <div class="handoff-note"><span class="handoff-dot" aria-hidden="true"></span><span>Keep this tab open until deployment finishes. This token is displayed only once.</span></div>

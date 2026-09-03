@@ -17,7 +17,7 @@ export function OverviewPage() {
   const failures = state.runs.filter((run) => ["failed", "completed_with_errors"].includes(run.status)).length;
   const approvals = state.approvals.length;
 
-  return <>
+  return <div id="operating-dashboard">
     <PageHeader
       eyebrow="Workspace overview"
       title="Overview"
@@ -62,5 +62,5 @@ export function OverviewPage() {
       <RunTable runs={state.runs.slice(0, 6)} onSelect={setSelectedRun} />
     </Surface>
     <RunDetailDialog run={selectedRun} onClose={() => setSelectedRun(null)} />
-  </>;
+  </div>;
 }

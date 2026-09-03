@@ -153,7 +153,8 @@ try {
       if (await evaluate(expression)) return;
       await sleep(100);
     }
-    throw new Error(`Timed out waiting for ${label}`);
+    const context = await evaluate(`({url: location.href, text: document.body.innerText.slice(0, 1600)})`);
+    throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(context)}`);
   };
   const screenshot = async (destination) => {
     const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
@@ -176,16 +177,16 @@ try {
   await screenshot(screenshots.automation);
 
   await evaluate(`document.querySelector('[data-profile="safe"]').click(); document.querySelector('#setup-primary').click()`);
-  await waitFor(`!document.querySelector('#operating-dashboard').classList.contains('hidden')`, "live dashboard");
+  await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "live dashboard");
   await screenshot(screenshots.live);
 
   const delivery = await evaluate(`(async()=>{const r=await fetch('/hooks/connect',{method:'POST',headers:{authorization:'Bearer ${fixtureEvent}'}});return {status:r.status,body:await r.json()}})()`);
   if (delivery.status !== 202 || !delivery.body.runs?.[0]) throw new Error(`Simulated event was not accepted: ${JSON.stringify(delivery)}`);
   const runId = delivery.body.runs[0];
-  await waitFor(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/runs/${runId}',{headers:{authorization:'Bearer '+token}});if(!r.ok)return false;const body=await r.json();return body.run.status==='completed'&&body.proposals?.[0]?.status==='executed'})()`, "automatic typed operation");
+  await waitFor(`(async()=>{const r=await fetch('/api/runs/${runId}');if(!r.ok)return false;const body=await r.json();return body.run.status==='completed'&&body.proposals?.[0]?.status==='executed'})()`, "automatic typed operation");
 
-  const finalState = await evaluate(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/state',{headers:{authorization:'Bearer '+token}});return r.json()})()`);
-  const runDetail = await evaluate(`(async()=>{const token=sessionStorage.getItem('gardener.identity');const r=await fetch('/api/runs/${runId}',{headers:{authorization:'Bearer '+token}});return r.json()})()`);
+  const finalState = await evaluate(`fetch('/api/state').then((response)=>response.json())`);
+  const runDetail = await evaluate(`fetch('/api/runs/${runId}').then((response)=>response.json())`);
   const policies = Object.fromEntries(finalState.policies.map((policy) => [policy.operation_kind, policy.mode]));
   const result = {
     passed: exceptions.length === 0,

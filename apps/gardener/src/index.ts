@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { bearerToken, verifyEventToken, verifyIdentityToken } from "./auth";
 import {
@@ -22,9 +23,10 @@ import { setupPolicyProfile, setupProfileIds } from "./setup";
 
 interface AppBindings {
   Bindings: Env;
-  Variables: { actor: string; actorLogin: string };
+  Variables: { actor: string; actorLogin: string; identityToken: string };
 }
 
+const sessionCookie = "gardener_session";
 const app = new Hono<AppBindings>();
 
 app.use("*", async (c, next) => {
@@ -102,18 +104,58 @@ app.get("/api/auth/start", async (c) => {
   return c.redirect(authorizationUrl, 302);
 });
 
+app.post("/api/auth/session", async (c) => {
+  const { token } = z.object({ token: z.string().min(1).max(20_000) }).strict().parse(await c.req.json());
+  const identity = await verifyIdentityToken(token, c.env);
+  const now = Math.floor(Date.now() / 1_000);
+  const maxAge = typeof identity.exp === "number" ? Math.max(1, Math.min(28_800, identity.exp - now)) : 28_800;
+  setCookie(c, sessionCookie, token, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === "https:",
+    sameSite: "Strict",
+    path: "/",
+    maxAge,
+  });
+  return c.json({ authenticated: true, githubLogin: typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user" });
+});
+
+app.get("/api/auth/session", async (c) => {
+  const token = getCookie(c, sessionCookie);
+  if (!token) return c.json({ authenticated: false });
+  try {
+    const identity = await verifyIdentityToken(token, c.env);
+    return c.json({ authenticated: true, githubLogin: typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user" });
+  } catch {
+    deleteCookie(c, sessionCookie, { path: "/", secure: new URL(c.req.url).protocol === "https:" });
+    return c.json({ authenticated: false });
+  }
+});
+
+app.post("/api/auth/logout", (c) => {
+  deleteCookie(c, sessionCookie, { path: "/", secure: new URL(c.req.url).protocol === "https:" });
+  return c.json({ signedOut: true });
+});
+
 app.use("/api/*", async (c, next) => {
   if (c.env.LOCAL_DEV_BYPASS === "true") {
     c.set("actor", "local-development");
     c.set("actorLogin", "Local developer");
+    c.set("identityToken", "local-development");
     return next();
   }
-  const token = bearerToken(c.req.header("authorization"));
+  const bearer = bearerToken(c.req.header("authorization"));
+  const cookie = getCookie(c, sessionCookie);
+  const token = bearer ?? cookie;
   if (!token) return c.json({ error: "Authentication required" }, 401);
+  if (!bearer && !["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
+    const origin = c.req.header("origin");
+    if (origin !== new URL(c.req.url).origin) return c.json({ error: "Invalid request origin" }, 403);
+  }
   try {
     const identity = await verifyIdentityToken(token, c.env);
     c.set("actor", identity.sub as string);
     c.set("actorLogin", typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user");
+    c.set("identityToken", token);
     return next();
   } catch {
     return c.json({ error: "Invalid or expired session" }, 401);
@@ -143,9 +185,7 @@ app.post("/api/health/ai", async (c) => {
 });
 
 app.post("/api/install/start", async (c) => {
-  const token = bearerToken(c.req.header("authorization"));
-  if (!token) return c.json({ error: "Authentication required" }, 401);
-  const installationUrl = await beginGitHubInstallation(c.env, token, new URL(c.req.url).origin);
+  const installationUrl = await beginGitHubInstallation(c.env, c.get("identityToken"), new URL(c.req.url).origin);
   return c.json({ installationUrl });
 });
 
