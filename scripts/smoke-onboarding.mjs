@@ -20,6 +20,7 @@ const temporary = await mkdtemp(join(tmpdir(), "gardener-onboarding-"));
 const devVars = join(appDirectory, ".dev.vars");
 const screenshots = {
   account: join(temporary, "01-account.png"),
+  accountMobile: join(temporary, "01-account-mobile.png"),
   repositories: join(temporary, "02-repositories.png"),
   automation: join(temporary, "03-automation.png"),
   live: join(temporary, "04-live.png"),
@@ -167,6 +168,10 @@ try {
   await command("Page.navigate", { url: appUrl });
   await waitFor(`document.querySelector('#setup-primary')?.dataset.action === 'signin'`, "account step");
   await screenshot(screenshots.account);
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(250);
+  await screenshot(screenshots.accountMobile);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
 
   await evaluate(`document.querySelector('#setup-primary').click()`);
   await waitFor(`document.querySelector('#setup-primary')?.dataset.action === 'install'`, "repository step");

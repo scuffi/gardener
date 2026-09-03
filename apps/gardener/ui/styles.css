@@ -218,6 +218,14 @@ p { margin-bottom: 0; }
 .inline-error { padding: 10px 12px; border-radius: var(--gd-radius); color: var(--gd-danger); background: var(--gd-danger-tint); font-size: 12px; }
 
 .setup-page { max-width: 1040px; margin: 0 auto; }
+.auth-layout { width: min(100%, 620px); }
+.auth-panel { overflow: hidden; }
+.auth-content { padding: 30px 32px 28px; }
+.auth-content .setup-icon { margin-bottom: 20px; }
+.auth-content h2 { margin-bottom: 8px; font-size: 22px; }
+.auth-content > p:not(.field-note) { max-width: 540px; margin-bottom: 22px; color: var(--gd-text-muted); font-size: 14px; line-height: 1.6; }
+.auth-content .field-note { margin-top: 12px; color: var(--gd-text-subtle); line-height: 1.5; }
+.auth-trust { margin-top: 12px; padding-right: 12px; padding-left: 12px; }
 .setup-panel { overflow: hidden; }
 .setup-progress { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0; border-bottom: 1px solid var(--gd-line); list-style: none; background: var(--gd-surface-raised); }
 .setup-progress li { position: relative; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 15px 18px; color: var(--gd-text-subtle); }
@@ -418,6 +426,7 @@ p { margin-bottom: 0; }
   .theme-option { grid-template-columns: 78px minmax(0, 1fr); }
   .runtime-status { align-items: start; padding: 16px; }
   .runtime-status > .automation-path { padding-left: 0; }
+  .auth-content { padding: 26px 24px 24px; }
   .setup-content { padding: 28px 22px; }
   .setup-progress li { justify-content: center; padding: 12px 8px; }
   .setup-progress li > div { display: none; }
@@ -461,6 +470,8 @@ p { margin-bottom: 0; }
   .runtime-status { grid-template-columns: auto minmax(0, 1fr); }
   .runtime-status > .automation-path { grid-column: 1 / -1; width: 100%; justify-content: space-between; gap: 4px; }
   .runtime-status > .automation-path > span { padding: 6px 8px; }
+  .auth-content { padding: 24px 18px 22px; }
+  .auth-content h2 { font-size: 20px; }
   .setup-content { min-height: 360px; padding: 24px 16px; }
   .setup-step-content h2 { font-size: 20px; }
   .profile-card { padding: 12px; }
