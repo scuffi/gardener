@@ -3,6 +3,7 @@
   "name": "gardener-connect",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "vars": {
     "CONNECT_ISSUER": "https://gardener-connect.agents-b8a.workers.dev",
