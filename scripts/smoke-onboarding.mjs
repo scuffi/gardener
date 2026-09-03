@@ -24,6 +24,8 @@ const screenshots = {
   repositories: join(temporary, "02-repositories.png"),
   automation: join(temporary, "03-automation.png"),
   live: join(temporary, "04-live.png"),
+  accountMenu: join(temporary, "05-account-menu.png"),
+  accountMenuMobile: join(temporary, "05-account-menu-mobile.png"),
 };
 
 const base64url = (value) => Buffer.from(value).toString("base64url");
@@ -137,7 +139,10 @@ try {
       pending.delete(message.id);
       message.error ? reject(new Error(message.error.message)) : resolvePromise(message.result);
     }
-    if (message.method === "Runtime.exceptionThrown") exceptions.push(message.params.exceptionDetails.text || "Browser exception");
+    if (message.method === "Runtime.exceptionThrown") {
+      const details = message.params.exceptionDetails;
+      exceptions.push(details.exception?.description || details.text || "Browser exception");
+    }
   };
   const command = (method, params = {}) => new Promise((resolvePromise, reject) => {
     const id = ++sequence;
@@ -155,7 +160,7 @@ try {
       await sleep(100);
     }
     const context = await evaluate(`({url: location.href, text: document.body.innerText.slice(0, 1600)})`);
-    throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(context)}`);
+    throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(context)}; browserExceptions=${JSON.stringify(exceptions)}`);
   };
   const screenshot = async (destination) => {
     const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
@@ -184,6 +189,23 @@ try {
   await evaluate(`document.querySelector('[data-profile="safe"]').click(); document.querySelector('#setup-primary').click()`);
   await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "live dashboard");
   await screenshot(screenshots.live);
+  await evaluate(`document.querySelector('#account-menu-trigger').click()`);
+  await waitFor(`Boolean(document.querySelector('[data-account-menu]'))`, "account menu");
+  await screenshot(screenshots.accountMenu);
+  await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await command("Page.reload");
+  await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "mobile dashboard");
+  await sleep(250);
+  await evaluate(`document.querySelector('#account-menu-trigger').click()`);
+  await waitFor(`Boolean(document.querySelector('[data-account-menu]'))`, "mobile account menu");
+  await screenshot(screenshots.accountMenuMobile);
+  await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await command("Page.reload");
+  await waitFor(`Boolean(document.querySelector('#operating-dashboard'))`, "restored desktop dashboard");
 
   const delivery = await evaluate(`(async()=>{const r=await fetch('/hooks/connect',{method:'POST',headers:{authorization:'Bearer ${fixtureEvent}'}});return {status:r.status,body:await r.json()}})()`);
   if (delivery.status !== 202 || !delivery.body.runs?.[0]) throw new Error(`Simulated event was not accepted: ${JSON.stringify(delivery)}`);

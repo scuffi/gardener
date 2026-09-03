@@ -30,7 +30,7 @@ export function RepositoriesPage() {
     <PageHeader
       title="Repositories"
       description="Choose where Gardener may observe events and propose or execute actions. Repository access remains controlled by the GitHub App installation."
-      actions={<><Button variant="secondary" icon={ArrowClockwiseIcon} loading={syncMutation.isPending} onClick={() => syncMutation.mutate()}>Sync access</Button><Button variant="primary" icon={GithubLogoIcon} loading={installMutation.isPending} onClick={() => installMutation.mutate()}>Manage repositories</Button></>}
+      actions={<Button variant="secondary" icon={ArrowClockwiseIcon} loading={syncMutation.isPending} onClick={() => syncMutation.mutate()}>Sync access</Button>}
     />
     <Surface padded={false}>
       {state.repositories.length ? <><div className="mobile-data-list">{state.repositories.map((repository) => <article className="mobile-data-card" key={repository.id}>

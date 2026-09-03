@@ -10,6 +10,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useGardener } from "../app-context";
 import { gardenerApi } from "../lib/api";
 import { isEnabled } from "../lib/format";
+import { AccountMenu } from "./account-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { useNotifications } from "./notifications";
 import { ThemeToggle } from "../theme";
@@ -144,9 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             icon={paused ? PlayIcon : PauseIcon}
             onClick={() => setPauseOpen(true)}
           >{paused ? "Resume automation" : "Pause automation"}</Button> : null}
-          {authenticated && state?.viewer ? <div className="account-chip" title={`Signed in as ${state.viewer.login}`}>
-            <span>{state.viewer.login.slice(0, 1).toUpperCase()}</span><strong>{state.viewer.login}</strong>
-          </div> : null}
+          {authenticated ? <AccountMenu /> : null}
         </div>
       </header>
       <main id="main-content" className="main-content">{children}</main>

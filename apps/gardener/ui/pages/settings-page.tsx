@@ -1,8 +1,7 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
 import { Button } from "@cloudflare/kumo/components/button";
-import { ArrowClockwiseIcon, CpuIcon, DatabaseIcon, GithubLogoIcon, SignOutIcon, StackIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, CpuIcon, DatabaseIcon, GithubLogoIcon, StackIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { useGardener } from "../app-context";
 import { gardenerApi } from "../lib/api";
 import { sentenceCase } from "../lib/format";
@@ -11,9 +10,8 @@ import { ThemePicker } from "../theme";
 import { PageHeader, SectionHeader, StatusBadge, Surface } from "../components/ui";
 
 export function SettingsPage() {
-  const { state, health, signOut } = useGardener();
+  const { state, health } = useGardener();
   const { notify } = useNotifications();
-  const navigate = useNavigate();
   const testMutation = useMutation({
     mutationFn: gardenerApi.testAi,
     onSuccess: ({ model, usage }) => notify({ tone: "success", title: "Workers AI responded successfully", description: `${model}${typeof usage?.costUsd === "number" ? ` · Test cost $${usage.costUsd.toFixed(6)}` : ""}` }),
@@ -28,7 +26,7 @@ export function SettingsPage() {
   ];
 
   return <>
-    <PageHeader title="Settings" description="Inspect provisioned Cloudflare services, execution limits, preview capabilities, and your dashboard session." />
+    <PageHeader title="Settings" description="Inspect provisioned Cloudflare services, execution limits, and preview capabilities." />
     {!health.ok ? <Banner variant="error" icon={<WarningCircleIcon size={20} weight="fill" />} title="Deployment configuration is incomplete" description="Resolve every unavailable service below before relying on repository automation." /> : null}
 
     <Surface padded={false}>
@@ -62,9 +60,5 @@ export function SettingsPage() {
       <div className="capability-list">{Object.entries(state.capabilities).map(([name, status]) => <div key={name}><span>{sentenceCase(name)}</span><StatusBadge tone={status === "available" ? "success" : "neutral"}>{sentenceCase(status)}</StatusBadge></div>)}</div>
     </Surface>
 
-    <Surface className="session-panel">
-      <div><h2>Signed in as {state.viewer.login}</h2><p>This temporary Connect-issued session is scoped to this Gardener instance and stored in a secure HttpOnly cookie.</p></div>
-      <Button variant="secondary-destructive" icon={SignOutIcon} onClick={() => { signOut(); navigate("/overview", { replace: true }); }}>Sign out</Button>
-    </Surface>
   </>;
 }
