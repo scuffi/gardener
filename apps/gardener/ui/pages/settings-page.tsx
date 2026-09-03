@@ -28,7 +28,7 @@ export function SettingsPage() {
   ];
 
   return <>
-    <PageHeader eyebrow="Deployment and account" title="Settings" description="Inspect provisioned Cloudflare services, execution limits, preview capabilities, and your dashboard session." />
+    <PageHeader title="Settings" description="Inspect provisioned Cloudflare services, execution limits, preview capabilities, and your dashboard session." />
     {!health.ok ? <Banner variant="error" icon={<WarningCircleIcon size={20} weight="fill" />} title="Deployment configuration is incomplete" description="Resolve every unavailable service below before relying on repository automation." /> : null}
 
     <Surface padded={false}>
@@ -63,7 +63,7 @@ export function SettingsPage() {
     </Surface>
 
     <Surface className="session-panel">
-      <div><p className="overline">Dashboard session</p><h2>Signed in as {state.viewer.login}</h2><p>This temporary Connect-issued session is scoped to this Gardener instance and stored only in this browser tab.</p></div>
+      <div><p className="overline">Dashboard session</p><h2>Signed in as {state.viewer.login}</h2><p>This temporary Connect-issued session is scoped to this Gardener instance and stored in a secure HttpOnly cookie.</p></div>
       <Button variant="secondary-destructive" icon={SignOutIcon} onClick={() => { signOut(); navigate("/overview", { replace: true }); }}>Sign out</Button>
     </Surface>
   </>;

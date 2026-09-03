@@ -31,7 +31,7 @@ export function ApprovalsPage() {
   if (!state) return null;
 
   return <>
-    <PageHeader eyebrow="Human review" title="Approvals" description="Validate proposed GitHub changes before they execute. Every decision is recorded in the audit trail." />
+    <PageHeader title="Approvals" description="Validate proposed GitHub changes before they execute. Every decision is recorded in the audit trail." />
     {state.globalPaused ? <Banner variant="alert" icon={<PauseCircleIcon size={20} weight="fill" />} title="Automation is paused" description="Resume automation before approving an operation. You can still reject pending proposals." /> : null}
     {state.approvals.length ? <div className="approval-list">{state.approvals.map((approval) => {
       const metadata = operationMetadata[approval.operation_kind] ?? { name: approval.operation_kind, description: "Proposed GitHub operation", risk: "medium" as const };

@@ -22,7 +22,7 @@ export function WorkflowsPage() {
   if (!state) return null;
 
   return <>
-    <PageHeader eyebrow="Event automation" title="Workflows" description="Versioned instructions that turn repository events into bounded, policy-checked operation proposals." />
+    <PageHeader title="Workflows" description="Versioned instructions that turn repository events into bounded, policy-checked operation proposals." />
     <Surface padded={false}>
       {state.workflows.length ? <>
         <div className="mobile-data-list">{state.workflows.map((workflow) => {

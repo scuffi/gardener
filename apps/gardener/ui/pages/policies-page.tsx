@@ -43,7 +43,7 @@ export function PoliciesPage() {
   const reset = () => setDraft(Object.fromEntries(state.policies.map((policy) => [policy.operation_kind, policy.mode])));
 
   return <>
-    <PageHeader eyebrow="Operation permissions" title="Policies" description="Control which GitHub actions are disabled, require human approval, or may execute automatically." />
+    <PageHeader title="Policies" description="Control which GitHub actions are disabled, require human approval, or may execute automatically." />
     <Banner
       variant="secondary"
       icon={<ShieldCheckIcon size={20} weight="fill" />}

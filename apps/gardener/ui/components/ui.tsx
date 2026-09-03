@@ -6,12 +6,11 @@ import { ArrowClockwiseIcon, ArrowRightIcon, CheckCircleIcon, CpuIcon, GithubLog
 import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { sentenceCase } from "../lib/format";
 
-export function PageHeader({ title, description, eyebrow, actions }: { title: string; description?: string; eyebrow?: string; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
   return <header className="page-header">
     <div className="page-header__copy">
-      {eyebrow ? <p className="overline">{eyebrow}</p> : null}
       <h1 ref={titleRef} tabIndex={-1}>{title}</h1>
       {description ? <p>{description}</p> : null}
     </div>

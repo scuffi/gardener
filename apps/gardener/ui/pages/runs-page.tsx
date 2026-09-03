@@ -19,7 +19,6 @@ export function RunsPage() {
 
   return <>
     <PageHeader
-      eyebrow="Execution history"
       title="Runs"
       description="Inspect every workflow execution, model result, proposed operation, failure, and recorded cost."
       actions={<label className="compact-field"><span>Status</span><select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All runs</option><option value="completed">Completed</option><option value="queued">Queued</option><option value="failed">Failed</option><option value="completed_with_errors">Completed with errors</option></select></label>}

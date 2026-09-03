@@ -19,7 +19,6 @@ export function OverviewPage() {
 
   return <div id="operating-dashboard">
     <PageHeader
-      eyebrow="Workspace overview"
       title="Overview"
       description="Monitor repository automation, review pending actions, and verify your Cloudflare deployment."
     />

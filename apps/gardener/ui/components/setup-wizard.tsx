@@ -39,7 +39,6 @@ export function SetupWizard() {
 
   return <div className="setup-page">
     <PageHeader
-      eyebrow="Customer-owned deployment"
       title="Configure repository automation"
       description="Select repository access and decide which actions Gardener can execute. The runtime and audit data stay in your Cloudflare account."
     />

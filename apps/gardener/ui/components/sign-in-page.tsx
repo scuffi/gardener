@@ -10,7 +10,6 @@ export function SignInPage() {
 
   return <div className="setup-page">
     <PageHeader
-      eyebrow="Secure dashboard"
       title="Sign in to Gardener"
       description="Manage repositories, policies, approvals, and automation for this deployment."
     />
@@ -23,22 +22,23 @@ export function SignInPage() {
     /> : null}
 
     <Surface className="setup-panel auth-panel" padded={false}>
-      <section className="setup-step-content">
-        <div className="setup-icon"><GithubLogoIcon size={28} weight="fill" aria-hidden="true" /></div>
-        <p className="overline">Gardener dashboard</p>
-        <h2>Welcome back</h2>
-        <p>Sign in with the GitHub account that owns this Gardener deployment. Repository access is configured separately after sign-in.</p>
-        <Button
-          id="setup-primary"
-          data-action="signin"
-          variant="primary"
-          size="lg"
-          icon={GithubLogoIcon}
-          disabled={!connectReady}
-          onClick={() => { location.href = "/api/auth/start"; }}
-        >Sign in with GitHub</Button>
-        <p className="field-note">Only the GitHub account bound to this deployment can open its dashboard.</p>
-      </section>
+      <div className="setup-content">
+        <section className="setup-step-content">
+          <div className="setup-icon"><GithubLogoIcon size={28} weight="fill" aria-hidden="true" /></div>
+          <h2>Welcome back</h2>
+          <p>Sign in with the GitHub account that owns this Gardener deployment. Repository access is configured separately after sign-in.</p>
+          <Button
+            id="setup-primary"
+            data-action="signin"
+            variant="primary"
+            size="lg"
+            icon={GithubLogoIcon}
+            disabled={!connectReady}
+            onClick={() => { location.href = "/api/auth/start"; }}
+          >Sign in with GitHub</Button>
+          <p className="field-note">Only the GitHub account bound to this deployment can open its dashboard.</p>
+        </section>
+      </div>
     </Surface>
 
     <div className="trust-note">
