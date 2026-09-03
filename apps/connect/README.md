@@ -6,18 +6,18 @@ Central Cloudflare Worker for Gardener's managed GitHub boundary. It keeps GitHu
 
 1. Create one managed GitHub App. Use its client ID/secret for user authorization, add OAuth callback URLs for `/v1/landing/callback` and `/v1/auth/github/callback`, set the GitHub App setup URL to `/v1/installations/callback`, and webhook URL to `/github/webhook`.
 2. Give the GitHub App **metadata, administration, checks, and commit statuses: read** plus **contents, issues, and pull requests: write** permissions. Subscribe to issue and pull-request events; installation lifecycle events are implicit.
-3. Create D1, replace the ID in `wrangler.jsonc`, copy `.dev.vars.example` to `.dev.vars`, and provide separate RSA key pairs for Connect JWT signing and GitHub App authentication.
+3. Create D1, replace the ID in `wrangler.jsonc`, copy `.dev.vars.example` to `.dev.vars`, and provide separate RSA key pairs for Connect JWT signing and GitHub App authentication. If this Connect deployment will accept optional Cloudflare Access service credentials, also generate an independent 32-byte `ACCESS_CREDENTIAL_ENCRYPTION_KEY`.
 4. Run `pnpm db:migrate:local && pnpm dev` (or `pnpm db:migrate && pnpm deploy`).
 
 ## Contract
 
 - `GET /health`, `GET /.well-known/jwks.json`
 - `GET /v1/landing/start`, `GET /v1/landing/callback`, `POST /v1/bootstrap`: the managed landing page first binds the deploying GitHub user, then creates an inert instance and returns its one-time `gdn_<instance-id>.<random>` token plus the Deploy to Cloudflare URL. D1 receives only SHA-256. The admin-protected variant allows a chosen instance ID for operations/testing.
-- `POST /v1/instances/claim` (instance bearer): binds the exact HTTPS webhook callback.
+- `POST /v1/instances/claim` (instance bearer): binds the exact HTTPS webhook callback and optionally registers or clears an encrypted Cloudflare Access service-token pair.
 - `POST /v1/auth/github/start`, `GET /v1/auth/github/callback`: OAuth and an eight-hour instance-audienced dashboard identity JWT, stored only in the customer's browser tab.
 - `POST /v1/installations/setup` (identity JWT), `GET /v1/installations/callback`, `GET /v1/repositories` (instance bearer): verified installation assignment and repository discovery.
-- `POST /github/webhook`: verifies HMAC over raw bytes, deduplicates delivery IDs, normalizes issue and pull-request events, signs them, and relays `{ "token": "..." }` to the claimed callback.
+- `POST /github/webhook`: verifies HMAC over raw bytes, deduplicates delivery IDs, normalizes issue and pull-request events, signs them, and relays `{ "token": "..." }` to the claimed callback. If the instance registered Cloudflare Access service credentials, Connect adds the standard service-auth headers before relay; Gardener still verifies the signed event independently.
 - `POST /v1/grants` (instance bearer): creates a five-minute grant for one run, delivered event resource, repository, and canonical hashes of the exact approved operation payloads. Connect refuses grants that do not reference a matching event it signed and relayed to that instance.
 - `POST /v1/operations` (grant bearer): executes only strict `v1` issue, branch, commit, pull-request review, pull-request lifecycle, and protected-merge operations. Connect re-fetches state, mints a least-privilege one-repository installation token internally, refuses force pushes, and records stable operation receipts.
 
-Only the GitHub user bound during bootstrap may receive dashboard identity tokens for that instance. Identity and event JWTs are audience-bound to the instance. Grants are audience-bound to Connect. Installation tokens are never returned from an endpoint or persisted.
+Only the GitHub user bound during bootstrap may receive dashboard identity tokens for that instance. Identity and event JWTs are audience-bound to the instance. Grants are audience-bound to Connect. Installation tokens are never returned from an endpoint or persisted. Optional Access credentials are AES-256-GCM encrypted, instance-bound, never returned, and only decrypted immediately before an outbound relay. See [`../../docs/cloudflare-access.md`](../../docs/cloudflare-access.md).

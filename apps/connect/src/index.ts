@@ -3,11 +3,11 @@ import { Hono, type Context, type Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { decodeJwt } from "jose";
 import { z } from "zod";
-import { bearer, constantTimeEqual, jwks, randomToken, sha256, signToken, verifyToken, verifyWebhookSignature } from "./crypto";
+import { bearer, constantTimeEqual, decryptAccessCredentials, encryptAccessCredentials, jwks, randomToken, sha256, signToken, verifyToken, verifyWebhookSignature } from "./crypto";
 import type { Env, GrantClaims, Variables } from "./env";
 import { discoverRepositories, exchangeOAuthCode, executeGitHubOperation, getInstallation } from "./github";
 import { landingPage } from "./landing";
-import { callbackUrlSchema, grantRequestSchema, operationSchema, type Operation } from "./schema";
+import { callbackUrlSchema, grantRequestSchema, instanceClaimSchema, operationSchema, type Operation } from "./schema";
 
 type AppBindings = { Bindings: Env; Variables: Variables };
 type Row = Record<string, unknown>;
@@ -124,12 +124,23 @@ app.use("/v1/grants", authenticateInstance);
 app.use("/v1/repositories", authenticateInstance);
 
 app.post("/v1/instances/claim", async (c) => {
-  const input = z.object({ instanceId: z.string().min(1), callbackUrl: callbackUrlSchema }).strict().parse(await c.req.json());
+  const input = instanceClaimSchema.parse(await c.req.json());
   if (input.instanceId !== c.get("instanceId")) return c.json({ error: "Instance mismatch" }, 403);
-  const result = await c.env.DB.prepare("UPDATE instances SET callback_url = ?, claimed_at = CURRENT_TIMESTAMP WHERE id = ? AND revoked_at IS NULL AND (callback_url IS NULL OR callback_url = ?)")
-    .bind(input.callbackUrl, input.instanceId, input.callbackUrl).run();
+  let result: D1Result;
+  if (input.cloudflareAccess) {
+    if (!c.env.ACCESS_CREDENTIAL_ENCRYPTION_KEY) return c.json({ error: "Connect Access credential storage is unavailable" }, 503);
+    const encrypted = await encryptAccessCredentials(c.env.ACCESS_CREDENTIAL_ENCRYPTION_KEY, input.instanceId, input.cloudflareAccess);
+    result = await c.env.DB.prepare("UPDATE instances SET callback_url = ?, claimed_at = CURRENT_TIMESTAMP, cloudflare_access_credentials = ?, cloudflare_access_configured_at = CURRENT_TIMESTAMP WHERE id = ? AND revoked_at IS NULL AND (callback_url IS NULL OR callback_url = ?)")
+      .bind(input.callbackUrl, encrypted, input.instanceId, input.callbackUrl).run();
+  } else if (input.cloudflareAccess === null) {
+    result = await c.env.DB.prepare("UPDATE instances SET callback_url = ?, claimed_at = CURRENT_TIMESTAMP, cloudflare_access_credentials = NULL, cloudflare_access_configured_at = NULL WHERE id = ? AND revoked_at IS NULL AND (callback_url IS NULL OR callback_url = ?)")
+      .bind(input.callbackUrl, input.instanceId, input.callbackUrl).run();
+  } else {
+    result = await c.env.DB.prepare("UPDATE instances SET callback_url = ?, claimed_at = CURRENT_TIMESTAMP WHERE id = ? AND revoked_at IS NULL AND (callback_url IS NULL OR callback_url = ?)")
+      .bind(input.callbackUrl, input.instanceId, input.callbackUrl).run();
+  }
   if ((result.meta.changes ?? 0) !== 1) return c.json({ error: "Instance is already claimed to another callback" }, 409);
-  return c.json({ claimed: true, instanceId: input.instanceId });
+  return c.json({ claimed: true, instanceId: input.instanceId, cloudflareAccessConfigured: Boolean(input.cloudflareAccess) });
 });
 
 async function createState(env: Env, instanceId: string, purpose: "login" | "installation", redirectUri?: string): Promise<string> {
@@ -322,7 +333,7 @@ app.post("/github/webhook", async (c) => {
   if (eventName !== "issues" && eventName !== "pull_request") { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, ignored: true }); }
   const normalized = eventName === "issues" ? normalizeIssueEvent(payload, deliveryId) : normalizePullRequestEvent(payload, deliveryId);
   if (!normalized) { await markDelivery(c.env, deliveryId, "ignored", `Unsupported ${eventName} payload`); return c.json({ accepted: true, ignored: true }); }
-  const route = await c.env.DB.prepare("SELECT r.instance_id, i.callback_url FROM repositories r JOIN instances i ON i.id = r.instance_id JOIN installations ins ON ins.id = r.installation_id WHERE r.id = ? AND r.installation_id = ? AND r.active = 1 AND i.revoked_at IS NULL AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL").bind(normalized.event.repository.id, normalized.event.repository.installationId).first<{ instance_id: string; callback_url: string }>();
+  const route = await c.env.DB.prepare("SELECT r.instance_id, i.callback_url, i.cloudflare_access_credentials FROM repositories r JOIN instances i ON i.id = r.instance_id JOIN installations ins ON ins.id = r.installation_id WHERE r.id = ? AND r.installation_id = ? AND r.active = 1 AND i.revoked_at IS NULL AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL").bind(normalized.event.repository.id, normalized.event.repository.installationId).first<{ instance_id: string; callback_url: string; cloudflare_access_credentials: string | null }>();
   if (!route?.callback_url) { await markDelivery(c.env, deliveryId, "unroutable", "Repository is not claimed"); return c.json({ accepted: true, routed: false }); }
   normalized.event.instanceId = route.instance_id;
   const resourceKind = normalized.event.kind === "github.issue" ? "issue" : "pull_request";
@@ -335,12 +346,33 @@ app.post("/github/webhook", async (c) => {
   await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relaying', instance_id = ?, repository_id = ?, normalized_event_id = ?, resource_kind = ?, resource_number = ?, event_action = ?, event_state = ?, event_draft = ?, head_sha = ?, base_ref = ?, base_sha = ? WHERE delivery_id = ?")
     .bind(route.instance_id, normalized.event.repository.id, normalized.event.id, resourceKind, resourceNumber, normalized.event.action, eventState, eventDraft, headSha, baseRef, baseSha, deliveryId).run();
   const eventToken = await signToken(c.env, { typ: "gardener-event", event: normalized.event, jti: deliveryId }, route.instance_id, 300);
-  const response = await fetch(route.callback_url, { method: "POST", headers: { "content-type": "application/json", "user-agent": "gardener-connect" }, body: JSON.stringify({ token: eventToken }), signal: AbortSignal.timeout(10_000) });
+  let accessHeaders: Record<string, string>;
+  try {
+    accessHeaders = await cloudflareAccessRelayHeaders(c.env, route.instance_id, route.cloudflare_access_credentials);
+  } catch {
+    await markDelivery(c.env, deliveryId, "relay_failed", "Cloudflare Access credentials unavailable");
+    return c.json({ error: "Instance relay credentials are unavailable" }, 502);
+  }
+  const response = await fetch(route.callback_url, { method: "POST", headers: { "content-type": "application/json", "user-agent": "gardener-connect", ...accessHeaders }, body: JSON.stringify({ token: eventToken }), signal: AbortSignal.timeout(10_000) });
   if (!response.ok) { await response.body?.cancel(); await markDelivery(c.env, deliveryId, "relay_failed", `HTTP ${response.status}`); return c.json({ error: "Instance relay failed" }, 502); }
   await response.body?.cancel(); await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relayed', relayed_at = CURRENT_TIMESTAMP WHERE delivery_id = ?")
     .bind(deliveryId).run();
   return c.json({ accepted: true, routed: true }, 202);
 });
+
+export async function cloudflareAccessRelayHeaders(
+  env: Pick<Env, "ACCESS_CREDENTIAL_ENCRYPTION_KEY">,
+  instanceId: string,
+  encrypted: string | null,
+): Promise<Record<string, string>> {
+  if (!encrypted) return {};
+  if (!env.ACCESS_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Access credential encryption is unavailable");
+  const credentials = await decryptAccessCredentials(env.ACCESS_CREDENTIAL_ENCRYPTION_KEY, instanceId, encrypted);
+  return {
+    "CF-Access-Client-Id": credentials.clientId,
+    "CF-Access-Client-Secret": credentials.clientSecret,
+  };
+}
 
 async function markDelivery(env: Env, id: string, status: string, error?: string) { await env.DB.prepare("UPDATE webhook_deliveries SET status = ?, error = ? WHERE delivery_id = ?").bind(status, error ?? null, id).run(); }
 

@@ -7,6 +7,7 @@ Gardener is an early public demo, not an SLA-backed service. Please report vulne
 - GitHub App private keys, OAuth secrets, webhook secrets, and installation tokens stay in the centrally operated Connect Worker.
 - Installation tokens are never returned by an API or included in events, prompts, workspace state, or logs.
 - Customer instances store their instance token only as a Worker secret; Connect stores its SHA-256 hash.
+- Optional Cloudflare Access service credentials are encrypted at rest by managed Connect with an independent AES-256-GCM key, bound to the instance ID, sent only to the instance's already-bound callback, and never included in logs or application payloads. Access admission never replaces Connect event-signature verification.
 - Dashboard identity is restricted to the GitHub user bound during the landing/bootstrap flow.
 - Every provider mutation is a validated typed operation authorized by a short-lived grant bound to a signed-and-relayed event, repository, resource, and canonical hash of the exact approved operation payload.
 - Agent output is never authorization.
@@ -20,7 +21,7 @@ Gardener is an early public demo, not an SLA-backed service. Please report vulne
 
 ## Required production configuration
 
-Use distinct production secrets, restrict the Connect admin bootstrap endpoint, rotate the Connect signing and GitHub App keys through an announced key-overlap window, configure the GitHub App with only the permissions documented in `README.md`, and verify the App is absent from every branch-protection and ruleset bypass list.
+Use distinct production secrets, restrict the Connect admin bootstrap endpoint, rotate the Connect signing and GitHub App keys through an announced key-overlap window, configure the GitHub App with only the permissions documented in `README.md`, and verify the App is absent from every branch-protection and ruleset bypass list. If optional Cloudflare Access protection is enabled, use a dedicated service token with a Service Auth policy, not a public path bypass or **Any Access Service Token**; follow [`docs/cloudflare-access.md`](docs/cloudflare-access.md).
 
 The local development authentication bypass must never be enabled in a public deployment.
 

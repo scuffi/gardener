@@ -1,2 +1,5 @@
 # Supplied by the managed Gardener Connect landing flow.
 GARDENER_INSTANCE_TOKEN=
+# Optional Cloudflare Access service-token pair. Standard deployments leave both unset.
+# CLOUDFLARE_ACCESS_CLIENT_ID=
+# CLOUDFLARE_ACCESS_CLIENT_SECRET=

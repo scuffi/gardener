@@ -21,6 +21,17 @@ export const callbackUrlSchema = z.url().refine((value) => {
   return url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
 }, "callback URL must use HTTPS");
 
+export const cloudflareAccessCredentialsSchema = z.object({
+  clientId: z.string().trim().min(1).max(512),
+  clientSecret: z.string().trim().min(1).max(512),
+}).strict();
+
+export const instanceClaimSchema = z.object({
+  instanceId: z.string().min(1),
+  callbackUrl: callbackUrlSchema,
+  cloudflareAccess: cloudflareAccessCredentialsSchema.nullable().optional(),
+}).strict();
+
 export function parseRepositoryFullName(value: string): { owner: string; name: string } | null {
   const parts = value.split("/");
   if (parts.length !== 2) return null;

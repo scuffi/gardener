@@ -1,5 +1,5 @@
 import { operationSchema, type Operation } from "./domain";
-import { instanceId, type Env } from "./env";
+import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 
 async function connectRequest(env: Env, path: string, init: RequestInit): Promise<Response> {
   const response = await fetch(new URL(path, env.CONNECT_URL), {
@@ -24,6 +24,7 @@ export async function claimGardenerInstance(env: Env, origin: string): Promise<v
     body: JSON.stringify({
       instanceId: instanceId(env),
       callbackUrl: `${origin.replace(/\/$/, "")}/hooks/connect`,
+      cloudflareAccess: cloudflareAccessCredentials(env),
     }),
   });
 }

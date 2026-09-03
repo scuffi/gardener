@@ -1,7 +1,7 @@
 import { exportSPKI, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { bearerToken, verifyEventToken, verifyIdentityToken } from "../src/auth";
-import { instanceId, type Env } from "../src/env";
+import { cloudflareAccessCredentials, instanceId, type Env } from "../src/env";
 
 async function fixture() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
@@ -21,6 +21,13 @@ describe("Connect authentication", () => {
     const { env } = await fixture();
     expect(instanceId(env)).toBe("instance-1");
     expect(() => instanceId({ GARDENER_INSTANCE_TOKEN: "invalid" })).toThrow("Invalid Gardener instance token");
+  });
+
+  it("keeps Cloudflare Access optional but requires a complete service-token pair", () => {
+    expect(cloudflareAccessCredentials({})).toBeNull();
+    expect(cloudflareAccessCredentials({ CLOUDFLARE_ACCESS_CLIENT_ID: " id ", CLOUDFLARE_ACCESS_CLIENT_SECRET: " secret " })).toEqual({ clientId: "id", clientSecret: "secret" });
+    expect(() => cloudflareAccessCredentials({ CLOUDFLARE_ACCESS_CLIENT_ID: "id" })).toThrow("requires both");
+    expect(() => cloudflareAccessCredentials({ CLOUDFLARE_ACCESS_CLIENT_SECRET: "secret" })).toThrow("requires both");
   });
 
   it("extracts bearer tokens", () => {

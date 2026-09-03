@@ -1,10 +1,10 @@
 import { createHmac, generateKeyPairSync, webcrypto } from "node:crypto";
 import { importPKCS8 } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
-import { constantTimeEqual, sha256, verifyWebhookSignature } from "../src/crypto";
+import { constantTimeEqual, decryptAccessCredentials, encryptAccessCredentials, sha256, verifyWebhookSignature } from "../src/crypto";
 import { normalizeGitHubAppPrivateKey } from "../src/github";
-import { canonicalOperationHash, normalizeIssueEvent, normalizePullRequestEvent, operationMatchesGrantResource } from "../src/index";
-import { grantRequestSchema, operationSchema, parseRepositoryFullName } from "../src/schema";
+import { canonicalOperationHash, cloudflareAccessRelayHeaders, normalizeIssueEvent, normalizePullRequestEvent, operationMatchesGrantResource } from "../src/index";
+import { grantRequestSchema, instanceClaimSchema, operationSchema, parseRepositoryFullName } from "../src/schema";
 
 beforeAll(() => {
   if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto });
@@ -33,6 +33,31 @@ describe("credential and webhook primitives", () => {
     expect(pkcs8).toContain("BEGIN PRIVATE KEY");
     await expect(importPKCS8(pkcs8, "RS256")).resolves.toBeDefined();
     expect(normalizeGitHubAppPrivateKey(pkcs8)).toBe(pkcs8);
+  });
+
+  it("encrypts instance-bound Cloudflare Access credentials and emits relay headers", async () => {
+    const encryptionKey = Buffer.alloc(32, 7).toString("base64url");
+    const credentials = { clientId: "service-token.access", clientSecret: "test-client-secret" };
+    const encrypted = await encryptAccessCredentials(encryptionKey, "instance-1", credentials);
+    expect(encrypted).not.toContain(credentials.clientId);
+    expect(encrypted).not.toContain(credentials.clientSecret);
+    await expect(decryptAccessCredentials(encryptionKey, "instance-1", encrypted)).resolves.toEqual(credentials);
+    await expect(decryptAccessCredentials(encryptionKey, "instance-2", encrypted)).rejects.toThrow();
+    await expect(cloudflareAccessRelayHeaders({ ACCESS_CREDENTIAL_ENCRYPTION_KEY: encryptionKey }, "instance-1", encrypted)).resolves.toEqual({
+      "CF-Access-Client-Id": credentials.clientId,
+      "CF-Access-Client-Secret": credentials.clientSecret,
+    });
+    await expect(cloudflareAccessRelayHeaders({}, "instance-1", encrypted)).rejects.toThrow("encryption is unavailable");
+    await expect(cloudflareAccessRelayHeaders({}, "instance-1", null)).resolves.toEqual({});
+  });
+
+  it("accepts optional strict Cloudflare Access credentials on instance claims", () => {
+    const claim = { instanceId: "instance-1", callbackUrl: "https://gardener.example/hooks/connect" };
+    expect(instanceClaimSchema.parse(claim).cloudflareAccess).toBeUndefined();
+    expect(instanceClaimSchema.parse({ ...claim, cloudflareAccess: null }).cloudflareAccess).toBeNull();
+    expect(instanceClaimSchema.parse({ ...claim, cloudflareAccess: { clientId: " id ", clientSecret: " secret " } }).cloudflareAccess).toEqual({ clientId: "id", clientSecret: "secret" });
+    expect(() => instanceClaimSchema.parse({ ...claim, cloudflareAccess: { clientId: "id" } })).toThrow();
+    expect(() => instanceClaimSchema.parse({ ...claim, cloudflareAccess: { clientId: "id", clientSecret: "secret", extra: true } })).toThrow();
   });
 });
 

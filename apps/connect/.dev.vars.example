@@ -9,6 +9,8 @@ GITHUB_WEBHOOK_SECRET=replace-with-random-secret
 CONNECT_JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 CONNECT_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 CONNECT_JWT_KID=connect-2026-01
+# Optional base64url-encoded 32-byte key. Required only when accepting per-instance Access credentials.
+# ACCESS_CREDENTIAL_ENCRYPTION_KEY=replace-with-32-random-bytes-as-base64url
 CONNECT_ISSUER=http://localhost:8787
 CONNECT_AUDIENCE=gardener-connect
 GITHUB_OAUTH_CALLBACK_URL=http://localhost:8787/v1/auth/github/callback

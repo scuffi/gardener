@@ -91,6 +91,8 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
 openssl pkey -in ~/.config/gardener/connect/jwt-private.pem -pubout \
   -out ~/.config/gardener/connect/jwt-public.pem
 openssl rand -hex 32
+# Save this independent base64url value for ACCESS_CREDENTIAL_ENCRYPTION_KEY.
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'
 ```
 
 Set these non-secret Wrangler variables from the App and deployment:
@@ -113,6 +115,8 @@ Upload these with `wrangler secret put`:
 - `CONNECT_JWT_PRIVATE_KEY`
 - `CONNECT_JWT_PUBLIC_KEY`
 
+To accept optional per-instance Cloudflare Access service tokens, also upload `ACCESS_CREDENTIAL_ENCRYPTION_KEY`. It must be a base64url-encoded 32-byte value and must not reuse either private key. Self-hosted Connect deployments that do not offer that optional mode can omit it.
+
 For example:
 
 ```bash
@@ -122,6 +126,7 @@ pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY
 pnpm exec wrangler secret put GITHUB_WEBHOOK_SECRET
 pnpm exec wrangler secret put CONNECT_JWT_PRIVATE_KEY
 pnpm exec wrangler secret put CONNECT_JWT_PUBLIC_KEY
+# Optional: pnpm exec wrangler secret put ACCESS_CREDENTIAL_ENCRYPTION_KEY
 pnpm exec wrangler secret put ADMIN_BOOTSTRAP_SECRET
 pnpm exec wrangler deploy
 ```

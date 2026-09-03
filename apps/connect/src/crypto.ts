@@ -4,6 +4,7 @@ import type { Env } from "./env";
 const encoder = new TextEncoder();
 const signingKeys = new Map<string, Promise<CryptoKey>>();
 const verifyKeys = new Map<string, Promise<CryptoKey>>();
+const encryptionKeys = new Map<string, Promise<CryptoKey>>();
 
 export function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -13,6 +14,65 @@ export function bytesToBase64Url(bytes: Uint8Array): string {
 
 export function randomToken(prefix = ""): string {
   return prefix + bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid encryption key encoding");
+  const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "="));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function accessEncryptionKey(value: string): Promise<CryptoKey> {
+  let key = encryptionKeys.get(value);
+  if (!key) {
+    const bytes = base64UrlToBytes(value);
+    if (bytes.byteLength !== 32) throw new Error("Access credential encryption key must be 32 bytes");
+    key = crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+    encryptionKeys.set(value, key);
+  }
+  return key;
+}
+
+function accessAdditionalData(instanceId: string): Uint8Array<ArrayBuffer> {
+  return encoder.encode(`gardener:cloudflare-access:${instanceId}:v1`);
+}
+
+export async function encryptAccessCredentials(
+  encryptionKey: string,
+  instanceId: string,
+  credentials: { clientId: string; clientSecret: string },
+): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = encoder.encode(JSON.stringify(credentials));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: accessAdditionalData(instanceId) },
+    await accessEncryptionKey(encryptionKey),
+    plaintext,
+  );
+  return `v1.${bytesToBase64Url(iv)}.${bytesToBase64Url(new Uint8Array(ciphertext))}`;
+}
+
+export async function decryptAccessCredentials(
+  encryptionKey: string,
+  instanceId: string,
+  encrypted: string,
+): Promise<{ clientId: string; clientSecret: string }> {
+  const [version, encodedIv, encodedCiphertext, extra] = encrypted.split(".");
+  if (version !== "v1" || !encodedIv || !encodedCiphertext || extra) throw new Error("Invalid encrypted Access credentials");
+  const iv = base64UrlToBytes(encodedIv);
+  if (iv.byteLength !== 12) throw new Error("Invalid encrypted Access credentials");
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv, additionalData: accessAdditionalData(instanceId) },
+    await accessEncryptionKey(encryptionKey),
+    base64UrlToBytes(encodedCiphertext),
+  );
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(plaintext));
+  if (!parsed || typeof parsed !== "object" || typeof (parsed as Record<string, unknown>).clientId !== "string" || typeof (parsed as Record<string, unknown>).clientSecret !== "string") {
+    throw new Error("Invalid encrypted Access credentials");
+  }
+  return parsed as { clientId: string; clientSecret: string };
 }
 
 export async function sha256(value: string): Promise<string> {

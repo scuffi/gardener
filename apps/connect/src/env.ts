@@ -15,6 +15,7 @@ export interface Env {
   CONNECT_JWT_KID: string;
   CONNECT_ISSUER: string;
   CONNECT_AUDIENCE: string;
+  ACCESS_CREDENTIAL_ENCRYPTION_KEY?: string;
   DEPLOY_REPOSITORY_URL?: string;
 }
 

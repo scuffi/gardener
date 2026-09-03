@@ -19,6 +19,8 @@ GitHub credentials never enter the customer Worker, browser, model prompt, or ag
 
 The hosted Connect service is the simplest path. Organizations that want to own the GitHub App, keys, connector data, and availability can follow the advanced [self-hosted Connect guide](docs/self-hosted-connect.md); the Gardener application and security contracts remain the same.
 
+Cloudflare Access is not required for Gardener's primary sign-in or signed event delivery. Organizations that already operate Zero Trust may optionally protect the complete Gardener hostname with a human policy plus a Connect service token. This layered mode avoids unreliable public path exceptions while preserving the existing GitHub owner flow; see [Optional Cloudflare Access protection](docs/cloudflare-access.md).
+
 ## User deployment
 
 Once the managed Connect Worker is running:
@@ -32,7 +34,7 @@ Once the managed Connect Worker is running:
 5. The guided setup confirms the owner, opens the shared GitHub App repository picker, synchronizes every selected repository, and offers three understandable automation profiles.
 6. Select **Activate Gardener**. The selected policies, Issue Gardener workflow, and global activity are configured together; no manual settings tour is required.
 
-The bootstrap token carries its non-secret instance ID, so no second instance identifier is required. Connect stores only its SHA-256 hash. The customer Worker discovers Connect's public signing key from JWKS.
+The bootstrap token carries its non-secret instance ID, so no second instance identifier is required. Connect stores only its SHA-256 hash. The customer Worker discovers Connect's public signing key from JWKS. The standard deployment needs no Cloudflare Access configuration; optional Access service credentials are registered separately and encrypted by managed Connect.
 
 The root `wrangler.jsonc` is the customer deployment configuration. It automatically provisions D1, a Queue and dead-letter Queue, static assets, and Workers AI. Gardener installs its idempotent initial D1 schema on first use, so a fresh deployment does not require a local migration command. It also reapplies additive policy-catalog compatibility rows safely at startup. Structural schema upgrades must run `pnpm exec wrangler d1 migrations apply DB --remote` (or an equivalent managed deploy step) before the updated Worker is released.
 
@@ -48,7 +50,7 @@ Create one managed GitHub App with:
 - Repository permissions: **Metadata, Administration, Checks, and Commit statuses: read**; **Contents, Issues, and Pull requests: read and write**
 - Events: **Issues** and **Pull requests**; installation lifecycle events are implicit
 
-Create a D1 database, configure its ID in `apps/connect/wrangler.jsonc`, apply `apps/connect/migrations`, and set the secrets listed in `apps/connect/.dev.vars.example`. The Connect JWT signing key and GitHub App private key must be separate RSA keys.
+Create a D1 database, configure its ID in `apps/connect/wrangler.jsonc`, apply `apps/connect/migrations`, and set the required secrets listed in `apps/connect/.dev.vars.example`. The Connect JWT signing key and GitHub App private key must be separate RSA keys. Operators offering optional Cloudflare Access service authentication must also configure an independent `ACCESS_CREDENTIAL_ENCRYPTION_KEY` for per-instance credential encryption.
 
 ```bash
 pnpm install

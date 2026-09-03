@@ -27,6 +27,7 @@ The active Issue Gardener workflow handles issue events and proposes bounded lab
 
 - GitHub authenticates to Connect with the webhook HMAC secret.
 - Connect signs normalized events and user identity tokens asymmetrically; Gardener verifies them against the configured public key/JWKS.
+- Cloudflare Access is an optional outer transport gate, not Gardener's primary authentication. When enabled, Connect presents an instance-specific Access service token before Gardener independently verifies the signed event JWT. Managed Connect stores that optional credential encrypted and binds its ciphertext to the instance ID.
 - The Connect landing flow authenticates the deploying GitHub user before issuing a Gardener instance token; later dashboard identity tokens are restricted to that owner.
 - A Gardener instance authenticates to Connect with its high-entropy instance token. Connect stores only its SHA-256 hash.
 - The instance token may request a short-lived grant; it is not accepted by an operation endpoint as write authority.
