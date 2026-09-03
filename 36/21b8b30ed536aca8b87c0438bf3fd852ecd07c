@@ -1,0 +1,19 @@
+apps/connect/src/crypto.ts
+  s_53dbd94a16ea71::t_0146f76df67800 7,19-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3621b8b30ed536aca8b87c0438bf3fd852ecd07c",
+  "prompts": {},
+  "sessions": {
+    "s_53dbd94a16ea71": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0678c-da18-7d2f-a0e0-b61d6884da57",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
