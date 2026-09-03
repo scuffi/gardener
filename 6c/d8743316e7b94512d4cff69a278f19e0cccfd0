@@ -1,0 +1,19 @@
+apps/gardener/test/sqlite.ts
+  s_83a29251dfe610::t_c18eeda1acd458 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6cd8743316e7b94512d4cff69a278f19e0cccfd0",
+  "prompts": {},
+  "sessions": {
+    "s_83a29251dfe610": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a06203-7eff-772e-86a2-71f2bdeae66a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
