@@ -66,6 +66,7 @@ export type WorkflowRuntimeV2 = z.infer<typeof workflowRuntimeV2Schema>;
 export const workflowCapabilitiesV2Schema = z.object({
   read: z.array(z.enum(["issue", "pull_request", "repository", "checks", "files"])).max(10).default([]),
   propose: z.array(operationKindSchema).max(operationKindSchema.options.length).default([]),
+  maximumMode: z.enum(["approval", "instance_policy"]).default("approval"),
 }).strict().superRefine((capabilities, context) => {
   if (new Set(capabilities.read).size !== capabilities.read.length) context.addIssue({ code: "custom", path: ["read"], message: "read capabilities must be unique" });
   if (new Set(capabilities.propose).size !== capabilities.propose.length) context.addIssue({ code: "custom", path: ["propose"], message: "proposed operations must be unique" });
@@ -122,6 +123,12 @@ export const compiledWorkflowPlanV2Schema = z.object({
   triggers: z.array(z.string().min(1).max(255)).min(1).max(100),
   repositoryIds: z.array(githubNumericIdSchema).min(1).max(1_000),
   condition: workflowConditionSchema.nullable(),
+  conditionResolver: z.object({
+    id: z.literal("signed-event-facts"),
+    version: z.literal(1),
+    catalogVersion: z.literal("2026-09-03.1"),
+  }).strict(),
+  requiredGitHubPermissions: z.array(z.string().min(1).max(100)).max(20),
   runtime: z.object({
     kind: z.enum(["workers-ai.issue-gardener", "workers-ai.pull-request-gardener"]),
     resolvedModel: z.string().min(1).max(255),

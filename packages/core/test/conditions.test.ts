@@ -37,6 +37,8 @@ describe("workflow capability registry", () => {
     expect(availableWorkflowCapabilities.some((capability) => /team|role|permission|checks/.test(capability.id))).toBe(false);
     expect(plannedWorkflowCapabilities.map((capability) => capability.id)).toEqual(expect.arrayContaining([
       "github.pull_request.checks.all_required_passed@v1",
+      "github.event.actor.identity@v1",
+      "github.resource.author.identity@v1",
       "github.event.actor.repository_permission@v1",
       "github.event.actor.organization_role@v1",
       "github.event.actor.team_ids@v1",
@@ -60,7 +62,7 @@ describe("three-valued condition evaluation", () => {
     expect(evaluateWorkflowCondition(null, issueEvent)).toEqual({ result: "true", matched: true, evidence: [] });
   });
 
-  it("distinguishes the event actor from the original resource author by stable identity", () => {
+  it("keeps negotiated actor and author identity capabilities fail-closed until the wire format is available", () => {
     const condition = {
       kind: "all" as const,
       conditions: [
@@ -68,8 +70,9 @@ describe("three-valued condition evaluation", () => {
         { kind: "predicate" as const, capabilityId: "github.resource.author.identity@v1" as const, operator: "equals" as const, expected: { id: authorIdentity.id, accountType: "Bot" as const } },
       ],
     };
-    expect(evaluateWorkflowCondition(condition, issueEvent)).toMatchObject({ result: "true", matched: true });
-    expect(evaluateWorkflowCondition({ ...condition, conditions: [condition.conditions[0], { ...condition.conditions[1], expected: { id: actor.id, accountType: "User" } }] }, issueEvent)).toMatchObject({ result: "false", matched: false });
+    expect(validateWorkflowCondition(condition, ["github.issue"])).toMatchObject({ valid: false });
+    expect(evaluateWorkflowCondition(condition, issueEvent)).toMatchObject({ result: "unknown", matched: false });
+    expect(evaluateWorkflowCondition({ ...condition, conditions: [condition.conditions[0], { ...condition.conditions[1], expected: { id: actor.id, accountType: "User" } }] }, issueEvent)).toMatchObject({ result: "unknown", matched: false });
   });
 
   it("fails closed when older signed events lack identity, including under negation", () => {
@@ -81,7 +84,7 @@ describe("three-valued condition evaluation", () => {
     const missingIdentity = { kind: "predicate" as const, capabilityId: "github.event.actor.identity@v1" as const, operator: "equals" as const, expected: { id: actor.id, accountType: "User" as const } };
     const result = evaluateWorkflowCondition({ kind: "not", condition: missingIdentity }, legacy);
     expect(result).toMatchObject({ result: "unknown", matched: false });
-    expect(result.evidence.map((item) => item.reason)).toEqual(["fact_missing", "not_unknown"]);
+    expect(result.evidence.map((item) => item.reason)).toEqual(["capability_unavailable", "not_unknown"]);
   });
 
   it("implements strong Kleene all, any, and not semantics", () => {

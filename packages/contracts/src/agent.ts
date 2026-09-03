@@ -36,6 +36,8 @@ export const agentStartRequestSchema = z.object({
   instructions: z.string().min(1).max(50_000),
   event: normalizedIssueEventSchema,
   maxOperations: z.number().int().positive().max(100).default(10),
+  maxInputTokens: z.number().int().positive().max(2_000_000).default(32_000),
+  maxOutputTokens: z.number().int().positive().max(8_192).default(800),
 }).strict();
 export type AgentStartRequest = z.infer<typeof agentStartRequestSchema>;
 

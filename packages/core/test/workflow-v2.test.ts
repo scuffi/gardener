@@ -32,6 +32,8 @@ describe("v2 workflow compilation", () => {
     expect(first.plan.compiledAt).not.toBe(second.plan.compiledAt);
     expect(first.plan.triggers).toEqual(["github.issue.opened", "github.issue.reopened"]);
     expect(first.plan.runtime.resolvedModel).toBe("@cf/meta/model");
+    expect(first.plan.conditionResolver).toEqual({ id: "signed-event-facts", version: 1, catalogVersion: "2026-09-03.1" });
+    expect(first.plan.requiredGitHubPermissions).toEqual(["issues:write"]);
     expect(first.plan).not.toHaveProperty("policy");
     expect(Object.isFrozen(first.plan.runtime)).toBe(true);
   });
@@ -46,7 +48,10 @@ describe("v2 workflow compilation", () => {
   it("blocks unsupported runtime, trigger, operation, workspace, and condition capabilities at activation", async () => {
     await expect(compileWorkflowV2({ ...spec, triggers: [{ kind: "manual" }] }, { workflowId: "manual", revision: 1, resolvedModel: "model" })).rejects.toThrow(/not available/);
     await expect(compileWorkflowV2({ ...spec, triggers: [{ kind: "github.pull_request", actions: ["opened"] }] }, { workflowId: "pr", revision: 1, resolvedModel: "model" })).rejects.toThrow(/only supports GitHub issue/);
-    await expect(compileWorkflowV2({ ...spec, capabilities: { read: ["issue"], propose: ["pull_request.merge"] } }, { workflowId: "merge", revision: 1, resolvedModel: "model" })).rejects.toThrow(/only supports issue operations/);
+    await expect(compileWorkflowV2({ ...spec, triggers: [{ kind: "github.issue", actions: ["assigned"] }] }, { workflowId: "assigned", revision: 1, resolvedModel: "model" })).rejects.toThrow(/does not support one or more trigger actions/);
+    await expect(compileWorkflowV2({ ...spec, capabilities: { read: ["issue"], propose: ["pull_request.merge"] } }, { workflowId: "merge", revision: 1, resolvedModel: "model" })).rejects.toThrow(/supports only label-add and comment-create proposals/);
+    await expect(compileWorkflowV2({ ...spec, capabilities: { read: ["issue"], propose: ["issue.close"] } }, { workflowId: "close", revision: 1, resolvedModel: "model" })).rejects.toThrow(/supports only label-add and comment-create proposals/);
+    await expect(compileWorkflowV2({ ...spec, capabilities: { read: ["repository"], propose: ["issue.label.add"] } }, { workflowId: "read", revision: 1, resolvedModel: "model" })).rejects.toThrow(/supports only issue reads/);
     await expect(compileWorkflowV2({ ...spec, workspace: { enabled: true, experimental: true, network: "denied", allowedHosts: [] } }, { workflowId: "workspace", revision: 1, resolvedModel: "model" })).rejects.toThrow(/not available/);
     await expect(compileWorkflowV2({ ...spec, condition: { kind: "predicate", capabilityId: "github.pull_request.checks.all_required_passed@v1", operator: "equals", expected: true } }, { workflowId: "checks", revision: 1, resolvedModel: "model" })).rejects.toThrow(/capability_unavailable/);
   });

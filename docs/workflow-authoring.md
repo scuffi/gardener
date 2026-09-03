@@ -102,14 +102,14 @@ Each condition field is registered in a capability catalog containing:
 - Trust source.
 - Availability and any required GitHub permission.
 
-Initial signed-event fields can include repository identity, event action, resource author, resource state, labels, pull-request base/head, draft state, and the GitHub webhook sender once normalized by Connect.
+Initial signed-event fields include repository identity, event action, the legacy resource-author login hint, resource state, labels, and pull-request base/head and draft state. Stable event-actor and resource-author identities remain planned until Gardener instances negotiate an identity-aware event contract; managed Connect must continue sending the exact strict v1 envelope to older independently deployed Workers.
 
 The event actor and resource author are distinct capabilities and must have unambiguous UI labels:
 
 - **Person or App that caused this event**: the GitHub webhook `sender`.
 - **Original issue or pull request author**: the resource owner.
 
-Connect must preserve numeric GitHub identity IDs and account types for both. Login strings are display hints, not the security identifier. A maintainer labeling a Dependabot pull request has a maintainer event actor and a Dependabot resource author.
+When the negotiated event contract is added, Connect must preserve numeric GitHub identity IDs and account types for both. Login strings are display hints, not the security identifier. A maintainer labeling a Dependabot pull request has a maintainer event actor and a Dependabot resource author.
 
 Capability IDs are independently versioned, for example `github.event.actor.identity@v1`. Their provenance is classified as Connect-attested identity, Connect-attested scope, Connect-resolved authorization, Connect-resolved mutable state, GitHub content, deterministic derived data, or model-derived data. Content and model-derived values may route or narrow work but never prove identity or authorization.
 
@@ -121,8 +121,8 @@ Evaluation occurs in phases:
 
 1. **Activation validation** confirms capabilities, permissions, trigger compatibility, explicit repository IDs, runtime support, and operation ceilings.
 2. **Admission** evaluates immutable event facts and may reject known non-matches before AI runs.
-3. **Pre-run** resolves required live authorization and resource facts through Connect; the complete expression must be `matched` before invoking a runtime.
-4. **Pre-operation** re-resolves mutable and authorization-sensitive facts before automatic execution and again when an approved proposal is executed.
+3. **Pre-run** will resolve required live authorization and resource facts through Connect when those capabilities become available; the complete expression must be `matched` before invoking a runtime.
+4. **Pre-operation** will re-resolve mutable and authorization-sensitive facts before automatic execution and again when an approved proposal is executed. Until that resolver exists, a workflow that follows instance policy cannot activate with conditions whose truth may become stale; approval-ceiling workflows require an explicit human decision.
 
 The compiler performs static authority-path analysis for high-impact automatic operations. Every satisfiable branch of an `any` condition must contain the required positive trusted anchors; `trusted identity OR label contains safe-to-merge` is not safe because the label-only branch bypasses identity.
 
@@ -136,13 +136,13 @@ The existing `workflows` row remains the active pointer and runtime projection. 
 - Source (`system`, `dashboard`, or later `agent`).
 - Creating principal and timestamp.
 - Explicit repository IDs; “all selected repositories” is compiled to the current ID set and never silently includes future installations.
-- Required GitHub permissions and the capability-registry digest.
+- Required GitHub permissions and a versioned condition-resolver/capability-catalog identifier.
 
 Creating or saving a draft inserts a revision. Activating a revision updates the active projection in `workflows`; it never rewrites the revision. Runs continue to bind the exact workflow revision and a separate operation-policy snapshot. Compiled plans contain no instance policy object or policy modes.
 
-Queue execution loads instructions, the resolved runtime model, conditions, capabilities, and limits from the run's pinned immutable revision. It must never join mutable current workflow instructions after admission. A temporary legacy fallback preserves already-queued runs during migration.
+V2 admission writes an explicit run-to-plan binding containing the plan ID and content hash. Queue execution loads instructions, the resolved runtime model, conditions, capabilities, and limits only through that immutable binding; a version number alone never retroactively opts a legacy run into V2. Runs admitted before backfill have no binding and retain the temporary legacy fallback. The first validated agent result is frozen per run, so retries cannot substitute different proposal payloads or exceed the cumulative operation ceiling. A partially processed legacy run that already has proposals but no frozen result fails terminally for manual review; it never invokes AI again or creates a second set of operations.
 
-The existing Issue Gardener is backfilled as revision 1 without changing its live behavior.
+The existing Issue Gardener is backfilled as revision 1 without changing its live behavior. Input is rejected conservatively before Workers AI when it exceeds the token budget, the provider receives the exact output-token ceiling, and activation requires a model with known pricing whose maximum token-budget cost fits the workflow cost limit. Runtime timeouts are terminal because the Workers AI binding cannot cancel an in-flight call safely.
 
 ## Management API
 

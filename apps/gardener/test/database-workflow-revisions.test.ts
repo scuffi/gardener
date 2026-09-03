@@ -94,18 +94,39 @@ function workflowColumns(sqlite: DatabaseSync): Array<{ name: string }> {
 }
 
 describe("workflow revision storage compatibility", () => {
-  it("applies the full numbered migration chain to a fresh database", () => {
+  it("supports numbered migrations followed by idempotent Worker initialization", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       for (const migration of ["0001_initial.sql", "0002_maintainer_policies.sql", "0003_workflow_revisions.sql"]) {
         sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
       }
+      await ensureDatabase(d1Database(sqlite));
 
       const columns = new Set(workflowColumns(sqlite).map((column) => column.name));
       expect(columns).toContain("active_revision");
       expect(columns).toContain("revision_counter");
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'workflow_revisions'").get()).toEqual({ name: "workflow_revisions" });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_workflow_revisions_created_at'").get()).toEqual({ name: "idx_workflow_revisions_created_at" });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("supports first-use Worker initialization followed by the full numbered migration chain", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    try {
+      await ensureDatabase(d1Database(sqlite));
+      for (const migration of ["0001_initial.sql", "0002_maintainer_policies.sql", "0003_workflow_revisions.sql"]) {
+        sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
+      }
+      await ensureDatabase(d1Database(sqlite));
+
+      const columns = new Set(workflowColumns(sqlite).map((column) => column.name));
+      expect(columns).toContain("active_revision");
+      expect(columns).toContain("revision_counter");
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'workflow_revisions'").get()).toEqual({ name: "workflow_revisions" });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'run_workflow_plans'").get()).toEqual({ name: "run_workflow_plans" });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'run_agent_results'").get()).toEqual({ name: "run_agent_results" });
     } finally {
       sqlite.close();
     }
@@ -165,7 +186,7 @@ describe("workflow revision storage compatibility", () => {
     }
   });
 
-  it("enforces immutable revision and content-hash uniqueness", async () => {
+  it("enforces immutable revision identity while allowing a later recompile of identical source content", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       await ensureDatabase(d1Database(sqlite));
@@ -179,9 +200,10 @@ describe("workflow revision storage compatibility", () => {
       insert.run(...values);
 
       expect(() => insert.run(...values.slice(0, 4), "hash-2", ...values.slice(5))).toThrow(/UNIQUE constraint failed: workflow_revisions\.workflow_id, workflow_revisions\.revision/);
-      expect(() => insert.run("issue-gardener", 2, "{}", "{}", "hash-1", "storage-v1", "{}", "agent", "agent-1", "{}")).toThrow(/UNIQUE constraint failed: workflow_revisions\.workflow_id, workflow_revisions\.content_hash/);
-      expect(sqlite.prepare("SELECT workflow_id, revision, content_hash, source_kind, created_by FROM workflow_revisions").all()).toEqual([
+      insert.run("issue-gardener", 2, "{}", "{}", "hash-1", "storage-v1", "{}", "agent", "agent-1", "{}");
+      expect(sqlite.prepare("SELECT workflow_id, revision, content_hash, source_kind, created_by FROM workflow_revisions ORDER BY revision").all()).toEqual([
         { workflow_id: "issue-gardener", revision: 1, content_hash: "hash-1", source_kind: "dashboard", created_by: "user-1" },
+        { workflow_id: "issue-gardener", revision: 2, content_hash: "hash-1", source_kind: "agent", created_by: "agent-1" },
       ]);
     } finally {
       sqlite.close();

@@ -28,7 +28,7 @@ export function stableHash(value: unknown): string {
   return pass(0xcbf29ce484222325n) + pass(0x84222325cbf29ce4n);
 }
 
-/** Stable across retries: callers must retain proposal indexes for a run. */
+/** Stable across retries when both proposal slot and canonical operation content match. */
 export function createOperationId(runId: string, proposalIndex: number, operation?: Omit<Operation, "id">): string {
   if (!runId.trim()) throw new Error("runId is required");
   if (!Number.isSafeInteger(proposalIndex) || proposalIndex < 0) throw new Error("proposalIndex must be a non-negative safe integer");

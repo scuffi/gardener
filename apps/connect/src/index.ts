@@ -1,4 +1,4 @@
-import { connectEventSchema, githubIdentitySchema, type ConnectEvent, type GitHubIdentity } from "@gardener/contracts";
+import { connectEventSchema, type ConnectEvent } from "@gardener/contracts";
 import { Hono, type Context, type Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { decodeJwt } from "jose";
@@ -397,14 +397,13 @@ export function normalizeIssueEvent(payload: unknown, deliveryId: string): { eve
   if (!isPositive(issue.id) || !isPositive(issue.number) || typeof issue.title !== "string" || issue.title.length > 1024 || (issue.body !== null && typeof issue.body !== "string") || !["open", "closed"].includes(String(issue.state)) || typeof issue.html_url !== "string" || !isPositive(repo.id) || typeof repo.name !== "string" || !isRecord(repo.owner) || typeof repo.owner.login !== "string" || !isPositive(installation.id) || !isRecord(issue.user) || typeof issue.user.login !== "string") return null;
   const labels = Array.isArray(issue.labels) ? issue.labels.flatMap((label) => isRecord(label) && typeof label.name === "string" ? [label.name.slice(0, 100)] : []).slice(0, 100) : [];
   const occurredAt = typeof issue.updated_at === "string" && !Number.isNaN(Date.parse(issue.updated_at)) ? new Date(issue.updated_at).toISOString() : new Date().toISOString();
-  const actor = normalizeGitHubIdentity(payload.sender);
-  const authorIdentity = normalizeGitHubIdentity(issue.user);
+  // Keep the strict v1 envelope byte-shape compatible with independently deployed
+  // Gardener Workers. Actor and stable author identities require negotiated v2 delivery.
   return { event: connectEventSchema.parse({
     schemaVersion: "v1", id: `github:${deliveryId}`, deliveryId, instanceId: "pending",
     kind: "github.issue", action: payload.action, occurredAt,
     repository: { provider: "github", id: String(repo.id), installationId: String(installation.id), owner: repo.owner.login, name: repo.name, ...(typeof repo.default_branch === "string" ? { defaultBranch: repo.default_branch } : {}) },
-    ...(actor ? { actor } : {}),
-    issue: { id: String(issue.id), number: issue.number, title: issue.title, body: typeof issue.body === "string" ? issue.body.slice(0, 65_536) : null, state: issue.state, labels, author: issue.user.login, ...(authorIdentity ? { authorIdentity } : {}), htmlUrl: issue.html_url },
+    issue: { id: String(issue.id), number: issue.number, title: issue.title, body: typeof issue.body === "string" ? issue.body.slice(0, 65_536) : null, state: issue.state, labels, author: issue.user.login, htmlUrl: issue.html_url },
   }) };
 }
 export function normalizePullRequestEvent(payload: unknown, deliveryId: string): { event: ConnectEvent } | null {
@@ -414,28 +413,19 @@ export function normalizePullRequestEvent(payload: unknown, deliveryId: string):
   if (!isPositive(pull.id) || !isPositive(pull.number) || typeof pull.title !== "string" || pull.title.length > 1_024 || (pull.body !== null && typeof pull.body !== "string") || !["open", "closed"].includes(String(pull.state)) || typeof pull.draft !== "boolean" || typeof pull.html_url !== "string" || !isRecord(pull.user) || typeof pull.user.login !== "string" || !isRecord(pull.head) || typeof pull.head.ref !== "string" || typeof pull.head.sha !== "string" || !isRecord(pull.base) || typeof pull.base.ref !== "string" || typeof pull.base.sha !== "string" || !isPositive(repo.id) || typeof repo.name !== "string" || !isRecord(repo.owner) || typeof repo.owner.login !== "string" || !isPositive(installation.id)) return null;
   const labels = Array.isArray(pull.labels) ? pull.labels.flatMap((label) => isRecord(label) && typeof label.name === "string" ? [label.name.slice(0, 100)] : []).slice(0, 100) : [];
   const occurredAt = typeof pull.updated_at === "string" && !Number.isNaN(Date.parse(pull.updated_at)) ? new Date(pull.updated_at).toISOString() : new Date().toISOString();
-  const actor = normalizeGitHubIdentity(payload.sender);
-  const authorIdentity = normalizeGitHubIdentity(pull.user);
+  // See the issue normalizer: do not add identity-aware fields before contract negotiation.
   return { event: connectEventSchema.parse({
     schemaVersion: "v1", id: `github:${deliveryId}`, deliveryId, instanceId: "pending",
     kind: "github.pull_request", action: payload.action, occurredAt,
     repository: { provider: "github", id: String(repo.id), installationId: String(installation.id), owner: repo.owner.login, name: repo.name, ...(typeof repo.default_branch === "string" ? { defaultBranch: repo.default_branch } : {}) },
-    ...(actor ? { actor } : {}),
     pullRequest: {
       id: String(pull.id), number: pull.number, title: pull.title, body: typeof pull.body === "string" ? pull.body.slice(0, 65_536) : null,
-      state: pull.state, draft: pull.draft, merged: pull.merged === true, labels, author: pull.user.login, ...(authorIdentity ? { authorIdentity } : {}), htmlUrl: pull.html_url,
+      state: pull.state, draft: pull.draft, merged: pull.merged === true, labels, author: pull.user.login, htmlUrl: pull.html_url,
       head: { ref: pull.head.ref, sha: pull.head.sha }, base: { ref: pull.base.ref, sha: pull.base.sha }, updatedAt: occurredAt,
     },
   }) };
 }
 
-function normalizeGitHubIdentity(value: unknown): GitHubIdentity | undefined {
-  if (!isRecord(value) || typeof value.login !== "string" || typeof value.type !== "string") return undefined;
-  const id = isPositive(value.id) ? String(value.id) : typeof value.id === "string" && /^[1-9][0-9]{0,31}$/.test(value.id) ? value.id : null;
-  if (!id) return undefined;
-  const parsed = githubIdentitySchema.safeParse({ id, login: value.login, accountType: value.type });
-  return parsed.success ? parsed.data : undefined;
-}
 
 function isRecord(value: unknown): value is Row { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function isPositive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }

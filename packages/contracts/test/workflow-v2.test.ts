@@ -70,6 +70,8 @@ describe("workflow definition v2", () => {
       schemaVersion: "v2", planId: `plan_${hash}`, workflowId: "issue-triage", revision: 1, contentHash: hash,
       compiledAt: "2026-09-03T12:00:00.000Z", triggers: ["github.issue.opened", "github.issue.reopened"], repositoryIds: ["1318443351"],
       condition: repositoryIdPredicate,
+      conditionResolver: { id: "signed-event-facts", version: 1, catalogVersion: "2026-09-03.1" },
+      requiredGitHubPermissions: ["issues:write"],
       runtime: { kind: "workers-ai.issue-gardener", resolvedModel: "@cf/model", instructions: "Classify new issues." },
       capabilities: { read: ["issue"], propose: ["issue.label.add"] },
       workspace: { enabled: false, experimental: false, network: "denied", allowedHosts: [] },

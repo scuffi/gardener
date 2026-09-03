@@ -46,13 +46,13 @@ describe("policy evaluation", () => {
 });
 
 describe("agent runtimes", () => {
-  const request = { schemaVersion: "v1" as const, runId: "run-1", model: "model", instructions: "Classify", event, maxOperations: 4 };
+  const request = { schemaVersion: "v1" as const, runId: "run-1", model: "model", instructions: "Classify", event, maxOperations: 4, maxInputTokens: 32_000, maxOutputTokens: 800 };
   it("uses an injected Workers AI binding and validates its output", async () => {
     const run = vi.fn().mockResolvedValue({ response: JSON.stringify({ summary: "A bug", labels: ["bug"], comment: null, rationale: "Crash report" }), usage: { prompt_tokens: 10, completion_tokens: 5 } });
     const runtime = new WorkersAiIssueGardenerRuntime({ run });
     const handle = await runtime.start(request);
     expect((await runtime.status(handle)).state).toBe("succeeded");
-    expect((await runtime.result(handle))?.proposals[0]?.operation.id).toBe("run-1:operation:0");
+    expect((await runtime.result(handle))?.proposals[0]?.operation.id).toMatch(/^run-1:operation:0:[a-f0-9]{32}$/);
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]?.[1]).toMatchObject({ max_tokens: 800, response_format: { type: "json_schema" } });
     expect(await runtime.start(request)).toEqual(handle);

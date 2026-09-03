@@ -1,3 +1,5 @@
+import { agentResultSchema, type AgentResult } from "@gardener/contracts";
+import { maximumModelCostUsd } from "@gardener/core";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
@@ -10,7 +12,7 @@ import {
   listConnectedRepositories,
 } from "./connect";
 import { ensureDatabase } from "./database";
-import { audit, createRunsForEvent, getSetting, ingestEvent, pauseScope, policySnapshot, repositoryPauseSetting, setSetting } from "./db";
+import { audit, createRunsForEvent, getSetting, ingestEvent, parseCompiledWorkflowV2, pauseScope, policySnapshot, repositoryPauseSetting, setSetting, workflowMatchesEvent } from "./db";
 import {
   operationSchema,
   policyModeSchema,
@@ -21,6 +23,7 @@ import {
 import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 import { runIssueGardener } from "./runtime";
 import { setupPolicyProfile, setupProfileIds } from "./setup";
+import { backfillIssueGardenerRevision, workflowManagement } from "./workflow-management";
 
 interface AppBindings {
   Bindings: Env;
@@ -34,6 +37,15 @@ app.use("*", async (c, next) => {
   await ensureDatabase(c.env.DB);
   return next();
 });
+
+async function ensureWorkflowCompatibility(env: Env): Promise<void> {
+  try {
+    await backfillIssueGardenerRevision(env);
+  } catch {
+    // Keep the legacy projection available if compatibility backfill cannot complete.
+    console.error("Workflow revision compatibility backfill failed");
+  }
+}
 
 app.onError((error, c) => {
   console.error("request failed", error instanceof Error ? error.message : "unknown error");
@@ -81,6 +93,7 @@ app.post("/hooks/connect", async (c) => {
   } catch {
     return c.json({ error: "Invalid or expired event signature" }, 401);
   }
+  await ensureWorkflowCompatibility(c.env);
   const inserted = await ingestEvent(c.env.DB, event);
   if (!inserted) {
     const queued = await c.env.DB.prepare("SELECT id FROM runs WHERE event_id = ? AND status = 'queued'")
@@ -151,6 +164,7 @@ app.use("/api/*", async (c, next) => {
     c.set("actor", "local-development");
     c.set("actorLogin", "Local developer");
     c.set("identityToken", "local-development");
+    await ensureWorkflowCompatibility(c.env);
     return next();
   }
   const bearer = bearerToken(c.req.header("authorization"));
@@ -166,11 +180,14 @@ app.use("/api/*", async (c, next) => {
     c.set("actor", identity.sub as string);
     c.set("actorLogin", typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user");
     c.set("identityToken", token);
+    await ensureWorkflowCompatibility(c.env);
     return next();
   } catch {
     return c.json({ error: "Invalid or expired session" }, 401);
   }
 });
+
+app.route("/api", workflowManagement);
 
 app.post("/api/health/ai", async (c) => {
   const result = await runIssueGardener({
@@ -210,13 +227,6 @@ app.post("/api/repositories/sync", async (c) => {
   }
   await audit(c.env.DB, c.get("actor"), "repositories.synced", "instance", instanceId(c.env), { count: repositories.length });
   return c.json({ repositories });
-});
-
-app.get("/api/workflows", async (c) => {
-  const workflows = await c.env.DB
-    .prepare("SELECT id, name, version, enabled, trigger_kind, instructions, compiled_plan, created_at, updated_at FROM workflows ORDER BY name")
-    .all();
-  return c.json({ workflows: workflows.results });
 });
 
 app.get("/api/policies", async (c) => {
@@ -341,18 +351,6 @@ app.put("/api/repositories/:id/pause", async (c) => {
   return c.json({ id, paused });
 });
 
-app.post("/api/workflows/:id/status", async (c) => {
-  const { enabled } = z.object({ enabled: z.boolean() }).parse(await c.req.json());
-  const id = c.req.param("id");
-  const result = await c.env.DB
-    .prepare("UPDATE workflows SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-    .bind(enabled ? 1 : 0, id)
-    .run();
-  if ((result.meta.changes ?? 0) === 0) return c.json({ error: "Workflow not found" }, 404);
-  await audit(c.env.DB, c.get("actor"), enabled ? "workflow.enabled" : "workflow.disabled", "workflow", id);
-  return c.json({ id, enabled });
-});
-
 app.put("/api/policies", async (c) => {
   const { policies } = z.object({
     policies: z.array(z.object({ operation: z.string().min(1).max(100), mode: policyModeSchema }).strict()).min(1).max(50),
@@ -397,10 +395,13 @@ app.post("/api/approvals/:id/reject", async (c) => {
 app.post("/api/approvals/:id/approve", async (c) => {
   const id = c.req.param("id");
   const row = await c.env.DB
-    .prepare("SELECT p.operation, p.run_id, r.event_id, e.repository_id FROM proposals p JOIN runs r ON r.id = p.run_id JOIN events e ON e.id = r.event_id WHERE p.id = ? AND p.status = 'pending'")
+    .prepare("SELECT p.operation, p.operation_kind, p.run_id, r.event_id, e.repository_id FROM proposals p JOIN runs r ON r.id = p.run_id JOIN events e ON e.id = r.event_id WHERE p.id = ? AND p.status = 'pending'")
     .bind(id)
-    .first<{ operation: string; run_id: string; event_id: string; repository_id: string }>();
+    .first<{ operation: string; operation_kind: string; run_id: string; event_id: string; repository_id: string }>();
   if (!row) return c.json({ error: "Proposal is not pending" }, 409);
+  const currentPolicy = await c.env.DB.prepare("SELECT mode FROM operation_policies WHERE operation_kind = ?")
+    .bind(row.operation_kind).first<{ mode: PolicyMode }>();
+  if (!currentPolicy || currentPolicy.mode === "disabled") return c.json({ error: "This operation is currently disabled by policy" }, 409);
   const initiallyPausedBy = await pauseScope(c.env.DB, row.repository_id);
   if (initiallyPausedBy) {
     return c.json({ error: initiallyPausedBy === "global" ? "Gardener is paused; resume before executing an approval" : "This repository is paused; resume it before executing an approval" }, 409);
@@ -421,6 +422,13 @@ app.post("/api/approvals/:id/approve", async (c) => {
         .bind(id)
         .run();
       return c.json({ error: pausedBy === "global" ? "Gardener was paused before execution" : "Repository was paused before execution" }, 409);
+    }
+    const latestPolicy = await c.env.DB.prepare("SELECT mode FROM operation_policies WHERE operation_kind = ?")
+      .bind(row.operation_kind).first<{ mode: PolicyMode }>();
+    if (!latestPolicy || latestPolicy.mode === "disabled") {
+      await c.env.DB.prepare("UPDATE proposals SET status = 'disabled', policy_mode = 'disabled' WHERE id = ? AND status = 'executing'")
+        .bind(id).run();
+      return c.json({ error: "This operation was disabled before execution" }, 409);
     }
     const receipt = await executeThroughConnect(c.env, row.run_id, row.event_id, operation);
     await c.env.DB
@@ -444,16 +452,33 @@ interface RunRow {
   status: string;
   policy_snapshot: string;
   envelope: string;
-  instructions: string;
+  legacy_instructions: string;
   attempt_count: number;
   repository_id: string;
+  workflow_id: string;
+  workflow_version: number;
+  plan_id: string | null;
+  plan_content_hash: string | null;
+  plan_workflow_id: string | null;
+  plan_revision: number | null;
+  revision_compiled_plan: string | null;
+}
+
+const policyRank: Record<PolicyMode, number> = { disabled: 0, approval: 1, automatic: 2 };
+
+function narrowerPolicyMode(admitted: PolicyMode, current: PolicyMode): PolicyMode {
+  return policyRank[admitted] <= policyRank[current] ? admitted : current;
 }
 
 async function processRun(env: Env, runId: string): Promise<void> {
   const row = await env.DB
     .prepare(
-      "SELECT r.id, r.status, r.policy_snapshot, r.attempt_count, e.envelope, e.repository_id, w.instructions FROM runs r " +
-        "JOIN events e ON e.id = r.event_id JOIN workflows w ON w.id = r.workflow_id WHERE r.id = ?",
+      "SELECT r.id, r.status, r.policy_snapshot, r.attempt_count, r.workflow_id, r.workflow_version, e.envelope, e.repository_id, " +
+        "w.instructions AS legacy_instructions, rp.plan_id, rp.content_hash AS plan_content_hash, rp.workflow_id AS plan_workflow_id, " +
+        "rp.revision AS plan_revision, wr.compiled_plan_json AS revision_compiled_plan FROM runs r " +
+        "JOIN events e ON e.id = r.event_id JOIN workflows w ON w.id = r.workflow_id " +
+        "LEFT JOIN run_workflow_plans rp ON rp.run_id = r.id " +
+        "LEFT JOIN workflow_revisions wr ON wr.workflow_id = rp.workflow_id AND wr.revision = rp.revision WHERE r.id = ?",
     )
     .bind(runId)
     .first<RunRow>();
@@ -478,22 +503,78 @@ async function processRun(env: Env, runId: string): Promise<void> {
     .run();
   if ((claimed.meta.changes ?? 0) === 0) return;
 
+  let maxAttempts = 3;
   try {
     const event = JSON.parse(row.envelope) as ConnectEvent;
     if (event.kind !== "github.issue") throw new Error(`No runtime is configured for ${event.kind}`);
-    const result = await runIssueGardener({
-      ai: env.AI,
-      model: env.AI_MODEL,
-      runId,
-      event,
-      instructions: row.instructions,
-    });
-    const policies = JSON.parse(row.policy_snapshot) as Record<string, PolicyMode>;
+    const hasPlanBinding = row.plan_id !== null;
+    const pinnedPlan = hasPlanBinding ? parseCompiledWorkflowV2(row.revision_compiled_plan) : null;
+    if (hasPlanBinding && !pinnedPlan) throw new Error("Pinned workflow revision is missing or invalid");
+    if (pinnedPlan && (
+      pinnedPlan.planId !== row.plan_id || pinnedPlan.contentHash !== row.plan_content_hash ||
+      pinnedPlan.workflowId !== row.plan_workflow_id || pinnedPlan.workflowId !== row.workflow_id ||
+      pinnedPlan.revision !== row.plan_revision || pinnedPlan.revision !== row.workflow_version ||
+      !workflowMatchesEvent(row.revision_compiled_plan!, event)
+    )) {
+      throw new Error("Pinned workflow revision does not match this run binding or event");
+    }
+    if (pinnedPlan) {
+      maxAttempts = pinnedPlan.limits.retries + 1;
+      const maximumCost = maximumModelCostUsd(pinnedPlan.runtime.resolvedModel, pinnedPlan.limits.inputTokens, pinnedPlan.limits.outputTokens);
+      if (maximumCost === null || maximumCost > pinnedPlan.limits.costUsd) {
+        throw new Error("Pinned workflow token budgets have no enforceable cost limit");
+      }
+    }
+    const frozenResult = await env.DB.prepare("SELECT result_json FROM run_agent_results WHERE run_id = ?")
+      .bind(runId).first<{ result_json: string }>();
+    let result: AgentResult;
+    if (frozenResult) {
+      result = agentResultSchema.parse(JSON.parse(frozenResult.result_json));
+    } else {
+      const priorProposal = await env.DB.prepare("SELECT 1 AS present FROM proposals WHERE run_id = ? LIMIT 1")
+        .bind(runId).first<{ present: number }>();
+      if (priorProposal) throw new Error("Run has unfrozen legacy proposals and requires manual review");
+      const proposedResult = await runIssueGardener({
+        ai: env.AI,
+        model: pinnedPlan?.runtime.resolvedModel ?? env.AI_MODEL,
+        runId,
+        event,
+        instructions: pinnedPlan?.runtime.instructions ?? row.legacy_instructions,
+        maxOperations: pinnedPlan?.limits.operations ?? 4,
+        ...(pinnedPlan ? {
+          runtimeSeconds: pinnedPlan.limits.runtimeSeconds,
+          maxInputTokens: pinnedPlan.limits.inputTokens,
+          maxOutputTokens: pinnedPlan.limits.outputTokens,
+        } : {}),
+      });
+      await env.DB.prepare("INSERT OR IGNORE INTO run_agent_results (run_id, result_json) VALUES (?, ?)")
+        .bind(runId, JSON.stringify(proposedResult)).run();
+      const stored = await env.DB.prepare("SELECT result_json FROM run_agent_results WHERE run_id = ?")
+        .bind(runId).first<{ result_json: string }>();
+      if (!stored) throw new Error("Agent result could not be frozen for retry-safe execution");
+      result = agentResultSchema.parse(JSON.parse(stored.result_json));
+    }
+    if (pinnedPlan) {
+      const limits = pinnedPlan.limits;
+      if (result.proposals.length > limits.operations) throw new Error("Agent result exceeded the workflow operation limit");
+      const maximumCost = maximumModelCostUsd(pinnedPlan.runtime.resolvedModel, limits.inputTokens, limits.outputTokens)!;
+      if (maximumCost > 0 && result.usage.costUsd === undefined) {
+        throw new Error("Agent result has no enforceable cost accounting");
+      }
+      if (result.usage.inputTokens !== undefined && result.usage.inputTokens > limits.inputTokens) throw new Error("Agent result exceeded the workflow input-token limit");
+      if (result.usage.outputTokens !== undefined && result.usage.outputTokens > limits.outputTokens) throw new Error("Agent result exceeded the workflow output-token limit");
+      if (result.usage.costUsd !== undefined && result.usage.costUsd > limits.costUsd) throw new Error("Agent result exceeded the workflow cost limit");
+    }
+    const admittedPolicies = JSON.parse(row.policy_snapshot) as Record<string, PolicyMode>;
+    const currentPolicies = await policySnapshot(env.DB);
     let executionErrors = 0;
 
     for (const proposal of result.proposals) {
       const operation = operationSchema.parse(proposal.operation);
-      const mode = policies[operation.kind] ?? "disabled";
+      const withinCapabilityCeiling = !pinnedPlan || pinnedPlan.capabilities.propose.includes(operation.kind);
+      const policyMode = narrowerPolicyMode(admittedPolicies[operation.kind] ?? "disabled", currentPolicies[operation.kind] ?? "disabled");
+      const ceilingMode = pinnedPlan?.capabilities.maximumMode === "approval" && policyMode === "automatic" ? "approval" : policyMode;
+      const mode = withinCapabilityCeiling ? ceilingMode : "disabled";
       const status = mode === "automatic" ? "executing" : mode === "approval" ? "pending" : "disabled";
       const proposalId = crypto.randomUUID();
       const inserted = await env.DB
@@ -503,15 +584,38 @@ async function processRun(env: Env, runId: string): Promise<void> {
         )
         .bind(proposalId, operation.id, runId, operation.kind, JSON.stringify(operation), mode, status, proposal.rationale)
         .run();
+      let executableProposalId: string = proposalId;
+      let executeAutomatically = mode === "automatic";
       if ((inserted.meta.changes ?? 0) > 0) {
         await audit(env.DB, "agent", "proposal.created", "proposal", proposalId, {
           operationId: operation.id,
           operationKind: operation.kind,
           policyMode: mode,
         });
+      } else {
+        const storedProposal = await env.DB.prepare(
+          "SELECT id, run_id, operation, policy_mode, status FROM proposals WHERE operation_id = ?",
+        ).bind(operation.id).first<{ id: string; run_id: string; operation: string; policy_mode: PolicyMode; status: string }>();
+        if (!storedProposal || storedProposal.run_id !== runId || JSON.stringify(operationSchema.parse(JSON.parse(storedProposal.operation))) !== JSON.stringify(operation)) {
+          throw new Error("Stored proposal slot does not match the frozen agent result");
+        }
+        // A retry may recover a previously claimed automatic proposal, but it must never
+        // reinterpret or overwrite a pending, rejected, disabled, failed, or executed row.
+        if (storedProposal.status !== "executing" || storedProposal.policy_mode !== "automatic") continue;
+        executableProposalId = storedProposal.id;
+        executeAutomatically = true;
       }
 
-      if (mode === "automatic") {
+      if (executeAutomatically) {
+        const latestPolicy = await env.DB.prepare("SELECT mode FROM operation_policies WHERE operation_kind = ?")
+          .bind(operation.kind).first<{ mode: PolicyMode }>();
+        if (latestPolicy?.mode !== "automatic") {
+          const narrowedMode = latestPolicy?.mode === "approval" ? "approval" : "disabled";
+          await env.DB.prepare("UPDATE proposals SET status = ?, policy_mode = ? WHERE operation_id = ? AND status = 'executing'")
+            .bind(narrowedMode === "approval" ? "pending" : "disabled", narrowedMode, operation.id).run();
+          await audit(env.DB, "system", "proposal.policy_narrowed", "proposal", executableProposalId, { operationId: operation.id, policyMode: narrowedMode });
+          continue;
+        }
         const pausedBeforeExecution = await pauseScope(env.DB, event.repository.id);
         if (pausedBeforeExecution) {
           executionErrors += 1;
@@ -520,7 +624,7 @@ async function processRun(env: Env, runId: string): Promise<void> {
             .prepare("UPDATE proposals SET status = 'failed', error = ?, decided_at = CURRENT_TIMESTAMP WHERE operation_id = ?")
             .bind(message, operation.id)
             .run();
-          await audit(env.DB, "system", "proposal.failed", "proposal", proposalId, { error: message });
+          await audit(env.DB, "system", "proposal.failed", "proposal", executableProposalId, { error: message });
           continue;
         }
         try {
@@ -529,7 +633,7 @@ async function processRun(env: Env, runId: string): Promise<void> {
             .prepare("UPDATE proposals SET status = 'executed', receipt = ?, error = NULL, decided_at = CURRENT_TIMESTAMP WHERE operation_id = ?")
             .bind(JSON.stringify(receipt), operation.id)
             .run();
-          await audit(env.DB, "agent", "proposal.executed", "proposal", proposalId, { operationId: operation.id });
+          await audit(env.DB, "agent", "proposal.executed", "proposal", executableProposalId, { operationId: operation.id });
         } catch (error) {
           executionErrors += 1;
           const message = error instanceof Error ? error.message : "Execution failed";
@@ -537,7 +641,7 @@ async function processRun(env: Env, runId: string): Promise<void> {
             .prepare("UPDATE proposals SET status = 'failed', error = ?, decided_at = CURRENT_TIMESTAMP WHERE operation_id = ?")
             .bind(message, operation.id)
             .run();
-          await audit(env.DB, "agent", "proposal.failed", "proposal", proposalId, { error: message });
+          await audit(env.DB, "agent", "proposal.failed", "proposal", executableProposalId, { error: message });
         }
       }
     }
@@ -561,7 +665,8 @@ async function processRun(env: Env, runId: string): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Run failed";
     const attempt = row.attempt_count + 1;
-    const final = attempt >= 3;
+    const nonRetryable = /workflow (?:runtime|input-token|output-token|cost|operation) limit|no enforceable cost (?:accounting|limit)|unfrozen legacy proposals/.test(message);
+    const final = nonRetryable || attempt >= maxAttempts;
     await env.DB.prepare(
       "UPDATE runs SET status = ?, error = ?, completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id = ?",
     ).bind(final ? "failed" : "queued", message, final ? 1 : 0, runId).run();

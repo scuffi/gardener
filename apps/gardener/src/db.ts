@@ -1,3 +1,5 @@
+import { compiledWorkflowPlanV2Schema, type CompiledWorkflowPlanV2 } from "@gardener/contracts";
+import { evaluateWorkflowCondition } from "@gardener/core";
 import type { ConnectEvent, PolicyMode } from "./domain";
 import type { Env } from "./env";
 
@@ -72,14 +74,31 @@ interface RunnableWorkflow {
   id: string;
   version: number;
   compiled_plan: string;
+  active_revision: number | null;
+  revision_compiled_plan: string | null;
+}
+
+export function parseCompiledWorkflowV2(compiledPlan: string | null): CompiledWorkflowPlanV2 | null {
+  if (!compiledPlan) return null;
+  try {
+    const value = JSON.parse(compiledPlan) as unknown;
+    if (typeof value !== "object" || value === null || (value as { schemaVersion?: unknown }).schemaVersion !== "v2") return null;
+    return compiledWorkflowPlanV2Schema.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 export function workflowMatchesEvent(compiledPlan: string, event: ConnectEvent): boolean {
   try {
-    const plan = JSON.parse(compiledPlan) as { triggers?: unknown };
-    return Array.isArray(plan.triggers) && plan.triggers.includes(`${event.kind}.${event.action}`);
+    const raw = JSON.parse(compiledPlan) as { schemaVersion?: unknown; triggers?: unknown };
+    if (!Array.isArray(raw.triggers) || !raw.triggers.includes(`${event.kind}.${event.action}`)) return false;
+    if (raw.schemaVersion !== "v2") return true;
+    const plan = compiledWorkflowPlanV2Schema.parse(raw);
+    if (!plan.repositoryIds.includes(event.repository.id)) return false;
+    return evaluateWorkflowCondition(plan.condition, event).matched;
   } catch {
-    // Invalid compiled plans fail closed rather than broadening their trigger.
+    // Invalid compiled plans, unavailable facts, and unresolved conditions fail closed.
     return false;
   }
 }
@@ -87,22 +106,33 @@ export function workflowMatchesEvent(compiledPlan: string, event: ConnectEvent):
 export async function createRunsForEvent(env: Env, event: ConnectEvent): Promise<string[]> {
   const { results: workflows } = await env.DB
     .prepare(
-      "SELECT id, version, compiled_plan FROM workflows WHERE enabled = 1 AND trigger_kind = ? ORDER BY id",
+      "SELECT w.id, w.version, w.compiled_plan, w.active_revision, wr.compiled_plan_json AS revision_compiled_plan " +
+        "FROM workflows w LEFT JOIN workflow_revisions wr ON wr.workflow_id = w.id AND wr.revision = w.active_revision " +
+        "WHERE w.enabled = 1 AND w.trigger_kind = ? ORDER BY w.id",
     )
     .bind(event.kind)
     .all<RunnableWorkflow>();
   const policies = await policySnapshot(env.DB);
   const runIds: string[] = [];
-  for (const workflow of workflows.filter((candidate) => workflowMatchesEvent(candidate.compiled_plan, event))) {
+  for (const workflow of workflows) {
+    const pinnedPlanJson = workflow.active_revision === null ? workflow.compiled_plan : workflow.revision_compiled_plan;
+    if (!pinnedPlanJson || !workflowMatchesEvent(pinnedPlanJson, event)) continue;
+    const pinnedPlan = workflow.active_revision === null ? null : parseCompiledWorkflowV2(pinnedPlanJson);
+    if (workflow.active_revision !== null && !pinnedPlan) continue;
+    const workflowVersion = workflow.active_revision ?? workflow.version;
     const runId = crypto.randomUUID();
-    const result = await env.DB
-      .prepare(
-        "INSERT OR IGNORE INTO runs " +
-          "(id, event_id, workflow_id, workflow_version, status, policy_snapshot) VALUES (?, ?, ?, ?, 'queued', ?)",
-      )
-      .bind(runId, event.id, workflow.id, workflow.version, JSON.stringify(policies))
-      .run();
-    if ((result.meta.changes ?? 0) > 0) runIds.push(runId);
+    const statements = [env.DB.prepare(
+      "INSERT OR IGNORE INTO runs " +
+        "(id, event_id, workflow_id, workflow_version, status, policy_snapshot) VALUES (?, ?, ?, ?, 'queued', ?)",
+    ).bind(runId, event.id, workflow.id, workflowVersion, JSON.stringify(policies))];
+    if (pinnedPlan) {
+      statements.push(env.DB.prepare(
+        "INSERT OR IGNORE INTO run_workflow_plans (run_id, workflow_id, revision, plan_id, content_hash) " +
+          "SELECT id, ?, ?, ?, ? FROM runs WHERE id = ?",
+      ).bind(workflow.id, workflowVersion, pinnedPlan.planId, pinnedPlan.contentHash, runId));
+    }
+    const results = await env.DB.batch(statements);
+    if ((results[0]?.meta.changes ?? 0) > 0) runIds.push(runId);
   }
   await Promise.all(runIds.map((runId) => env.RUN_QUEUE.send({ runId })));
   return runIds;

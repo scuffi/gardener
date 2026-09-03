@@ -28,32 +28,51 @@ describe("issue gardener runtime", () => {
     expect(parseAiClassification({ response: "```json\n{\"summary\":\"A bug\",\"labels\":[\"bug\"],\"comment\":null,\"rationale\":\"Crash report\"}\n```" }).summary).toBe("A bug");
   });
 
-  it("creates bounded typed proposals and skips existing labels", async () => {
+  it("creates bounded typed proposals, skips existing labels, and passes the output bound to Workers AI", async () => {
+    let workersAiInput: any;
     const result = await runIssueGardener({
       ai: {
-        run: async () => ({
+        run: async (_model, input) => {
+          workersAiInput = input;
+          return ({
           response: JSON.stringify({
             summary: "Likely a bug with missing reproduction details.",
             labels: ["bug", "question"],
             comment: "Thanks. Could you share the runtime version?",
             rationale: "The report describes a crash but lacks environment details.",
           }),
-          usage: { prompt_tokens: 100, completion_tokens: 40 },
-        }),
+            usage: { prompt_tokens: 100, completion_tokens: 40 },
+          });
+        },
       },
       model: "test-model",
       runId: "run-1",
       event,
       instructions: "Classify the issue.",
+      maxOutputTokens: 42,
     });
 
+    expect(workersAiInput.max_tokens).toBe(42);
     expect(result.proposals).toHaveLength(2);
     expect(result.proposals.map((item) => item.operation.kind)).toEqual([
       "issue.label.add",
       "issue.comment.create",
     ]);
-    expect(result.proposals[0]?.operation.id).toBe("run-1:operation:0");
+    expect(result.proposals[0]?.operation.id).toMatch(/^run-1:operation:0:[a-f0-9]{32}$/);
     expect(result.usage).toMatchObject({ model: "test-model", inputTokens: 100, outputTokens: 40 });
+  });
+
+  it("rejects an input above the conservative token bound before calling Workers AI", async () => {
+    let called = false;
+    await expect(runIssueGardener({
+      ai: { run: async () => { called = true; return {}; } },
+      model: "test-model",
+      runId: "bounded-input",
+      event,
+      instructions: "Classify the issue.",
+      maxInputTokens: 1,
+    })).rejects.toThrow(/input-token limit/);
+    expect(called).toBe(false);
   });
 
   it("uses the deterministic adapter only for the reserved smoke model", async () => {

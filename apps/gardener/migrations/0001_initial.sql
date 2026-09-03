@@ -25,27 +25,8 @@ CREATE TABLE IF NOT EXISTS workflows (
   trigger_kind TEXT NOT NULL,
   instructions TEXT NOT NULL,
   compiled_plan TEXT NOT NULL,
-  active_revision INTEGER CHECK (active_revision IS NULL OR active_revision > 0),
-  revision_counter INTEGER NOT NULL DEFAULT 0 CHECK (revision_counter >= 0),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS workflow_revisions (
-  workflow_id TEXT NOT NULL,
-  revision INTEGER NOT NULL CHECK (revision > 0),
-  definition_json TEXT NOT NULL,
-  compiled_plan_json TEXT NOT NULL,
-  content_hash TEXT NOT NULL,
-  validator_version TEXT NOT NULL,
-  validation_json TEXT NOT NULL,
-  source_kind TEXT NOT NULL CHECK (source_kind IN ('system', 'dashboard', 'agent')),
-  created_by TEXT NOT NULL,
-  source_metadata_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (workflow_id, revision),
-  UNIQUE (workflow_id, content_hash),
-  FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS operation_policies (
@@ -112,7 +93,6 @@ CREATE TABLE IF NOT EXISTS audit_records (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_workflow_revisions_created_at ON workflow_revisions(workflow_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_records(created_at DESC);

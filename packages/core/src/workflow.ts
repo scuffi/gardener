@@ -52,6 +52,14 @@ export function compileWorkflow(
 
 export const compilePlan = compileWorkflow;
 
+export const issueGardenerRuntimeCapabilities = Object.freeze({
+  eventKind: "github.issue" as const,
+  actions: Object.freeze(["opened", "edited", "reopened", "closed", "labeled", "unlabeled"] as const),
+  reads: Object.freeze(["issue"] as const),
+  operations: Object.freeze(["issue.label.add", "issue.comment.create"] as const),
+  maxOutputTokens: 8_192,
+});
+
 export interface CompileWorkflowV2Options {
   workflowId: string;
   revision: number;
@@ -70,8 +78,14 @@ export async function compileWorkflowV2(source: WorkflowSpecV2 | unknown, option
   const eventTriggers = spec.triggers.filter((trigger) => trigger.kind === "github.issue" || trigger.kind === "github.pull_request");
   if (eventTriggers.length !== spec.triggers.length) throw new Error("manual and schedule triggers are not available");
   if (spec.runtime.kind !== "workers-ai.issue-gardener") throw new Error(`runtime is not available: ${spec.runtime.kind}`);
-  if (eventTriggers.some((trigger) => trigger.kind !== "github.issue")) throw new Error("the issue gardener runtime only supports GitHub issue events");
-  if (spec.capabilities.propose.some((operation) => !operation.startsWith("issue."))) throw new Error("the issue gardener runtime only supports issue operations");
+  if (eventTriggers.some((trigger) => trigger.kind !== issueGardenerRuntimeCapabilities.eventKind)) throw new Error("the issue gardener runtime only supports GitHub issue events");
+  const supportedActions = new Set<string>(issueGardenerRuntimeCapabilities.actions);
+  if (eventTriggers.some((trigger) => trigger.actions.some((action) => !supportedActions.has(action)))) throw new Error("the issue gardener runtime does not support one or more trigger actions");
+  const supportedOperations = new Set<string>(issueGardenerRuntimeCapabilities.operations);
+  if (spec.capabilities.propose.some((operation) => !supportedOperations.has(operation))) throw new Error("the issue gardener runtime supports only label-add and comment-create proposals");
+  const supportedReads = new Set<string>(issueGardenerRuntimeCapabilities.reads);
+  if (spec.capabilities.read.some((capability) => !supportedReads.has(capability))) throw new Error("the issue gardener runtime supports only issue reads");
+  if (spec.limits.outputTokens > issueGardenerRuntimeCapabilities.maxOutputTokens) throw new Error("the issue gardener output-token limit exceeds the runtime maximum");
   if (spec.workspace.enabled) throw new Error("workspace execution is not available");
 
   const eventKinds = [...new Set(eventTriggers.map((trigger) => trigger.kind))];
@@ -94,6 +108,8 @@ export async function compileWorkflowV2(source: WorkflowSpecV2 | unknown, option
     triggers,
     repositoryIds: spec.repositoryIds,
     condition: spec.condition,
+    conditionResolver: { id: "signed-event-facts" as const, version: 1 as const, catalogVersion: "2026-09-03.1" as const },
+    requiredGitHubPermissions: spec.capabilities.propose.length ? ["issues:write"] : [],
     runtime: { kind: spec.runtime.kind, resolvedModel: options.resolvedModel, instructions: spec.runtime.instructions },
     capabilities: spec.capabilities,
     workspace: spec.workspace,
