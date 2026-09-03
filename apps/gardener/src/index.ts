@@ -5,6 +5,7 @@ import { bearerToken, verifyEventToken, verifyIdentityToken } from "./auth";
 import {
   beginGitHubInstallation,
   beginGitHubLogin,
+  claimGardenerInstance,
   executeThroughConnect,
   listConnectedRepositories,
 } from "./connect";
@@ -17,7 +18,7 @@ import {
   type PolicyMode,
   type RunQueueMessage,
 } from "./domain";
-import { instanceId, type Env } from "./env";
+import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 import { runIssueGardener } from "./runtime";
 import { setupPolicyProfile, setupProfileIds } from "./setup";
 
@@ -122,13 +123,22 @@ app.post("/api/auth/session", async (c) => {
 app.get("/api/auth/session", async (c) => {
   const token = getCookie(c, sessionCookie);
   if (!token) return c.json({ authenticated: false });
+  let identity;
   try {
-    const identity = await verifyIdentityToken(token, c.env);
-    return c.json({ authenticated: true, githubLogin: typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user" });
+    identity = await verifyIdentityToken(token, c.env);
   } catch {
     deleteCookie(c, sessionCookie, { path: "/", secure: new URL(c.req.url).protocol === "https:" });
     return c.json({ authenticated: false });
   }
+  if (cloudflareAccessCredentials(c.env)) {
+    try {
+      await claimGardenerInstance(c.env, new URL(c.req.url).origin);
+    } catch {
+      console.error("Cloudflare Access credential registration failed");
+      return c.json({ error: "Cloudflare Access service authentication could not be registered" }, 503);
+    }
+  }
+  return c.json({ authenticated: true, githubLogin: typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user" });
 });
 
 app.post("/api/auth/logout", (c) => {

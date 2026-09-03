@@ -49,7 +49,7 @@ pnpm exec wrangler secret put CLOUDFLARE_ACCESS_CLIENT_SECRET --config wrangler.
 
 Never put either value in `wrangler.jsonc`, a `.dev.vars` file committed to source control, a URL, or a support message.
 
-Gardener registers the pair during its authenticated instance claim. The next **Sign in with GitHub** attempt performs that claim. Managed Connect encrypts the complete pair with AES-256-GCM, binds the ciphertext to the Gardener instance ID, and adds the two standard Access headers only when relaying an event to that instance's already-bound callback URL. The credentials are never returned by an API or included in logs, events, model input, grants, or operation receipts.
+Gardener registers the pair during its authenticated instance claim. An existing Gardener session performs that claim on the next dashboard load; otherwise the next **Sign in with GitHub** attempt performs it. Managed Connect encrypts the complete pair with AES-256-GCM, binds the ciphertext to the Gardener instance ID, and adds the two standard Access headers only when relaying an event to that instance's already-bound callback URL. The credentials are never returned by an API or included in logs, events, model input, grants, or operation receipts.
 
 Both values are optional. If neither exists, Gardener explicitly keeps the standard non-Access relay mode. If only one is present, Gardener fails the claim instead of storing a partial configuration.
 
@@ -87,7 +87,7 @@ For rotation without relay downtime:
 
 1. Create a replacement Access service token and add it to the Service Auth policy.
 2. Replace both Gardener Worker secrets.
-3. Sign out and start GitHub sign-in once so Gardener registers the replacement with Connect.
+3. Reload Gardener with an authenticated Gardener session, or start GitHub sign-in once, so Gardener registers the replacement with Connect.
 4. Run the invalid-token verification above with the replacement credentials.
 5. Remove and revoke the old Access service token.
 
