@@ -21,7 +21,7 @@ Connect is implemented in this repository but is **not** installed into customer
 
 Gardener is the customer data plane deployed into the user's Cloudflare account. It owns repository selections, workflows, policy, runs, proposals, approvals, audit records, Workers AI usage, and its dashboard. GitHub credentials never cross into this deployment.
 
-The first iteration handles issue events and can propose or perform bounded label, comment, close, and reopen operations. The contracts include extension points for PR reviews and code changes, but Computer workspaces and merge automation are deliberately deferred until the issue-gardening slice is proven.
+The active Issue Gardener workflow handles issue events and proposes bounded label and comment changes. The policy and Connect layers support the complete typed maintainer surface: issue actions, branch creation, bounded commits, pull-request creation and updates (including close/reopen and draft state), grouped reviews, and protected merge. Code and pull-request policies start disabled; Computer-based code generation and additional workflows remain deferred.
 
 ## Trust model
 
@@ -31,11 +31,12 @@ The first iteration handles issue events and can propose or perform bounded labe
 - A Gardener instance authenticates to Connect with its high-entropy instance token. Connect stores only its SHA-256 hash.
 - The instance token may request a short-lived grant; it is not accepted by an operation endpoint as write authority.
 - Grants bind an instance, signed-and-relayed event, installation, repository, resource, operation scopes, and expiration.
-- Connect re-fetches relevant GitHub state when executing a mutation and records operation IDs for idempotency.
-- Agent output is untrusted data. Gardener validates it into typed proposals, evaluates the immutable run policy snapshot, and either discards, queues for approval, or submits it with a grant.
+- Connect binds grants to canonical hashes of exact approved operations, re-fetches relevant GitHub state when executing a mutation, and records operation IDs for retry safety.
+- Agent output is untrusted data. Gardener validates it into typed proposals, evaluates the immutable run policy snapshot, and either discards, queues for approval, or submits the exact typed payload with a hash-bound grant.
+- Pull-request operations bind the expected state, draft status, head revision, and base revision from the delivered event. The Gardener GitHub App must not appear on branch-protection or ruleset bypass lists; GitHub remains responsible for enforcing review, conversation, freshness, and ruleset requirements at merge time.
 
 ## Deliberately small v1
 
 The first release uses D1 and one Queue. It does not add Durable Objects, R2, AI Gateway, a plugin system, or a generic provider framework until contention, artifact size, or additional providers justify them. The `AgentRuntime` and typed connector contracts are the intentional seams.
 
-Workflows start paused. Labels and comments have independent Disabled / Approval / Automatic modes. Global pause blocks new execution without deleting state.
+Workflows start paused. Every typed operation has an independent Disabled / Approval / Automatic mode, with code and pull-request operations disabled by default. Global and repository pause controls block admission of new execution without deleting state.

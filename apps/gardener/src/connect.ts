@@ -85,8 +85,7 @@ export async function executeThroughConnect(
       runId,
       eventId,
       repository: operation.repository,
-      resource: { kind: "issue", number: operation.issueNumber },
-      operations: [operation.kind],
+      operations: [operation],
     }),
   });
   const grantBody = (await grantResponse.json()) as { grant?: string };

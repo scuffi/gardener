@@ -1,6 +1,11 @@
 import initialSchema from "../migrations/0001_initial.sql";
+import maintainerPolicies from "../migrations/0002_maintainer_policies.sql";
 
 const initialization = new WeakMap<object, Promise<void>>();
+
+function statements(sql: string): string[] {
+  return sql.split(";").map((statement) => statement.trim()).filter((statement) => statement && !statement.startsWith("PRAGMA"));
+}
 
 /**
  * Deploy to Cloudflare provisions D1 but does not run Wrangler migrations.
@@ -16,12 +21,11 @@ export function ensureDatabase(db: D1Database): Promise<void> {
     try {
       await db.prepare("SELECT key FROM settings LIMIT 1").first();
     } catch {
-      const statements = initialSchema
-        .split(";")
-        .map((statement) => statement.trim())
-        .filter((statement) => statement && !statement.startsWith("PRAGMA"));
-      await db.batch(statements.map((statement) => db.prepare(statement)));
+      await db.batch(statements(initialSchema).map((statement) => db.prepare(statement)));
     }
+    // This additive compatibility migration is safe to reapply and prevents a deployed Worker
+    // from silently running with a partial operation-policy catalog.
+    await db.batch(statements(maintainerPolicies).map((statement) => db.prepare(statement)));
   })();
   initialization.set(key, pending);
   pending.catch(() => initialization.delete(key));

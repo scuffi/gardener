@@ -7,7 +7,7 @@ import { bearer, constantTimeEqual, jwks, randomToken, sha256, signToken, verify
 import type { Env, GrantClaims, Variables } from "./env";
 import { discoverRepositories, exchangeOAuthCode, executeGitHubOperation, getInstallation } from "./github";
 import { landingPage } from "./landing";
-import { callbackUrlSchema, grantRequestSchema, operationSchema } from "./schema";
+import { callbackUrlSchema, grantRequestSchema, operationSchema, type Operation } from "./schema";
 
 type AppBindings = { Bindings: Env; Variables: Variables };
 type Row = Record<string, unknown>;
@@ -234,41 +234,74 @@ app.post("/v1/grants", async (c) => {
   const repo = await c.env.DB.prepare("SELECT r.id, r.installation_id FROM repositories r JOIN installations i ON i.id = r.installation_id WHERE r.id = ? AND r.instance_id = ? AND r.owner = ? AND r.name = ? AND r.active = 1 AND i.revoked_at IS NULL AND i.suspended_at IS NULL").bind(input.repository.id, instanceId, input.repository.owner, input.repository.name).first<{ id: string; installation_id: string }>();
   if (!repo || repo.installation_id !== input.repository.installationId) return c.json({ error: "Repository is not authorized for this instance" }, 403);
   const deliveredEvent = await c.env.DB.prepare(
-    "SELECT 1 FROM webhook_deliveries WHERE instance_id = ? AND repository_id = ? AND normalized_event_id = ? AND resource_kind = ? AND resource_number = ? AND status IN ('relaying', 'relayed')",
-  ).bind(instanceId, repo.id, input.eventId, input.resource.kind, input.resource.number).first();
-  if (!deliveredEvent) return c.json({ error: "Run grant must reference an event delivered to this instance" }, 403);
+    "SELECT resource_kind, resource_number, event_state, event_draft, head_sha, base_ref, base_sha FROM webhook_deliveries WHERE instance_id = ? AND repository_id = ? AND normalized_event_id = ? AND status IN ('relaying', 'relayed')",
+  ).bind(instanceId, repo.id, input.eventId).first<{ resource_kind: string; resource_number: number; event_state: string | null; event_draft: number | null; head_sha: string | null; base_ref: string | null; base_sha: string | null }>();
+  if (!deliveredEvent || !["issue", "pull_request"].includes(deliveredEvent.resource_kind) || !Number.isSafeInteger(deliveredEvent.resource_number)) {
+    return c.json({ error: "Run grant must reference a supported event delivered to this instance" }, 403);
+  }
+  const resourceKind = deliveredEvent.resource_kind as GrantClaims["resourceKind"];
+  const resourceNumber = deliveredEvent.resource_number;
+  if (input.operations.some((operation) => {
+    if (operation.repository.id !== repo.id || operation.repository.owner !== input.repository.owner || operation.repository.name !== input.repository.name || operation.repository.installationId !== repo.installation_id || !operationMatchesGrantResource(operation, { resourceKind, resourceNumber })) return true;
+    if ("issueNumber" in operation) return operation.expectedIssueState !== deliveredEvent.event_state;
+    if ("pullNumber" in operation) return operation.expectedHeadSha !== deliveredEvent.head_sha || operation.expectedBaseRef !== deliveredEvent.base_ref || operation.expectedBaseSha !== deliveredEvent.base_sha || operation.expectedState !== deliveredEvent.event_state || operation.expectedDraft !== (deliveredEvent.event_draft === 1);
+    return false;
+  })) {
+    return c.json({ error: "Requested operation is outside the delivered event scope" }, 403);
+  }
+  const operations = [...new Set(input.operations.map((operation) => operation.kind))];
+  const operationHashes = await Promise.all(input.operations.map(canonicalOperationHash));
   const jti = crypto.randomUUID(); const expiresAt = Math.floor(Date.now() / 1000) + 300;
   await c.env.DB.prepare("INSERT INTO grants (jti, instance_id, run_id, event_id, repository_id, resource_kind, resource_number, operations, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(jti, instanceId, input.runId, input.eventId, repo.id, input.resource.kind, input.resource.number, JSON.stringify(input.operations), expiresAt).run();
-  const grant = await signToken(c.env, { typ: "gardener-run-grant", jti, instanceId, runId: input.runId, eventId: input.eventId, repositoryId: repo.id, owner: input.repository.owner, name: input.repository.name, installationId: repo.installation_id, resourceKind: input.resource.kind, resourceNumber: input.resource.number, operations: input.operations }, c.env.CONNECT_AUDIENCE, 300);
+    .bind(jti, instanceId, input.runId, input.eventId, repo.id, resourceKind, resourceNumber, JSON.stringify(operationHashes), expiresAt).run();
+  const grant = await signToken(c.env, { typ: "gardener-run-grant", jti, instanceId, runId: input.runId, eventId: input.eventId, repositoryId: repo.id, owner: input.repository.owner, name: input.repository.name, installationId: repo.installation_id, resourceKind, resourceNumber, operations, operationHashes }, c.env.CONNECT_AUDIENCE, 300);
   return c.json({ grant, expiresAt }, 201, { "cache-control": "no-store" });
 });
+
+export async function canonicalOperationHash(operation: Operation): Promise<string> {
+  return sha256(JSON.stringify(operationSchema.parse(operation)));
+}
+
+export function operationMatchesGrantResource(operation: Operation, grant: Pick<GrantClaims, "resourceKind" | "resourceNumber">): boolean {
+  if ("issueNumber" in operation) return grant.resourceKind === "issue" && operation.issueNumber === grant.resourceNumber;
+  if ("pullNumber" in operation) return grant.resourceKind === "pull_request" && operation.pullNumber === grant.resourceNumber;
+  // Repository creations are authorized only from an issue-bound maintenance run.
+  return grant.resourceKind === "issue";
+}
 
 app.post("/v1/operations", async (c) => {
   const token = bearer(c.req.header("authorization")); if (!token) return c.json({ error: "Run grant required" }, 401);
   let grant: GrantClaims;
   try {
     const p = await verifyToken(c.env, token, c.env.CONNECT_AUDIENCE);
-    if (p.typ !== "gardener-run-grant" || typeof p.jti !== "string" || typeof p.instanceId !== "string" || typeof p.runId !== "string" || typeof p.eventId !== "string" || typeof p.repositoryId !== "string" || typeof p.owner !== "string" || typeof p.name !== "string" || typeof p.installationId !== "string" || p.resourceKind !== "issue" || typeof p.resourceNumber !== "number" || !Array.isArray(p.operations)) throw new Error("bad claims");
+    if (p.typ !== "gardener-run-grant" || typeof p.jti !== "string" || typeof p.instanceId !== "string" || typeof p.runId !== "string" || typeof p.eventId !== "string" || typeof p.repositoryId !== "string" || typeof p.owner !== "string" || typeof p.name !== "string" || typeof p.installationId !== "string" || !["issue", "pull_request"].includes(String(p.resourceKind)) || typeof p.resourceNumber !== "number" || !Array.isArray(p.operations) || !Array.isArray(p.operationHashes) || !p.operationHashes.every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash))) throw new Error("bad claims");
     grant = p as unknown as GrantClaims;
   } catch { return c.json({ error: "Invalid or expired run grant" }, 401); }
   const stored = await c.env.DB.prepare("SELECT g.jti FROM grants g JOIN instances i ON i.id = g.instance_id JOIN repositories r ON r.id = g.repository_id JOIN installations ins ON ins.id = r.installation_id WHERE g.jti = ? AND g.instance_id = ? AND g.expires_at > ? AND i.revoked_at IS NULL AND r.active = 1 AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL")
     .bind(grant.jti, grant.instanceId, Math.floor(Date.now() / 1000)).first(); if (!stored) return c.json({ error: "Revoked or expired run grant" }, 401);
   const operation = operationSchema.parse(z.object({ operation: z.unknown() }).parse(await c.req.json()).operation);
-  if (operation.repository.id !== grant.repositoryId || operation.repository.owner !== grant.owner || operation.repository.name !== grant.name || operation.repository.installationId !== grant.installationId || operation.issueNumber !== grant.resourceNumber || !grant.operations.includes(operation.kind)) return c.json({ error: "Operation is outside grant scope" }, 403);
+  const operationHash = await canonicalOperationHash(operation);
+  if (operation.repository.id !== grant.repositoryId || operation.repository.owner !== grant.owner || operation.repository.name !== grant.name || operation.repository.installationId !== grant.installationId || !operationMatchesGrantResource(operation, grant) || !grant.operations.includes(operation.kind) || !grant.operationHashes.includes(operationHash)) return c.json({ error: "Operation is outside grant scope" }, 403);
   const serializedOperation = JSON.stringify(operation);
-  const existing = await c.env.DB.prepare("SELECT instance_id, operation_kind, operation, repository_id, resource_number, status, receipt FROM operation_receipts WHERE operation_id = ?").bind(operation.id).first<{ instance_id: string; operation_kind: string; operation: string; repository_id: string; resource_number: number; status: string; receipt: string | null }>();
+  const existing = await c.env.DB.prepare("SELECT instance_id, operation_kind, operation, repository_id, resource_number, status, receipt, lease_expires_at FROM operation_receipts WHERE operation_id = ?").bind(operation.id).first<{ instance_id: string; operation_kind: string; operation: string; repository_id: string; resource_number: number; status: string; receipt: string | null; lease_expires_at: number | null }>();
   if (existing && (existing.instance_id !== grant.instanceId || existing.operation_kind !== operation.kind || existing.operation !== serializedOperation || existing.repository_id !== grant.repositoryId || existing.resource_number !== grant.resourceNumber)) return c.json({ error: "Operation id was already used for a different operation" }, 409);
   if (existing?.status === "applied" && existing.receipt) return c.json(JSON.parse(existing.receipt) as Record<string, unknown>);
-  if (existing?.status === "executing") return c.json({ error: "Operation is already executing" }, 409);
-  if (!existing) await c.env.DB.prepare("INSERT INTO operation_receipts (operation_id, instance_id, grant_jti, operation_kind, operation, repository_id, resource_number) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(operation.id, grant.instanceId, grant.jti, operation.kind, serializedOperation, grant.repositoryId, grant.resourceNumber).run();
-  else await c.env.DB.prepare("UPDATE operation_receipts SET status = 'executing', grant_jti = ?, error = NULL, completed_at = NULL WHERE operation_id = ? AND status = 'failed'").bind(grant.jti, operation.id).run();
+  const now = Math.floor(Date.now() / 1000);
+  if (existing?.status === "executing" && (existing.lease_expires_at ?? Number.POSITIVE_INFINITY) > now) return c.json({ error: "Operation is already executing" }, 409);
+  const attemptToken = crypto.randomUUID();
+  const leaseExpiresAt = now + 600;
+  if (!existing) await c.env.DB.prepare("INSERT INTO operation_receipts (operation_id, instance_id, grant_jti, operation_kind, operation, repository_id, resource_number, attempt_token, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(operation.id, grant.instanceId, grant.jti, operation.kind, serializedOperation, grant.repositoryId, grant.resourceNumber, attemptToken, leaseExpiresAt).run();
+  else {
+    const claimed = await c.env.DB.prepare("UPDATE operation_receipts SET status = 'executing', grant_jti = ?, attempt_token = ?, lease_expires_at = ?, error = NULL, completed_at = NULL WHERE operation_id = ? AND (status = 'failed' OR (status = 'executing' AND lease_expires_at <= ?))").bind(grant.jti, attemptToken, leaseExpiresAt, operation.id, now).run();
+    if ((claimed.meta.changes ?? 0) !== 1) return c.json({ error: "Operation retry was claimed by another request" }, 409);
+  }
   try {
     const receipt = { operationId: operation.id, ...(await executeGitHubOperation(c.env, operation)) };
-    await c.env.DB.prepare("UPDATE operation_receipts SET status = 'applied', receipt = ?, error = NULL, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ?").bind(JSON.stringify(receipt), operation.id).run();
+    const completed = await c.env.DB.prepare("UPDATE operation_receipts SET status = 'applied', receipt = ?, error = NULL, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ? AND attempt_token = ?").bind(JSON.stringify(receipt), operation.id, attemptToken).run();
+    if ((completed.meta.changes ?? 0) !== 1) return c.json({ error: "Operation execution lease expired" }, 409);
     return c.json(receipt);
   } catch (error) {
-    await c.env.DB.prepare("UPDATE operation_receipts SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ?").bind(error instanceof Error ? error.message.slice(0, 500) : "Operation failed", operation.id).run(); throw error;
+    await c.env.DB.prepare("UPDATE operation_receipts SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ? AND attempt_token = ?").bind(error instanceof Error ? error.message.slice(0, 500) : "Operation failed", operation.id, attemptToken).run(); throw error;
   }
 });
 
@@ -286,13 +319,21 @@ app.post("/github/webhook", async (c) => {
   let payload: unknown; try { payload = JSON.parse(raw); } catch { await markDelivery(c.env, deliveryId, "invalid", "Invalid JSON"); return c.json({ error: "Invalid JSON" }, 400); }
   if (eventName === "ping") { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, pong: true }); }
   if (eventName === "installation" || eventName === "installation_repositories") { await handleInstallationWebhook(c.env, eventName, payload); await markDelivery(c.env, deliveryId, "processed"); return c.json({ accepted: true }); }
-  if (eventName !== "issues") { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, ignored: true }); }
-  const normalized = normalizeIssueEvent(payload, deliveryId); if (!normalized) { await markDelivery(c.env, deliveryId, "ignored", "Unsupported issues payload"); return c.json({ accepted: true, ignored: true }); }
+  if (eventName !== "issues" && eventName !== "pull_request") { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, ignored: true }); }
+  const normalized = eventName === "issues" ? normalizeIssueEvent(payload, deliveryId) : normalizePullRequestEvent(payload, deliveryId);
+  if (!normalized) { await markDelivery(c.env, deliveryId, "ignored", `Unsupported ${eventName} payload`); return c.json({ accepted: true, ignored: true }); }
   const route = await c.env.DB.prepare("SELECT r.instance_id, i.callback_url FROM repositories r JOIN instances i ON i.id = r.instance_id JOIN installations ins ON ins.id = r.installation_id WHERE r.id = ? AND r.installation_id = ? AND r.active = 1 AND i.revoked_at IS NULL AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL").bind(normalized.event.repository.id, normalized.event.repository.installationId).first<{ instance_id: string; callback_url: string }>();
   if (!route?.callback_url) { await markDelivery(c.env, deliveryId, "unroutable", "Repository is not claimed"); return c.json({ accepted: true, routed: false }); }
   normalized.event.instanceId = route.instance_id;
-  await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relaying', instance_id = ?, repository_id = ?, normalized_event_id = ?, resource_kind = 'issue', resource_number = ? WHERE delivery_id = ?")
-    .bind(route.instance_id, normalized.event.repository.id, normalized.event.id, normalized.event.issue.number, deliveryId).run();
+  const resourceKind = normalized.event.kind === "github.issue" ? "issue" : "pull_request";
+  const resourceNumber = normalized.event.kind === "github.issue" ? normalized.event.issue.number : normalized.event.pullRequest.number;
+  const eventState = normalized.event.kind === "github.issue" ? normalized.event.issue.state : normalized.event.pullRequest.state;
+  const eventDraft = normalized.event.kind === "github.pull_request" ? (normalized.event.pullRequest.draft ? 1 : 0) : null;
+  const headSha = normalized.event.kind === "github.pull_request" ? normalized.event.pullRequest.head.sha : null;
+  const baseRef = normalized.event.kind === "github.pull_request" ? normalized.event.pullRequest.base.ref : null;
+  const baseSha = normalized.event.kind === "github.pull_request" ? normalized.event.pullRequest.base.sha : null;
+  await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relaying', instance_id = ?, repository_id = ?, normalized_event_id = ?, resource_kind = ?, resource_number = ?, event_action = ?, event_state = ?, event_draft = ?, head_sha = ?, base_ref = ?, base_sha = ? WHERE delivery_id = ?")
+    .bind(route.instance_id, normalized.event.repository.id, normalized.event.id, resourceKind, resourceNumber, normalized.event.action, eventState, eventDraft, headSha, baseRef, baseSha, deliveryId).run();
   const eventToken = await signToken(c.env, { typ: "gardener-event", event: normalized.event, jti: deliveryId }, route.instance_id, 300);
   const response = await fetch(route.callback_url, { method: "POST", headers: { "content-type": "application/json", "user-agent": "gardener-connect" }, body: JSON.stringify({ token: eventToken }), signal: AbortSignal.timeout(10_000) });
   if (!response.ok) { await response.body?.cancel(); await markDelivery(c.env, deliveryId, "relay_failed", `HTTP ${response.status}`); return c.json({ error: "Instance relay failed" }, 502); }
@@ -331,6 +372,25 @@ export function normalizeIssueEvent(payload: unknown, deliveryId: string): { eve
     issue: { id: String(issue.id), number: issue.number, title: issue.title, body: typeof issue.body === "string" ? issue.body.slice(0, 65_536) : null, state: issue.state, labels, author: issue.user.login, htmlUrl: issue.html_url },
   }) };
 }
+export function normalizePullRequestEvent(payload: unknown, deliveryId: string): { event: ConnectEvent } | null {
+  const actions = ["opened", "edited", "reopened", "closed", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "review_requested", "review_request_removed"];
+  if (!isRecord(payload) || !actions.includes(String(payload.action)) || !isRecord(payload.pull_request) || !isRecord(payload.repository) || !isRecord(payload.installation)) return null;
+  const pull = payload.pull_request, repo = payload.repository, installation = payload.installation;
+  if (!isPositive(pull.id) || !isPositive(pull.number) || typeof pull.title !== "string" || pull.title.length > 1_024 || (pull.body !== null && typeof pull.body !== "string") || !["open", "closed"].includes(String(pull.state)) || typeof pull.draft !== "boolean" || typeof pull.html_url !== "string" || !isRecord(pull.user) || typeof pull.user.login !== "string" || !isRecord(pull.head) || typeof pull.head.ref !== "string" || typeof pull.head.sha !== "string" || !isRecord(pull.base) || typeof pull.base.ref !== "string" || typeof pull.base.sha !== "string" || !isPositive(repo.id) || typeof repo.name !== "string" || !isRecord(repo.owner) || typeof repo.owner.login !== "string" || !isPositive(installation.id)) return null;
+  const labels = Array.isArray(pull.labels) ? pull.labels.flatMap((label) => isRecord(label) && typeof label.name === "string" ? [label.name.slice(0, 100)] : []).slice(0, 100) : [];
+  const occurredAt = typeof pull.updated_at === "string" && !Number.isNaN(Date.parse(pull.updated_at)) ? new Date(pull.updated_at).toISOString() : new Date().toISOString();
+  return { event: connectEventSchema.parse({
+    schemaVersion: "v1", id: `github:${deliveryId}`, deliveryId, instanceId: "pending",
+    kind: "github.pull_request", action: payload.action, occurredAt,
+    repository: { provider: "github", id: String(repo.id), installationId: String(installation.id), owner: repo.owner.login, name: repo.name, ...(typeof repo.default_branch === "string" ? { defaultBranch: repo.default_branch } : {}) },
+    pullRequest: {
+      id: String(pull.id), number: pull.number, title: pull.title, body: typeof pull.body === "string" ? pull.body.slice(0, 65_536) : null,
+      state: pull.state, draft: pull.draft, merged: pull.merged === true, labels, author: pull.user.login, htmlUrl: pull.html_url,
+      head: { ref: pull.head.ref, sha: pull.head.sha }, base: { ref: pull.base.ref, sha: pull.base.sha }, updatedAt: occurredAt,
+    },
+  }) };
+}
+
 function isRecord(value: unknown): value is Row { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function isPositive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 

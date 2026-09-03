@@ -7,11 +7,12 @@ import { useNavigate } from "react-router-dom";
 import { useGardener } from "../app-context";
 import { gardenerApi } from "../lib/api";
 import { formatDate, parseOperation } from "../lib/format";
+import { operationDetail } from "../lib/operation-detail";
 import type { Approval } from "../lib/types";
 import { operationMetadata } from "../lib/types";
 import { ConfirmDialog } from "../components/confirm-dialog";
 import { useNotifications } from "../components/notifications";
-import { EmptyState, PageHeader, StatusBadge } from "../components/ui";
+import { EmptyState, PageHeader } from "../components/ui";
 
 export function ApprovalsPage() {
   const { state } = useGardener();
@@ -34,16 +35,17 @@ export function ApprovalsPage() {
     <PageHeader title="Approvals" description="Validate proposed GitHub changes before they execute. Every decision is recorded in the audit trail." />
     {state.globalPaused ? <Banner variant="alert" icon={<PauseCircleIcon size={20} weight="fill" />} title="Automation is paused" description="Resume automation before approving an operation. You can still reject pending proposals." /> : null}
     {state.approvals.length ? <div className="approval-list">{state.approvals.map((approval) => {
-      const metadata = operationMetadata[approval.operation_kind] ?? { name: approval.operation_kind, description: "Proposed GitHub operation", risk: "medium" as const };
+      const metadata = approval.operation_kind in operationMetadata
+        ? operationMetadata[approval.operation_kind as keyof typeof operationMetadata]
+        : { name: approval.operation_kind, description: "Proposed GitHub operation" };
       const operation = parseOperation(approval.operation);
-      const detail = String(operation.label ?? operation.body ?? operation.kind ?? "Review the structured operation below.");
+      const detail = operationDetail(operation);
       return <article className="approval-card" key={approval.id}>
         <header className="approval-card__header">
           <div><h2>{metadata.name}</h2><p>{approval.owner}/{approval.name}</p></div>
-          <StatusBadge tone={metadata.risk === "high" ? "error" : metadata.risk === "medium" ? "warning" : "info"}>{metadata.risk} risk</StatusBadge>
         </header>
         <div className="approval-card__context">
-          <span>Issue <code>{approval.resource_id}</code></span><span>Triggered by {approval.action.replaceAll("_", " ")}</span><span>{formatDate(approval.created_at)}</span>
+          <span>{approval.event_kind === "github.pull_request" ? "Pull request" : "Issue"} <code>{approval.resource_id}</code></span><span>Triggered by {approval.action.replaceAll("_", " ")}</span><span>{formatDate(approval.created_at)}</span>
         </div>
         <p className="approval-card__rationale">{approval.rationale}</p>
         <div className="operation-preview"><span>Proposed change</span><p>{detail}</p></div>
@@ -61,7 +63,7 @@ export function ApprovalsPage() {
       description={decision?.action === "approve"
         ? "Gardener Connect will revalidate repository access and current GitHub state immediately before executing the change."
         : "The proposed operation will be marked rejected and will not execute."}
-      detail={decision ? <><strong>{operationMetadata[decision.approval.operation_kind]?.name ?? decision.approval.operation_kind}</strong><p>{decision.approval.owner}/{decision.approval.name}</p></> : null}
+      detail={decision ? <><strong>{decision.approval.operation_kind in operationMetadata ? operationMetadata[decision.approval.operation_kind as keyof typeof operationMetadata].name : decision.approval.operation_kind}</strong><p>{decision.approval.owner}/{decision.approval.name}</p></> : null}
       confirmLabel={decision?.action === "approve" ? "Approve and execute" : "Reject proposal"}
       confirmTone={decision?.action === "approve" ? "primary" : "destructive"}
       loading={mutation.isPending}

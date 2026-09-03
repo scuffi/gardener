@@ -107,7 +107,13 @@ INSERT OR IGNORE INTO operation_policies (operation_kind, mode) VALUES
   ('issue.comment.create', 'approval'),
   ('issue.comment.update', 'approval'),
   ('issue.close', 'disabled'),
-  ('issue.reopen', 'disabled');
+  ('issue.reopen', 'disabled'),
+  ('branch.create', 'disabled'),
+  ('commit.create', 'disabled'),
+  ('pull_request.open', 'disabled'),
+  ('pull_request.update', 'disabled'),
+  ('pull_request.review.submit', 'disabled'),
+  ('pull_request.merge', 'disabled');
 
 INSERT OR IGNORE INTO workflows (id, name, enabled, trigger_kind, instructions, compiled_plan) VALUES (
   'issue-gardener',

@@ -35,6 +35,8 @@ const screenshots = {
   repositoriesPage: join(temporary, "07-repositories-page.png"),
   workflowsPage: join(temporary, "08-workflows-page.png"),
   policiesPage: join(temporary, "09-policies-page.png"),
+  policiesPageFull: join(temporary, "09-policies-page-full.png"),
+  policiesPageMobile: join(temporary, "09-policies-page-mobile.png"),
   approvalsPage: join(temporary, "10-approvals-page.png"),
   runsPage: join(temporary, "11-runs-page.png"),
   runDialog: join(temporary, "12-run-dialog.png"),
@@ -111,6 +113,13 @@ const listen = (server, port) => new Promise((resolvePromise, reject) => {
   server.listen(port, "127.0.0.1", resolvePromise);
 });
 const close = (server) => new Promise((resolvePromise) => server.close(resolvePromise));
+const runProcess = (command, args, options) => new Promise((resolvePromise, reject) => {
+  const child = spawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  child.once("error", reject);
+  child.once("exit", (code) => code === 0 ? resolvePromise() : reject(new Error(`${command} exited ${code}: ${stderr.slice(-2_000)}`)));
+});
 
 let worker;
 let chrome;
@@ -182,6 +191,12 @@ try {
   };
   const screenshot = async (destination) => {
     const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    await writeFile(destination, Buffer.from(capture.data, "base64"));
+  };
+  const screenshotFullPage = async (destination) => {
+    const metrics = await command("Page.getLayoutMetrics");
+    const size = metrics.cssContentSize;
+    const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: size.width, height: size.height, scale: 1 } });
     await writeFile(destination, Buffer.from(capture.data, "base64"));
   };
   const openPage = async (label, path) => {
@@ -292,8 +307,42 @@ try {
   await openPage("Workflows", "/workflows");
   await screenshot(screenshots.workflowsPage);
   await openPage("Policies", "/policies");
+  const expectedPolicyNames = ["Add issue labels", "Remove issue labels", "Post issue comments", "Update issue comments", "Close issues", "Reopen issues", "Create branches", "Create commits", "Open pull requests", "Update pull requests", "Submit pull request reviews", "Merge pull requests"];
+  const policyVisualState = await evaluate(`(()=>{const groups=[...document.querySelectorAll('.policy-group__header h2')].map((heading)=>heading.textContent);const names=[...document.querySelectorAll('.policy-row__copy h3')].map((heading)=>heading.textContent);const newOperations=${JSON.stringify(["branch.create", "commit.create", "pull_request.open", "pull_request.update", "pull_request.review.submit", "pull_request.merge"])};return {groups,names,noRiskBadges:!document.querySelector('.policy-row__copy .status-badge'),newOperationsOff:newOperations.every((operation)=>document.querySelector('input[name="policy-'+operation+'"]:checked')?.value==='disabled')}})()`);
+  if (policyVisualState.groups.join('|') !== 'Issues|Code changes|Pull requests' || policyVisualState.names.join('|') !== expectedPolicyNames.join('|') || !policyVisualState.noRiskBadges || !policyVisualState.newOperationsOff) throw new Error(`Policy visual state is incomplete: ${JSON.stringify(policyVisualState)}`);
   await screenshot(screenshots.policiesPage);
+  await screenshotFullPage(screenshots.policiesPageFull);
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  const mobilePolicyLayout = await evaluate(`(()=>{const controls=[...document.querySelectorAll('.policy-segmented')];return {noDocumentOverflow:document.documentElement.scrollWidth<=document.documentElement.clientWidth,controlsInsideViewport:controls.every((control)=>{const rect=control.getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth}),orderedNames:[...document.querySelectorAll('.policy-row__copy h3')].map((heading)=>heading.textContent)}})()`);
+  if (!mobilePolicyLayout.noDocumentOverflow || !mobilePolicyLayout.controlsInsideViewport || mobilePolicyLayout.orderedNames.join('|') !== expectedPolicyNames.join('|')) throw new Error(`Mobile policy layout is invalid: ${JSON.stringify(mobilePolicyLayout)}`);
+  await screenshotFullPage(screenshots.policiesPageMobile);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
+  const maintainerOperation = { schemaVersion: "v1", id: "visual-commit-operation", kind: "commit.create", repository: { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" }, branch: "gardener/visual-fix", expectedHeadSha: "abcdef1234567890abcdef1234567890abcdef12", message: "Preserve executable behavior", files: [{ path: "scripts/very-long-maintenance-path-that-must-remain-readable-and-bounded-in-the-approval-card/smoke.sh", content: "#!/bin/sh\necho smoke\n" }] };
+  const sqlValue = (value) => `'${String(value).replaceAll("'", "''")}'`;
+  const visualSql = `INSERT INTO proposals (id, operation_id, run_id, operation_kind, operation, policy_mode, status, rationale) VALUES (${sqlValue("visual-maintainer-proposal")}, ${sqlValue(maintainerOperation.id)}, ${sqlValue(runId)}, ${sqlValue(maintainerOperation.kind)}, ${sqlValue(JSON.stringify(maintainerOperation))}, 'approval', 'pending', 'Visual coverage for a bounded maintainer approval.');`;
+  // Stop the local Worker before writing its persisted D1 database: Miniflare otherwise keeps
+  // an in-memory connection whose shutdown can overwrite an out-of-process fixture insert.
+  await stopProcess(worker);
+  await runProcess("pnpm", ["exec", "wrangler", "d1", "execute", "DB", "--local", "--persist-to", join(temporary, "state"), "--command", visualSql], { cwd: appDirectory });
+  // Restart only the Worker; the authenticated browser session remains intact.
+  worker = spawn("pnpm", [
+    "exec", "wrangler", "dev", "--port", String(appPort), "--local", "--persist-to", join(temporary, "state"),
+    "--var", "AI_MODEL:gardener/deterministic-smoke", "--var", `CONNECT_ISSUER:${connectUrl}`,
+    "--var", `CONNECT_URL:${connectUrl}`, "--var", "LOCAL_DEV_BYPASS:false",
+  ], { cwd: appDirectory, detached: true, stdio: "ignore" });
+  let restarted = false;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try { if ((await fetch(`${appUrl}/api/health`)).ok) { restarted = true; break; } } catch {}
+    await sleep(200);
+  }
+  if (!restarted) throw new Error("Gardener did not restart after inserting the maintainer visual fixture");
   await openPage("Approvals", "/approvals");
+  await command("Page.reload");
+  await waitFor(`[...document.querySelectorAll('.approval-card h2')].some((heading)=>heading.textContent==='Create commits')`, "maintainer approval visual state");
+  if (await evaluate(`Boolean(document.querySelector('.approval-card__header .status-badge'))`)) throw new Error("Approval risk badge was rendered");
+  if (!await evaluate(`[...document.querySelectorAll('.operation-preview')].some((detail)=>detail.textContent.includes('scripts/very-long-maintenance-path'))`)) throw new Error("Maintainer approval detail was not rendered");
   await screenshot(screenshots.approvalsPage);
   await openPage("Runs", "/runs");
   await screenshot(screenshots.runsPage);
@@ -316,13 +365,13 @@ try {
     completed: finalState.setup.completed,
     paused: finalState.globalPaused,
     workflowEnabled: Boolean(finalState.workflows[0]?.enabled),
-    safeProfile: { labels: policies["issue.label.add"], comments: policies["issue.comment.create"], close: policies["issue.close"] },
+    safeProfile: { labels: policies["issue.label.add"], comments: policies["issue.comment.create"], close: policies["issue.close"], maintainerOperationsOff: ["branch.create", "commit.create", "pull_request.open", "pull_request.update", "pull_request.review.submit", "pull_request.merge"].every((operation) => policies[operation] === "disabled") },
     repositoryPause: { enforced: pausedDelivery.body.pausedBy === "repository", resumed: finalState.repositories.find((repository) => repository.id === "repo-1")?.paused === false },
     eventFlow: { accepted: delivery.status === 202, runStatus: runDetail.run.status, proposalStatus: runDetail.proposals[0]?.status, operationKind: executedOperations[0]?.kind },
     browserExceptions: exceptions,
     screenshots,
   };
-  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || !result.repositoryPause.enforced || !result.repositoryPause.resumed || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
+  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || !result.safeProfile.maintainerOperationsOff || !result.repositoryPause.enforced || !result.repositoryPause.resumed || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
     throw new Error(`Onboarding assertions failed: ${JSON.stringify(result)}`);
   }
   console.log(JSON.stringify(result, null, 2));

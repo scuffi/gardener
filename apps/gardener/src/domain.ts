@@ -1,6 +1,6 @@
 export {
   connectEventSchema,
-  issueOperationSchema as operationSchema,
+  operationSchema,
   issueResourceSchema,
   policyModeSchema,
   repositorySchema,
@@ -9,7 +9,7 @@ export type {
   AgentProposal,
   AgentResult,
   ConnectEvent,
-  IssueOperation as Operation,
+  Operation,
   PolicyMode,
   Repository,
 } from "@gardener/contracts";

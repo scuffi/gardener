@@ -75,10 +75,10 @@ The App uses:
 - OAuth callbacks: `/v1/landing/callback` and `/v1/auth/github/callback`
 - setup callback: `/v1/installations/callback`
 - webhook: `/github/webhook`
-- repository permissions: Metadata read and Issues read/write
-- issue webhooks; GitHub App installation lifecycle events are implicit
+- repository permissions: Metadata read; Administration, Checks, and Commit statuses read; Contents, Issues, and Pull requests read/write
+- issue and pull-request webhooks; GitHub App installation lifecycle events are implicit
 
-Record the returned App ID, client ID, slug, client secret, PEM private key, and webhook secret. Never commit the credential file.
+Record the returned App ID, client ID, slug, client secret, PEM private key, and webhook secret. Never commit the credential file. When expanding permissions on an existing App, each installation owner must approve the new permissions before Connect can mint tokens for those operations.
 
 ## 3. Configure keys and secrets
 

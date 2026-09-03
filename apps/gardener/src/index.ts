@@ -250,7 +250,7 @@ app.get("/api/state", async (c) => {
     c.env.DB
       .prepare(
         "SELECT p.id, p.run_id, p.operation_kind, p.policy_mode, p.rationale, p.operation, p.created_at, " +
-          "r.summary, e.action, e.resource_id, repo.owner, repo.name " +
+          "r.summary, e.event_kind, e.action, e.resource_id, repo.owner, repo.name " +
           "FROM proposals p JOIN runs r ON r.id = p.run_id JOIN events e ON e.id = r.event_id " +
           "JOIN repositories repo ON repo.id = e.repository_id WHERE p.status = 'pending' " +
           "ORDER BY p.created_at DESC LIMIT 50",
@@ -470,6 +470,7 @@ async function processRun(env: Env, runId: string): Promise<void> {
 
   try {
     const event = JSON.parse(row.envelope) as ConnectEvent;
+    if (event.kind !== "github.issue") throw new Error(`No runtime is configured for ${event.kind}`);
     const result = await runIssueGardener({
       ai: env.AI,
       model: env.AI_MODEL,

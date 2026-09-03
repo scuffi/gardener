@@ -1,3 +1,5 @@
+import type { OperationKind } from "@gardener/contracts";
+
 export type Flag = boolean | 0 | 1;
 export type PolicyMode = "disabled" | "approval" | "automatic";
 export type SetupProfile = "safe" | "review" | "labels";
@@ -48,6 +50,7 @@ export interface Approval {
   operation: string;
   created_at: string;
   summary?: string | null;
+  event_kind: string;
   action: string;
   resource_id: string;
   owner: string;
@@ -86,11 +89,17 @@ export interface RunProposal {
 }
 export interface RunDetail { run: Record<string, unknown>; proposals: RunProposal[] }
 
-export const operationMetadata: Record<string, { name: string; description: string; risk: "low" | "medium" | "high" }> = {
-  "issue.label.add": { name: "Add labels", description: "Apply a conventional label to an issue.", risk: "low" },
-  "issue.label.remove": { name: "Remove labels", description: "Remove a label that no longer applies.", risk: "low" },
-  "issue.comment.create": { name: "Post comments", description: "Publish a bounded reply on an issue.", risk: "medium" },
-  "issue.comment.update": { name: "Update comments", description: "Edit a comment previously created by Gardener.", risk: "medium" },
-  "issue.close": { name: "Close issues", description: "Change an open issue to closed.", risk: "high" },
-  "issue.reopen": { name: "Reopen issues", description: "Return a closed issue to open.", risk: "high" },
-};
+export const operationMetadata = {
+  "issue.label.add": { name: "Add issue labels", description: "Add labels to issues." },
+  "issue.label.remove": { name: "Remove issue labels", description: "Remove labels from issues." },
+  "issue.comment.create": { name: "Post issue comments", description: "Post new comments on issues." },
+  "issue.comment.update": { name: "Update issue comments", description: "Edit issue comments previously posted by Gardener." },
+  "issue.close": { name: "Close issues", description: "Close open issues." },
+  "issue.reopen": { name: "Reopen issues", description: "Reopen closed issues." },
+  "branch.create": { name: "Create branches", description: "Create branches from a specific commit." },
+  "commit.create": { name: "Create commits", description: "Create commits that add, update, or delete files on a branch." },
+  "pull_request.open": { name: "Open pull requests", description: "Open draft or ready-for-review pull requests from a branch." },
+  "pull_request.update": { name: "Update pull requests", description: "Edit titles, descriptions, or draft status, and close or reopen pull requests." },
+  "pull_request.review.submit": { name: "Submit pull request reviews", description: "Submit review comments, approvals, or change requests." },
+  "pull_request.merge": { name: "Merge pull requests", description: "Merge eligible pull requests using an allowed merge method." },
+} satisfies Record<OperationKind, { name: string; description: string }>;

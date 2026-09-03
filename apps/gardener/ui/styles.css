@@ -251,12 +251,15 @@ p { margin-bottom: 0; }
 .approval-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border-top: 1px solid var(--gd-line); }
 .approval-card__footer > div { display: flex; gap: 8px; }
 
+.policy-groups { display: grid; gap: 22px; margin-top: 18px; }
+.policy-group__header { margin: 0 0 9px 2px; }
+.policy-group__header h2 { font-size: 15px; }
+.policy-group__header p { margin-top: 2px; color: var(--gd-text-muted); font-size: 12px; }
 .policy-list { overflow: hidden; }
 .policy-row { min-height: 92px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); align-items: center; gap: 28px; padding: 16px 18px; }
 .policy-row:hover { background: color-mix(in srgb, var(--gd-route-accent) 3%, var(--gd-surface)); }
 .policy-row + .policy-row { border-top: 1px solid var(--gd-line); }
-.policy-row__copy > div { display: flex; align-items: center; gap: 9px; }
-.policy-row__copy h2 { margin: 0; font-size: 14px; }
+.policy-row__copy h3 { margin: 0; font-size: 14px; }
 .policy-row__copy p { margin-top: 4px; color: var(--gd-text-muted); font-size: 12px; }
 .policy-control { min-width: 0; display: grid; gap: 6px; margin: 0; padding: 0; border: 0; }
 .policy-segmented { display: grid; grid-template-columns: .7fr 1.3fr 1fr; gap: 3px; padding: 3px; border: 1px solid var(--gd-line); border-radius: 9px; background: var(--gd-surface-recessed); }

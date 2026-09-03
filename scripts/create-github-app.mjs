@@ -26,9 +26,17 @@ server.on("request", async (request, response) => {
       setup_url: new URL("/v1/installations/callback", connectUrl).toString(),
       setup_on_update: true,
       public: false,
-      default_permissions: { metadata: "read", issues: "write" },
+      default_permissions: {
+        administration: "read",
+        checks: "read",
+        contents: "write",
+        issues: "write",
+        metadata: "read",
+        pull_requests: "write",
+        statuses: "read",
+      },
       // Installation lifecycle events are implicit for GitHub Apps and are rejected by the manifest API when listed here.
-      default_events: ["issues"],
+      default_events: ["issues", "pull_request"],
     };
     const encoded = String(JSON.stringify(manifest)).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });

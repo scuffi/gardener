@@ -1,4 +1,4 @@
-import type { IssueOperationKind } from "@gardener/contracts";
+import type { OperationKind } from "@gardener/contracts";
 
 export interface Env {
   DB: D1Database;
@@ -33,7 +33,8 @@ export interface GrantClaims {
   owner: string;
   name: string;
   installationId: string;
-  resourceKind: "issue";
+  resourceKind: "issue" | "pull_request";
   resourceNumber: number;
-  operations: IssueOperationKind[];
+  operations: OperationKind[];
+  operationHashes: string[];
 }

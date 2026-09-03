@@ -61,7 +61,7 @@ export async function ingestEvent(db: D1Database, event: ConnectEvent): Promise<
         event.kind,
         event.action,
         repository.id,
-        event.issue.id,
+        event.kind === "github.issue" ? event.issue.id : event.pullRequest.id,
         JSON.stringify(event),
       ),
   ]);

@@ -10,9 +10,9 @@ import { useNotifications } from "./notifications";
 import { PageHeader, Surface } from "./ui";
 
 const profiles: Array<{ id: SetupProfile; name: string; summary: string; policies: string[]; recommended?: boolean }> = [
-  { id: "safe", name: "Safe start", summary: "Labels can run automatically. Comments always wait for your approval.", policies: ["Labels: automatic", "Comments: approval", "Issue state: off"], recommended: true },
-  { id: "review", name: "Review everything", summary: "Every proposed label and comment waits for approval before reaching GitHub.", policies: ["Labels: approval", "Comments: approval", "Issue state: off"] },
-  { id: "labels", name: "Labels only", summary: "Gardener organizes issues with labels and never posts comments.", policies: ["Labels: automatic", "Comments: off", "Issue state: off"] },
+  { id: "safe", name: "Safe start", summary: "Gardener can add labels automatically. Removing labels and posting comments require approval.", policies: ["Add labels: automatic", "Other labels & comments: approval", "Issue state: off", "Code & PRs: off"], recommended: true },
+  { id: "review", name: "Review issue changes", summary: "Every proposed issue label or comment waits for approval.", policies: ["Labels: approval", "Comments: approval", "Issue state: off", "Code & PRs: off"] },
+  { id: "labels", name: "Labels only", summary: "Gardener can add and remove issue labels. Comments and all other writes stay off.", policies: ["Labels: automatic", "Comments: off", "Issue state: off", "Code & PRs: off"] },
 ];
 
 export function SetupWizard() {
@@ -76,7 +76,7 @@ export function SetupWizard() {
         {step === 2 ? <section className="setup-step-content setup-step-content--wide">
           <div className="setup-icon"><ShieldCheckIcon size={28} weight="fill" aria-hidden="true" /></div>
           <h2>Choose initial permissions</h2>
-          <p>Start with a preset, then adjust each operation from Policies. Closing and reopening issues remain disabled in every preset.</p>
+          <p>Start with an issue preset, then adjust each operation in Policies. Code changes and pull request actions start off.</p>
           <fieldset className="profile-grid">
             <legend className="sr-only">Automation permission preset</legend>
             {profiles.map((option) => <label key={option.id} data-profile={option.id} className={`profile-card${profile === option.id ? " profile-card--selected" : ""}`}>

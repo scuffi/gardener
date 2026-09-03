@@ -1,4 +1,4 @@
-import type { AgentResult, ConnectEvent } from "@gardener/contracts";
+import type { AgentResult, NormalizedIssueEvent } from "@gardener/contracts";
 import {
   DeterministicMockAgentRuntime,
   WorkersAiIssueGardenerRuntime,
@@ -14,7 +14,7 @@ export async function runIssueGardener(input: {
   ai: WorkersAiBinding;
   model: string;
   runId: string;
-  event: ConnectEvent;
+  event: NormalizedIssueEvent;
   instructions: string;
 }): Promise<AgentResult> {
   // Reserved for the local browser smoke harness; deployment configs always select a hosted Workers AI model.

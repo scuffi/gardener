@@ -4,7 +4,7 @@ Gardener is a repository-maintenance agent that users deploy into their own Clou
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/scuffi/gardener)
 
-> **First iteration:** issue classification, labels, bounded comments, close/reopen, approvals, audit, and global pause are implemented. Computer workspaces, code changes, pull requests, reviews, schedules, and merge are deliberately deferred. See [`docs/first-iteration.md`](docs/first-iteration.md).
+> **Current iteration:** the Issue Gardener workflow is live, and the complete typed maintainer operation surface—issues, branches, bounded commits, pull-request reviews and lifecycle changes, and protected merge—is policy-controlled in Gardener and bounded and revalidated by Connect. New code and pull-request policies start off. Computer-based code generation, scheduled stewardship, and additional workflows remain deferred. See [`docs/first-iteration.md`](docs/first-iteration.md).
 
 ## How it is managed
 
@@ -34,7 +34,7 @@ Once the managed Connect Worker is running:
 
 The bootstrap token carries its non-secret instance ID, so no second instance identifier is required. Connect stores only its SHA-256 hash. The customer Worker discovers Connect's public signing key from JWKS.
 
-The root `wrangler.jsonc` is the customer deployment configuration. It automatically provisions D1, a Queue and dead-letter Queue, static assets, and Workers AI. Gardener installs its idempotent initial D1 schema on first use, so a fresh deployment does not require a local migration command. Later numbered schema upgrades must run `pnpm exec wrangler d1 migrations apply DB --remote` (or an equivalent managed deploy step) before the updated Worker is released.
+The root `wrangler.jsonc` is the customer deployment configuration. It automatically provisions D1, a Queue and dead-letter Queue, static assets, and Workers AI. Gardener installs its idempotent initial D1 schema on first use, so a fresh deployment does not require a local migration command. It also reapplies additive policy-catalog compatibility rows safely at startup. Structural schema upgrades must run `pnpm exec wrangler d1 migrations apply DB --remote` (or an equivalent managed deploy step) before the updated Worker is released.
 
 Before publishing under a different repository URL, update the deploy badge and `DEPLOY_REPOSITORY_URL` in `apps/connect/wrangler.jsonc`.
 
@@ -45,8 +45,8 @@ Create one managed GitHub App with:
 - Callback URLs: `https://<connect-host>/v1/landing/callback` and `https://<connect-host>/v1/auth/github/callback`
 - Setup URL: `https://<connect-host>/v1/installations/callback`
 - Webhook URL: `https://<connect-host>/github/webhook`
-- Repository permissions: **Metadata: read**, **Issues: read and write**
-- Events: **Issues**, **Installation**, and **Installation repositories**
+- Repository permissions: **Metadata, Administration, Checks, and Commit statuses: read**; **Contents, Issues, and Pull requests: read and write**
+- Events: **Issues** and **Pull requests**; installation lifecycle events are implicit
 
 Create a D1 database, configure its ID in `apps/connect/wrangler.jsonc`, apply `apps/connect/migrations`, and set the secrets listed in `apps/connect/.dev.vars.example`. The Connect JWT signing key and GitHub App private key must be separate RSA keys.
 

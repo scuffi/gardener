@@ -36,9 +36,12 @@ describe("policy evaluation", () => {
   });
 
   it("fails merge closed when current safety state is incomplete", () => {
-    const merge = { schemaVersion: "v1" as const, id: "op2", kind: "pull_request.merge" as const, repository, pullNumber: 2, expectedHeadSha: "abcdef1", method: "squash" as const, expectedDraft: false as const, requiredChecks: ["test"] };
-    expect(evaluatePolicy(merge, policy, { current: { headSha: "abcdef1", draft: false, successfulChecks: ["test"] } }).outcome).toBe("denied");
-    expect(evaluatePolicy(merge, policy, { current: { headSha: "abcdef1", draft: false, successfulChecks: ["test"], branchProtectionAllowsMerge: true } }).outcome).toBe("authorized");
+    const headSha = "abcdef1234567890abcdef1234567890abcdef12";
+    const baseSha = "1234567890abcdef1234567890abcdef12345678";
+    const merge = { schemaVersion: "v1" as const, id: "op2", kind: "pull_request.merge" as const, repository, pullNumber: 2, expectedHeadSha: headSha, expectedBaseRef: "main", expectedBaseSha: baseSha, expectedState: "open" as const, method: "squash" as const, expectedDraft: false as const, requiredChecks: [{ context: "test", appId: 123 }] };
+    expect(evaluatePolicy(merge, policy, { current: { headSha, baseRef: "main", baseSha, draft: false, successfulChecks: ["test"] } }).outcome).toBe("denied");
+    expect(evaluatePolicy(merge, policy, { current: { headSha, baseRef: "main", baseSha, draft: false, successfulChecks: ["test"], branchProtectionAllowsMerge: true } }).outcome).toBe("authorized");
+    expect(evaluatePolicy(merge, policy, { current: { headSha, baseRef: "release", baseSha, draft: false, successfulChecks: ["test"], branchProtectionAllowsMerge: true } }).outcome).toBe("denied");
   });
 });
 
