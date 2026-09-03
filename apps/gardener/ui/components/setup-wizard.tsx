@@ -66,7 +66,6 @@ export function SetupWizard() {
       <div className="setup-content">
         {step === 1 ? <section className="setup-step-content">
           <div className="setup-icon"><LockKeyIcon size={28} weight="fill" aria-hidden="true" /></div>
-          <p className="overline">Step 1 of 2</p>
           <h2>Select repository access</h2>
           <p>Install the shared Gardener GitHub App and choose only the repositories it may observe. You can change access later in GitHub.</p>
           <Button id="setup-primary" data-action="install" variant="primary" size="lg" icon={GithubLogoIcon} loading={installMutation.isPending} onClick={() => installMutation.mutate()}>
@@ -76,7 +75,6 @@ export function SetupWizard() {
 
         {step === 2 ? <section className="setup-step-content setup-step-content--wide">
           <div className="setup-icon"><ShieldCheckIcon size={28} weight="fill" aria-hidden="true" /></div>
-          <p className="overline">Step 2 of 2</p>
           <h2>Choose initial permissions</h2>
           <p>Start with a preset, then adjust each operation from Policies. Closing and reopening issues remain disabled in every preset.</p>
           <fieldset className="profile-grid">

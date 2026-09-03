@@ -39,7 +39,7 @@ export function ApprovalsPage() {
       const detail = String(operation.label ?? operation.body ?? operation.kind ?? "Review the structured operation below.");
       return <article className="approval-card" key={approval.id}>
         <header className="approval-card__header">
-          <div><p className="overline">{approval.owner}/{approval.name}</p><h2>{metadata.name}</h2></div>
+          <div><h2>{metadata.name}</h2><p>{approval.owner}/{approval.name}</p></div>
           <StatusBadge tone={metadata.risk === "high" ? "error" : metadata.risk === "medium" ? "warning" : "info"}>{metadata.risk} risk</StatusBadge>
         </header>
         <div className="approval-card__context">

@@ -63,7 +63,7 @@ export function SettingsPage() {
     </Surface>
 
     <Surface className="session-panel">
-      <div><p className="overline">Dashboard session</p><h2>Signed in as {state.viewer.login}</h2><p>This temporary Connect-issued session is scoped to this Gardener instance and stored in a secure HttpOnly cookie.</p></div>
+      <div><h2>Signed in as {state.viewer.login}</h2><p>This temporary Connect-issued session is scoped to this Gardener instance and stored in a secure HttpOnly cookie.</p></div>
       <Button variant="secondary-destructive" icon={SignOutIcon} onClick={() => { signOut(); navigate("/overview", { replace: true }); }}>Sign out</Button>
     </Surface>
   </>;

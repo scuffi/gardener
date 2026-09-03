@@ -48,7 +48,7 @@ export function OverviewPage() {
     </div>
 
     {approvals > 0 ? <Surface className="attention-panel">
-      <div><p className="overline">Action required</p><h2>{approvals} {approvals === 1 ? "operation is" : "operations are"} waiting for approval</h2><p>Review the proposed GitHub changes before they execute.</p></div>
+      <div><h2>{approvals} {approvals === 1 ? "operation is" : "operations are"} waiting for approval</h2><p>Review the proposed GitHub changes before they execute.</p></div>
       <Link className="text-link text-link--with-icon" to="/approvals">Review approvals <ArrowRightIcon size={16} /></Link>
     </Surface> : null}
 
