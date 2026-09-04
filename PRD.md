@@ -75,7 +75,7 @@ The setup flow should discover every repository selected during GitHub App insta
 
 Workflow definitions are validated and compiled into immutable plans. Runs execute compiled plans, never mutable source. New workflows and starter packs begin paused.
 
-The dashboard is the primary no-code workflow product. It must showcase useful templates and provide an ordered **When / Where / If / Then / Controls** builder so users can create and change workflows without editing JSON, YAML, prompts, or code. The dashboard and future local coding-agent tools operate on the same versioned representation and management API.
+The dashboard is the primary no-code workflow product. It must showcase configured repository agents and provide an ordered **Trigger / Context / Agent / Guardrails** builder so users can create and change workflows without editing JSON, YAML, or code. Guided behavior is the default, with an advanced bounded system-instructions editor for users who want to customize their agent. The dashboard and future local coding-agent tools operate on the same versioned representation and management API.
 
 Keep the initial workflow language small and understandable. It needs:
 
@@ -84,7 +84,8 @@ Keep the initial workflow language small and understandable. It needs:
 - Typed, bounded conditions with three-valued fail-closed evaluation
 - Distinct event-actor and resource-author identities
 - Extensible capability metadata for future user, team, repository-role, branch, label, check, and time-window controls
-- Instructions
+- Guided or custom system instructions with a versioned allowlist of trusted run-metadata placeholders
+- Structured lower-trust repository content supplied separately from system instructions
 - Model/runtime selection
 - Read tools
 - Workspace requirements

@@ -39,7 +39,7 @@ function AppNavigation({ groups, setupComplete }: { groups: NavGroup[]; setupCom
       <Sidebar.Menu>
         {group.items.map((item) => {
           const locked = !setupComplete && item.to !== "/overview";
-          const active = !locked && location.pathname === item.to;
+          const active = !locked && (location.pathname === item.to || (item.to === "/workflows" && location.pathname.startsWith("/workflows/")));
           return <Sidebar.MenuButton
             key={item.to}
             icon={item.icon}
@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ] },
     { label: "System", items: [{ to: "/settings", label: "Settings", icon: GearIcon }] },
   ];
-  const currentItem = groups.flatMap((group) => group.items).find((item) => item.to === location.pathname);
+  const currentItem = groups.flatMap((group) => group.items).find((item) => item.to === location.pathname || (item.to === "/workflows" && location.pathname.startsWith("/workflows/")));
   const ContextIcon = setupComplete ? currentItem?.icon ?? PlantIcon : PlantIcon;
 
   return <Sidebar.Provider

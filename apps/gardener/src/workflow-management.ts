@@ -1,6 +1,7 @@
 import {
   compiledWorkflowPlanV2Schema,
   operationKindSchema,
+  validateSystemPromptTemplate,
   workflowDefinitionV2Schema,
   workflowSpecV2Schema,
   type WorkflowDefinitionV2,
@@ -21,7 +22,7 @@ import { z } from "zod";
 import { audit } from "./db";
 import type { Env } from "./env";
 
-export const WORKFLOW_VALIDATOR_VERSION = "gardener-workflow-v2.2";
+export const WORKFLOW_VALIDATOR_VERSION = "gardener-workflow-v2.3";
 const sessionCookie = "gardener_session";
 const supportedIssueGardenerOperations = new Set<string>(issueGardenerRuntimeCapabilities.operations);
 const supportedIssueGardenerReads = new Set<string>(issueGardenerRuntimeCapabilities.reads);
@@ -134,6 +135,13 @@ async function validateParsedWorkflowSpec(env: Pick<Env, "DB" | "AI_MODEL">, spe
     }
   });
 
+  for (const issue of validateSystemPromptTemplate(spec.runtime.instructions)) {
+    diagnostics.push({
+      code: `prompt_${issue.code}`,
+      path: "$.runtime.instructions",
+      message: issue.message,
+    });
+  }
   if (spec.runtime.kind !== "workers-ai.issue-gardener") {
     diagnostics.push({
       code: "runtime_unavailable",

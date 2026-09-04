@@ -9,6 +9,8 @@ import { ErrorState, LoadingState } from "./components/ui";
 const OverviewPage = lazy(() => import("./pages/overview-page").then((module) => ({ default: module.OverviewPage })));
 const RepositoriesPage = lazy(() => import("./pages/repositories-page").then((module) => ({ default: module.RepositoriesPage })));
 const WorkflowsPage = lazy(() => import("./pages/workflows-page").then((module) => ({ default: module.WorkflowsPage })));
+const WorkflowBuilderPage = lazy(() => import("./pages/workflow-builder-page").then((module) => ({ default: module.WorkflowBuilderPage })));
+const WorkflowDetailPage = lazy(() => import("./pages/workflow-detail-page").then((module) => ({ default: module.WorkflowDetailPage })));
 const RunsPage = lazy(() => import("./pages/runs-page").then((module) => ({ default: module.RunsPage })));
 const ApprovalsPage = lazy(() => import("./pages/approvals-page").then((module) => ({ default: module.ApprovalsPage })));
 const PoliciesPage = lazy(() => import("./pages/policies-page").then((module) => ({ default: module.PoliciesPage })));
@@ -34,6 +36,10 @@ function AppRoutes() {
     <Route path="/overview" element={<OverviewPage />} />
     <Route path="/repositories" element={<RepositoriesPage />} />
     <Route path="/workflows" element={<WorkflowsPage />} />
+    <Route path="/workflows/new" element={<WorkflowBuilderPage />} />
+    <Route path="/workflows/:id/edit" element={<WorkflowBuilderPage />} />
+    <Route path="/workflows/:id/revisions/:revision" element={<WorkflowDetailPage />} />
+    <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
     <Route path="/runs" element={<RunsPage />} />
     <Route path="/approvals" element={<ApprovalsPage />} />
     <Route path="/policies" element={<PoliciesPage />} />

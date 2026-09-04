@@ -215,6 +215,15 @@ describe("workflow validation, templates, and management API", () => {
       expect(unsupportedAction.activatable).toBe(false);
       expect(unsupportedAction.diagnostics.map((item) => item.code)).toContain("trigger_action_unavailable");
 
+      const unknownPromptVariable = await validateWorkflowSpec(env, issueSpec({
+        runtime: { kind: "workers-ai.issue-gardener", model: "deployment-default", instructions: "Read {{resource.body}}" },
+      }));
+      expect(unknownPromptVariable.valid).toBe(true);
+      expect(unknownPromptVariable.activatable).toBe(false);
+      expect(unknownPromptVariable.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "prompt_unknown_variable", path: "$.runtime.instructions" }),
+      ]));
+
       const staleAutomaticCondition = await validateWorkflowSpec(env, issueSpec({
         condition: { kind: "predicate", capabilityId: "github.resource.labels@v1", operator: "contains", expected: "safe" },
         capabilities: { read: ["issue"], propose: ["issue.label.add"], maximumMode: "instance_policy" },

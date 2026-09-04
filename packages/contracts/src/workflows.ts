@@ -133,6 +133,8 @@ export const compiledWorkflowPlanV2Schema = z.object({
     kind: z.enum(["workers-ai.issue-gardener", "workers-ai.pull-request-gardener"]),
     resolvedModel: z.string().min(1).max(255),
     instructions: z.string().min(1).max(50_000),
+    // Absent on pre-template plans, whose instructions must remain literal for compatibility.
+    promptTemplateVersion: z.literal(1).optional(),
   }).strict(),
   capabilities: workflowCapabilitiesV2Schema,
   workspace: workspaceRequirementsSchema,

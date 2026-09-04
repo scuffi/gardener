@@ -1,7 +1,9 @@
 import {
+  SYSTEM_PROMPT_TEMPLATE_VERSION,
   compiledPlanSchema,
   compiledWorkflowPlanV2Schema,
   policySchema,
+  validateSystemPromptTemplate,
   workflowDefinitionSchema,
   workflowDefinitionV2Schema,
   workflowSpecV2Schema,
@@ -87,6 +89,8 @@ export async function compileWorkflowV2(source: WorkflowSpecV2 | unknown, option
   if (spec.capabilities.read.some((capability) => !supportedReads.has(capability))) throw new Error("the issue gardener runtime supports only issue reads");
   if (spec.limits.outputTokens > issueGardenerRuntimeCapabilities.maxOutputTokens) throw new Error("the issue gardener output-token limit exceeds the runtime maximum");
   if (spec.workspace.enabled) throw new Error("workspace execution is not available");
+  const promptTemplateIssues = validateSystemPromptTemplate(spec.runtime.instructions);
+  if (promptTemplateIssues.length) throw new Error(`system prompt template is invalid: ${promptTemplateIssues.map((issue) => issue.message).join("; ")}`);
 
   const eventKinds = [...new Set(eventTriggers.map((trigger) => trigger.kind))];
   const conditionValidation = validateWorkflowCondition(spec.condition, eventKinds, { mode: "activation" });
@@ -110,7 +114,7 @@ export async function compileWorkflowV2(source: WorkflowSpecV2 | unknown, option
     condition: spec.condition,
     conditionResolver: { id: "signed-event-facts" as const, version: 1 as const, catalogVersion: "2026-09-03.1" as const },
     requiredGitHubPermissions: spec.capabilities.propose.length ? ["issues:write"] : [],
-    runtime: { kind: spec.runtime.kind, resolvedModel: options.resolvedModel, instructions: spec.runtime.instructions },
+    runtime: { kind: spec.runtime.kind, resolvedModel: options.resolvedModel, instructions: spec.runtime.instructions, promptTemplateVersion: SYSTEM_PROMPT_TEMPLATE_VERSION },
     capabilities: spec.capabilities,
     workspace: spec.workspace,
     limits: spec.limits,

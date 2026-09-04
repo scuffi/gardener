@@ -1,5 +1,5 @@
 import { agentResultSchema, type AgentResult } from "@gardener/contracts";
-import { maximumModelCostUsd } from "@gardener/core";
+import { maximumModelCostUsd, renderSystemPromptTemplate } from "@gardener/core";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
@@ -255,7 +255,7 @@ app.get("/api/state", async (c) => {
     getSetting(c.env.DB, "global_paused"),
     getSetting(c.env.DB, "onboarding_completed"),
     getSetting(c.env.DB, "setup_profile"),
-    c.env.DB.prepare("SELECT id, name, version, enabled, trigger_kind, updated_at FROM workflows ORDER BY name").all(),
+    c.env.DB.prepare("SELECT w.id, w.name, w.version, w.enabled, w.trigger_kind, w.active_revision, w.revision_counter, w.updated_at, wr.definition_json AS latest_definition FROM workflows w LEFT JOIN workflow_revisions wr ON wr.workflow_id = w.id AND wr.revision = w.revision_counter ORDER BY w.name").all(),
     c.env.DB.prepare("SELECT operation_kind, mode, updated_at FROM operation_policies ORDER BY operation_kind").all(),
     c.env.DB.prepare("SELECT id, owner, name, default_branch, active, updated_at FROM repositories ORDER BY owner, name").all(),
     c.env.DB.prepare("SELECT key, value FROM settings WHERE key LIKE 'repository_paused:%'").all<{ key: string; value: string }>(),
@@ -539,7 +539,9 @@ async function processRun(env: Env, runId: string): Promise<void> {
         model: pinnedPlan?.runtime.resolvedModel ?? env.AI_MODEL,
         runId,
         event,
-        instructions: pinnedPlan?.runtime.instructions ?? row.legacy_instructions,
+        instructions: pinnedPlan?.runtime.promptTemplateVersion === 1
+          ? renderSystemPromptTemplate(pinnedPlan.runtime.instructions, event)
+          : pinnedPlan?.runtime.instructions ?? row.legacy_instructions,
         maxOperations: pinnedPlan?.limits.operations ?? 4,
         ...(pinnedPlan ? {
           runtimeSeconds: pinnedPlan.limits.runtimeSeconds,

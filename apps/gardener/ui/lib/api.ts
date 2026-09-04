@@ -1,4 +1,5 @@
-import type { AppState, HealthState, PolicyMode, RunDetail, SetupProfile } from "./types";
+import type { WorkflowSpecV2 } from "@gardener/contracts";
+import type { AppState, HealthState, PolicyMode, RunDetail, SetupProfile, WorkflowCreateResult, WorkflowDetail, WorkflowRevisionDetail, WorkflowValidation } from "./types";
 
 export interface SessionState { authenticated: boolean; githubLogin?: string }
 
@@ -57,6 +58,21 @@ export const gardenerApi = {
     method: "PUT",
     body: JSON.stringify({ paused }),
   }),
+  validateWorkflow: (spec: WorkflowSpecV2) => api<WorkflowValidation>("/api/workflows/validate", {
+    method: "POST",
+    body: JSON.stringify(spec),
+  }),
+  createWorkflow: (spec: WorkflowSpecV2) => api<WorkflowCreateResult>("/api/workflows", {
+    method: "POST",
+    body: JSON.stringify(spec),
+  }),
+  createWorkflowRevision: (id: string, baseRevision: number, spec: WorkflowSpecV2) => api<WorkflowCreateResult>(`/api/workflows/${encodeURIComponent(id)}/revisions`, {
+    method: "POST",
+    body: JSON.stringify({ baseRevision, spec }),
+  }),
+  workflow: (id: string) => api<WorkflowDetail>(`/api/workflows/${encodeURIComponent(id)}`),
+  workflowRevision: (id: string, revision: number) => api<WorkflowRevisionDetail>(`/api/workflows/${encodeURIComponent(id)}/revisions/${revision}`),
+  activateWorkflowRevision: (id: string, revision: number) => api<{ workflowId: string; revision: number; activated: true }>(`/api/workflows/${encodeURIComponent(id)}/revisions/${revision}/activate`, { method: "POST" }),
   setWorkflow: (id: string, enabled: boolean) => api<{ id: string; enabled: boolean }>(`/api/workflows/${encodeURIComponent(id)}/status`, {
     method: "POST",
     body: JSON.stringify({ enabled }),

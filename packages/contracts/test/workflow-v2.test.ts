@@ -4,6 +4,8 @@ import {
   WORKFLOW_CONDITION_MAX_NODES,
   WORKFLOW_CONDITION_MAX_PREDICATES,
   compiledWorkflowPlanV2Schema,
+  systemPromptTemplateReferences,
+  validateSystemPromptTemplate,
   workflowConditionSchema,
   workflowDefinitionSchema,
   workflowDefinitionV2Schema,
@@ -57,6 +59,20 @@ describe("workflow definition v2", () => {
     expect(() => workflowSpecV2Schema.parse({ ...spec, script: "fetch('https://example.com')" })).toThrow();
   });
 
+  it("accepts only bounded, registered system-prompt variables", () => {
+    const instructions = "Triage {{ resource.id }} in {{repository.full_name}} after {{event.action}}.";
+    expect(systemPromptTemplateReferences(instructions)).toEqual(["resource.id", "repository.full_name", "event.action"]);
+    expect(validateSystemPromptTemplate(instructions)).toEqual([]);
+    expect(validateSystemPromptTemplate("Read {{resource.body}} and {{unknown}}.")).toMatchObject([
+      { code: "unknown_variable", variable: "resource.body" },
+      { code: "unknown_variable", variable: "unknown" },
+    ]);
+    expect(validateSystemPromptTemplate("Triage {{resource.id")).toMatchObject([{ code: "malformed_placeholder" }]);
+    expect(validateSystemPromptTemplate("{{resource.id}} ".repeat(33))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "too_many_references" }),
+    ]));
+  });
+
   it("requires action-specific triggers and unique capabilities", () => {
     expect(() => workflowSpecV2Schema.parse({ ...spec, triggers: [{ kind: "github.issue", actions: [] }] })).toThrow();
     expect(() => workflowSpecV2Schema.parse({ ...spec, triggers: [{ kind: "github.issue", actions: ["opened", "opened"] }] })).toThrow(/unique/);
@@ -72,13 +88,18 @@ describe("workflow definition v2", () => {
       condition: repositoryIdPredicate,
       conditionResolver: { id: "signed-event-facts", version: 1, catalogVersion: "2026-09-03.1" },
       requiredGitHubPermissions: ["issues:write"],
-      runtime: { kind: "workers-ai.issue-gardener", resolvedModel: "@cf/model", instructions: "Classify new issues." },
+      runtime: { kind: "workers-ai.issue-gardener", resolvedModel: "@cf/model", instructions: "Classify new issues.", promptTemplateVersion: 1 },
       capabilities: { read: ["issue"], propose: ["issue.label.add"] },
       workspace: { enabled: false, experimental: false, network: "denied", allowedHosts: [] },
       limits: { runtimeSeconds: 300, inputTokens: 32_000, outputTokens: 8_000, costUsd: 1, retries: 2, operations: 10 },
     });
     expect(compiled.triggers).toEqual(["github.issue.opened", "github.issue.reopened"]);
     expect(compiled).not.toHaveProperty("policy");
+    const legacy = compiledWorkflowPlanV2Schema.parse({
+      ...compiled,
+      runtime: { kind: compiled.runtime.kind, resolvedModel: compiled.runtime.resolvedModel, instructions: "Keep {{resource.id}} literal." },
+    });
+    expect(legacy.runtime.promptTemplateVersion).toBeUndefined();
   });
 
   it("rejects unknown capabilities, arbitrary paths, regex, and incompatible expected values", () => {

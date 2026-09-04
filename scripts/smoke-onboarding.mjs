@@ -34,6 +34,17 @@ const screenshots = {
   accountMenuMobile: join(temporary, "06-account-menu-mobile.png"),
   repositoriesPage: join(temporary, "07-repositories-page.png"),
   workflowsPage: join(temporary, "08-workflows-page.png"),
+  workflowsPageMobile: join(temporary, "08-workflows-page-mobile.png"),
+  workflowBuilderLight: join(temporary, "08-workflow-builder-light.png"),
+  workflowBuilderDark: join(temporary, "08-workflow-builder-dark.png"),
+  workflowBuilderMobile: join(temporary, "08-workflow-builder-mobile.png"),
+  workflowDetail: join(temporary, "08-workflow-detail.png"),
+  workflowDetailMobile: join(temporary, "08-workflow-detail-mobile.png"),
+  workflowActivated: join(temporary, "08-workflow-activated.png"),
+  workflowEdit: join(temporary, "08-workflow-edit.png"),
+  workflowDraftTwo: join(temporary, "08-workflow-draft-two.png"),
+  workflowRestored: join(temporary, "08-workflow-restored.png"),
+  workflowsPageDraft: join(temporary, "08-workflows-page-draft.png"),
   policiesPage: join(temporary, "09-policies-page.png"),
   policiesPageFull: join(temporary, "09-policies-page-full.png"),
   policiesPageMobile: join(temporary, "09-policies-page-mobile.png"),
@@ -68,7 +79,7 @@ function issueEventToken(delivery, issueNumber) {
       kind: "github.issue",
       action: "opened",
       occurredAt: new Date().toISOString(),
-      repository: { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
+      repository: { provider: "github", id: "101", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
       issue: { id: `issue-${issueNumber}`, number: issueNumber, title: "Bug: worker crashes on launch", body: "The worker fails immediately after startup.", state: "open", labels: [], author: "octocat", htmlUrl: `https://github.com/cloudflare/workers-sdk/issues/${issueNumber}` },
     },
   });
@@ -87,8 +98,8 @@ const connect = createServer(async (request, response) => {
   if (url.pathname === "/v1/auth/github/start" && request.method === "POST") return reply(200, { authorizationUrl: `${appUrl}/#identity_token=${fixtureIdentity}` });
   if (url.pathname === "/v1/installations/setup" && request.method === "POST") return reply(200, { installationUrl: `${appUrl}/?installation=complete` });
   if (url.pathname === "/v1/repositories" && request.method === "GET") return reply(200, { repositories: [
-    { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
-    { provider: "github", id: "repo-2", installationId: "installation-1", owner: "cloudflare", name: "agents", defaultBranch: "main" },
+    { provider: "github", id: "101", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" },
+    { provider: "github", id: "102", installationId: "installation-1", owner: "cloudflare", name: "agents", defaultBranch: "main" },
   ] });
   if (url.pathname === "/v1/grants" && request.method === "POST") return reply(200, { grant: "simulation-grant" });
   if (url.pathname === "/v1/operations" && request.method === "POST") {
@@ -251,14 +262,14 @@ try {
   await evaluate(`document.querySelector('#automation-menu-trigger').click()`);
   await waitFor(`Boolean(document.querySelector('[data-automation-menu]'))`, "automation menu");
   await screenshot(screenshots.automationMenu);
-  await evaluate(`document.querySelector('[data-repository-id="repo-1"]').click()`);
-  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.repositories.find((repository)=>repository.id==='repo-1')?.paused===true)`, "repository pause");
+  await evaluate(`document.querySelector('[data-repository-id="101"]').click()`);
+  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.repositories.find((repository)=>repository.id==='101')?.paused===true)`, "repository pause");
   const pausedDelivery = await evaluate(`(async()=>{const r=await fetch('/hooks/connect',{method:'POST',headers:{authorization:'Bearer ${fixturePausedEvent}'}});return {status:r.status,body:await r.json()}})()`);
   if (pausedDelivery.status !== 202 || !pausedDelivery.body.paused || pausedDelivery.body.pausedBy !== 'repository' || pausedDelivery.body.runs?.length) throw new Error(`Paused repository accepted a run: ${JSON.stringify(pausedDelivery)}`);
   await evaluate(`(()=>{if(!document.querySelector('[data-automation-menu]'))document.querySelector('#automation-menu-trigger').click();return true})()`);
-  await waitFor(`Boolean(document.querySelector('[data-repository-id="repo-1"]'))`, "repository resume control");
-  await evaluate(`document.querySelector('[data-repository-id="repo-1"]').click()`);
-  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.repositories.find((repository)=>repository.id==='repo-1')?.paused===false)`, "repository resume");
+  await waitFor(`Boolean(document.querySelector('[data-repository-id="101"]'))`, "repository resume control");
+  await evaluate(`document.querySelector('[data-repository-id="101"]').click()`);
+  await waitFor(`fetch('/api/state').then((response)=>response.json()).then((state)=>state.repositories.find((repository)=>repository.id==='101')?.paused===false)`, "repository resume");
   await command("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
   await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
 
@@ -306,6 +317,71 @@ try {
   await screenshot(screenshots.repositoriesPage);
   await openPage("Workflows", "/workflows");
   await screenshot(screenshots.workflowsPage);
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(250);
+  await screenshot(screenshots.workflowsPageMobile);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(200);
+
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('New workflow')).click()`);
+  await waitFor(`location.pathname === '/workflows/new' && document.querySelector('h1')?.textContent === 'New workflow'`, "workflow builder");
+  await screenshotFullPage(screenshots.workflowBuilderDark);
+  await evaluate(`localStorage.setItem('gardener.theme','light')`);
+  await command("Page.reload");
+  await waitFor(`document.documentElement.dataset.mode === 'light' && location.pathname === '/workflows/new' && Boolean(document.querySelector('#workflow-name'))`, "light workflow builder");
+  await evaluate(`(()=>{const input=document.querySelector('#workflow-name');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Smoke issue helper');input.dispatchEvent(new Event('input',{bubbles:true}));return input.value})()`);
+  await evaluate(`(()=>{const input=document.querySelector('#workflow-instructions');const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set;setter.call(input,input.value+' Prioritize {{resource.id}} and keep the reply warm.');input.dispatchEvent(new Event('input',{bubbles:true}));return input.value})()`);
+  await waitFor(`document.body.innerText.includes('Custom instructions')`, "custom agent instructions");
+  await evaluate(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.querySelector('strong')?.textContent==='Issue opened').click()`);
+  await evaluate(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.textContent?.includes('cloudflare/workers-sdk')).click()`);
+  await waitFor(`!([...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Create draft'))?.disabled)`, "valid workflow draft");
+  await screenshotFullPage(screenshots.workflowBuilderLight);
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(250);
+  if (!await evaluate(`document.documentElement.scrollWidth <= document.documentElement.clientWidth`)) throw new Error("Workflow builder overflows the mobile viewport");
+  await screenshotFullPage(screenshots.workflowBuilderMobile);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(200);
+  const policiesBeforeBuilder = await evaluate(`fetch('/api/policies').then((response)=>response.json()).then((body)=>body.policies.map((policy)=>policy.operation_kind+':'+policy.mode).sort().join('|'))`);
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Create draft')).click()`);
+  await waitFor(`location.pathname === '/workflows/smoke-issue-helper' && document.querySelector('h1')?.textContent === 'Smoke issue helper'`, "workflow draft detail");
+  await screenshot(screenshots.workflowDetail);
+  await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(250);
+  if (!await evaluate(`document.documentElement.scrollWidth <= document.documentElement.clientWidth`)) throw new Error("Workflow detail overflows the mobile viewport");
+  await screenshotFullPage(screenshots.workflowDetailMobile);
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(200);
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Activate revision')).click()`);
+  await waitFor(`fetch('/api/workflows/smoke-issue-helper').then((response)=>response.json()).then((body)=>body.workflow.active_revision===1)`, "workflow activation");
+  await waitFor(`[...document.querySelectorAll('button')].some((button)=>button.textContent?.includes('Enable workflow'))`, "workflow enable control");
+  await screenshot(screenshots.workflowActivated);
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Enable workflow')).click()`);
+  await waitFor(`fetch('/api/workflows/smoke-issue-helper').then((response)=>response.json()).then((body)=>Boolean(body.workflow.enabled))`, "workflow enablement");
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Edit as new draft')).click()`);
+  await waitFor(`location.pathname === '/workflows/smoke-issue-helper/edit' && document.querySelector('#workflow-name')?.disabled === true`, "workflow draft editor");
+  await screenshotFullPage(screenshots.workflowEdit);
+  await evaluate(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.querySelector('strong')?.textContent==='Suggest a reply').querySelector('input').click()`);
+  await waitFor(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.querySelector('strong')?.textContent==='Suggest a reply')?.classList.contains('builder-choice--selected')===false && ![...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Save new draft'))?.disabled`, "changed workflow draft");
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Save new draft')).click()`);
+  await waitFor(`location.pathname === '/workflows/smoke-issue-helper' && fetch('/api/workflows/smoke-issue-helper').then((response)=>response.json()).then((body)=>body.latestRevision===2 && body.workflow.active_revision===1 && Boolean(body.workflow.enabled))`, "immutable workflow draft revision");
+  await screenshot(screenshots.workflowDraftTwo);
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Activate revision 2')).click()`);
+  await waitFor(`fetch('/api/workflows/smoke-issue-helper').then((response)=>response.json()).then((body)=>body.workflow.active_revision===2)`, "second workflow revision activation");
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Edit as new draft')).click()`);
+  await waitFor(`location.pathname === '/workflows/smoke-issue-helper/edit' && document.querySelector('#workflow-name')?.disabled === true`, "workflow reversion editor");
+  await evaluate(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.querySelector('strong')?.textContent==='Suggest a reply').querySelector('input').click()`);
+  await waitFor(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.querySelector('strong')?.textContent==='Suggest a reply')?.classList.contains('builder-choice--selected')===true && ![...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Save new draft'))?.disabled`, "restored workflow draft settings");
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Save new draft')).click()`);
+  await waitFor(`location.pathname === '/workflows/smoke-issue-helper/revisions/1' && [...document.querySelectorAll('button')].some((button)=>button.textContent?.includes('Activate revision 1'))`, "matching saved workflow revision");
+  await evaluate(`[...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Activate revision 1')).click()`);
+  await waitFor(`fetch('/api/workflows/smoke-issue-helper').then((response)=>response.json()).then((body)=>body.latestRevision===2 && body.workflow.active_revision===1 && Boolean(body.workflow.enabled))`, "workflow revision restoration");
+  await screenshot(screenshots.workflowRestored);
+  const policiesAfterBuilder = await evaluate(`fetch('/api/policies').then((response)=>response.json()).then((body)=>body.policies.map((policy)=>policy.operation_kind+':'+policy.mode).sort().join('|'))`);
+  if (policiesAfterBuilder !== policiesBeforeBuilder) throw new Error("Workflow creation changed instance operation policies");
+  await openPage("Workflows", "/workflows");
+  await screenshot(screenshots.workflowsPageDraft);
+
   await openPage("Policies", "/policies");
   const expectedPolicyNames = ["Add issue labels", "Remove issue labels", "Post issue comments", "Update issue comments", "Close issues", "Reopen issues", "Create branches", "Create commits", "Open pull requests", "Update pull requests", "Submit pull request reviews", "Merge pull requests"];
   const policyVisualState = await evaluate(`(()=>{const groups=[...document.querySelectorAll('.policy-group__header h2')].map((heading)=>heading.textContent);const names=[...document.querySelectorAll('.policy-row__copy h3')].map((heading)=>heading.textContent);const newOperations=${JSON.stringify(["branch.create", "commit.create", "pull_request.open", "pull_request.update", "pull_request.review.submit", "pull_request.merge"])};const sidebar=document.querySelector('.gardener-sidebar');return {groups,names,noRiskBadges:!document.querySelector('.policy-row__copy .status-badge'),newOperationsOff:newOperations.every((operation)=>document.querySelector('input[name="policy-'+operation+'"]:checked')?.value==='disabled'),sidebarFullHeight:Boolean(sidebar)&&sidebar.getBoundingClientRect().height>=innerHeight-1}})()`);
@@ -325,7 +401,7 @@ try {
   await screenshotFullPage(screenshots.policiesPageMobile);
   await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await sleep(300);
-  const maintainerOperation = { schemaVersion: "v1", id: "visual-commit-operation", kind: "commit.create", repository: { provider: "github", id: "repo-1", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" }, branch: "gardener/visual-fix", expectedHeadSha: "abcdef1234567890abcdef1234567890abcdef12", message: "Preserve executable behavior", files: [{ path: "scripts/very-long-maintenance-path-that-must-remain-readable-and-bounded-in-the-approval-card/smoke.sh", content: "#!/bin/sh\necho smoke\n" }] };
+  const maintainerOperation = { schemaVersion: "v1", id: "visual-commit-operation", kind: "commit.create", repository: { provider: "github", id: "101", installationId: "installation-1", owner: "cloudflare", name: "workers-sdk", defaultBranch: "main" }, branch: "gardener/visual-fix", expectedHeadSha: "abcdef1234567890abcdef1234567890abcdef12", message: "Preserve executable behavior", files: [{ path: "scripts/very-long-maintenance-path-that-must-remain-readable-and-bounded-in-the-approval-card/smoke.sh", content: "#!/bin/sh\necho smoke\n" }] };
   const sqlValue = (value) => `'${String(value).replaceAll("'", "''")}'`;
   const visualSql = `INSERT INTO proposals (id, operation_id, run_id, operation_kind, operation, policy_mode, status, rationale) VALUES (${sqlValue("visual-maintainer-proposal")}, ${sqlValue(maintainerOperation.id)}, ${sqlValue(runId)}, ${sqlValue(maintainerOperation.kind)}, ${sqlValue(JSON.stringify(maintainerOperation))}, 'approval', 'pending', 'Visual coverage for a bounded maintainer approval.');`;
   // Stop the local Worker before writing its persisted D1 database: Miniflare otherwise keeps
@@ -364,20 +440,22 @@ try {
   const finalState = await evaluate(`fetch('/api/state').then((response)=>response.json())`);
   const runDetail = await evaluate(`fetch('/api/runs/${runId}').then((response)=>response.json())`);
   const policies = Object.fromEntries(finalState.policies.map((policy) => [policy.operation_kind, policy.mode]));
+  const builtWorkflow = finalState.workflows.find((workflow) => workflow.id === "smoke-issue-helper");
   const result = {
     passed: exceptions.length === 0,
     steps: ["account", "repositories", "automation", "live"],
     repositories: finalState.setup.activeRepositories,
     completed: finalState.setup.completed,
     paused: finalState.globalPaused,
-    workflowEnabled: Boolean(finalState.workflows[0]?.enabled),
+    workflowEnabled: Boolean(finalState.workflows.find((workflow) => workflow.id === "issue-gardener")?.enabled),
+    workflowBuilder: { created: Boolean(builtWorkflow), activeRevision: builtWorkflow?.active_revision, latestRevision: builtWorkflow?.revision_counter, enabled: Boolean(builtWorkflow?.enabled), policiesUnchanged: policiesAfterBuilder === policiesBeforeBuilder },
     safeProfile: { labels: policies["issue.label.add"], comments: policies["issue.comment.create"], close: policies["issue.close"], maintainerOperationsOff: ["branch.create", "commit.create", "pull_request.open", "pull_request.update", "pull_request.review.submit", "pull_request.merge"].every((operation) => policies[operation] === "disabled") },
-    repositoryPause: { enforced: pausedDelivery.body.pausedBy === "repository", resumed: finalState.repositories.find((repository) => repository.id === "repo-1")?.paused === false },
+    repositoryPause: { enforced: pausedDelivery.body.pausedBy === "repository", resumed: finalState.repositories.find((repository) => repository.id === "101")?.paused === false },
     eventFlow: { accepted: delivery.status === 202, runStatus: runDetail.run.status, proposalStatus: runDetail.proposals[0]?.status, operationKind: executedOperations[0]?.kind },
     browserExceptions: exceptions,
     screenshots,
   };
-  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || !result.safeProfile.maintainerOperationsOff || !result.repositoryPause.enforced || !result.repositoryPause.resumed || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
+  if (!result.passed || result.repositories !== 2 || !result.completed || result.paused || !result.workflowEnabled || !result.workflowBuilder.created || result.workflowBuilder.activeRevision !== 1 || result.workflowBuilder.latestRevision !== 2 || !result.workflowBuilder.enabled || !result.workflowBuilder.policiesUnchanged || result.safeProfile.labels !== "automatic" || result.safeProfile.comments !== "approval" || result.safeProfile.close !== "disabled" || !result.safeProfile.maintainerOperationsOff || !result.repositoryPause.enforced || !result.repositoryPause.resumed || result.eventFlow.runStatus !== "completed" || result.eventFlow.proposalStatus !== "executed" || result.eventFlow.operationKind !== "issue.label.add") {
     throw new Error(`Onboarding assertions failed: ${JSON.stringify(result)}`);
   }
   console.log(JSON.stringify(result, null, 2));

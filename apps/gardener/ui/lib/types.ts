@@ -1,4 +1,4 @@
-import type { OperationKind } from "@gardener/contracts";
+import type { OperationKind, WorkflowSpecV2 } from "@gardener/contracts";
 
 export type Flag = boolean | 0 | 1;
 export type PolicyMode = "disabled" | "approval" | "automatic";
@@ -22,6 +22,9 @@ export interface Workflow {
   version: number;
   enabled: Flag;
   trigger_kind: string;
+  active_revision: number | null;
+  revision_counter: number;
+  latest_definition?: string | null;
   updated_at?: string;
 }
 export interface Policy { operation_kind: string; mode: PolicyMode; updated_at?: string }
@@ -88,6 +91,37 @@ export interface RunProposal {
   decided_at?: string | null;
 }
 export interface RunDetail { run: Record<string, unknown>; proposals: RunProposal[] }
+
+export interface WorkflowDiagnostic {
+  code: string;
+  path: string;
+  message: string;
+  capabilityId?: string;
+}
+export interface WorkflowValidation {
+  valid: boolean;
+  activatable: boolean;
+  diagnostics: WorkflowDiagnostic[];
+  spec?: WorkflowSpecV2;
+}
+export interface WorkflowRevision {
+  workflowId: string;
+  revision: number;
+  definition: { schemaVersion: "v2"; workflowId: string; revision: number; contentHash: string; spec: WorkflowSpecV2 };
+  compiledPlan: Record<string, unknown> | null;
+  contentHash: string;
+  validatorVersion: string;
+  sourceKind: "system" | "dashboard" | "agent";
+  createdBy: string;
+  createdAt: string;
+}
+export interface WorkflowDetail {
+  workflow: Workflow & { instructions: string; compiled_plan: string; created_at: string };
+  activeRevision: WorkflowRevision | null;
+  latestRevision: number;
+}
+export interface WorkflowRevisionDetail { revision: WorkflowRevision; currentValidation: WorkflowValidation }
+export interface WorkflowCreateResult { workflowId: string; duplicate: boolean; revision: WorkflowRevision }
 
 export const operationMetadata = {
   "issue.label.add": { name: "Add issue labels", description: "Add labels to issues." },

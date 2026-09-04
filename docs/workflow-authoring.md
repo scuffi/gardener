@@ -45,14 +45,7 @@ The Workflows area should have two connected surfaces.
 
 ### Showcase
 
-A template gallery explains the outcome, trigger, required capabilities, operations, and safety posture before a workflow is created. Initial entries should include:
-
-- Issue triage.
-- Issue labels only.
-- Helpful issue response.
-- Dependabot auto-merge, marked unavailable until the pull-request runtime and check-aware operation are installed.
-
-Templates create ordinary editable drafts. They do not receive privileged behavior.
+The primary showcase presents configured workflows as repository agents rather than database rows. Each agent card explains its trigger, repository scope, supplied context, model behavior, typed proposal abilities, authority ceiling, current policy result, and active/draft revision state. A template gallery may be added later, but it is not required for the initial authoring experience.
 
 ### Builder
 
@@ -62,9 +55,10 @@ The builder uses an ordered operational layout rather than an unrestricted graph
 2. Trigger.
 3. Repositories.
 4. Conditions.
-5. Actions and instructions.
-6. Controls and limits.
-7. Review, validate, and publish draft.
+5. Abilities and guided model behavior.
+6. Advanced system instructions with bounded metadata variables.
+7. Controls and limits.
+8. Review, validate, and publish draft.
 
 This maps directly to the declarative definition while remaining approachable. An advanced representation may be shown for inspection and future import/export, but raw JSON or YAML is not the primary interface.
 
@@ -79,6 +73,21 @@ The review step must show:
 - Whether activation would affect an enabled workflow.
 
 Saving creates a new immutable draft revision. Activation is an explicit human action. Enabling or disabling the workflow remains a separate control.
+
+### Agent instructions and run context
+
+The builder starts with guided instructions derived from selected abilities, then offers an advanced system-instructions editor. Instructions shape classification, prioritization, and communication style; they cannot add read capabilities, operations, repositories, authority, secrets, network access, or policy modes.
+
+System instructions use a bounded versioned placeholder catalog. Initial trusted metadata variables are:
+
+- `{{repository.id}}`
+- `{{repository.full_name}}`
+- `{{event.action}}`
+- `{{resource.type}}`
+- `{{resource.id}}`
+- `{{resource.number}}`
+
+Unknown and malformed placeholders fail validation. Placeholder count and instruction length are bounded. Values are resolved from the signed Connect event immediately before model execution. Compiled plans record the prompt-template version; plans created before that field existed keep literal instructions and are not retroactively reinterpreted. Issue and pull-request titles, bodies, labels, and authors are never interpolated into the system role; they remain lower-trust structured user context. Templates do not support arbitrary paths, expressions, filters, secret references, code execution, or authorization decisions.
 
 ## Conditions and future security controls
 
