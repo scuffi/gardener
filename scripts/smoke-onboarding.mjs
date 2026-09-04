@@ -329,9 +329,10 @@ try {
   await evaluate(`localStorage.setItem('gardener.theme','light')`);
   await command("Page.reload");
   await waitFor(`document.documentElement.dataset.mode === 'light' && location.pathname === '/workflows/new' && Boolean(document.querySelector('#workflow-name'))`, "light workflow builder");
+  if (await evaluate(`document.querySelector('.agent-instructions-disclosure')?.open === true`)) throw new Error("Advanced instructions should start collapsed for guided behavior");
   await evaluate(`(()=>{const input=document.querySelector('#workflow-name');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Smoke issue helper');input.dispatchEvent(new Event('input',{bubbles:true}));return input.value})()`);
   await evaluate(`(()=>{const input=document.querySelector('#workflow-instructions');const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set;setter.call(input,input.value+' Prioritize {{resource.id}} and keep the reply warm.');input.dispatchEvent(new Event('input',{bubbles:true}));return input.value})()`);
-  await waitFor(`document.body.innerText.includes('Custom instructions')`, "custom agent instructions");
+  await waitFor(`document.querySelector('.agent-instructions-disclosure')?.open === true && document.body.innerText.includes('Custom behavior')`, "custom agent instructions");
   await evaluate(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.querySelector('strong')?.textContent==='Issue opened').click()`);
   await evaluate(`[...document.querySelectorAll('.builder-choice')].find((choice)=>choice.textContent?.includes('cloudflare/workers-sdk')).click()`);
   await waitFor(`!([...document.querySelectorAll('button')].find((button)=>button.textContent?.includes('Create draft'))?.disabled)`, "valid workflow draft");

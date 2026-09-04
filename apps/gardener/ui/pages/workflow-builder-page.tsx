@@ -12,11 +12,11 @@ import { gardenerApi } from "../lib/api";
 import { buildWorkflowSpec, defaultWorkflowInstructions, initialWorkflowValues, workflowBuilderError, workflowBuilderValuesFromSpec, type WorkflowBuilderValues } from "../lib/workflow-builder";
 import { isEnabled } from "../lib/format";
 
-function Choice({ checked, onChange, title, description, icon }: { checked: boolean; onChange: (checked: boolean) => void; title: string; description: string; icon?: ReactNode }) {
+function Choice({ checked, onChange, title, description, icon }: { checked: boolean; onChange: (checked: boolean) => void; title: string; description?: string | undefined; icon?: ReactNode }) {
   return <label className={`builder-choice${checked ? " builder-choice--selected" : ""}`}>
     <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
     <span className="builder-choice__check" aria-hidden="true">{checked ? <CheckIcon size={11} weight="bold" /> : null}</span>
-    <span className="builder-choice__copy">{icon ? <span className="builder-choice__icon">{icon}</span> : null}<span><strong>{title}</strong><small>{description}</small></span></span>
+    <span className="builder-choice__copy">{icon ? <span className="builder-choice__icon">{icon}</span> : null}<span><strong>{title}</strong>{description ? <small>{description}</small> : null}</span></span>
   </label>;
 }
 
@@ -34,6 +34,7 @@ export function WorkflowBuilderPage() {
   const [values, setValues] = useState<WorkflowBuilderValues>(initialWorkflowValues);
   const [diagnostics, setDiagnostics] = useState<string[]>([]);
   const [hydratedRevision, setHydratedRevision] = useState<number | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const editQuery = useQuery({
     queryKey: ["workflow-edit", id],
@@ -65,6 +66,9 @@ export function WorkflowBuilderPage() {
   const outcomeError = formError === "Choose at least one outcome." ? formError : null;
   const promptError = formError && !nameError && !eventError && !repositoryError && !outcomeError ? formError : null;
   const customInstructions = values.instructions !== defaultWorkflowInstructions(values);
+  useEffect(() => {
+    if (customInstructions || promptError) setAdvancedOpen(true);
+  }, [customInstructions, promptError]);
   const instructionExample = values.instructions.replace(/{{\s*([^{}]*?)\s*}}/g, (placeholder, id: string) => systemPromptVariables.find((variable) => variable.id === id.trim())?.example ?? placeholder);
 
   const saveMutation = useMutation({
@@ -139,71 +143,71 @@ export function WorkflowBuilderPage() {
   return <form onSubmit={submit} className="workflow-builder">
     <PageHeader
       title={editing ? "Edit workflow" : "New workflow"}
-      description={editing ? "Refine this agent's context, behavior, abilities, and authority. Saving creates a new immutable draft." : "Create a repository agent by choosing its trigger, context, behavior, abilities, and authority."}
+      description={editing ? "Update the workflow. Saving creates a new draft revision." : "Set when it runs, what it suggests, and who approves."}
       actions={<Button type="button" variant="secondary" icon={ArrowLeftIcon} onClick={() => navigate(editing ? `/workflows/${encodeURIComponent(id!)}` : "/workflows")}>{editing ? "Cancel" : "Back to workflows"}</Button>}
     />
 
     <ol className="builder-flow" aria-label="Workflow configuration flow">
-      <li><span>1</span><strong>Trigger</strong><small>When the agent wakes</small></li>
+      <li><span>1</span><strong>Trigger</strong></li>
       <ArrowRightIcon aria-hidden="true" />
-      <li><span>2</span><strong>Context</strong><small>What it can inspect</small></li>
+      <li><span>2</span><strong>Scope</strong></li>
       <ArrowRightIcon aria-hidden="true" />
-      <li><span>3</span><strong>Agent</strong><small>How the model helps</small></li>
+      <li><span>3</span><strong>Behavior</strong></li>
       <ArrowRightIcon aria-hidden="true" />
-      <li><span>4</span><strong>Guardrails</strong><small>What it may do</small></li>
+      <li><span>4</span><strong>Approval</strong></li>
     </ol>
 
     <div className="workflow-builder__layout">
       <div className="workflow-builder__form">
         <Surface padded={false}>
-          <SectionHeader title="Agent" description="Give this repository agent a clear job." />
+          <SectionHeader title="Name" />
           <div className="builder-section"><Input id="workflow-name" label="Workflow name" value={values.name} onChange={(event) => update("name", event.target.value)} placeholder="Issue helper" maxLength={100} disabled={editing} autoFocus={!editing} aria-invalid={Boolean(nameError)} aria-describedby={nameError ? "workflow-name-error" : editing ? "workflow-name-note" : undefined} />{nameError ? <p id="workflow-name-error" className="sr-only">{nameError}</p> : null}{editing ? <p id="workflow-name-note" className="builder-field-note">Workflow names stay fixed across revisions.</p> : null}</div>
         </Surface>
 
         <Surface padded={false}>
-          <SectionHeader title="Run context" description="Choose when this agent wakes and what it can inspect." />
+          <SectionHeader title="Trigger" description="When should it run?" />
           <fieldset className="builder-section builder-options" aria-invalid={Boolean(eventError)} aria-describedby={eventError ? "workflow-event-error" : undefined}><legend className="sr-only">Issue events</legend>
-            <Choice checked={values.opened} onChange={(checked) => update("opened", checked)} title="Issue opened" description="A new issue is created." />
-            <Choice checked={values.reopened} onChange={(checked) => update("reopened", checked)} title="Issue reopened" description="A closed issue becomes active again." />
+            <Choice checked={values.opened} onChange={(checked) => update("opened", checked)} title="Issue opened" />
+            <Choice checked={values.reopened} onChange={(checked) => update("reopened", checked)} title="Issue reopened" />
             {eventError ? <p id="workflow-event-error" className="sr-only">{eventError}</p> : null}
           </fieldset>
         </Surface>
 
         <Surface padded={false}>
-          <SectionHeader title="Repositories" description="Select the exact repositories this agent can inspect." />
+          <SectionHeader title="Repositories" description="Where can it run?" />
           <fieldset className="builder-section builder-options" aria-invalid={Boolean(repositoryError)} aria-describedby={repositoryError ? "workflow-repository-error" : undefined}><legend className="sr-only">Repositories</legend>
             {selectableRepositories.map((repository) => <Choice
               key={repository.id}
               checked={values.repositoryIds.includes(repository.id)}
               onChange={(checked) => toggleRepository(repository.id, checked)}
               title={`${repository.owner}/${repository.name}`}
-              description={!isEnabled(repository.active) ? "Repository is no longer available." : repository.paused ? "Repository is currently paused." : "Active repository"}
+              description={!isEnabled(repository.active) ? "Unavailable" : repository.paused ? "Paused" : undefined}
               icon={<GitBranchIcon size={16} aria-hidden="true" />}
             />)}
             {!selectableRepositories.length ? <p className="builder-empty">Connect a repository before creating a workflow.</p> : null}
             {repositoryError ? <p id="workflow-repository-error" className="sr-only">{repositoryError}</p> : null}
-            <div className="builder-context-note"><BracketsCurlyIcon size={17} aria-hidden="true" /><span><strong>Issue context included</strong><small>Title, body, labels, author, number, repository, and event action are supplied to the model.</small></span></div>
           </fieldset>
         </Surface>
 
         <Surface padded={false}>
-          <SectionHeader title="Abilities" description="Set hard limits on what this agent may propose." />
+          <SectionHeader title="Suggestions" description="What may it propose?" />
           <fieldset className="builder-section builder-options" aria-invalid={Boolean(outcomeError)} aria-describedby={outcomeError ? "workflow-outcome-error" : undefined}><legend className="sr-only">Workflow outcomes</legend>
-            <Choice checked={values.suggestLabels} onChange={(checked) => updateOutcome("suggestLabels", checked)} title="Suggest labels" description="Propose conventional labels such as bug, documentation, or question." icon={<TagIcon size={16} aria-hidden="true" />} />
-            <Choice checked={values.suggestReply} onChange={(checked) => updateOutcome("suggestReply", checked)} title="Suggest a reply" description="Draft one concise, helpful issue comment." icon={<ChatCircleTextIcon size={16} aria-hidden="true" />} />
+            <Choice checked={values.suggestLabels} onChange={(checked) => updateOutcome("suggestLabels", checked)} title="Suggest labels" icon={<TagIcon size={16} aria-hidden="true" />} />
+            <Choice checked={values.suggestReply} onChange={(checked) => updateOutcome("suggestReply", checked)} title="Suggest a reply" icon={<ChatCircleTextIcon size={16} aria-hidden="true" />} />
             {outcomeError ? <p id="workflow-outcome-error" className="sr-only">{outcomeError}</p> : null}
-            <p className="builder-boundary-note"><ShieldCheckIcon size={16} aria-hidden="true" />Abilities are enforced limits. Instructions cannot grant additional actions.</p>
+            <p className="builder-boundary-note"><ShieldCheckIcon size={16} aria-hidden="true" />These are hard limits.</p>
           </fieldset>
         </Surface>
 
         <Surface padded={false}>
           <SectionHeader
-            title="Agent behavior"
-            description="Guide how the model reasons, classifies, and communicates."
-            actions={<StatusBadge tone={customInstructions ? "info" : "neutral"}>{customInstructions ? "Custom instructions" : "Guided default"}</StatusBadge>}
+            title="Behavior"
+            actions={<StatusBadge tone={customInstructions ? "info" : "neutral"}>{customInstructions ? "Custom" : "Guided"}</StatusBadge>}
           />
-          <div className="builder-section agent-instructions">
-            <div className="agent-instructions__heading"><label htmlFor="workflow-instructions">System instructions</label><Button type="button" variant="secondary" size="sm" icon={SparkleIcon} onClick={() => update("instructions", defaultWorkflowInstructions(values))}>Reset to guided</Button></div>
+          <details className="agent-instructions-disclosure" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+            <summary>Advanced instructions</summary>
+            <div className="builder-section agent-instructions">
+              <div className="agent-instructions__heading"><label htmlFor="workflow-instructions">System instructions</label><Button type="button" variant="secondary" size="sm" icon={SparkleIcon} onClick={() => update("instructions", defaultWorkflowInstructions(values))}>Reset to guided</Button></div>
             <textarea
               ref={promptRef}
               id="workflow-instructions"
@@ -217,19 +221,20 @@ export function WorkflowBuilderPage() {
               aria-describedby={`workflow-instructions-help workflow-instructions-trust${promptError ? " workflow-instructions-error" : ""}`}
             />
             {promptError ? <p id="workflow-instructions-error" className="sr-only">{promptError}</p> : null}
-            <p id="workflow-instructions-help" className="agent-instructions__help">Shape priorities, classification, and reply tone. Output schema, abilities, policies, and repository scope remain enforced.</p>
+            <p id="workflow-instructions-help" className="agent-instructions__help">Customize priorities and tone. Abilities and policies stay enforced.</p>
             <div className="prompt-variables">
-              <div><strong>Trusted run metadata</strong><small>Insert signed event values at the cursor.</small></div>
+              <div><strong>Insert trusted metadata</strong></div>
               <div className="prompt-variables__list">{systemPromptVariables.map((variable) => <button key={variable.id} type="button" className="prompt-variable" title={variable.description} aria-label={`Insert ${variable.label.toLowerCase()} variable`} onClick={() => insertPromptVariable(variable.id)}><span>{variable.label}</span><code>{`{{${variable.id}}}`}</code></button>)}</div>
             </div>
             <details className="prompt-example"><summary>Preview injected instructions</summary><pre>{instructionExample}</pre></details>
-            <p id="workflow-instructions-trust" className="builder-context-note builder-context-note--compact"><ShieldCheckIcon size={16} aria-hidden="true" /><span>These values come from the signed event. Issue title, body, labels, and author stay in lower-trust context, never system instructions.</span></p>
-            <div className="agent-instructions__meta"><span>{values.instructions.length.toLocaleString()} / 50,000 characters</span><span>Workers AI · deployment model</span></div>
-          </div>
+            <p id="workflow-instructions-trust" className="builder-context-note builder-context-note--compact"><ShieldCheckIcon size={16} aria-hidden="true" /><span>Only signed metadata is inserted. Issue content remains untrusted.</span></p>
+              <div className="agent-instructions__meta"><span>{values.instructions.length.toLocaleString()} / 50,000 characters</span><span>Workers AI · deployment model</span></div>
+            </div>
+          </details>
         </Surface>
 
         <Surface padded={false}>
-          <SectionHeader title="Authority" description="This workflow may narrow instance policy, never raise it." />
+          <SectionHeader title="Approval" description="Who reviews its suggestions?" />
           <fieldset className="builder-section builder-options"><legend className="sr-only">Authority control</legend>
             <label className={`builder-choice${spec.capabilities.maximumMode === "approval" ? " builder-choice--selected" : ""}`}>
               <input type="radio" name="maximum-mode" checked={values.maximumMode === "approval"} onChange={() => update("maximumMode", "approval")} />
@@ -241,7 +246,7 @@ export function WorkflowBuilderPage() {
               <span className="builder-choice__radio" aria-hidden="true" />
               <span className="builder-choice__copy"><span><strong>Follow instance policy</strong><small>Use Automatic only where the instance policy allows it.</small></span></span>
             </label>
-            <div className="builder-inline-policies"><strong>Effective operation policy</strong>{values.suggestLabels ? <span>Labels <StatusBadge tone="info">{modeLabel(effectiveMode("issue.label.add"))}</StatusBadge></span> : null}{values.suggestReply ? <span>Replies <StatusBadge tone="info">{modeLabel(effectiveMode("issue.comment.create"))}</StatusBadge></span> : null}</div>
+            <div className="builder-inline-policies"><strong>Effective policy</strong>{values.suggestLabels ? <span>Labels <StatusBadge tone="info">{modeLabel(effectiveMode("issue.label.add"))}</StatusBadge></span> : null}{values.suggestReply ? <span>Replies <StatusBadge tone="info">{modeLabel(effectiveMode("issue.comment.create"))}</StatusBadge></span> : null}</div>
           </fieldset>
         </Surface>
       </div>
@@ -249,16 +254,13 @@ export function WorkflowBuilderPage() {
       <aside className="workflow-builder__summary" aria-label="Workflow summary">
         <Surface>
           <div className="agent-preview__header"><span className="agent-icon"><RobotIcon size={19} weight="duotone" aria-hidden="true" /></span><span><h2>Agent preview</h2><p>{values.name.trim() || "Untitled agent"}</p></span><StatusBadge tone="warning">Draft</StatusBadge></div>
-          <div className="agent-mini-flow" aria-label="Agent orchestration preview"><span>Event</span><ArrowRightIcon aria-hidden="true" /><span>Context</span><ArrowRightIcon aria-hidden="true" /><span>AI</span><ArrowRightIcon aria-hidden="true" /><span>Actions</span></div>
-          <p className="agent-preview__mission">{spec.description}</p>
           <dl className="builder-summary-list">
-            <div><dt>Watches</dt><dd>{[values.opened ? "opened" : null, values.reopened ? "reopened" : null].filter(Boolean).join(" or ") || "No event selected"} issues</dd></div>
-            <div><dt>Scope</dt><dd>{values.repositoryIds.length ? `${values.repositoryIds.length} ${values.repositoryIds.length === 1 ? "repository" : "repositories"}` : "No repositories selected"}</dd></div>
-            <div><dt>Context</dt><dd>Issue content + trusted metadata</dd></div>
-            <div><dt>Abilities</dt><dd>{[values.suggestLabels ? "labels" : null, values.suggestReply ? "replies" : null].filter(Boolean).join(" and ") || "No abilities selected"}</dd></div>
-            <div><dt>Authority</dt><dd>{spec.capabilities.maximumMode === "approval" ? "Approval required" : "Follow instance policy"}</dd></div>
+            <div><dt>When</dt><dd>{[values.opened ? "opened" : null, values.reopened ? "reopened" : null].filter(Boolean).join(" or ") || "No trigger"}</dd></div>
+            <div><dt>Where</dt><dd>{values.repositoryIds.length ? `${values.repositoryIds.length} ${values.repositoryIds.length === 1 ? "repository" : "repositories"}` : "No repositories"}</dd></div>
+            <div><dt>Suggests</dt><dd>{[values.suggestLabels ? "labels" : null, values.suggestReply ? "replies" : null].filter(Boolean).join(" and ") || "Nothing"}</dd></div>
+            <div><dt>Policy</dt><dd>{spec.capabilities.maximumMode === "approval" ? "Approval required" : "Instance policy"}</dd></div>
           </dl>
-          <div className="agent-preview__instructions"><span><BracketsCurlyIcon size={15} aria-hidden="true" />{customInstructions ? "Custom instructions" : "Guided instructions"}</span><p>{values.instructions || "No instructions yet."}</p></div>
+          <p className="agent-preview__mode"><BracketsCurlyIcon size={14} aria-hidden="true" />{customInstructions ? "Custom behavior" : "Guided behavior"}</p>
           {diagnostics.length ? <div className="inline-error" role="alert">{diagnostics.map((message) => <p key={message}>{message}</p>)}</div> : null}
           {submissionError ? <p id="workflow-form-status" className="builder-form-hint" role="status" aria-live="polite">{submissionError}</p> : null}
           <Button type="submit" variant="primary" loading={saveMutation.isPending} disabled={Boolean(submissionError)} aria-describedby={submissionError ? "workflow-form-status" : undefined} className="builder-submit">{editing ? "Save new draft" : "Create draft"}</Button>

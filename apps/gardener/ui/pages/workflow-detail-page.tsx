@@ -1,5 +1,5 @@
 import { Button } from "@cloudflare/kumo/components/button";
-import { ArrowLeftIcon, ArrowRightIcon, BracketsCurlyIcon, ChatCircleTextIcon, CheckCircleIcon, FlowArrowIcon, PencilSimpleIcon, PlayIcon, RobotIcon, StopIcon, TagIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, ChatCircleTextIcon, CheckCircleIcon, PencilSimpleIcon, PlayIcon, RobotIcon, StopIcon, TagIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { systemPromptTemplateReferences } from "@gardener/contracts";
@@ -89,14 +89,14 @@ export function WorkflowDetailPage() {
   return <>
     <PageHeader
       title={workflow.name}
-      description={viewingLatest ? "Review the latest draft, activate it, then choose when it should receive new events." : `Review saved revision ${revision.revision} and activate it if you want to restore this definition.`}
+      description={viewingLatest ? "Latest revision" : `Saved revision ${revision.revision}`}
       actions={<Button variant="secondary" icon={ArrowLeftIcon} onClick={() => navigate("/workflows")}>Back to workflows</Button>}
     />
 
     <Surface padded={false}>
       <SectionHeader
         title={`Revision ${revision.revision}`}
-        description={revisionIsActive ? "This is the active revision." : viewingLatest ? active ? `Revision ${workflow.active_revision} remains active until you activate this draft.` : "This workflow is still a draft." : `Revision ${detail.latestRevision} is the latest saved revision.`}
+        description={revisionIsActive ? "Active" : viewingLatest ? active ? `Revision ${workflow.active_revision} is active.` : "Not active yet" : `Latest is revision ${detail.latestRevision}.`}
         actions={<div className="workflow-detail__badges">
           <StatusBadge tone={revisionIsActive ? "success" : "warning"}>{revisionIsActive ? "Active revision" : viewingLatest ? "Draft" : "Saved revision"}</StatusBadge>
           <StatusBadge tone={enabled ? "success" : "neutral"}>{enabled ? "Workflow enabled" : "Workflow disabled"}</StatusBadge>
@@ -104,39 +104,36 @@ export function WorkflowDetailPage() {
       />
       <div className="workflow-detail__profile">
         <div className="workflow-detail__main">
-          <div className="workflow-profile-heading"><span className="agent-icon agent-icon--large"><RobotIcon size={22} weight="duotone" aria-hidden="true" /></span><span><strong>{spec.description || "Repository gardening agent"}</strong><small>{guidedInstructions ? "Guided behavior" : "Custom agent instructions"} · Workers AI deployment model</small></span></div>
-          <div className="workflow-orchestration" aria-label="Agent orchestration">
-            <span><FlowArrowIcon size={15} aria-hidden="true" />GitHub event</span><ArrowRightIcon aria-hidden="true" />
-            <span><BracketsCurlyIcon size={15} aria-hidden="true" />Issue context</span><ArrowRightIcon aria-hidden="true" />
-            <span><RobotIcon size={15} aria-hidden="true" />Workers AI</span><ArrowRightIcon aria-hidden="true" />
-            <span>{proposes.includes("issue.label.add") ? <TagIcon size={15} aria-hidden="true" /> : <ChatCircleTextIcon size={15} aria-hidden="true" />}Typed proposals</span>
-          </div>
+          <div className="workflow-profile-heading"><span className="agent-icon agent-icon--large"><RobotIcon size={22} weight="duotone" aria-hidden="true" /></span><span><strong>{spec.description || "Repository workflow"}</strong><small>{guidedInstructions ? "Guided behavior" : "Custom behavior"}</small></span></div>
 
           <section className="workflow-profile-section">
-            <h3>Run context</h3>
+            <h3>Runs when</h3>
             <dl className="workflow-detail__summary">
-              <div><dt>Watches</dt><dd>Issues {actions.join(" or ")}</dd></div>
-              <div><dt>Repositories</dt><dd>{repositoryNames.join(", ")}</dd></div>
-              <div><dt>Model sees</dt><dd>Issue title, body, labels, author, number, repository, and event action</dd></div>
+              <div><dt>Trigger</dt><dd>Issue {actions.join(" or ")}</dd></div>
+              <div><dt>Scope</dt><dd>{repositoryNames.join(", ")}</dd></div>
+              <div><dt>Input</dt><dd>Issue content and signed metadata</dd></div>
             </dl>
           </section>
 
           <section className="workflow-profile-section">
-            <div className="workflow-profile-section__heading"><span><h3>Model behavior</h3><p>Instructions guide the agent; they never expand its abilities or authority.</p></span><StatusBadge tone={guidedInstructions ? "neutral" : "info"}>{guidedInstructions ? "Guided instructions" : "Custom instructions"}</StatusBadge></div>
-            <pre className="workflow-instructions-preview">{spec.runtime.instructions}</pre>
-            {promptReferences.length ? <div className="workflow-prompt-context"><strong>Trusted metadata used</strong><span>{promptReferences.map((reference) => <code key={reference}>{`{{${reference}}}`}</code>)}</span></div> : null}
-            <p className="workflow-trust-note"><CheckCircleIcon size={15} aria-hidden="true" />Issue content remains lower-trust user context, not system instructions.</p>
+            <div className="workflow-profile-section__heading"><h3>Behavior</h3><StatusBadge tone={guidedInstructions ? "neutral" : "info"}>{guidedInstructions ? "Guided" : "Custom"}</StatusBadge></div>
+            <details className="workflow-behavior-details">
+              <summary>View system instructions</summary>
+              <pre className="workflow-instructions-preview">{spec.runtime.instructions}</pre>
+              {promptReferences.length ? <div className="workflow-prompt-context"><strong>Trusted metadata</strong><span>{promptReferences.map((reference) => <code key={reference}>{`{{${reference}}}`}</code>)}</span></div> : null}
+            </details>
+            <p className="workflow-trust-note"><CheckCircleIcon size={15} aria-hidden="true" />Issue content is treated as untrusted input.</p>
           </section>
 
           <section className="workflow-profile-section">
-            <h3>Abilities</h3>
-            <div className="workflow-ability-list">{proposes.map((operation) => <div key={operation}><span className="workflow-ability-list__icon">{operation === "issue.label.add" ? <TagIcon size={17} aria-hidden="true" /> : <ChatCircleTextIcon size={17} aria-hidden="true" />}</span><span><strong>{actionLabel(operation)}</strong><small>Typed, bounded proposal</small></span><StatusBadge tone="info">{modeLabel(effectiveMode(operation))}</StatusBadge></div>)}</div>
+            <h3>Suggestions</h3>
+            <div className="workflow-ability-list">{proposes.map((operation) => <div key={operation}><span className="workflow-ability-list__icon">{operation === "issue.label.add" ? <TagIcon size={17} aria-hidden="true" /> : <ChatCircleTextIcon size={17} aria-hidden="true" />}</span><strong>{actionLabel(operation)}</strong><StatusBadge tone="info">{modeLabel(effectiveMode(operation))}</StatusBadge></div>)}</div>
           </section>
         </div>
 
         <aside className="workflow-detail__lifecycle" aria-label="Workflow authority and lifecycle">
-          {canActivate ? <div className="workflow-detail__ready"><CheckCircleIcon size={18} aria-hidden="true" /><span><strong>{revisionIsActive ? "Active definition" : "Ready to activate"}</strong><small>{revisionIsActive ? "This revision still passes current validation." : "Repositories, runtime, instructions, and operation limits are available."}</small></span></div> : validation.activatable ? <div className="inline-error" role="alert"><p>This revision has no immutable compiled plan. Save it as a new draft before activation.</p></div> : <div className="inline-error" role="alert">{validation.diagnostics.map((item) => <p key={`${item.path}-${item.code}`}>{item.message}</p>)}</div>}
-          <div className="workflow-lifecycle-card"><span>Maximum authority</span><strong>{spec.capabilities.maximumMode === "approval" ? "Approval required" : "Follow instance policy"}</strong><p>Instructions cannot grant additional operations or override instance policy.</p></div>
+          {canActivate ? <div className="workflow-detail__ready"><CheckCircleIcon size={18} aria-hidden="true" /><span><strong>{revisionIsActive ? "Active revision" : "Ready to activate"}</strong><small>Validation passed.</small></span></div> : validation.activatable ? <div className="inline-error" role="alert"><p>This revision has no immutable compiled plan. Save it as a new draft before activation.</p></div> : <div className="inline-error" role="alert">{validation.diagnostics.map((item) => <p key={`${item.path}-${item.code}`}>{item.message}</p>)}</div>}
+          <div className="workflow-lifecycle-card"><span>Authority</span><strong>{spec.capabilities.maximumMode === "approval" ? "Approval required" : "Instance policy"}</strong><p>Cannot exceed instance policy.</p></div>
           <dl className="workflow-lifecycle-facts"><div><dt>Viewing</dt><dd>Revision {revision.revision}</dd></div><div><dt>Active</dt><dd>{workflow.active_revision ? `Revision ${workflow.active_revision}` : "None"}</dd></div><div><dt>Latest</dt><dd>Revision {detail.latestRevision}</dd></div><div><dt>Scope</dt><dd>{repositoryNames.length} {repositoryNames.length === 1 ? "repository" : "repositories"}</dd></div></dl>
         </aside>
       </div>

@@ -1,5 +1,5 @@
 import { Button } from "@cloudflare/kumo/components/button";
-import { ArrowRightIcon, BracketsCurlyIcon, ChatCircleTextIcon, FlowArrowIcon, GitBranchIcon, PlusIcon, PlayIcon, RobotIcon, StopIcon, TagIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, FlowArrowIcon, GitBranchIcon, PlusIcon, PlayIcon, RobotIcon, StopIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import type { WorkflowSpecV2 } from "@gardener/contracts";
@@ -62,7 +62,7 @@ export function WorkflowsPage() {
   return <>
     <PageHeader
       title="Workflows"
-      description="Agents that watch GitHub issues, gather context, and propose bounded actions."
+      description="Choose what Gardener watches and may suggest."
       actions={<Button variant="primary" icon={PlusIcon} onClick={() => navigate("/workflows/new")}>New workflow</Button>}
     />
     {state.workflows.length ? <div className="workflow-agent-list">{state.workflows.map((workflow) => {
@@ -75,9 +75,6 @@ export function WorkflowsPage() {
       }) ?? [];
       const actions = spec?.triggers[0] && "actions" in spec.triggers[0] ? spec.triggers[0].actions : [];
       const proposes = spec?.capabilities.propose ?? [];
-      const mission = spec?.description || (proposes.includes("issue.label.add") && proposes.includes("issue.comment.create")
-        ? "Triage issues with suggested labels and helpful replies."
-        : proposes.includes("issue.label.add") ? "Triage issues with suggested labels." : proposes.includes("issue.comment.create") ? "Draft helpful issue replies." : "A bounded repository gardening agent.");
       const guided = spec ? spec.runtime.instructions === defaultWorkflowInstructions({
         suggestLabels: proposes.includes("issue.label.add"),
         suggestReply: proposes.includes("issue.comment.create"),
@@ -88,42 +85,32 @@ export function WorkflowsPage() {
           <span className="agent-icon agent-icon--large"><RobotIcon size={22} weight="duotone" aria-hidden="true" /></span>
           <div className="workflow-agent-card__identity">
             <Link id={titleId} className="workflow-agent-card__title" to={`/workflows/${encodeURIComponent(workflow.id)}`}>{workflow.name}</Link>
-            <p>{mission}</p>
+            <p>{repositoryNames.length ? `${repositoryNames.length} ${repositoryNames.length === 1 ? "repository" : "repositories"}` : "Repository scope unavailable"} · {guided ? "Guided" : "Custom"} behavior</p>
           </div>
           <WorkflowStatuses workflow={workflow} />
           <div className="workflow-agent-card__actions">
-            <Button variant="secondary" size="sm" onClick={() => navigate(`/workflows/${encodeURIComponent(workflow.id)}`)}>Review</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate(`/workflows/${encodeURIComponent(workflow.id)}`)}>Manage</Button>
             {workflow.active_revision !== null ? <Button variant={enabled ? "secondary" : "primary"} size="sm" icon={enabled ? StopIcon : PlayIcon} loading={pending} onClick={() => mutation.mutate({ id: workflow.id, enabled: !enabled })}>{enabled ? "Disable" : "Enable"}</Button> : null}
           </div>
         </header>
 
-        <div className="workflow-orchestration" aria-label="Workflow orchestration">
-          <span><FlowArrowIcon size={15} aria-hidden="true" />GitHub event</span><ArrowRightIcon aria-hidden="true" />
-          <span><BracketsCurlyIcon size={15} aria-hidden="true" />Issue context</span><ArrowRightIcon aria-hidden="true" />
-          <span><RobotIcon size={15} aria-hidden="true" />Workers AI</span><ArrowRightIcon aria-hidden="true" />
-          <span>{proposes.includes("issue.label.add") ? <TagIcon size={15} aria-hidden="true" /> : <ChatCircleTextIcon size={15} aria-hidden="true" />}Typed proposals</span>
-        </div>
-
-        <div className="workflow-agent-card__grid">
-          <section><span>Watches</span><strong>{actions.length ? `Issues ${actions.join(" or ")}` : "GitHub issues"}</strong><small>{repositoryNames.length ? `${repositoryNames.length} ${repositoryNames.length === 1 ? "repository" : "repositories"}` : "Explicit repository scope"}</small></section>
-          <section><span>Context</span><strong>Issue content</strong><small>Title, body, labels, author, and signed event metadata</small></section>
-          <section><span>Model behavior</span><strong>{guided ? "Guided instructions" : "Custom instructions"}</strong><small>{spec?.runtime.instructions || "Pinned agent instructions"}</small></section>
-          <section><span>Can propose</span><strong>{proposes.length ? proposes.map(actionLabel).join(" · ") : "Bounded actions"}</strong><small>Never executes outside these abilities</small></section>
-        </div>
-
-        <div className="workflow-agent-card__authority">
-          <span><strong>Authority</strong><small>{spec?.capabilities.maximumMode === "instance_policy" ? "Follows instance policy" : "Approval required"}</small></span>
-          <span className="workflow-policy-pills">{proposes.map((operation) => <span key={operation}>{actionLabel(operation)} <StatusBadge tone="info">{spec ? policyLabel(effectivePolicy(spec, operation)) : "Bounded"}</StatusBadge></span>)}</span>
+        <div className="workflow-agent-card__rule" aria-label="Workflow behavior">
+          <section><span>When</span><strong>{actions.length ? `Issue ${actions.join(" or ")}` : "GitHub issue event"}</strong></section>
+          <ArrowRightIcon aria-hidden="true" />
+          <section><span>Proposes</span><strong>{proposes.length ? proposes.map(actionLabel).join(" and ") : "Bounded actions"}</strong></section>
+          <ArrowRightIcon aria-hidden="true" />
+          <section><span>Authority</span><strong>{spec?.capabilities.maximumMode === "instance_policy" ? "Instance policy" : "Approval required"}</strong></section>
         </div>
 
         <footer className="workflow-agent-card__footer">
-          <span><GitBranchIcon size={14} aria-hidden="true" />{workflow.active_revision === null ? "No active revision" : `Active v${workflow.active_revision}`}</span>
-          {workflow.revision_counter > (workflow.active_revision ?? 0) ? <span>Draft v{workflow.revision_counter}</span> : null}
-          <span>Latest v{workflow.revision_counter || workflow.version}</span>
-          <span>Updated {formatRelativeTime(workflow.updated_at)}</span>
-          {!guided && spec ? <span className="workflow-agent-card__custom">Custom instructions</span> : null}
+          <div className="workflow-agent-card__revision">
+            <span><GitBranchIcon size={14} aria-hidden="true" />{workflow.active_revision === null ? "No active revision" : `Active v${workflow.active_revision}`}</span>
+            {workflow.revision_counter > (workflow.active_revision ?? 0) ? <span>Draft v{workflow.revision_counter}</span> : null}
+            <span>Updated {formatRelativeTime(workflow.updated_at)}</span>
+          </div>
+          <span className="workflow-policy-pills">{proposes.map((operation) => <span key={operation}>{actionLabel(operation)} <StatusBadge tone="info">{spec ? policyLabel(effectivePolicy(spec, operation)) : "Bounded"}</StatusBadge></span>)}</span>
         </footer>
       </article>;
-    })}</div> : <EmptyState icon={FlowArrowIcon} title="No workflow agents yet" description="Create an agent to watch repository events, gather context, and propose safe actions." action={<Button variant="primary" icon={PlusIcon} onClick={() => navigate("/workflows/new")}>Create workflow</Button>} />}
+    })}</div> : <EmptyState icon={FlowArrowIcon} title="No workflows yet" description="Create one to respond to repository events." action={<Button variant="primary" icon={PlusIcon} onClick={() => navigate("/workflows/new")}>Create workflow</Button>} />}
   </>;
 }
