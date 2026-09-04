@@ -1,0 +1,21 @@
+apps/gardener/test/workflow-execution-v2.test.ts
+  s_5843e4e7444de1::t_539959ca20afed 52,55-56,58-59,65,70,114-116,124-135,149-152,160,199
+packages/contracts/src/workflows.ts
+  s_5843e4e7444de1::t_05335a7be0332d 136-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0518309cc16e9100ca312ed514f244e90670cd08",
+  "prompts": {},
+  "sessions": {
+    "s_5843e4e7444de1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "b4db542f-695b-4b0e-a66e-4d691f92d21a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
