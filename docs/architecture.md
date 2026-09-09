@@ -1,43 +1,114 @@
-# Gardener architecture
+# Gardener Agent-native architecture
 
-Gardener is one repository with two independently deployed Cloudflare Workers.
+## Status
+
+This document describes the target architecture and identifies what exists in the current foundation. It is not a claim that end-to-end Agent execution is ready. The current `AgentRunWorkflow` fails closed before model or tool execution because trusted observation, tool, and exact-effect integrations are incomplete.
+
+## Two independent deployment boundaries
 
 ```text
-GitHub ──webhooks──▶ Connect ──signed event──▶ customer Gardener
-  ▲                    ▲                            │
-  │                    └── scoped grant + typed op ─┘
-  └──────── installation token held only here
+GitHub ── webhook ──▶ managed Connect ── signed RepositoryEventV2 ──▶ customer Gardener
+  ▲                         ▲                                         │
+  │                         └──── hash-bound grant + typed effect ────┘
+  └──────── GitHub installation token exists only in Connect
 ```
 
-## Deployment boundaries
+### Managed Connect
 
-### Connect (`apps/connect`)
+`apps/connect` is centrally operated by default. It owns the shared GitHub App, OAuth secret, webhook secret, signing key, installation discovery, normalized event attestation, installation-token minting, live GitHub revalidation, and typed operation execution. It never exposes a raw GitHub proxy or installation token.
 
-Connect is the small, centrally operated control plane. It owns the shared GitHub App, verifies GitHub webhooks, associates installations with Gardener instances, issues short-lived identity and run-grant JWTs, and translates validated typed operations into GitHub API calls.
+Advanced customers may operate the same boundary themselves. Self-hosting changes the operator, not the contract or credential-isolation rule.
 
-Connect is implemented in this repository but is **not** installed into customer accounts. Its GitHub App private key, OAuth secret, webhook secret, and signing key are Worker secrets in the centrally operated deployment.
+### Customer Gardener
 
-### Gardener (`apps/gardener`)
+`apps/gardener` owns owner sessions, repository selection, Agent packages, mutable drafts, immutable revisions, activation and enablement state, policy, Inbox decisions, events, runs, tasks, steps, interruptions, temporary grants, effect intents, receipts, leases, artifacts, and audit history.
 
-Gardener is the customer data plane deployed into the user's Cloudflare account. It owns repository selections, workflows, policy, runs, proposals, approvals, audit records, Workers AI usage, and its dashboard. GitHub credentials never cross into this deployment.
+Gardener has an AI binding but no GitHub credential. Standard deployment needs no model-provider secret. An instance setting selects a Gardener-owned harness adapter; the immutable run snapshot pins the actual harness ID and adapter version.
 
-The active Issue Gardener workflow handles issue events and proposes bounded label and comment changes. The policy and Connect layers support the complete typed maintainer surface: issue actions, branch creation, bounded commits, pull-request creation and updates (including close/reopen and draft state), grouped reviews, and protected merge. Code and pull-request policies start disabled; Computer-based code generation and additional workflows remain deferred.
+## Authority layers
 
-## Trust model
+These layers remain separate and fail closed:
 
-- GitHub authenticates to Connect with the webhook HMAC secret.
-- Connect signs normalized events and user identity tokens asymmetrically; Gardener verifies them against the configured public key/JWKS.
-- Cloudflare Access is an optional outer transport gate, not Gardener's primary authentication. When enabled, Connect presents an instance-specific Access service token before Gardener independently verifies the signed event JWT. Managed Connect stores that optional credential encrypted and binds its ciphertext to the instance ID.
-- The Connect landing flow authenticates the deploying GitHub user before issuing a Gardener instance token; later dashboard identity tokens are restricted to that owner.
-- A Gardener instance authenticates to Connect with its high-entropy instance token. Connect stores only its SHA-256 hash.
-- The instance token may request a short-lived grant; it is not accepted by an operation endpoint as write authority.
-- Grants bind an instance, signed-and-relayed event, installation, repository, resource, operation scopes, and expiration.
-- Connect binds grants to canonical hashes of exact approved operations, re-fetches relevant GitHub state when executing a mutation, and records operation IDs for retry safety.
-- Agent output is untrusted data. Gardener validates it into typed proposals, evaluates the immutable run policy snapshot, and either discards, queues for approval, or submits the exact typed payload with a hash-bound grant.
-- Pull-request operations bind the expected state, draft status, head revision, and base revision from the delivered event. The Gardener GitHub App must not appear on branch-protection or ruleset bypass lists; GitHub remains responsible for enforcing review, conversation, freshness, and ruleset requirements at merge time.
+1. **Admission:** global/repository pause and an enabled Agent with an active immutable revision.
+2. **Event eligibility:** a `RepositoryEventV2` trigger, immutable repository ID, and trusted actor/resource facts.
+3. **Revision capability ceiling:** capabilities explicitly requested by the compiled Agent revision.
+4. **Instance policy:** observations and workspace/effect modes (`disabled`, `approval`, `automatic`).
+5. **Authoring authorization:** owner session or OAuth MCP scopes; authoring never implies runtime authority.
+6. **One-run grants:** narrowly scoped, expiring approvals for grantable observation/workspace needs.
+7. **Typed interruption:** authenticated, responder-bound, nonce-bound human input or decision.
+8. **Exact-effect decision:** one canonical operation payload and hash, never a blanket plan approval.
+9. **Connect execution:** event/grant/repository/resource binding, live-state preconditions, provider permissions, idempotency, and receipt.
 
-## Deliberately small v1
+Repository content, comments, model output, Agent prose, channel messages, and eval scores may influence planning but never authorize an effect.
 
-The first release uses D1 and one Queue. It does not add Durable Objects, R2, AI Gateway, a plugin system, or a generic provider framework until contention, artifact size, or additional providers justify them. The `AgentRuntime` and typed connector contracts are the intentional seams.
+## Authoring and immutable data
 
-Workflows start paused. Every typed operation has an independent Disabled / Approval / Automatic mode, with code and pull-request operations disabled by default. Global and repository pause controls block admission of new execution without deleting state.
+`AgentSourceV1` preserves the exact bytes of `AGENT.md` and supporting files as canonical base64. The parser separately produces strict semantics. Compilation resolves `this` and explicit selectors to immutable GitHub repository IDs and records source, semantic, referenced-file, compiler, catalog, and runtime identities.
+
+Drafts remain mutable and paused. Publication creates an immutable paused revision. Activation changes the active revision pointer. Enablement is a separate owner action. A run binds `CompiledAgentRevisionV1`, effective capabilities, policy, harness, budgets, and all component versions in `AgentRunSnapshotV1`.
+
+Dashboard, direct Markdown, Git-native publication, CLI clients, and OAuth MCP are intended to call the same canonical services. MCP currently exposes only read, validate, explain, diff, simulation, paused-draft, and redacted-trace tools.
+
+## Durable run model
+
+The target runtime has one deployed generic `AgentRunWorkflow`; user Agent creation is a data operation and never creates a Worker class or Wrangler deployment.
+
+D1 is authoritative for:
+
+- Agents, drafts, revisions, activation, and enablement;
+- normalized events and admission decisions;
+- runs, parallel tasks, durable steps, usage, and errors;
+- interruptions and one-run capability grants;
+- effect intents, canonical operation hashes, approvals, and receipts;
+- Inbox items, evals, artifacts, and workspace cleanup leases.
+
+Cloudflare Workflows owns durable continuation, deterministic step retry, sleeps, waits, cancellation, and replay. Large snapshots, patches, transcripts, logs, and tool output are referenced from host-controlled R2 instead of being embedded in Workflow state. Promise-based parallel groups must be deterministic; authoritative orchestration must not use `Promise.race()` or `Promise.any()` because losing work continues and replay selection can diverge.
+
+The current entrypoint only verifies the run/snapshot binding and records a terminal integration error. The durable model/tool loop, interruption waits, child joins, exact effects, and cleanup sequencing remain release blockers.
+
+## Computer workspaces
+
+`@cloudflare/computer` is the primary execution abstraction:
+
+1. Connect-attested observation;
+2. durable Computer filesystem;
+3. local-only typed Git;
+4. Worker shell (`just-bash`, not full Linux);
+5. Worker JavaScript;
+6. lazy Container fallback.
+
+Every writable principal gets a workspace ID derived from immutable instance/run/task/principal identity. Parallel tasks never share one writable workspace. Inputs are credential-free snapshots bound to an exact SHA, hydrated by trusted host code or mounted read-only from R2. The workspace has no credentialed remote.
+
+Local Git rejects network-bearing operations such as clone, fetch, pull, push, and `ls-remote`. Worker execution uses denied egress. Container is **Ask per run** by default and starts lazily. Container authorization does not grant networking or dependency installation; those require separate capabilities and instance policy. Unresolved Container-to-Durable-Object synchronization blocks patch/artifact freezing. Execution IDs, hashes, durable results, ambiguous-result classification, cleanup leases, and a sweeper prevent unsafe replay and abandoned state.
+
+Computer `0.2.1` is preview software and depends on experimental Worker Loader support. Unit tests cannot establish deployment safety; real workerd/Cloudflare and Container tests remain mandatory.
+
+## Replaceable model harnesses
+
+Gardener owns one framework-neutral lifecycle and conformance suite. Static generic adapters exist for:
+
+- **Flue** — default instance selection;
+- **Think** — supported preview adapter;
+- **Cloudflare Agents SDK + AI binding** — minimal direct adapter.
+
+There is no public generic AI SDK harness. Each adapter may call only the Gardener-supplied observation/workspace facade. Persistent GitHub effects are deliberately unrepresentable in the harness tool contract. User Agents never generate framework classes.
+
+The adapters and static classes exist, but the trusted `GARDENER_HARNESS_TOOLS` facade, Flue build transform/export, Durable Object locator wiring, and run orchestration are not yet fully integrated.
+
+## Effects and optimistic coordination
+
+Planning may read and alter only isolated workspace state. It cannot persistently mutate GitHub. Acting is model-free: Gardener persists an exact typed operation intent, evaluates policy, obtains any exact approval, and requests a grant bound to its canonical hash. Connect re-fetches live state and executes only that payload.
+
+Every external effect requires a stable idempotency key, canonical input hash, persisted intent, explicit retry classification, and persisted receipt. Shared resources use expected SHAs, timestamps/state, operation hashes, and optimistic preconditions. Narrow resource-level coordination is allowed only when an operation is intrinsically exclusive; there is no global Agent mutex.
+
+## Inbox and channels
+
+Inbox is the canonical decision surface for interruptions, exact effects, blocked/failed runs, draft activation, regressions, and cleanup failures. Slack, email, GitHub, and other channels may notify or carry authenticated nonce-bound responses later. Freeform channel text never confers authority. Product traces explain behavior; immutable audit records, hashes, grants, and receipts prove decisions.
+
+## Authentication boundaries
+
+- The Gardener owner session is established from a Connect-issued, instance-audienced GitHub identity token and stored in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie.
+- The instance authenticates to Connect with a high-entropy Worker secret; Connect stores its hash.
+- Connect signs events and identities; Gardener validates issuer, audience, signature, and expiry.
+- OAuth MCP tokens are separate authoring credentials with explicit scopes and owner consent.
+- Optional Cloudflare Access is an outer transport gate, never a replacement for any inner control.

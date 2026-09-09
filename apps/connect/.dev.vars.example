@@ -1,4 +1,4 @@
-# Copy to .dev.vars. Never commit real values.
+# Copy to untracked .dev.vars for local development. Never commit or log real values.
 ADMIN_BOOTSTRAP_SECRET=replace-with-at-least-32-random-bytes
 GITHUB_CLIENT_ID=Iv1.example
 GITHUB_CLIENT_SECRET=replace-me
@@ -6,11 +6,15 @@ GITHUB_APP_ID=123456
 GITHUB_APP_SLUG=gardener-connect
 GITHUB_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 GITHUB_WEBHOOK_SECRET=replace-with-random-secret
+
+# This signing key pair must be distinct from the GitHub App key.
 CONNECT_JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 CONNECT_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-CONNECT_JWT_KID=connect-2026-01
-# Optional base64url-encoded 32-byte key. Required only when accepting per-instance Access credentials.
+CONNECT_JWT_KID=connect-local-1
+
+# Optional independent base64url-encoded 32-byte key for per-instance Access credentials.
 # ACCESS_CREDENTIAL_ENCRYPTION_KEY=replace-with-32-random-bytes-as-base64url
-CONNECT_ISSUER=http://localhost:8787
+
+CONNECT_ISSUER=http://localhost:8788
 CONNECT_AUDIENCE=gardener-connect
-GITHUB_OAUTH_CALLBACK_URL=http://localhost:8787/v1/auth/github/callback
+GITHUB_OAUTH_CALLBACK_URL=http://localhost:8788/v1/auth/github/callback

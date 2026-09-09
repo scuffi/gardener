@@ -12,7 +12,7 @@ export function SignInPage() {
     <div className="auth-layout">
       <PageHeader
         title="Sign in to Gardener"
-        description="Manage repositories, policies, approvals, and automation for this deployment."
+        description="Manage Agents, repository authority, Inbox decisions, and history for this deployment."
       />
 
       {!connectReady ? <Banner

@@ -1,25 +1,35 @@
 import {
   operationSchema,
-  repositorySchema,
+  repositoryEventV2Schema,
+  repositoryRefSchema,
   type Operation,
+  type RepositoryEventV2,
 } from "@gardener/contracts";
 import { z } from "zod";
 
-export { operationSchema, repositorySchema };
-export type { Operation };
+export { operationSchema, repositoryEventV2Schema, repositoryRefSchema };
+export type { Operation, RepositoryEventV2 };
 
 export const grantRequestSchema = z.object({
   instanceId: z.string().min(1),
   runId: z.string().min(1).max(200),
   eventId: z.string().min(1).max(255),
-  repository: repositorySchema,
+  repository: repositoryRefSchema,
   operations: z.array(operationSchema).min(1).max(20),
 }).strict();
 
-export const callbackUrlSchema = z.url().refine((value) => {
+export function isAllowedCallbackUrl(value: string): boolean {
   const url = new URL(value);
-  return url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
-}, "callback URL must use HTTPS");
+  if (url.username || url.password) return false;
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (local) return url.protocol === "http:" || url.protocol === "https:";
+  return url.protocol === "https:" && url.port === "" && url.hostname.endsWith(".workers.dev");
+}
+
+export const callbackUrlSchema = z.url().refine(
+  isAllowedCallbackUrl,
+  "callback URL must be a public HTTPS workers.dev URL (or loopback for local development)",
+);
 
 export const cloudflareAccessCredentialsSchema = z.object({
   clientId: z.string().trim().min(1).max(512),

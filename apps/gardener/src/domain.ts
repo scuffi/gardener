@@ -1,20 +1,19 @@
 export {
-  connectEventSchema,
+  agentSourceV1Schema,
+  compiledAgentRevisionV1Schema,
+  operationKindSchema,
   operationSchema,
-  issueResourceSchema,
   policyModeSchema,
-  repositorySchema,
+  repositoryEventV2Schema,
+  repositoryRefSchema,
 } from "@gardener/contracts";
 export type {
-  AgentProposal,
-  AgentResult,
-  ConnectEvent,
+  AgentSourceV1,
+  CompiledAgentRevisionV1,
   Operation,
+  OperationKind,
   PolicyMode,
-  Repository,
+  RepositoryEventV2,
+  RepositoryRef,
 } from "@gardener/contracts";
 export { createOperationId } from "@gardener/core";
-
-export interface RunQueueMessage {
-  runId: string;
-}

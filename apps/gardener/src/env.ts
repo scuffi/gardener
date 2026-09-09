@@ -1,6 +1,7 @@
+import type { HarnessToolFacade } from "./harness";
+
 export interface Env {
   DB: D1Database;
-  RUN_QUEUE: Queue;
   AI: Ai;
   ASSETS: Fetcher;
   AI_MODEL: string;
@@ -12,6 +13,18 @@ export interface Env {
   CLOUDFLARE_ACCESS_CLIENT_SECRET?: string;
   LOCAL_DEV_BYPASS?: string;
   CONNECT_JWT_ALG?: string;
+
+  COMPUTER_WORKSPACES: DurableObjectNamespace;
+  COMPUTER_LOADER: unknown;
+  COMPUTER_INPUTS?: R2Bucket;
+  GARDENER_THINK_HARNESS: DurableObjectNamespace;
+  GARDENER_DIRECT_HARNESS: DurableObjectNamespace;
+  AGENT_RUN_WORKFLOW: Workflow;
+  GARDENER_HARNESS_TOOLS?: HarnessToolFacade;
+
+  /** OAuth is mounted only when an operator provisions the required KV binding. */
+  OAUTH_KV?: KVNamespace;
+  OAUTH_PROVIDER?: unknown;
 }
 
 /** The bootstrap token carries its non-secret instance id, keeping deployment to one copied secret. */

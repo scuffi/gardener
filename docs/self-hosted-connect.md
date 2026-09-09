@@ -1,88 +1,69 @@
 # Self-host Gardener Connect
 
-Gardener uses the hosted Connect service by default. Organizations that need to own their GitHub App, credentials, signing keys, connector data, and availability can deploy the same Connect Worker into their own Cloudflare account.
+Managed Connect is the effortless default. Organizations that need to own the GitHub App, keys, connector D1 data, availability, and upgrades may deploy `apps/connect` into their own Cloudflare account. This is an advanced operating mode.
 
-This is an advanced operating mode, not a requirement for deploying Gardener. Connect and Gardener remain separate Workers even when the same organization owns both, so GitHub credentials never enter the Gardener Worker or Workers AI.
+Connect and Gardener remain separate Workers even under one operator. Never copy GitHub credentials into Gardener, its AI binding, MCP server, or Computer workspaces.
 
-## What you operate
-
-A self-hosted installation owns:
+## What the operator owns
 
 - one Connect Worker and D1 database;
-- one reusable GitHub App for all of its Gardener instances;
-- the GitHub App private key, client secret, and webhook secret;
-- a separate RSA key pair for Connect identity, event, and grant JWTs;
-- public callback and webhook availability, upgrades, monitoring, and key rotation.
+- one reusable GitHub App for all of that Connect deployment's Gardener instances;
+- App private key, client secret, and webhook secret;
+- a distinct RSA signing key pair for identity/event/grant JWTs;
+- optional independent Access credential-encryption key;
+- public callbacks/webhooks, monitoring, migrations, revocation, and rotation;
+- verification of every enabled GitHub permission, event, API endpoint, and precondition.
 
-Do not create a GitHub App per repository or Gardener deployment. One App can be installed on many selected repositories and serve many Gardener instances.
+Do not create one App per repository or Agent.
 
 ## Prerequisites
 
-- Node.js 22 or newer and pnpm 11.25.0
-- a Cloudflare account authenticated with Wrangler
-- permission to create a GitHub App
-- a public HTTPS Connect URL; GitHub callbacks and webhooks cannot pass through an interactive Cloudflare Access login
-
-Install dependencies and verify Wrangler first:
+- Node.js 22+ and pnpm 11.25.0;
+- a Cloudflare account authenticated with Wrangler;
+- permission to create/manage a GitHub App;
+- a public HTTPS Connect origin. GitHub callbacks/webhooks cannot pass through interactive Access login.
 
 ```bash
 pnpm install
 pnpm exec wrangler whoami
 ```
 
-## 1. Prepare Connect
+## Configure Connect
 
-Copy `apps/connect/wrangler.jsonc` for your environment and change:
+Copy/change `apps/connect/wrangler.jsonc` for the deployment:
 
-- `name`
-- `CONNECT_ISSUER` to the final public Connect origin
-- `GITHUB_OAUTH_CALLBACK_URL` to `<origin>/v1/auth/github/callback`
-- `DEPLOY_REPOSITORY_URL` to the public Gardener source customers should deploy
-- the D1 `database_id`
-
-Create D1 and copy the returned ID into the configuration:
+- Worker `name`;
+- `CONNECT_ISSUER` and `GITHUB_OAUTH_CALLBACK_URL`;
+- `DEPLOY_REPOSITORY_URL` for the public Gardener source;
+- D1 `database_id`;
+- non-secret App ID/client ID/slug values.
 
 ```bash
 cd apps/connect
 pnpm exec wrangler d1 create gardener-connect
 pnpm exec wrangler d1 migrations apply DB --remote
-```
-
-Deploying once before GitHub credentials are installed is safe and gives you a stable workers.dev URL. `/health` returns `503` until configuration is complete.
-
-```bash
 pnpm exec wrangler deploy
 ```
 
-## 2. Create one GitHub App
+A first deployment may return unhealthy until secrets are installed.
 
-The repository includes a GitHub App Manifest helper. Run it once with the public Connect origin:
+## Create and review the GitHub App
 
-From the repository root:
+The target event surface includes issue, pull request, issue/PR comment, PR review/review-comment, discussion/comment, check run/suite, push, release, and installation lifecycle events. The operation catalog may require metadata, contents, issues, pull requests, discussions, checks/statuses, releases, and administration/protection reads. Team eligibility additionally requires organization Members read.
+
+Do not copy this list blindly into production. Review current GitHub documentation and the implemented Connect endpoint for each enabled family. Start with only verified permissions. Existing installations require owner approval when permissions expand, and execution must remain disabled until reauthorization is observed.
+
+The manifest helper is intended to create the App from the repository root:
 
 ```bash
 node scripts/create-github-app.mjs https://connect.example.com
 ```
 
-GitHub asks for one browser confirmation and returns the App credentials to the local helper. They are written with owner-only permissions to:
+The helper stores returned material with owner-only permissions under `~/.config/gardener/`. It must never be committed. The helper itself still requires Agent-native permission/event review before release.
 
-```text
-~/.config/gardener/github-app.json
-```
+## Configure keys and secrets
 
-The App uses:
-
-- OAuth callbacks: `/v1/landing/callback` and `/v1/auth/github/callback`
-- setup callback: `/v1/installations/callback`
-- webhook: `/github/webhook`
-- repository permissions: Metadata read; Administration, Checks, and Commit statuses read; Contents, Issues, and Pull requests read/write
-- issue and pull-request webhooks; GitHub App installation lifecycle events are implicit
-
-Record the returned App ID, client ID, slug, client secret, PEM private key, and webhook secret. Never commit the credential file. When expanding permissions on an existing App, each installation owner must approve the new permissions before Connect can mint tokens for those operations.
-
-## 3. Configure keys and secrets
-
-Generate a Connect JWT key pair that is distinct from the GitHub App key:
+Create a Connect JWT pair distinct from the App key:
 
 ```bash
 mkdir -p ~/.config/gardener/connect
@@ -91,22 +72,11 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
 openssl pkey -in ~/.config/gardener/connect/jwt-private.pem -pubout \
   -out ~/.config/gardener/connect/jwt-public.pem
 openssl rand -hex 32
-# Save this independent base64url value for ACCESS_CREDENTIAL_ENCRYPTION_KEY.
+# Optional independent Access encryption key:
 openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'
 ```
 
-Set these non-secret Wrangler variables from the App and deployment:
-
-- `GITHUB_CLIENT_ID`
-- `GITHUB_APP_ID`
-- `GITHUB_APP_SLUG`
-- `CONNECT_ISSUER`
-- `CONNECT_AUDIENCE`
-- `CONNECT_JWT_KID`
-- `GITHUB_OAUTH_CALLBACK_URL`
-- `DEPLOY_REPOSITORY_URL`
-
-Upload these with `wrangler secret put`:
+Set non-secret variables in Wrangler configuration and upload secrets interactively:
 
 - `ADMIN_BOOTSTRAP_SECRET`
 - `GITHUB_CLIENT_SECRET`
@@ -114,10 +84,7 @@ Upload these with `wrangler secret put`:
 - `GITHUB_WEBHOOK_SECRET`
 - `CONNECT_JWT_PRIVATE_KEY`
 - `CONNECT_JWT_PUBLIC_KEY`
-
-To accept optional per-instance Cloudflare Access service tokens, also upload `ACCESS_CREDENTIAL_ENCRYPTION_KEY`. It must be a base64url-encoded 32-byte value and must not reuse either private key. Self-hosted Connect deployments that do not offer that optional mode can omit it.
-
-For example:
+- optional `ACCESS_CREDENTIAL_ENCRYPTION_KEY`
 
 ```bash
 cd apps/connect
@@ -126,27 +93,22 @@ pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY
 pnpm exec wrangler secret put GITHUB_WEBHOOK_SECRET
 pnpm exec wrangler secret put CONNECT_JWT_PRIVATE_KEY
 pnpm exec wrangler secret put CONNECT_JWT_PUBLIC_KEY
-# Optional: pnpm exec wrangler secret put ACCESS_CREDENTIAL_ENCRYPTION_KEY
 pnpm exec wrangler secret put ADMIN_BOOTSTRAP_SECRET
 pnpm exec wrangler deploy
 ```
 
-## 4. Verify Connect
+Never pass secret values on command lines, put them in URLs/configuration, or send them to support.
 
-The public endpoints must work without a Cloudflare Access login:
+## Verify
 
 ```bash
 curl -f https://connect.example.com/health
 curl -f https://connect.example.com/.well-known/jwks.json
 ```
 
-`/health` should report `ok: true`, `database: true`, and `configured: true`. The JWKS response must contain the configured `CONNECT_JWT_KID`.
+Verify configured health and the expected key ID. Complete the browser landing flow to create an inert Gardener instance token.
 
-Open the Connect origin in a browser and complete the landing flow. It produces the one Gardener instance token needed by the customer deployment.
-
-## 5. Point Gardener at self-hosted Connect
-
-In the customer Gardener configuration, set both values to the same Connect origin:
+Point both Gardener Connect variables at the origin and install the generated instance token as a Gardener Worker secret:
 
 ```json
 {
@@ -157,18 +119,18 @@ In the customer Gardener configuration, set both values to the same Connect orig
 }
 ```
 
-Set the generated instance token as `GARDENER_INSTANCE_TOKEN`, deploy Gardener, and select **Configure Gardener**. Gardener discovers the signing key from Connect's JWKS endpoint unless `CONNECT_PUBLIC_KEY` is explicitly pinned.
+Gardener discovers JWKS unless an operator explicitly pins `CONNECT_PUBLIC_KEY`.
 
-## Operational hardening
+## Hardening and operations
 
-Before opening Connect broadly:
+- Rate-limit public bootstrap without blocking GitHub callbacks/webhooks.
+- Alert on signature, relay, permission, grant, stale-state, and receipt failures.
+- Keep Connect/Gardener releases independently deployable but contract-compatible.
+- Back up Connect D1 and apply numbered migrations deliberately.
+- Rotate App and signing keys through tested overlap/revocation procedures.
+- Test repository removal, installation suspension/uninstall, instance revoke, and global pause.
+- Confirm unsupported operation kinds fail permanently rather than reaching a generic API client.
+- Keep provider payload retention bounded and logs credential-free.
+- If Access is offered, use a dedicated independent encryption key and one service token per Gardener instance.
 
-- apply rate limiting or WAF controls to `/v1/bootstrap` without blocking GitHub callbacks or `/github/webhook`;
-- enable Worker logs and alert on webhook relay failures;
-- restrict GitHub App permissions to the documented minimum;
-- rotate GitHub and Connect signing keys deliberately;
-- back up D1 and apply numbered migrations before deploying upgrades;
-- keep Connect and Gardener on independently deployable release paths;
-- test revocation by removing a repository and uninstalling the GitHub App.
-
-The managed and self-hosted modes use the same contracts and security checks. Self-hosting changes who operates the credential boundary; it does not move credentials into Gardener.
+Self-hosting changes who operates Connect. It does not weaken exact-effect hashes, live revalidation, typed endpoints, or credential isolation.

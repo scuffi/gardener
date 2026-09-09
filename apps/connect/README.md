@@ -1,23 +1,65 @@
 # Gardener Connect
 
-Central Cloudflare Worker for Gardener's managed GitHub boundary. It keeps GitHub App credentials and installation tokens out of customer Workers and exposes only signed identities/events, scoped run grants, and typed maintainer operations.
+Gardener Connect is the independently deployed GitHub credential boundary. The Gardener team operates it by default; self-hosting is an advanced option. It verifies GitHub, signs strict events and identities, supplies bounded observations/snapshots, grants exact operations, and executes only verified typed GitHub calls. Installation tokens and App credentials never enter Gardener.
+
+## Current status
+
+`RepositoryEventV2` normalization and the full `OperationV2` contract are being integrated. Existing executors cover a subset of the catalog. Any catalog kind without a reviewed GitHub endpoint, permission, live precondition, and idempotency strategy must return a persisted permanent `unsupported_operation` receipt. Do not describe the complete catalog as live until Connect tests and App permission reauthorization pass.
 
 ## Setup
 
-1. Create one managed GitHub App. Use its client ID/secret for user authorization, add OAuth callback URLs for `/v1/landing/callback` and `/v1/auth/github/callback`, set the GitHub App setup URL to `/v1/installations/callback`, and webhook URL to `/github/webhook`.
-2. Give the GitHub App **metadata, administration, checks, and commit statuses: read** plus **contents, issues, and pull requests: write** permissions. Subscribe to issue and pull-request events; installation lifecycle events are implicit.
-3. Create D1, replace the ID in `wrangler.jsonc`, copy `.dev.vars.example` to `.dev.vars`, and provide separate RSA key pairs for Connect JWT signing and GitHub App authentication. If this Connect deployment will accept optional Cloudflare Access service credentials, also generate an independent 32-byte `ACCESS_CREDENTIAL_ENCRYPTION_KEY`.
-4. Run `pnpm db:migrate:local && pnpm dev` (or `pnpm db:migrate && pnpm deploy`).
+1. Create one reusable GitHub App for this Connect deployment. Configure OAuth callbacks `/v1/landing/callback` and `/v1/auth/github/callback`, setup callback `/v1/installations/callback`, and webhook `/github/webhook`.
+2. Configure only the permissions/events verified for the operation/event families you are enabling. The target catalog requires metadata plus appropriate contents, issues, pull requests, discussions, checks/statuses, releases, and protected-branch observation. Team eligibility additionally requires organization Members read. Permission expansion on an existing App requires installation-owner approval/reauthorization; do not assume it is seamless.
+3. Create D1, set its ID in `wrangler.jsonc`, and copy `.dev.vars.example` to untracked `.dev.vars`.
+4. Provide separate RSA key pairs for Connect JWT signing and GitHub App authentication. Optional Access credential storage also requires an independent 32-byte `ACCESS_CREDENTIAL_ENCRYPTION_KEY`.
+5. Apply migrations and deploy:
 
-## Contract
+```bash
+pnpm db:migrate
+pnpm deploy
+```
 
-- `GET /health`, `GET /.well-known/jwks.json`
-- `GET /v1/landing/start`, `GET /v1/landing/callback`, `POST /v1/bootstrap`: the managed landing page first binds the deploying GitHub user, then creates an inert instance and returns its one-time `gdn_<instance-id>.<random>` token plus the Deploy to Cloudflare URL. D1 receives only SHA-256. The admin-protected variant allows a chosen instance ID for operations/testing.
-- `POST /v1/instances/claim` (instance bearer): binds the exact HTTPS webhook callback and optionally registers or clears an encrypted Cloudflare Access service-token pair.
-- `POST /v1/auth/github/start`, `GET /v1/auth/github/callback`: OAuth and an eight-hour instance-audienced dashboard identity JWT, stored only in the customer's browser tab.
-- `POST /v1/installations/setup` (identity JWT), `GET /v1/installations/callback`, `GET /v1/repositories` (instance bearer): verified installation assignment and repository discovery.
-- `POST /github/webhook`: verifies HMAC over raw bytes, deduplicates delivery IDs, normalizes issue and pull-request events, signs them, and relays `{ "token": "..." }` to the claimed callback. If the instance registered Cloudflare Access service credentials, Connect adds the standard service-auth headers before relay; Gardener still verifies the signed event independently.
-- `POST /v1/grants` (instance bearer): creates a five-minute grant for one run, delivered event resource, repository, and canonical hashes of the exact approved operation payloads. Connect refuses grants that do not reference a matching event it signed and relayed to that instance.
-- `POST /v1/operations` (grant bearer): executes only strict `v1` issue, branch, commit, pull-request review, pull-request lifecycle, and protected-merge operations. Connect re-fetches state, mints a least-privilege one-repository installation token internally, refuses force pushes, and records stable operation receipts.
+## Public contract
 
-Only the GitHub user bound during bootstrap may receive dashboard identity tokens for that instance. Identity and event JWTs are audience-bound to the instance. Grants are audience-bound to Connect. Installation tokens are never returned from an endpoint or persisted. Optional Access credentials are AES-256-GCM encrypted, instance-bound, never returned, and only decrypted immediately before an outbound relay. See [`../../docs/cloudflare-access.md`](../../docs/cloudflare-access.md).
+- `GET /health` and `GET /.well-known/jwks.json`.
+- Landing/bootstrap endpoints authenticate the deploying GitHub user, create an inert instance, and return a one-time `gdn_<instance-id>.<random>` token. D1 stores only its SHA-256 hash.
+- Claim binds the exact public HTTPS `*.workers.dev` Gardener callback (loopback is accepted only for local development) and may register/clear an encrypted optional Cloudflare Access service-token pair. Managed Connect does not relay to arbitrary custom hosts.
+- Dashboard OAuth returns an instance-audienced identity token. Gardener converts it to its own secure owner session.
+- Installation endpoints associate the App installation and return selected repository metadata to the authenticated instance.
+- `POST /github/webhook` verifies HMAC over raw bytes, deduplicates delivery IDs, strictly normalizes supported events to `RepositoryEventV2`, signs them, and relays an Authorization-only bearer request to the claimed callback with redirects disabled. The Worker uses `global_fetch_strictly_public`; missing immutable IDs/facts and unknown actions fail closed.
+- Observation/snapshot interfaces must return Connect-attested bounded facts and exact-SHA repository input without exposing credentials. This part remains an integration blocker.
+- `POST /v1/grants` creates a short-lived grant for one instance/run/event/repository/resource and canonical hashes of exact typed operations.
+- `POST /v1/operations` accepts strict operation payloads only when their canonical hash is in the grant, re-fetches relevant state, mints the least-privilege one-repository installation token internally, executes or returns a typed conflict/permanent/transient result, and persists `OperationReceiptV2`.
+
+Only the GitHub owner bound during bootstrap may obtain a dashboard identity for the instance. Identity/event JWTs are Gardener-instance-audienced; grants are Connect-audienced. An instance token alone cannot call the operation executor.
+
+## Target event families
+
+`RepositoryEventV2` covers issues, pull requests, issue/PR comments, PR reviews/review comments, discussions/comments, check runs/suites, pushes, and releases. Gardener manual/scheduled events are created by Gardener rather than accepted from the GitHub webhook endpoint.
+
+Connect rejects payloads that cannot attest the required immutable resource state. For example, a GitHub comment payload that does not carry trustworthy PR head/base facts must be enriched through an authenticated read or rejected, never guessed.
+
+## Target typed operation catalog
+
+- Issue labels/comments/state/assignees.
+- PR comments, reviews, reviewer requests/removals, updates, draft opening, and protected merge.
+- `gardener/` branch creation and bounded commit creation.
+- Discussion comments/answers/state.
+- Check rerun.
+- Release draft create/update/publish/delete.
+
+See [`../../docs/agent-authoring.md`](../../docs/agent-authoring.md) for exact operation names. The contract is broader than the currently verified executor set.
+
+## Security requirements
+
+- No raw provider proxy or installation-token response.
+- Strict schemas and endpoint/body allowlists.
+- Event/repository/resource/hash/expiry binding.
+- Live state and permission revalidation immediately before mutation.
+- Stable operation IDs, canonical hashes, durable receipts, and bounded retries.
+- No force push, credentialed snapshot, or branch/ruleset bypass.
+- Global, instance, installation, and repository revocation.
+- Sanitized logs and bounded provider-payload retention.
+- Dedicated Access Service Auth credentials are AES-256-GCM encrypted, instance-bound, never returned, and decrypted only for outbound relay.
+
+Optional Cloudflare Access details are in [`../../docs/cloudflare-access.md`](../../docs/cloudflare-access.md). Self-hosting guidance is in [`../../docs/self-hosted-connect.md`](../../docs/self-hosted-connect.md).

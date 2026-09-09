@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, importSPKI, jwtVerify, type JWTPayload } from "jose";
-import { connectEventSchema, type ConnectEvent } from "./domain";
+import { repositoryEventV2Schema, type RepositoryEventV2 } from "./domain";
 import { instanceId, type Env } from "./env";
 
 const keyCache = new Map<string, Promise<CryptoKey>>();
@@ -45,10 +45,10 @@ export async function verifyIdentityToken(token: string, env: Env): Promise<JWTP
   return payload;
 }
 
-export async function verifyEventToken(token: string, env: Env): Promise<ConnectEvent> {
+export async function verifyEventToken(token: string, env: Env): Promise<RepositoryEventV2> {
   const payload = await verify(token, env);
   if (payload.typ !== "gardener-event") throw new Error("Invalid event token");
-  const event = connectEventSchema.parse(payload.event);
+  const event = repositoryEventV2Schema.parse(payload.event);
   if (event.instanceId !== instanceId(env)) throw new Error("Event instance mismatch");
   return event;
 }

@@ -41,24 +41,26 @@ describe("Connect authentication", () => {
       .setProtectedHeader({ alg: "RS256" })
       .setIssuer(env.CONNECT_ISSUER)
       .setAudience(instanceId(env))
-      .setSubject("github:42")
+      .setSubject("42")
       .setExpirationTime("5m")
       .sign(privateKey);
-    await expect(verifyIdentityToken(token, env)).resolves.toMatchObject({ sub: "github:42" });
+    await expect(verifyIdentityToken(token, env)).resolves.toMatchObject({ sub: "42" });
   });
 
   it("rejects events for another instance", async () => {
     const { privateKey, env } = await fixture();
     const event = {
-      schemaVersion: "v1",
+      schemaVersion: "v2",
       id: "event-1",
       deliveryId: "delivery-1",
       instanceId: "instance-2",
       kind: "github.issue",
       action: "opened",
       occurredAt: "2026-09-02T12:00:00.000Z",
-      repository: { id: "repo-1", installationId: "1", owner: "acme", name: "widgets" },
-      issue: { id: "issue-1", number: 1, title: "Bug", body: null, state: "open", labels: [], author: "a", htmlUrl: "https://github.com/acme/widgets/issues/1" },
+      repository: { provider: "github", id: "1318443351", installationId: "158557952", owner: "acme", name: "widgets", defaultBranch: "main" },
+      actor: { id: "42", login: "octocat", accountType: "User" },
+      resourceAuthor: { id: "42", login: "octocat", accountType: "User" },
+      issue: { id: "100", number: 1, title: "Bug", body: null, state: "open", labels: [], locked: false, updatedAt: "2026-09-02T12:00:00.000Z", htmlUrl: "https://github.com/acme/widgets/issues/1" },
     };
     const token = await new SignJWT({ typ: "gardener-event", event })
       .setProtectedHeader({ alg: "RS256" })

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@gardener/contracts": "workspace:*",
+    "yaml": "2.9.0",
     "zod": "4.5.4"
   },
   "devDependencies": {

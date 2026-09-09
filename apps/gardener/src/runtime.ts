@@ -1,60 +1,37 @@
-import type { AgentResult, NormalizedIssueEvent } from "@gardener/contracts";
-import {
-  DeterministicMockAgentRuntime,
-  WorkersAiIssueGardenerRuntime,
-  parseIssueClassification,
-  type IssueClassification,
-  type WorkersAiBinding,
-} from "@gardener/core";
+import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { getRun, updateRunState } from "./persistence";
+import type { Env } from "./env";
 
-export const parseAiClassification = parseIssueClassification;
-export type Classification = IssueClassification;
-
-export async function runIssueGardener(input: {
-  ai: WorkersAiBinding;
-  model: string;
+export interface AgentRunWorkflowPayload {
   runId: string;
-  event: NormalizedIssueEvent;
-  instructions: string;
-  maxOperations?: number;
-  maxInputTokens?: number;
-  maxOutputTokens?: number;
-  runtimeSeconds?: number;
-}): Promise<AgentResult> {
-  const execute = async (): Promise<AgentResult> => {
-    // Reserved for the local browser smoke harness; deployment configs always select a hosted Workers AI model.
-    const runtime = input.model === "gardener/deterministic-smoke"
-      ? new DeterministicMockAgentRuntime()
-      : new WorkersAiIssueGardenerRuntime(input.ai);
-    const handle = await runtime.start({
-      schemaVersion: "v1",
-      runId: input.runId,
-      model: input.model,
-      instructions: input.instructions,
-      event: input.event,
-      maxOperations: input.maxOperations ?? 4,
-      maxInputTokens: input.maxInputTokens ?? 32_000,
-      maxOutputTokens: input.maxOutputTokens ?? 800,
-    });
-    const status = await runtime.status(handle);
-    if (status.state !== "succeeded") {
-      throw new Error(status.error ?? `Agent execution ended in ${status.state}`);
-    }
-    const result = await runtime.result(handle);
-    if (!result) throw new Error("Agent execution returned no result");
-    return result;
-  };
+  runSnapshotHash: string;
+}
 
-  if (!input.runtimeSeconds) return execute();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      execute(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Agent execution exceeded the workflow runtime limit")), input.runtimeSeconds! * 1_000);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
+/**
+ * Fail-closed durable entrypoint for the Agent-native runtime.
+ *
+ * Authoring, publication, activation, and event admission are wired, but the
+ * trusted tool facade, Connect V2 live-state observation, and exact-effect
+ * executor are not yet integrated. Until all three exist this workflow records
+ * a terminal failure and never calls a model, workspace tool, or GitHub effect.
+ */
+export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPayload> {
+  async run(event: Readonly<WorkflowEvent<AgentRunWorkflowPayload>>, step: WorkflowStep): Promise<void> {
+    await step.do("fail-closed-runtime-boundary-v1", async () => {
+      const run = await getRun(this.env.DB, event.payload.runId);
+      if (!run || run.runSnapshotHash !== event.payload.runSnapshotHash) {
+        throw new Error("Agent run identity or immutable snapshot binding is invalid");
+      }
+      await updateRunState(this.env.DB, {
+        runId: run.id,
+        expectedStatus: run.status,
+        status: "failed",
+        usage: run.usage,
+        error: {
+          code: "agent_runtime_not_integrated",
+          message: "Agent execution is disabled until trusted tools, Connect V2 observations, and exact-effect execution are integrated",
+        },
+      });
+    });
   }
 }

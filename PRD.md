@@ -1,253 +1,228 @@
-# Gardener — Public Demo PRD
+# Gardener — Agent-native product requirements
 
-## Goal
+## Product goal
 
-Build **Gardener**, a free repository-maintenance manager that users deploy into their own Cloudflare account.
+Gardener is a repository-stewardship product that customers deploy into their own Cloudflare account. A customer authors portable Gardener Agents in `AGENT.md`, reviews their structural capabilities, tests them without persistent effects, publishes immutable paused revisions, and explicitly activates and enables them. Gardener plans flexibly but can act only through policy-controlled, exact, typed GitHub operations executed by a credential-isolated Connect service.
 
-A user should be able to:
+This is a hard Agent-native cutover. The old form-defined automation product and its previous execution transport are not compatibility requirements.
 
-1. Click **Deploy to Cloudflare**.
-2. Provide one generated Gardener instance token.
-3. Sign in with GitHub and install the managed Gardener GitHub App on any repositories they choose.
-4. Select gardening workflows and decide which operations are disabled, require approval, or run automatically.
-5. Observe every run, proposal, approval, operation, failure, and model cost from a dashboard.
+## Current delivery status
 
-This is a public demo intended to be reasonably hardened for real public use. It is not an SLA-backed production SaaS. Target implementation time is 2–3 weeks.
+The Agent contracts/compiler, data model, Computer workspace, model harness, OAuth MCP, management API, Agent-native dashboard, converged deployment configuration, and fail-closed generic runtime entrypoint are foundations under integration. The trusted tool/effect loop, complete Connect V2 execution, and real staging validation remain incomplete. The application must report this honestly and perform no Agent action until those boundaries are complete. See [`docs/foundation-status.md`](docs/foundation-status.md).
 
-Build this as a greenfield project. Existing projects are references only; do not preserve their structure or compatibility when a simpler design is better.
+## Users and outcomes
 
-## Product model
+An instance owner should be able to:
 
-Gardener uses two planes:
+1. Start at managed Connect, authenticate with GitHub, choose App repositories, and deploy only Gardener with one copied instance secret.
+2. Land in Inbox and see decisions, failures, drafts, regressions, and cleanup problems.
+3. Describe an Agent, review/edit its exact `AGENT.md`, and inspect every requested capability.
+4. Validate and simulate it without persistent effects.
+5. Publish an immutable paused revision, activate it explicitly, and enable it separately.
+6. Run multiple Agents and multiple tasks concurrently with isolated workspaces.
+7. Answer typed, durable interruptions after disconnect/reconnect.
+8. Understand what was observed, planned, approved, executed, retried, or rejected and why.
+9. Pause all activity or one repository immediately.
+10. Author the same portable package through dashboard, Git, CLI, or OAuth MCP without creating separate semantics.
 
-### Customer-deployed Gardener
+## Deployment planes
 
-Runs in the user's Cloudflare account and owns:
+### Customer Gardener
 
-- Dashboard and management API
-- Workflow definitions and immutable compiled versions
-- Repository selections and local policy
-- Agent execution and Workers AI usage
-- `@cloudflare/computer` workspaces for code tasks
-- Queue orchestration, scheduling, retries, and concurrency
-- Human approvals
-- Run history, operation receipts, costs, and audit records
+Gardener owns:
 
-The user's workflow data and model execution remain in their Cloudflare account.
+- dashboard, Inbox, owner session, and management API;
+- Agent packages, drafts, immutable revisions, activation, and enablement;
+- repository selection, capability policy, operation policy, and pauses;
+- D1 event/run/task/step/interruption/grant/effect/receipt/audit records;
+- one generic `AgentRunWorkflow`;
+- AI binding and selected harness adapter;
+- isolated Cloudflare Computer workspaces;
+- R2 snapshots and artifacts.
 
-### Managed Gardener Connect
+### Managed Connect
 
-A small Cloudflare-operated service owns:
+Connect owns:
 
-- GitHub login for the Gardener dashboard
-- The shared managed GitHub App
-- GitHub installation and repository discovery
-- GitHub webhook verification and delivery to the correct Gardener instance
-- Short-lived run grants scoped to an instance, repository, resource, and operation set
-- Typed GitHub reads and writes
-- Credential isolation, token minting, revocation, and provider-side safety checks
+- the shared GitHub App and all GitHub secrets/tokens;
+- dashboard GitHub login and repository installation/discovery;
+- raw webhook verification, normalization, and `RepositoryEventV2` signatures;
+- Connect-attested observation and exact-SHA snapshot delivery;
+- short-lived exact-operation grants;
+- typed GitHub endpoint execution, live-state revalidation, idempotency, and receipts;
+- instance/repository/installation/global revocation.
 
-Connect must never return a GitHub installation token or App credential to the customer Worker, browser, model, or workspace.
+Connect is managed by default. Advanced customers may self-host the same independently deployed boundary.
 
-Publish a versioned connector contract and a small example/skeleton so advanced users can later build a customer-owned connector. A complete guided bring-your-own GitHub App flow is not required for this demo.
+## Agent package and authoring
 
-## Deployment and onboarding
-
-The public repository must support a root-level Deploy to Cloudflare flow. The button deploys only the customer Gardener runtime; the managed Connect service is already operated separately.
-
-Provision the required Cloudflare resources automatically where supported:
-
-- Worker and static UI
-- D1
-- Queue and dead-letter queue
-- Durable Objects
-- Workers AI
-- Resources needed by the chosen `@cloudflare/computer` integration
-- Optional bounded artifact storage if necessary
-
-The only required deploy-time secret should be a high-entropy Gardener instance token generated by the Gardener landing/Connect flow. Store it only as a Worker secret; Connect stores a hash. It identifies one deployment and may request metadata or scoped run grants, but must not directly authorize arbitrary GitHub writes.
-
-Dashboard authentication uses GitHub through Connect. Connect returns short-lived, instance-audienced identity tokens that the customer Worker verifies. Do not require users to configure Cloudflare Access.
-
-The setup flow should discover every repository selected during GitHub App installation. Multiple repositories must work from the beginning.
-
-## Workflows and agent execution
-
-Workflow definitions are validated and compiled into immutable plans. Runs execute compiled plans, never mutable source. New workflows and starter packs begin paused.
-
-The dashboard is the primary no-code workflow product. It must showcase configured repository agents and provide an ordered **Trigger / Context / Agent / Guardrails** builder so users can create and change workflows without editing JSON, YAML, or code. Guided behavior is the default, with an advanced bounded system-instructions editor for users who want to customize their agent. The dashboard and future local coding-agent tools operate on the same versioned representation and management API.
-
-Keep the initial workflow language small and understandable. It needs:
-
-- Event, manual, and scheduled triggers
-- Explicit repository selection using immutable repository IDs
-- Typed, bounded conditions with three-valued fail-closed evaluation
-- Distinct event-actor and resource-author identities
-- Extensible capability metadata for future user, team, repository-role, branch, label, check, and time-window controls
-- Guided or custom system instructions with a versioned allowlist of trusted run-metadata placeholders
-- Structured lower-trust repository content supplied separately from system instructions
-- Model/runtime selection
-- Read tools
-- Workspace requirements
-- Allowed operations and a restrictive authority ceiling
-- Runtime, token, cost, retry, and operation limits
-
-Workflow conditions only narrow eligibility. They cannot grant operation authority or change instance policy. Security-sensitive identity, team, role, and mutable repository facts are resolved or attested by Connect and rechecked before execution; repository content and model output are never authorization evidence. Unknown or unavailable capabilities fail closed.
-
-The agent harness must be replaceable. Define a small `AgentRuntime` contract for start, status, result, and cancellation. Workflow policy and authorization must not import harness-specific concepts.
-
-Start with a short implementation spike comparing direct Cloudflare Agents/Think and Flue against the same conformance scenario. Choose the simplest reliable initial adapter, but preserve the boundary so it can be replaced later.
-
-Agent results contain evidence, usage, artifacts, and typed operation proposals. Agent output is never authorization.
-
-## Computer and code changes
-
-Use `@cloudflare/computer` for durable workspaces and isolated code execution. It already supports trusted Git capabilities outside the executed model code; extend or integrate that model rather than placing Git credentials inside the sandbox.
-
-The agent may check out an immutable revision, inspect/edit files, and run bounded tests. Trusted host code extracts the resulting change set and performs branch, commit, push, and pull-request operations through typed policy-controlled capabilities.
+`AGENT.md` is the canonical portable source. Strict YAML frontmatter declares exact triggers, immutable repository selectors, explicit observation/workspace/effect capabilities, eligibility, authority ceiling, limits, skills, and evals. Markdown describes behavior only.
 
 Requirements:
 
-- No Git credential in model-visible environment variables, files, prompts, output, or logs
-- Workspace isolated by run and repository
-- Egress denied by default and explicitly allowlisted
-- Bounded CPU, wall time, output, disk, file count, diff size, and dependency installation
-- Deterministic cleanup and short artifact retention
-- Global code-execution kill switch
+- preserve exact source bytes, parsed semantics, compiled revision, provenance, hashes, and compiler/runtime/catalog versions;
+- reject unknown fields/capabilities/actions, duplicate keys/paths, aliases, traversal, malformed UTF-8, oversized content, and missing package references;
+- omitted capabilities mean none;
+- compile `this` to an immutable repository ID;
+- never interpolate repository/model/channel content as authority;
+- use the same parser, compiler, semantic diff, simulation, and persistence API for every authoring channel;
+- prompt generation may propose a package but cannot approve capabilities;
+- Git provenance binds repository ID, commit SHA, and package path.
 
-`@cloudflare/computer` is currently preview software. Pin a tested version, label code execution experimental, and fail closed when the integration is unavailable.
+MCP is OAuth-protected and stateless. Its scopes permit read, validate, explain/diff, non-mutating simulation, paused-draft writes, and redacted traces only. It cannot publish revisions, activate, enable, change policy/repositories, approve, answer authority-bearing waits, or execute effects.
 
-## Operations and human-in-the-loop policy
+## Lifecycle and administration
 
-Support the full maintainer surface:
+- New Agents are disabled.
+- Drafts are mutable and paused.
+- Publication creates an immutable paused revision.
+- Activation is an explicit owner action that changes the active revision.
+- Enablement is a separate owner action.
+- Activation/enablement cannot raise operation policy.
+- Revisions show semantic differences in triggers, repositories, capabilities, behavior, limits, eligibility, skills, and evals.
+- Global and repository pauses remain independent of Agent state.
 
-- Add and remove labels
-- Create or update bounded comments
-- Close and reopen issues
-- Submit PR reviews, including comments, approval, or change requests
-- Create branches and bounded commits
-- Open or update pull requests
-- Merge pull requests using allowed merge methods
+## Events and eligibility
 
-Every operation type has one independently configurable mode:
+`RepositoryEventV2` supports GitHub issues, pull requests, comments, reviews, discussions, checks, pushes, releases, and trusted Gardener manual/scheduled requests. It preserves immutable repository/resource/actor IDs and separates the event actor from resource author.
 
-- **Disabled**
-- **Require approval**
-- **Automatic**
+Trusted eligibility runs outside the model against typed, bounded, versioned facts. Missing or unavailable authorization-sensitive facts fail closed. Team/role predicates require Connect-resolved facts and the necessary GitHub App permission; text and login strings are not identity proof.
 
-Provide Safe, Balanced, Autonomous, and Custom UI presets. Presets only set per-operation policy; they do not bypass safety invariants. Store the exact immutable policy snapshot with each run. Approving an old proposal must re-fetch and validate current repository state.
+Multiple matching Agents may be admitted for one event. One Agent may have simultaneous runs. There is no global Agent lock.
 
-Automatic merge must always require the expected current head SHA, non-draft state, configured successful checks, allowed merge method, and GitHub branch protection. Gardener must never bypass repository protections.
+## Capabilities and policy
 
-## GitHub App and security
+Authority is the intersection of:
 
-Use one managed GitHub App capable of the complete operation surface. Users choose which repositories it can access. GitHub generally does not allow installers to remove individual permissions requested by a shared App, so dashboard toggles control Gardener behavior rather than the App installation's maximum permission grant.
+- event/repository eligibility;
+- compiled revision capability ceiling;
+- instance policy;
+- authoring authorization;
+- any typed one-run grant;
+- authenticated interruption decision;
+- exact-effect approval;
+- Connect live-state execution checks.
 
-Compensating controls in Connect are required:
+Safe observations and bounded workspace needs may be requested for one run. Repository expansion, new persistent effect kinds, broader actors, or higher authority require a new revision. Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
 
-- Keep the App private key in managed secret storage with rotation and access audit
-- Never expose raw installation tokens
-- Mint short-lived tokens for one exact repository and only the permissions needed by the current operation
-- Verify webhook signatures before parsing or routing
-- Use signed event envelopes and replay-resistant delivery IDs
-- Require short-lived run grants for provider access
-- Enforce typed endpoint/body allowlists
-- Re-fetch GitHub state immediately before mutations
-- Enforce idempotency, bounded retries, rate limits, and per-resource serialization
-- Support installation, repository, instance, and global revocation
-- Retain provider payloads only for a documented short operational window
+Every effect kind has an independent `disabled`, `approval`, or `automatic` mode. Initially disable unrestricted networking, dependency installation, direct pushes, automatic code changes, and auto-merge. High-impact operations remain especially restrictive.
 
-Non-toggleable Gardener invariants include exact installation/repository/resource matching, current-state validation, stable operation IDs, no force push, bounded comments/diffs/files, denied sensitive paths by default, sanitized logs, and secret scanning.
+## Planning and acting
 
-Missing GitHub permissions should fail closed with an actionable health message.
+Planning may use the model and isolated workspace but cannot mutate GitHub. Harness tools can represent only observations and workspace actions. The planner emits typed requests, evidence, artifacts, task results, interruptions, or exact effect proposals.
 
-## Initial gardening packs
+Acting is model-free:
 
-Ship four concise starter packs:
+1. validate the strict operation;
+2. persist its stable ID and canonical hash;
+3. evaluate the immutable policy snapshot;
+4. obtain exact approval where required;
+5. ask Connect for a hash-bound grant;
+6. re-fetch live provider state;
+7. execute exactly once or classify retry/conflict/permanent failure;
+8. persist a strict receipt.
 
-1. **Issue Gardener** — classify issues, find likely duplicates, apply labels, propose helpful replies, and optionally close confirmed duplicates.
-2. **PR Gardener** — summarize changes, identify risk, apply labels, inspect checks, and propose or submit reviews.
-3. **Maintenance Fixer** — reproduce a bounded issue in Computer, edit code, run configured tests, and propose or open a PR.
-4. **Repository Steward** — scheduled stale-item and repository-health maintenance.
+A general plan approval is never blanket write authority. Every retry uses the same canonical payload and operation identity.
 
-Starter packs are examples, not hidden product logic. Users can inspect, copy, and edit them.
+## Typed stewardship catalog
 
-## Dashboard outcomes
+The product catalog covers:
 
-The UI should make these questions obvious:
+- issue labels, comments, state, and assignees;
+- PR comments, reviews, reviewer requests/removal, lifecycle updates, draft opening, and protected merge;
+- branch and bounded commit creation;
+- discussion comments, answers, and state;
+- check reruns;
+- release draft creation/update/publication/deletion.
 
-- What triggered this run?
-- What evidence and tools did the agent use?
-- What did it propose or change?
-- Which policy authorized it?
-- Was a human involved?
-- What did the model and workspace cost?
-- Is anything waiting for approval or failing?
-- How do I pause all activity immediately?
+Contracts use immutable IDs and expected state/SHA/timestamp preconditions. Commits are file/size/path bounded, never force push, and use a Gardener namespace. PR creation is draft-only. Protected merge requires exact head/base, non-draft/open state, required check identity and conclusion, allowed method, protection-state binding, and GitHub protection enforcement. Gardener must never be a bypass actor.
 
-Minimum areas: Overview, Repositories, Workflows, Runs, Approvals, Policies, and Settings/Health. Workflows include a template showcase, no-code builder, immutable revision history, capability warnings, effective-policy summary, validation, dry-run, and explicit human activation.
+Catalog inclusion does not permit guessing GitHub APIs or permissions. Unsupported executors fail permanently and visibly until verified.
 
-## Delivery order
+## Durable orchestration and parallelism
 
-1. Freeze connector, event, grant, operation, agent-runtime, and workspace contracts.
-2. Prove one end-to-end issue webhook through Connect to a deployed Gardener instance.
-3. Complete deployment, claim, GitHub login, installation, and multi-repository discovery.
-4. Implement immutable workflows, Queue/DLQ execution, audit, budgets, and Issue Gardener.
-5. Add tri-state approvals and automatic label/comment execution.
-6. Add PR review operations.
-7. Add Computer workspace execution and branch/commit/PR creation.
-8. Add protected merge.
-9. Add remaining starter packs, schedules, diagnostics, connector skeleton, and conformance suites.
-10. Threat-model, adversarially test, deploy from scratch in unrelated accounts, document, and record the demo.
+One generic `AgentRunWorkflow` serves all user Agents. Agent editing is data-only and requires no deploy.
 
-If time is lost, remove polish or starter-pack breadth before weakening credential isolation, current-state checks, approval integrity, repository isolation, or kill switches.
+Workflows owns durable continuation, deterministic retries, sleeps, waits, cancellation, and replay. D1 remains the authoritative product/audit record. R2 stores large inputs and outputs; Workflow state carries compact references.
 
-## Demo acceptance criteria
+Parallelism is default at four levels:
 
-- A new user deploys without a local CLI and supplies only one copied secret.
-- GitHub login and App installation populate multiple selected repositories.
-- Workflows start paused and clearly show requested capabilities.
-- The user can configure Disabled/Approval/Automatic independently per operation.
-- An event produces a durable, traceable agent run and typed proposal.
-- Approval and automatic execution both revalidate current state.
-- Computer can create and test a bounded change without exposing Git credentials to model code.
-- Gardener can open a PR and can merge only when explicitly enabled and all protections pass.
-- Global pause and connector revocation stop new writes.
-- No provider credential or raw instance token is stored in D1 or exposed to the model.
-- Costs, limits, failures, preview status, and data flow are visible.
+- matching Agents per event;
+- simultaneous runs of one Agent;
+- delegated tasks/subagents within a run;
+- independent read-only or disjoint tool calls.
 
-## Non-goals for this demo
+Each child gets task-specific context, capabilities, budget, and an isolated workspace. Child Agents have no independent persistent-effect authority. Parent/child joins are persisted in D1. Authoritative orchestration permits deterministic `Promise.all` groups but prohibits `Promise.race`/`Promise.any` selection.
 
-- GitLab implementation
-- Hosted multi-tenant workflow/run storage
-- Complete guided customer-owned GitHub App onboarding
-- Arbitrary privileged plugins
-- Unrestricted shell/network access
-- Branch-protection bypass
-- Production SLA for preview Computer APIs
+## Computer execution
 
-## References
+Use `@cloudflare/computer` with the hierarchy: Connect-attested observations, durable filesystem, local-only typed Git, Worker shell, Worker JavaScript, and lazy Container.
 
-Use these for ideas and validated patterns, not as compatibility requirements:
+Requirements:
 
-- Detailed predecessor plan:
-  `/Users/aferguson/Documents/dev/team-apps/.pi/plans/2026-09-02-gardener-public-demo/plan.md`
-- Existing workflow manager, compiler, execution, UI, and security patterns:
-  `/Users/aferguson/Documents/dev/team-apps/apps/repo-manager/`
-- Existing private GitHub App broker and typed-operation patterns:
-  `/Users/aferguson/Documents/dev/team-apps/apps/gh-app/`
-- Existing security summary:
-  `/Users/aferguson/Documents/dev/team-apps/apps/repo-manager/docs/security.md`
-- Cloudflare Agents and Think source:
-  `/Users/aferguson/Documents/dev/agents/`
-  and `https://github.com/cloudflare/agents`
-- Flue source and Cloudflare adapter:
-  `/Users/aferguson/Documents/dev/flue/`
-  and `https://github.com/withastro/flue`
-- Cloudflare Computer:
-  `https://github.com/cloudflare/computer`
-  Start with its root README, `packages/computer/README.md`, and the Think/examples directories. Note its preview-only status.
-- Deploy to Cloudflare documentation:
-  `https://developers.cloudflare.com/workers/platform/deploy-buttons/`
+- workspace IDs derive from immutable instance/run/task/principal identity;
+- exact-SHA, credential-free inputs and no credentialed remote;
+- local Git rejects clone/fetch/pull/push/`ls-remote` and network configuration;
+- shell is `just-bash`; package managers/native tools need Container;
+- Container defaults to Ask per run;
+- Container, network, and dependency installation are separate grants;
+- egress is denied by default and DNS/IP resolution is checked by trusted code when networking is later supported;
+- bounded time/output/source/disk/files/diff/artifacts;
+- unresolved synchronization blocks artifact freezing;
+- ambiguous executions are not automatically replayed;
+- cleanup uses leases, retries, reconciliation, and visible Inbox failure.
 
-Before implementation, read the relevant current upstream documentation rather than relying on assumptions copied from the predecessor projects.
+Computer is preview-only and code execution remains experimental until real platform tests pass.
+
+## Harnesses and models
+
+A Gardener-owned contract supports Flue (default), Think, and a minimal direct Cloudflare Agents SDK + AI binding adapter. Selection is an instance setting, not portable Agent authority. Each run pins adapter ID/version. There is one static generic class/function per adapter, never generated code per Agent.
+
+The standard deployment uses the Cloudflare AI binding and current AI Gateway routing support; no model-provider secret is required. Framework internals may use AI SDK, but Gardener exposes no generic AI SDK harness.
+
+Adapters must pass the same conformance suite for identity binding, structured output, budgets, tool narrowing, cancellation, errors, and no persistent authority expansion. Preview/experimental failures are typed and fail closed.
+
+## Inbox and observability
+
+Inbox is the canonical owner decision surface. It includes typed interruptions, exact-effect approvals, blocked/failed runs, drafts awaiting activation, eval regressions, and workspace cleanup failures.
+
+Run pages show nested parallel tasks/steps, model/workspace usage, redacted evidence/artifacts, waits, effects, receipts, retries, and cancellation. Traces explain; audit records and receipts prove. Redacted real runs may become versioned eval fixtures, but model/eval scores may block or request review and never authorize an effect.
+
+Notification channels are adapters only. Freeform Slack, email, issue comments, GitHub comments, or model-readable text cannot confer authority.
+
+## Authentication and optional Access
+
+Dashboard sign-in, GitHub App installation, instance authentication, OAuth MCP credentials, and runtime grants are distinct.
+
+Cloudflare Access is optional defense in depth. When used, one full-host Access application has a human Allow policy and a Connect-specific Service Auth policy. There is no `/hooks/connect` bypass. Access admission never replaces the Gardener owner session or signed Connect event verification.
+
+## Destructive cutover
+
+The production cutover deletes old automation definitions/revisions/events/runs/proposals/results/audit data without export. It retains repositories, instance settings/owner authentication state where applicable, and operation-policy modes. No compatibility runtime or legacy fallback survives. New Agents are created as disabled/paused objects after cutover.
+
+The reset occurs only after exhaustive validation and owner acknowledgement.
+
+## Acceptance criteria
+
+- One-secret managed deployment and multi-repository owner onboarding work from a public source.
+- No GitHub/provider credential reaches Gardener, source control, browser APIs, prompts, MCP clients, tools, logs, URLs, or Computer.
+- All authoring channels compile identical bytes/semantics into immutable paused revisions.
+- Activation and enablement require separate owner actions.
+- Events can admit multiple parallel Agents without shared writable workspaces.
+- Interruptions survive disconnects and reject expiry, wrong responder, wrong nonce, changed payload, and replay.
+- Every effect is exact-hash-bound, persisted, policy-checked, live-revalidated, and receipted.
+- Pause, revocation, stale-state conflict, cancellation, retry, and cleanup work under real Cloudflare staging.
+- Inbox and run details pass keyboard, Axe, light/dark, desktop/mobile, and 400% zoom/reflow review.
+- Fresh install and destructive upgrade are tested; no old automation code/data remains.
+- Full tests, typechecks, builds, dry runs, security review, GitHub permission review, and production verification pass before traffic moves.
+
+## Non-goals
+
+- Credentials or arbitrary privileged plugins in Agent packages.
+- Unrestricted shell/network/dependency installation.
+- Direct credentialed Git pushes from workspaces.
+- Branch-protection or ruleset bypass.
+- Model-scored authorization.
+- Per-Agent Worker classes or deployments.
+- GitLab in the initial cutover.
+- An SLA claim for preview Computer/Think or experimental Flue dependencies.

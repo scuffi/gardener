@@ -30,7 +30,7 @@ export function landingPage(): string {
       <section class="intro" aria-labelledby="intro-title">
         <p class="eyebrow">Customer-owned repository automation</p>
         <h1 id="intro-title">Repository automation, deployed to your Cloudflare account.</h1>
-        <p class="lead">Classify issues and propose policy-controlled GitHub actions from a Worker you own. Runtime data, workflow state, and Workers AI execution stay in your account.</p>
+        <p class="lead">Classify issues and propose policy-controlled GitHub actions from a Worker you own. Runtime data, durable run state, and Workers AI execution stay in your account.</p>
         <div class="platform" aria-label="Cloudflare services used"><span>Workers</span><span>D1</span><span>Cloudflare Queues</span><span>Workers AI</span></div>
         <div class="architecture-note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg><span>GitHub credentials remain isolated in Gardener Connect and are never exposed to your Worker or an AI model.</span></div>
       </section>

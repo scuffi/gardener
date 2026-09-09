@@ -1,29 +1,39 @@
 # Dependency and platform version policy
 
-Gardener validates versions instead of copying them from predecessor projects.
+Gardener pins runtime and build dependencies exactly. Preview frameworks are isolated behind Gardener-owned contracts rather than becoming product authority boundaries.
 
-- Runtime dependencies are pinned to exact versions for reproducible customer deployments.
-- `pnpm versions:check` compares every dependency in every workspace manifest with the npm `latest` dist-tag and fails on drift or inconsistent workspace versions.
-- The root `check` command runs this validation before typechecking, tests, and builds.
-- Dependabot checks the complete pnpm workspace weekly and groups Cloudflare runtime updates.
-- Before adopting a preview Cloudflare product, verify both the current upstream documentation and npm release, pin the tested version, document its preview status, and add a smoke test against the deployed binding.
+- `pnpm versions:check` compares workspace manifests with the npm `latest` dist-tag and rejects inconsistent workspace versions.
+- The root `check` command runs version checks, typechecks, tests, builds, and a deployment dry run.
+- Dependabot scans the pnpm workspace weekly.
+- A version bump is not accepted solely because it is latest. It must pass the contract/compiler suites, adapter conformance, Worker dry run, and the relevant deployed Cloudflare smoke tests.
+- Never automatically upgrade an in-flight run. `AgentRunSnapshotV1` pins compiler, runtime, capability catalog, model harness ID, and adapter version.
 
-CI follows the current Node.js 24 LTS line (24.20.0 when validated); local development supports Node 22 or newer.
+Current exact versions relevant to the Agent-native foundation include:
 
-Validated while creating the first iteration:
-
-| Package/product | Current npm release | Decision |
+| Package/product | Pinned version | Status and boundary |
 | --- | ---: | --- |
-| Wrangler | 4.128.0 | Pinned and used |
-| Workers types | 5.20260902.1 | Pinned and used |
-| Hono | 4.13.5 | Pinned and used |
-| jose | 6.2.10 | Pinned and used |
-| Zod | 4.5.4 | Pinned and used |
-| TypeScript | 7.0.2 | Pinned and used |
-| Vitest | 4.1.11 | Pinned and used |
-| Workers AI Llama 3.3 70B FP8 Fast | hosted model | Current model page verified; 24k context, JSON Schema output, $0.29/M input and $2.25/M output |
-| Cloudflare Agents SDK (`agents`) | 0.22.0 | Evaluated; its Durable Object lifecycle is not needed for the first Queue-backed issue slice |
-| `@cloudflare/computer` | 0.2.1 | Preview, explicitly not production-suitable upstream, and requires a SQLite Durable Object plus execution backend; deferred with code-change features |
-| `@cloudflare/sandbox` | stable/latest 0.12.9; next 0.13.0-next.751.1 | The documented 1.0 line is still preview and adds Containers/Paid-plan requirements; both lines are deferred |
+| Cloudflare Computer | `@cloudflare/computer@0.2.1` | Preview-only. Behind `ExecutionWorkspace`; requires SQLite Durable Objects, Worker Loader experimental support, R2, and optional Container staging. |
+| Cloudflare Think | `@cloudflare/think@0.17.0` | Preview-only. Behind the Gardener harness contract. |
+| Flue runtime/Vite/CLI | `2.0.3` | Experimental. Default harness selection, but replaceable and conformance-tested. |
+| Cloudflare Agents SDK | `agents@0.22.0` | Used for the direct generic harness and stateless MCP helpers. |
+| Workers OAuth provider | `@cloudflare/workers-oauth-provider@0.10.3` | OAuth boundary; requires audience/client/owner/scope and consent validation. |
+| MCP server | `@modelcontextprotocol/server@2.0.0` | Stateless authoring protocol only. |
+| AI SDK | `ai@7.0.94` | Framework implementation dependency, not a public Gardener harness. |
+| Workers AI provider | `workers-ai-provider@4.0.0` | Framework adapter dependency; no provider secret is required for the standard AI binding path. |
+| Wrangler | `4.129.0` | Build/deploy tool. |
+| Workers types | `5.20260904.1` | Worker platform types. |
+| TypeScript | `7.0.2` | Compiler. |
+| Vitest | `5.0.0` | Test runner. |
 
-“Latest” is not sufficient by itself for preview integrations: the version must also pass this repository's typecheck, unit suite, dry-run Worker builds, and an integration smoke test before release.
+Flue, Think, and Computer are not promoted to trusted policy or authorization components. Gardener validates requests/results before and after every adapter boundary. A preview adapter being unavailable must produce a typed failure, not a fallback with broader authority.
+
+## Required validation by subsystem
+
+- **Contracts/compiler:** malformed, unknown, oversized, duplicate, traversal, canonical-byte, hash, repository-resolution, capability, eligibility, and semantic-diff tests.
+- **D1/Workflows:** fresh install, destructive upgrade, concurrent initialization, immutable revision, idempotency, replay, wait/expiry, cancellation, and child-join tests.
+- **Computer:** workerd tests for filesystem/Git/shell/JavaScript; Docker/Cloudflare tests for Container sync, denied egress, cleanup, and ambiguous execution.
+- **Harnesses:** one conformance suite across all adapters plus deployed AI binding/Gateway model tests.
+- **MCP/OAuth:** dynamic client, owner consent, PKCE/provider behavior, exact audience, scopes, replay, CSRF, redaction, and negative-authority tests.
+- **Connect:** real GitHub webhook fixtures, permission checks, exact operation hashes, stale-state conflicts, retry receipts, and unsupported-operation behavior.
+
+CI evidence cannot substitute for Cloudflare staging where Workflows, Dynamic Workers, Worker Loader, Containers, Durable Objects, and R2 differ from local execution.

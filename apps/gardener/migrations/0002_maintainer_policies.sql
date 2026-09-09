@@ -1,7 +1,4 @@
-INSERT OR IGNORE INTO operation_policies (operation_kind, mode) VALUES
-  ('branch.create', 'disabled'),
-  ('commit.create', 'disabled'),
-  ('pull_request.open', 'disabled'),
-  ('pull_request.update', 'disabled'),
-  ('pull_request.review.submit', 'disabled'),
-  ('pull_request.merge', 'disabled');
+-- Historical no-op.
+-- Fresh installations receive the complete operation policy catalog from
+-- 0001_initial.sql. Existing 0001-0003 installations are cut over by 0004.
+SELECT 1;

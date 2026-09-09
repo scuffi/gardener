@@ -4,8 +4,8 @@ import { Empty } from "@cloudflare/kumo/components/empty";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Loader } from "@cloudflare/kumo/components/loader";
 import type { Icon } from "@phosphor-icons/react";
-import { ArrowClockwiseIcon, ArrowRightIcon, CheckCircleIcon, CpuIcon, GithubLogoIcon, ShieldCheckIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { Fragment, useEffect, useRef, type ReactNode } from "react";
+import { ArrowClockwiseIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { sentenceCase } from "../lib/format";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
@@ -35,18 +35,6 @@ export type StatusTone = "success" | "warning" | "error" | "info" | "neutral";
 export function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: StatusTone }) {
   const variant = tone === "neutral" ? "secondary" : tone;
   return <Badge variant={variant} appearance={tone === "neutral" ? "filled" : "dot"}>{children}</Badge>;
-}
-
-export function AutomationTrace({ variant = "execution", compact = false }: { variant?: "execution" | "workflow"; compact?: boolean }) {
-  const items = variant === "execution"
-    ? [{ label: "Event", icon: GithubLogoIcon }, { label: "Policy", icon: ShieldCheckIcon }, { label: "Action", icon: CheckCircleIcon }]
-    : [{ label: "Event", icon: GithubLogoIcon }, { label: "Workers AI", icon: CpuIcon }, { label: "Policy", icon: ShieldCheckIcon }];
-  return <div className={`automation-path${compact ? " automation-path--compact" : ""}`} aria-label={`Automation path: ${items.map((item) => item.label).join(", ")}`}>
-    {items.map((item, index) => {
-      const ItemIcon = item.icon;
-      return <Fragment key={item.label}><span className="automation-path__step"><ItemIcon size={compact ? 13 : 15} aria-hidden="true" />{item.label}</span>{index < items.length - 1 ? <ArrowRightIcon className="automation-path__arrow" size={compact ? 11 : 13} aria-hidden="true" /> : null}</Fragment>;
-    })}
-  </div>;
 }
 
 export function RunStatus({ status }: { status: string }) {

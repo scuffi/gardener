@@ -1,33 +1,23 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
-import { Button } from "@cloudflare/kumo/components/button";
-import { ArrowClockwiseIcon, CpuIcon, DatabaseIcon, GithubLogoIcon, StackIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useMutation } from "@tanstack/react-query";
+import { CpuIcon, DatabaseIcon, GithubLogoIcon, HardDrivesIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useGardener } from "../app-context";
-import { gardenerApi } from "../lib/api";
 import { sentenceCase } from "../lib/format";
-import { useNotifications } from "../components/notifications";
 import { ThemePicker } from "../theme";
 import { PageHeader, SectionHeader, StatusBadge, Surface } from "../components/ui";
 
 export function SettingsPage() {
   const { state, health } = useGardener();
-  const { notify } = useNotifications();
-  const testMutation = useMutation({
-    mutationFn: gardenerApi.testAi,
-    onSuccess: ({ model, usage }) => notify({ tone: "success", title: "Workers AI responded successfully", description: `${model}${typeof usage?.costUsd === "number" ? ` · Test cost $${usage.costUsd.toFixed(6)}` : ""}` }),
-    onError: (error: Error) => notify({ tone: "error", title: "Workers AI test failed", description: error.message }),
-  });
   if (!state || !health) return null;
   const services = [
-    { name: "D1 database", description: "Workflow state and durable audit records", ready: health.database, icon: DatabaseIcon },
-    { name: "Cloudflare Queues", description: "Asynchronous run delivery and retries", ready: health.queue, icon: StackIcon },
-    { name: "Workers AI", description: "Bounded structured model execution", ready: health.workersAi, icon: CpuIcon },
+    { name: "D1 database", description: "Agents, decisions, runs, effects, and audit records", ready: health.database, icon: DatabaseIcon },
+    { name: "Durable orchestration", description: `Run continuation, retries, waits, and cancellation · ${sentenceCase(health.agentRuntime.status)}`, ready: health.agentRuntime.enabled, icon: HardDrivesIcon },
+    { name: "Cloudflare AI", description: "Replaceable model harness through the AI binding", ready: health.workersAi, icon: CpuIcon },
     { name: "Gardener Connect", description: "GitHub identity, installation access, and writes", ready: health.connectConfigured, icon: GithubLogoIcon },
   ];
 
   return <>
-    <PageHeader title="Settings" description="Inspect provisioned Cloudflare services, execution limits, and preview capabilities." />
-    {!health.ok ? <Banner variant="error" icon={<WarningCircleIcon size={20} weight="fill" />} title="Deployment configuration is incomplete" description="Resolve every unavailable service below before relying on repository automation." /> : null}
+    <PageHeader title="Settings" description="Inspect this instance's Cloudflare services, model harness, workspace availability, and runtime limits." />
+    {!health.ok ? <Banner variant="error" icon={<WarningCircleIcon size={20} weight="fill" />} title="Agent execution is fail closed" description="Authoring and review are available, but this foundation cannot run Agents or execute effects until the trusted runtime is integrated and staged." /> : null}
 
     <Surface padded={false}>
       <SectionHeader title="Deployment health" description="Required services for this customer-owned Gardener instance." />
@@ -45,19 +35,18 @@ export function SettingsPage() {
 
     <div className="settings-columns">
       <Surface>
-        <SectionHeader title="Workers AI binding" description="Send synthetic issue data through the configured model and validate the structured response." />
+        <SectionHeader title="Cloudflare AI binding" description="Send synthetic data through the configured model without granting tools or repository authority." />
         <dl className="definition-list"><div><dt>Model</dt><dd><code>AI_MODEL</code></dd></div><div><dt>Writes to GitHub</dt><dd>No</dd></div><div><dt>Test data</dt><dd>Synthetic</dd></div></dl>
-        <Button variant="secondary" icon={ArrowClockwiseIcon} loading={testMutation.isPending} disabled={!health.workersAi} onClick={() => testMutation.mutate()}>Test Workers AI binding</Button>
       </Surface>
       <Surface>
-        <SectionHeader title="Execution limits" description="Hard limits applied to every issue-gardening run." />
-        <dl className="definition-list"><div><dt>Model output</dt><dd>800 tokens</dd></div><div><dt>Proposals per run</dt><dd>4 maximum</dd></div><div><dt>Authorization grant</dt><dd>5 minutes</dd></div><div><dt>Comment scope</dt><dd>Bounded</dd></div></dl>
+        <SectionHeader title="Execution boundaries" description="Every run pins its revision, harness, budgets, capabilities, and policy snapshot." />
+        <dl className="definition-list"><div><dt>Container</dt><dd>Ask per run</dd></div><div><dt>Network</dt><dd>Disabled by default</dd></div><div><dt>Dependency install</dt><dd>Disabled by default</dd></div><div><dt>GitHub effects</dt><dd>Exact and policy checked</dd></div></dl>
       </Surface>
     </div>
 
     <Surface padded={false}>
       <SectionHeader title="Capabilities" description="Availability of the broader repository-maintenance roadmap." />
-      <div className="capability-list">{Object.entries(state.capabilities).map(([name, status]) => <div key={name}><span>{sentenceCase(name)}</span><StatusBadge tone={status === "available" ? "success" : "neutral"}>{sentenceCase(status)}</StatusBadge></div>)}</div>
+      <div className="capability-list">{Object.entries(state.capabilities ?? {}).map(([name, status]) => <div key={name}><span>{sentenceCase(name)}</span><StatusBadge tone={status === "available" ? "success" : "neutral"}>{sentenceCase(status)}</StatusBadge></div>)}</div>
     </Surface>
 
   </>;

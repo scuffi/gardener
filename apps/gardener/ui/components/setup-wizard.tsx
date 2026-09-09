@@ -10,9 +10,9 @@ import { useNotifications } from "./notifications";
 import { PageHeader, Surface } from "./ui";
 
 const profiles: Array<{ id: SetupProfile; name: string; summary: string; policies: string[]; recommended?: boolean }> = [
-  { id: "safe", name: "Safe start", summary: "Gardener can add labels automatically. Removing labels and posting comments require approval.", policies: ["Add labels: automatic", "Other labels & comments: approval", "Issue state: off", "Code & PRs: off"], recommended: true },
-  { id: "review", name: "Review issue changes", summary: "Every proposed issue label or comment waits for approval.", policies: ["Labels: approval", "Comments: approval", "Issue state: off", "Code & PRs: off"] },
-  { id: "labels", name: "Labels only", summary: "Gardener can add and remove issue labels. Comments and all other writes stay off.", policies: ["Labels: automatic", "Comments: off", "Issue state: off", "Code & PRs: off"] },
+  { id: "safe", name: "Safe start", summary: "Keep most effects off; require a decision for comments and label removal.", policies: ["Add labels: automatic", "Other labels & comments: approval", "All other effects: off"], recommended: true },
+  { id: "review", name: "Human review", summary: "Require an Inbox decision for every initially supported issue effect.", policies: ["Labels: approval", "Comments: approval", "All other effects: off"] },
+  { id: "labels", name: "Labels only", summary: "Allow label changes while comments and every other persistent effect stay off.", policies: ["Labels: automatic", "Comments: off", "All other effects: off"] },
 ];
 
 export function SetupWizard() {
@@ -32,15 +32,15 @@ export function SetupWizard() {
     mutationFn: () => gardenerApi.activate(profile),
     onSuccess: async () => {
       await refresh();
-      notify({ tone: "success", title: "Automation active", description: "Gardener is listening for supported issue events." });
+      notify({ tone: "success", title: "Setup complete", description: "Create, publish, activate, and separately enable an Agent when you are ready." });
     },
     onError: (error: Error) => notify({ tone: "error", title: "Unable to activate Gardener", description: error.message }),
   });
 
   return <div className="setup-page">
     <PageHeader
-      title="Configure repository automation"
-      description="Select repository access and decide which actions Gardener can execute. The runtime and audit data stay in your Cloudflare account."
+      title="Configure Gardener"
+      description="Select repository access and set the instance policy ceiling. Agents and audit data stay in your Cloudflare account."
     />
 
     {!connectReady ? <Banner
@@ -75,8 +75,8 @@ export function SetupWizard() {
 
         {step === 2 ? <section className="setup-step-content setup-step-content--wide">
           <div className="setup-icon"><ShieldCheckIcon size={28} weight="fill" aria-hidden="true" /></div>
-          <h2>Choose initial permissions</h2>
-          <p>Start with an issue preset, then adjust each operation in Policies. Code changes and pull request actions start off.</p>
+          <h2>Choose the initial policy ceiling</h2>
+          <p>These modes constrain every Agent; they do not enable an Agent or grant capabilities. You can review each effect later in Policies.</p>
           <fieldset className="profile-grid">
             <legend className="sr-only">Automation permission preset</legend>
             {profiles.map((option) => <label key={option.id} data-profile={option.id} className={`profile-card${profile === option.id ? " profile-card--selected" : ""}`}>
@@ -90,7 +90,7 @@ export function SetupWizard() {
             </label>)}
           </fieldset>
           <Button id="setup-primary" data-action="activate" variant="primary" size="lg" icon={ArrowRightIcon} loading={activateMutation.isPending} onClick={() => activateMutation.mutate()}>
-            Activate Gardener
+            Finish setup
           </Button>
         </section> : null}
       </div>
@@ -98,7 +98,7 @@ export function SetupWizard() {
 
     <div className="trust-note">
       <ShieldCheckIcon size={20} weight="fill" aria-hidden="true" />
-      <div><strong>Credentials stay isolated</strong><p>GitHub credentials remain in Gardener Connect and are never sent to this Worker or Workers AI.</p></div>
+      <div><strong>Credentials stay isolated</strong><p>GitHub credentials remain in Gardener Connect and are never sent to this Worker, Agents, model harnesses, or Computer workspaces.</p></div>
     </div>
   </div>;
 }

@@ -34,7 +34,7 @@ export interface GrantClaims {
   owner: string;
   name: string;
   installationId: string;
-  resourceKind: "issue" | "pull_request";
+  resourceKind: "issue" | "pull_request" | "discussion" | "check" | "release" | "repository";
   resourceNumber: number;
   operations: OperationKind[];
   operationHashes: string[];

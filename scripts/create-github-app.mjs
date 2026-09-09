@@ -30,13 +30,26 @@ server.on("request", async (request, response) => {
         administration: "read",
         checks: "read",
         contents: "write",
+        discussions: "write",
         issues: "write",
         metadata: "read",
         pull_requests: "write",
         statuses: "read",
       },
       // Installation lifecycle events are implicit for GitHub Apps and are rejected by the manifest API when listed here.
-      default_events: ["issues", "pull_request"],
+      default_events: [
+        "check_run",
+        "check_suite",
+        "discussion",
+        "discussion_comment",
+        "issue_comment",
+        "issues",
+        "pull_request",
+        "pull_request_review",
+        "pull_request_review_comment",
+        "push",
+        "release",
+      ],
     };
     const encoded = String(JSON.stringify(manifest)).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });

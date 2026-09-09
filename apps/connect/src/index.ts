@@ -1,11 +1,13 @@
-import { connectEventSchema, type ConnectEvent } from "@gardener/contracts";
+import { operationReceiptSchema, repositoryEventV2Schema, type RepositoryEventV2 } from "@gardener/contracts";
+import { canonicalOperationHash as canonicalOperationHashV2 } from "@gardener/core";
 import { Hono, type Context, type Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { decodeJwt } from "jose";
 import { z } from "zod";
 import { bearer, constantTimeEqual, decryptAccessCredentials, encryptAccessCredentials, jwks, randomToken, sha256, signToken, verifyToken, verifyWebhookSignature } from "./crypto";
 import type { Env, GrantClaims, Variables } from "./env";
-import { discoverRepositories, exchangeOAuthCode, executeGitHubOperation, getInstallation } from "./github";
+import { ConnectOperationError, discoverRepositories, exchangeOAuthCode, executeGitHubOperation, fetchPullRequestForWebhook, getInstallation } from "./github";
+import { normalizeGitHubWebhook } from "./webhook";
 import { landingPage } from "./landing";
 import { callbackUrlSchema, grantRequestSchema, instanceClaimSchema, operationSchema, type Operation } from "./schema";
 
@@ -23,7 +25,7 @@ app.get("/health", async (c) => {
   let database = false;
   try { await c.env.DB.prepare("SELECT 1").first(); database = true; } catch { /* health only */ }
   const configured = ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "CONNECT_JWT_PRIVATE_KEY", "CONNECT_JWT_PUBLIC_KEY"].every((key) => Boolean((c.env as unknown as Row)[key]));
-  return c.json({ ok: database && configured, database, configured, service: "gardener-connect", version: "v1" }, database && configured ? 200 : 503);
+  return c.json({ ok: database && configured, database, configured, service: "gardener-connect", version: "v2" }, database && configured ? 200 : 503);
 });
 app.get("/.well-known/jwks.json", async (c) => c.json(await jwks(c.env), 200, { "cache-control": "public, max-age=300" }));
 
@@ -244,22 +246,19 @@ app.post("/v1/grants", async (c) => {
   if (input.instanceId !== instanceId) return c.json({ error: "Instance mismatch" }, 403);
   const repo = await c.env.DB.prepare("SELECT r.id, r.installation_id FROM repositories r JOIN installations i ON i.id = r.installation_id WHERE r.id = ? AND r.instance_id = ? AND r.owner = ? AND r.name = ? AND r.active = 1 AND i.revoked_at IS NULL AND i.suspended_at IS NULL").bind(input.repository.id, instanceId, input.repository.owner, input.repository.name).first<{ id: string; installation_id: string }>();
   if (!repo || repo.installation_id !== input.repository.installationId) return c.json({ error: "Repository is not authorized for this instance" }, 403);
-  const deliveredEvent = await c.env.DB.prepare(
-    "SELECT resource_kind, resource_number, event_state, event_draft, head_sha, base_ref, base_sha FROM webhook_deliveries WHERE instance_id = ? AND repository_id = ? AND normalized_event_id = ? AND status IN ('relaying', 'relayed')",
-  ).bind(instanceId, repo.id, input.eventId).first<{ resource_kind: string; resource_number: number; event_state: string | null; event_draft: number | null; head_sha: string | null; base_ref: string | null; base_sha: string | null }>();
-  if (!deliveredEvent || !["issue", "pull_request"].includes(deliveredEvent.resource_kind) || !Number.isSafeInteger(deliveredEvent.resource_number)) {
-    return c.json({ error: "Run grant must reference a supported event delivered to this instance" }, 403);
+  const delivered = await c.env.DB.prepare(
+    "SELECT resource_kind, resource_number, normalized_event_json, normalized_event_hash FROM webhook_deliveries WHERE instance_id = ? AND repository_id = ? AND normalized_event_id = ? AND status IN ('relaying', 'relayed')",
+  ).bind(instanceId, repo.id, input.eventId).first<{ resource_kind: string; resource_number: number; normalized_event_json: string; normalized_event_hash: string }>();
+  if (!delivered || typeof delivered.normalized_event_json !== "string" || typeof delivered.normalized_event_hash !== "string" || await sha256(delivered.normalized_event_json) !== delivered.normalized_event_hash) {
+    return c.json({ error: "Run grant must reference an intact V2 event delivered to this instance" }, 403);
   }
-  const resourceKind = deliveredEvent.resource_kind as GrantClaims["resourceKind"];
-  const resourceNumber = deliveredEvent.resource_number;
-  if (input.operations.some((operation) => {
-    if (operation.repository.id !== repo.id || operation.repository.owner !== input.repository.owner || operation.repository.name !== input.repository.name || operation.repository.installationId !== repo.installation_id || !operationMatchesGrantResource(operation, { resourceKind, resourceNumber })) return true;
-    if ("issueNumber" in operation) return operation.expectedIssueState !== deliveredEvent.event_state;
-    if ("pullNumber" in operation) return operation.expectedHeadSha !== deliveredEvent.head_sha || operation.expectedBaseRef !== deliveredEvent.base_ref || operation.expectedBaseSha !== deliveredEvent.base_sha || operation.expectedState !== deliveredEvent.event_state || operation.expectedDraft !== (deliveredEvent.event_draft === 1);
-    return false;
-  })) {
-    return c.json({ error: "Requested operation is outside the delivered event scope" }, 403);
-  }
+  const deliveredEvent = repositoryEventV2Schema.parse(JSON.parse(delivered.normalized_event_json));
+  const eventBinding = eventScope(deliveredEvent);
+  const resourceKind = eventBinding.resourceKind;
+  const resourceNumber = eventBinding.resourceNumber;
+  if (delivered.resource_kind !== resourceKind || delivered.resource_number !== resourceNumber || input.operations.some((operation) =>
+    operation.repository.id !== repo.id || operation.repository.owner !== input.repository.owner || operation.repository.name !== input.repository.name || operation.repository.installationId !== repo.installation_id || !operationMatchesEvent(operation, deliveredEvent)
+  )) return c.json({ error: "Requested operation is outside the delivered event scope or its attested live facts" }, 403);
   const operations = [...new Set(input.operations.map((operation) => operation.kind))];
   const operationHashes = await Promise.all(input.operations.map(canonicalOperationHash));
   const jti = crypto.randomUUID(); const expiresAt = Math.floor(Date.now() / 1000) + 300;
@@ -270,14 +269,39 @@ app.post("/v1/grants", async (c) => {
 });
 
 export async function canonicalOperationHash(operation: Operation): Promise<string> {
-  return sha256(JSON.stringify(operationSchema.parse(operation)));
+  return canonicalOperationHashV2(operation);
 }
 
 export function operationMatchesGrantResource(operation: Operation, grant: Pick<GrantClaims, "resourceKind" | "resourceNumber">): boolean {
   if ("issueNumber" in operation) return grant.resourceKind === "issue" && operation.issueNumber === grant.resourceNumber;
   if ("pullNumber" in operation) return grant.resourceKind === "pull_request" && operation.pullNumber === grant.resourceNumber;
-  // Repository creations are authorized only from an issue-bound maintenance run.
+  if ("discussionNumber" in operation) return grant.resourceKind === "discussion" && operation.discussionNumber === grant.resourceNumber;
+  if (operation.kind === "check.rerun") return grant.resourceKind === "check" && Number(operation.checkRunId) === grant.resourceNumber;
+  if (operation.kind.startsWith("release.") && "releaseId" in operation) return grant.resourceKind === "release" && Number(operation.releaseId) === grant.resourceNumber;
+  // New branches, commits, draft pull requests, and draft releases remain issue-bound.
   return grant.resourceKind === "issue";
+}
+
+export function operationMatchesEvent(operation: Operation, event: RepositoryEventV2): boolean {
+  const scope = eventScope(event);
+  if (!operationMatchesGrantResource(operation, scope)) return false;
+  if ("issueNumber" in operation) {
+    const issue = event.kind === "github.issue" || event.kind === "github.issue_comment" ? event.issue : null;
+    if (!issue || operation.expectedIssueState !== issue.state || operation.expectedIssueUpdatedAt !== issue.updatedAt) return false;
+    if (operation.kind === "issue.comment.update" && event.kind === "github.issue_comment") return operation.commentId === event.comment.id && operation.expectedCommentUpdatedAt === event.comment.updatedAt;
+  }
+  if ("pullNumber" in operation) {
+    if (!(event.kind === "github.pull_request" || event.kind === "github.pull_request_comment" || event.kind === "github.pull_request_review" || event.kind === "github.pull_request_review_comment")) return false;
+    const pull = event.pullRequest;
+    if (operation.expectedHeadSha !== pull.head.sha || operation.expectedBaseRef !== pull.base.ref || operation.expectedBaseSha !== pull.base.sha || operation.expectedState !== pull.state || operation.expectedDraft !== pull.draft || operation.expectedPullUpdatedAt !== pull.updatedAt) return false;
+  }
+  if ("discussionNumber" in operation) {
+    if (!(event.kind === "github.discussion" || event.kind === "github.discussion_comment")) return false;
+    if (operation.expectedDiscussionState !== event.discussion.state || operation.expectedDiscussionUpdatedAt !== event.discussion.updatedAt) return false;
+  }
+  if (operation.kind === "check.rerun") return event.kind === "github.check_run" && operation.checkRunId === event.checkRun.id && operation.expectedHeadSha === event.checkRun.headSha && operation.expectedStatus === event.checkRun.status && operation.expectedConclusion === event.checkRun.conclusion;
+  if (operation.kind === "release.update" || operation.kind === "release.publish" || operation.kind === "release.delete") return event.kind === "github.release" && operation.releaseId === event.release.id && operation.expectedTagName === event.release.tagName && operation.expectedDraft === event.release.draft && operation.expectedReleaseUpdatedAt === event.release.updatedAt;
+  return true;
 }
 
 app.post("/v1/operations", async (c) => {
@@ -285,7 +309,7 @@ app.post("/v1/operations", async (c) => {
   let grant: GrantClaims;
   try {
     const p = await verifyToken(c.env, token, c.env.CONNECT_AUDIENCE);
-    if (p.typ !== "gardener-run-grant" || typeof p.jti !== "string" || typeof p.instanceId !== "string" || typeof p.runId !== "string" || typeof p.eventId !== "string" || typeof p.repositoryId !== "string" || typeof p.owner !== "string" || typeof p.name !== "string" || typeof p.installationId !== "string" || !["issue", "pull_request"].includes(String(p.resourceKind)) || typeof p.resourceNumber !== "number" || !Array.isArray(p.operations) || !Array.isArray(p.operationHashes) || !p.operationHashes.every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash))) throw new Error("bad claims");
+    if (p.typ !== "gardener-run-grant" || typeof p.jti !== "string" || typeof p.instanceId !== "string" || typeof p.runId !== "string" || typeof p.eventId !== "string" || typeof p.repositoryId !== "string" || typeof p.owner !== "string" || typeof p.name !== "string" || typeof p.installationId !== "string" || !["issue", "pull_request", "discussion", "check", "release", "repository"].includes(String(p.resourceKind)) || typeof p.resourceNumber !== "number" || !Array.isArray(p.operations) || !Array.isArray(p.operationHashes) || !p.operationHashes.every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash))) throw new Error("bad claims");
     grant = p as unknown as GrantClaims;
   } catch { return c.json({ error: "Invalid or expired run grant" }, 401); }
   const stored = await c.env.DB.prepare("SELECT g.jti FROM grants g JOIN instances i ON i.id = g.instance_id JOIN repositories r ON r.id = g.repository_id JOIN installations ins ON ins.id = r.installation_id WHERE g.jti = ? AND g.instance_id = ? AND g.expires_at > ? AND i.revoked_at IS NULL AND r.active = 1 AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL")
@@ -294,27 +318,51 @@ app.post("/v1/operations", async (c) => {
   const operationHash = await canonicalOperationHash(operation);
   if (operation.repository.id !== grant.repositoryId || operation.repository.owner !== grant.owner || operation.repository.name !== grant.name || operation.repository.installationId !== grant.installationId || !operationMatchesGrantResource(operation, grant) || !grant.operations.includes(operation.kind) || !grant.operationHashes.includes(operationHash)) return c.json({ error: "Operation is outside grant scope" }, 403);
   const serializedOperation = JSON.stringify(operation);
-  const existing = await c.env.DB.prepare("SELECT instance_id, operation_kind, operation, repository_id, resource_number, status, receipt, lease_expires_at FROM operation_receipts WHERE operation_id = ?").bind(operation.id).first<{ instance_id: string; operation_kind: string; operation: string; repository_id: string; resource_number: number; status: string; receipt: string | null; lease_expires_at: number | null }>();
-  if (existing && (existing.instance_id !== grant.instanceId || existing.operation_kind !== operation.kind || existing.operation !== serializedOperation || existing.repository_id !== grant.repositoryId || existing.resource_number !== grant.resourceNumber)) return c.json({ error: "Operation id was already used for a different operation" }, 409);
-  if (existing?.status === "applied" && existing.receipt) return c.json(JSON.parse(existing.receipt) as Record<string, unknown>);
+  const existing = await c.env.DB.prepare("SELECT instance_id, operation_kind, operation, operation_hash, repository_id, resource_number, status, receipt, lease_expires_at, attempt_count FROM operation_receipts WHERE operation_id = ?").bind(operation.id).first<{ instance_id: string; operation_kind: string; operation: string; operation_hash: string | null; repository_id: string; resource_number: number; status: string; receipt: string | null; lease_expires_at: number | null; attempt_count: number }>();
+  if (existing && (existing.instance_id !== grant.instanceId || existing.operation_kind !== operation.kind || existing.operation !== serializedOperation || (existing.operation_hash !== null && existing.operation_hash !== operationHash) || existing.repository_id !== grant.repositoryId || existing.resource_number !== grant.resourceNumber)) return c.json({ error: "Operation id was already used for a different operation" }, 409);
+  if (existing?.status === "applied" && existing.receipt) return c.json(operationReceiptSchema.parse(JSON.parse(existing.receipt)));
+  if (existing?.status === "failed" && existing.receipt) {
+    const priorReceipt = operationReceiptSchema.parse(JSON.parse(existing.receipt));
+    if (priorReceipt.error?.retryable === false) return c.json(priorReceipt, priorReceipt.error.code === "unsupported_operation" ? 422 : 409);
+  }
   const now = Math.floor(Date.now() / 1000);
   if (existing?.status === "executing" && (existing.lease_expires_at ?? Number.POSITIVE_INFINITY) > now) return c.json({ error: "Operation is already executing" }, 409);
   const attemptToken = crypto.randomUUID();
   const leaseExpiresAt = now + 600;
-  if (!existing) await c.env.DB.prepare("INSERT INTO operation_receipts (operation_id, instance_id, grant_jti, operation_kind, operation, repository_id, resource_number, attempt_token, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(operation.id, grant.instanceId, grant.jti, operation.kind, serializedOperation, grant.repositoryId, grant.resourceNumber, attemptToken, leaseExpiresAt).run();
+  if (!existing) await c.env.DB.prepare("INSERT INTO operation_receipts (operation_id, instance_id, grant_jti, operation_kind, operation, operation_hash, repository_id, resource_number, attempt_token, lease_expires_at, attempt_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)").bind(operation.id, grant.instanceId, grant.jti, operation.kind, serializedOperation, operationHash, grant.repositoryId, grant.resourceNumber, attemptToken, leaseExpiresAt).run();
   else {
-    const claimed = await c.env.DB.prepare("UPDATE operation_receipts SET status = 'executing', grant_jti = ?, attempt_token = ?, lease_expires_at = ?, error = NULL, completed_at = NULL WHERE operation_id = ? AND (status = 'failed' OR (status = 'executing' AND lease_expires_at <= ?))").bind(grant.jti, attemptToken, leaseExpiresAt, operation.id, now).run();
+    const claimed = await c.env.DB.prepare("UPDATE operation_receipts SET status = 'executing', grant_jti = ?, attempt_token = ?, lease_expires_at = ?, attempt_count = attempt_count + 1, operation_hash = ?, error = NULL, completed_at = NULL WHERE operation_id = ? AND attempt_count < 20 AND (status = 'failed' OR (status = 'executing' AND lease_expires_at <= ?))").bind(grant.jti, attemptToken, leaseExpiresAt, operationHash, operation.id, now).run();
     if ((claimed.meta.changes ?? 0) !== 1) return c.json({ error: "Operation retry was claimed by another request" }, 409);
   }
+  const attemptedAt = new Date().toISOString();
+  const attempt = (existing?.attempt_count ?? 0) + 1;
   try {
-    const receipt = { operationId: operation.id, ...(await executeGitHubOperation(c.env, operation)) };
+    const result = await executeGitHubOperation(c.env, operation);
+    const receipt = operationReceiptSchema.parse({ schemaVersion: "v2", operationId: operation.id, operationHash, kind: operation.kind, status: result.status === "already-applied" ? "skipped" : "succeeded", attempt, attemptedAt, completedAt: new Date().toISOString(), ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}), ...(result.url ? { resourceUrl: result.url } : {}) });
     const completed = await c.env.DB.prepare("UPDATE operation_receipts SET status = 'applied', receipt = ?, error = NULL, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ? AND attempt_token = ?").bind(JSON.stringify(receipt), operation.id, attemptToken).run();
     if ((completed.meta.changes ?? 0) !== 1) return c.json({ error: "Operation execution lease expired" }, 409);
     return c.json(receipt);
   } catch (error) {
-    await c.env.DB.prepare("UPDATE operation_receipts SET status = 'failed', error = ?, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ? AND attempt_token = ?").bind(error instanceof Error ? error.message.slice(0, 500) : "Operation failed", operation.id, attemptToken).run(); throw error;
+    const typed = error instanceof ConnectOperationError ? error : new ConnectOperationError("github_execution_failed", error instanceof Error ? error.message : "Operation failed", error instanceof TypeError);
+    const receipt = operationReceiptSchema.parse({ schemaVersion: "v2", operationId: operation.id, operationHash, kind: operation.kind, status: "failed", attempt, attemptedAt, completedAt: new Date().toISOString(), error: { code: typed.code, message: typed.message.slice(0, 2_000), retryable: typed.retryable } });
+    await c.env.DB.prepare("UPDATE operation_receipts SET status = 'failed', receipt = ?, error = ?, completed_at = CURRENT_TIMESTAMP WHERE operation_id = ? AND attempt_token = ?").bind(JSON.stringify(receipt), typed.message.slice(0, 500), operation.id, attemptToken).run();
+    return c.json(receipt, typed.code === "unsupported_operation" ? 422 : typed.retryable ? 503 : 409);
   }
 });
+
+function eventScope(event: RepositoryEventV2): { resourceKind: GrantClaims["resourceKind"]; resourceNumber: number; eventState: string | null; eventDraft: number | null; headSha: string | null; baseRef: string | null; baseSha: string | null } {
+  if (event.kind === "github.issue") return { resourceKind: "issue", resourceNumber: event.issue.number, eventState: event.issue.state, eventDraft: null, headSha: null, baseRef: null, baseSha: null };
+  if (event.kind === "github.issue_comment") return { resourceKind: "issue", resourceNumber: event.issue.number, eventState: event.issue.state, eventDraft: null, headSha: null, baseRef: null, baseSha: null };
+  if (event.kind === "github.pull_request" || event.kind === "github.pull_request_comment" || event.kind === "github.pull_request_review" || event.kind === "github.pull_request_review_comment") {
+    const pull = event.pullRequest;
+    return { resourceKind: "pull_request", resourceNumber: pull.number, eventState: pull.state, eventDraft: pull.draft ? 1 : 0, headSha: pull.head.sha, baseRef: pull.base.ref, baseSha: pull.base.sha };
+  }
+  if (event.kind === "github.discussion" || event.kind === "github.discussion_comment") return { resourceKind: "discussion", resourceNumber: event.discussion.number, eventState: event.discussion.state, eventDraft: null, headSha: null, baseRef: null, baseSha: null };
+  if (event.kind === "github.check_run") return { resourceKind: "check", resourceNumber: Number(event.checkRun.id), eventState: event.checkRun.status, eventDraft: null, headSha: event.checkRun.headSha, baseRef: null, baseSha: null };
+  if (event.kind === "github.check_suite") return { resourceKind: "check", resourceNumber: Number(event.checkSuite.id), eventState: event.checkSuite.status, eventDraft: null, headSha: event.checkSuite.headSha, baseRef: null, baseSha: null };
+  if (event.kind === "github.release") return { resourceKind: "release", resourceNumber: Number(event.release.id), eventState: event.release.draft ? "draft" : "published", eventDraft: event.release.draft ? 1 : 0, headSha: null, baseRef: null, baseSha: null };
+  return { resourceKind: "repository", resourceNumber: 0, eventState: null, eventDraft: null, headSha: null, baseRef: null, baseSha: null };
+}
 
 app.post("/github/webhook", async (c) => {
   const raw = await c.req.text();
@@ -330,22 +378,25 @@ app.post("/github/webhook", async (c) => {
   let payload: unknown; try { payload = JSON.parse(raw); } catch { await markDelivery(c.env, deliveryId, "invalid", "Invalid JSON"); return c.json({ error: "Invalid JSON" }, 400); }
   if (eventName === "ping") { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, pong: true }); }
   if (eventName === "installation" || eventName === "installation_repositories") { await handleInstallationWebhook(c.env, eventName, payload); await markDelivery(c.env, deliveryId, "processed"); return c.json({ accepted: true }); }
-  if (eventName !== "issues" && eventName !== "pull_request") { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, ignored: true }); }
-  const normalized = eventName === "issues" ? normalizeIssueEvent(payload, deliveryId) : normalizePullRequestEvent(payload, deliveryId);
-  if (!normalized) { await markDelivery(c.env, deliveryId, "ignored", `Unsupported ${eventName} payload`); return c.json({ accepted: true, ignored: true }); }
-  const route = await c.env.DB.prepare("SELECT r.instance_id, i.callback_url, i.cloudflare_access_credentials FROM repositories r JOIN instances i ON i.id = r.instance_id JOIN installations ins ON ins.id = r.installation_id WHERE r.id = ? AND r.installation_id = ? AND r.active = 1 AND i.revoked_at IS NULL AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL").bind(normalized.event.repository.id, normalized.event.repository.installationId).first<{ instance_id: string; callback_url: string; cloudflare_access_credentials: string | null }>();
+  const supportedEvents = new Set(["issues", "pull_request", "issue_comment", "pull_request_review", "pull_request_review_comment", "discussion", "discussion_comment", "check_run", "check_suite", "push", "release"]);
+  if (!supportedEvents.has(eventName)) { await markDelivery(c.env, deliveryId, "ignored"); return c.json({ accepted: true, ignored: true }); }
+  let pendingEvent = normalizeGitHubWebhook(eventName, payload, deliveryId);
+  if (!pendingEvent && eventName === "issue_comment" && isRecord(payload) && isRecord(payload.issue) && payload.issue.pull_request !== undefined) {
+    try {
+      const pullRequest = await fetchPullRequestForWebhook(c.env, payload);
+      if (pullRequest) pendingEvent = normalizeGitHubWebhook("pull_request_comment", { ...payload, pull_request: pullRequest }, deliveryId);
+    } catch { /* incomplete or unauthorized enrichment fails closed below */ }
+  }
+  if (!pendingEvent) { await markDelivery(c.env, deliveryId, "invalid", `Unsupported or incomplete ${eventName} payload`); return c.json({ error: "Unsupported or incomplete webhook payload" }, 400); }
+  const route = await c.env.DB.prepare("SELECT r.instance_id, i.callback_url, i.cloudflare_access_credentials FROM repositories r JOIN instances i ON i.id = r.instance_id JOIN installations ins ON ins.id = r.installation_id WHERE r.id = ? AND r.installation_id = ? AND r.active = 1 AND i.revoked_at IS NULL AND ins.revoked_at IS NULL AND ins.suspended_at IS NULL").bind(pendingEvent.repository.id, pendingEvent.repository.installationId).first<{ instance_id: string; callback_url: string; cloudflare_access_credentials: string | null }>();
   if (!route?.callback_url) { await markDelivery(c.env, deliveryId, "unroutable", "Repository is not claimed"); return c.json({ accepted: true, routed: false }); }
-  normalized.event.instanceId = route.instance_id;
-  const resourceKind = normalized.event.kind === "github.issue" ? "issue" : "pull_request";
-  const resourceNumber = normalized.event.kind === "github.issue" ? normalized.event.issue.number : normalized.event.pullRequest.number;
-  const eventState = normalized.event.kind === "github.issue" ? normalized.event.issue.state : normalized.event.pullRequest.state;
-  const eventDraft = normalized.event.kind === "github.pull_request" ? (normalized.event.pullRequest.draft ? 1 : 0) : null;
-  const headSha = normalized.event.kind === "github.pull_request" ? normalized.event.pullRequest.head.sha : null;
-  const baseRef = normalized.event.kind === "github.pull_request" ? normalized.event.pullRequest.base.ref : null;
-  const baseSha = normalized.event.kind === "github.pull_request" ? normalized.event.pullRequest.base.sha : null;
-  await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relaying', instance_id = ?, repository_id = ?, normalized_event_id = ?, resource_kind = ?, resource_number = ?, event_action = ?, event_state = ?, event_draft = ?, head_sha = ?, base_ref = ?, base_sha = ? WHERE delivery_id = ?")
-    .bind(route.instance_id, normalized.event.repository.id, normalized.event.id, resourceKind, resourceNumber, normalized.event.action, eventState, eventDraft, headSha, baseRef, baseSha, deliveryId).run();
-  const eventToken = await signToken(c.env, { typ: "gardener-event", event: normalized.event, jti: deliveryId }, route.instance_id, 300);
+  const event = repositoryEventV2Schema.parse({ ...pendingEvent, instanceId: route.instance_id });
+  const scope = eventScope(event);
+  const eventJson = JSON.stringify(event);
+  const eventHash = await sha256(eventJson);
+  await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relaying', instance_id = ?, repository_id = ?, normalized_event_id = ?, resource_kind = ?, resource_number = ?, event_action = ?, event_state = ?, event_draft = ?, head_sha = ?, base_ref = ?, base_sha = ?, normalized_event_json = ?, normalized_event_hash = ? WHERE delivery_id = ?")
+    .bind(route.instance_id, event.repository.id, event.id, scope.resourceKind, scope.resourceNumber, event.action, scope.eventState, scope.eventDraft, scope.headSha, scope.baseRef, scope.baseSha, eventJson, eventHash, deliveryId).run();
+  const eventToken = await signToken(c.env, { typ: "gardener-event", event, eventHash, jti: deliveryId }, route.instance_id, 300);
   let accessHeaders: Record<string, string>;
   try {
     accessHeaders = await cloudflareAccessRelayHeaders(c.env, route.instance_id, route.cloudflare_access_credentials);
@@ -353,12 +404,25 @@ app.post("/github/webhook", async (c) => {
     await markDelivery(c.env, deliveryId, "relay_failed", "Cloudflare Access credentials unavailable");
     return c.json({ error: "Instance relay credentials are unavailable" }, 502);
   }
-  const response = await fetch(route.callback_url, { method: "POST", headers: { "content-type": "application/json", "user-agent": "gardener-connect", ...accessHeaders }, body: JSON.stringify({ token: eventToken }), signal: AbortSignal.timeout(10_000) });
+  const response = await fetch(createEventRelayRequest(route.callback_url, eventToken, accessHeaders));
   if (!response.ok) { await response.body?.cancel(); await markDelivery(c.env, deliveryId, "relay_failed", `HTTP ${response.status}`); return c.json({ error: "Instance relay failed" }, 502); }
   await response.body?.cancel(); await c.env.DB.prepare("UPDATE webhook_deliveries SET status = 'relayed', relayed_at = CURRENT_TIMESTAMP WHERE delivery_id = ?")
     .bind(deliveryId).run();
-  return c.json({ accepted: true, routed: true }, 202);
+  return c.json({ accepted: true, routed: true, schemaVersion: "v2" }, 202);
 });
+
+export function createEventRelayRequest(
+  callbackUrl: string,
+  eventToken: string,
+  accessHeaders: Record<string, string> = {},
+): Request {
+  return new Request(callbackUrl, {
+    method: "POST",
+    headers: { ...accessHeaders, authorization: `Bearer ${eventToken}`, "user-agent": "gardener-connect" },
+    redirect: "manual",
+    signal: AbortSignal.timeout(10_000),
+  });
+}
 
 export async function cloudflareAccessRelayHeaders(
   env: Pick<Env, "ACCESS_CREDENTIAL_ENCRYPTION_KEY">,
@@ -390,42 +454,6 @@ async function handleInstallationWebhook(env: Env, eventName: string, payload: u
   }
   const known = await env.DB.prepare("SELECT instance_id FROM installations WHERE id = ? AND revoked_at IS NULL").bind(id).first<{ instance_id: string }>(); if (known && action !== "deleted") await syncInstallation(env, known.instance_id, id);
 }
-
-export function normalizeIssueEvent(payload: unknown, deliveryId: string): { event: ConnectEvent } | null {
-  if (!isRecord(payload) || !["opened", "edited", "reopened", "closed", "labeled", "unlabeled"].includes(String(payload.action)) || !isRecord(payload.issue) || payload.issue.pull_request !== undefined || !isRecord(payload.repository) || !isRecord(payload.installation)) return null;
-  const issue = payload.issue, repo = payload.repository, installation = payload.installation;
-  if (!isPositive(issue.id) || !isPositive(issue.number) || typeof issue.title !== "string" || issue.title.length > 1024 || (issue.body !== null && typeof issue.body !== "string") || !["open", "closed"].includes(String(issue.state)) || typeof issue.html_url !== "string" || !isPositive(repo.id) || typeof repo.name !== "string" || !isRecord(repo.owner) || typeof repo.owner.login !== "string" || !isPositive(installation.id) || !isRecord(issue.user) || typeof issue.user.login !== "string") return null;
-  const labels = Array.isArray(issue.labels) ? issue.labels.flatMap((label) => isRecord(label) && typeof label.name === "string" ? [label.name.slice(0, 100)] : []).slice(0, 100) : [];
-  const occurredAt = typeof issue.updated_at === "string" && !Number.isNaN(Date.parse(issue.updated_at)) ? new Date(issue.updated_at).toISOString() : new Date().toISOString();
-  // Keep the strict v1 envelope byte-shape compatible with independently deployed
-  // Gardener Workers. Actor and stable author identities require negotiated v2 delivery.
-  return { event: connectEventSchema.parse({
-    schemaVersion: "v1", id: `github:${deliveryId}`, deliveryId, instanceId: "pending",
-    kind: "github.issue", action: payload.action, occurredAt,
-    repository: { provider: "github", id: String(repo.id), installationId: String(installation.id), owner: repo.owner.login, name: repo.name, ...(typeof repo.default_branch === "string" ? { defaultBranch: repo.default_branch } : {}) },
-    issue: { id: String(issue.id), number: issue.number, title: issue.title, body: typeof issue.body === "string" ? issue.body.slice(0, 65_536) : null, state: issue.state, labels, author: issue.user.login, htmlUrl: issue.html_url },
-  }) };
-}
-export function normalizePullRequestEvent(payload: unknown, deliveryId: string): { event: ConnectEvent } | null {
-  const actions = ["opened", "edited", "reopened", "closed", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "review_requested", "review_request_removed"];
-  if (!isRecord(payload) || !actions.includes(String(payload.action)) || !isRecord(payload.pull_request) || !isRecord(payload.repository) || !isRecord(payload.installation)) return null;
-  const pull = payload.pull_request, repo = payload.repository, installation = payload.installation;
-  if (!isPositive(pull.id) || !isPositive(pull.number) || typeof pull.title !== "string" || pull.title.length > 1_024 || (pull.body !== null && typeof pull.body !== "string") || !["open", "closed"].includes(String(pull.state)) || typeof pull.draft !== "boolean" || typeof pull.html_url !== "string" || !isRecord(pull.user) || typeof pull.user.login !== "string" || !isRecord(pull.head) || typeof pull.head.ref !== "string" || typeof pull.head.sha !== "string" || !isRecord(pull.base) || typeof pull.base.ref !== "string" || typeof pull.base.sha !== "string" || !isPositive(repo.id) || typeof repo.name !== "string" || !isRecord(repo.owner) || typeof repo.owner.login !== "string" || !isPositive(installation.id)) return null;
-  const labels = Array.isArray(pull.labels) ? pull.labels.flatMap((label) => isRecord(label) && typeof label.name === "string" ? [label.name.slice(0, 100)] : []).slice(0, 100) : [];
-  const occurredAt = typeof pull.updated_at === "string" && !Number.isNaN(Date.parse(pull.updated_at)) ? new Date(pull.updated_at).toISOString() : new Date().toISOString();
-  // See the issue normalizer: do not add identity-aware fields before contract negotiation.
-  return { event: connectEventSchema.parse({
-    schemaVersion: "v1", id: `github:${deliveryId}`, deliveryId, instanceId: "pending",
-    kind: "github.pull_request", action: payload.action, occurredAt,
-    repository: { provider: "github", id: String(repo.id), installationId: String(installation.id), owner: repo.owner.login, name: repo.name, ...(typeof repo.default_branch === "string" ? { defaultBranch: repo.default_branch } : {}) },
-    pullRequest: {
-      id: String(pull.id), number: pull.number, title: pull.title, body: typeof pull.body === "string" ? pull.body.slice(0, 65_536) : null,
-      state: pull.state, draft: pull.draft, merged: pull.merged === true, labels, author: pull.user.login, htmlUrl: pull.html_url,
-      head: { ref: pull.head.ref, sha: pull.head.sha }, base: { ref: pull.base.ref, sha: pull.base.sha }, updatedAt: occurredAt,
-    },
-  }) };
-}
-
 
 function isRecord(value: unknown): value is Row { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function isPositive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }

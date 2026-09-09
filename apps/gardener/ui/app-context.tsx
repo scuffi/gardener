@@ -43,7 +43,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     if (!installationComplete || !authenticated || installationHandled.current) return;
     installationHandled.current = true;
     void gardenerApi.syncRepositories().then(async () => {
-      history.replaceState(null, "", "/overview");
+      history.replaceState(null, "", "/inbox");
       await queryClient.invalidateQueries({ queryKey: ["state"] });
       notify({ tone: "success", title: "Repository access connected", description: "Choose how Gardener should handle GitHub actions." });
     }).catch((error: unknown) => {

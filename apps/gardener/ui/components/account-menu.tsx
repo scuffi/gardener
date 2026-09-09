@@ -46,7 +46,7 @@ export function AccountMenu() {
         Dashboard settings
       </DropdownMenu.Item>
       <DropdownMenu.Separator />
-      <DropdownMenu.Item variant="danger" icon={SignOutIcon} onClick={() => { signOut(); navigate("/overview", { replace: true }); }}>
+      <DropdownMenu.Item variant="danger" icon={SignOutIcon} onClick={() => { signOut(); navigate("/inbox", { replace: true }); }}>
         Sign out
       </DropdownMenu.Item>
     </DropdownMenu.Content>

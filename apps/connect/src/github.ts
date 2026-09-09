@@ -59,7 +59,11 @@ async function github(path: string, token: string, init: RequestInit = {}): Prom
 }
 
 async function jsonResponse(response: Response, context: string): Promise<unknown> {
-  if (!response.ok) { await response.body?.cancel(); throw new Error(`${context} failed (${response.status})`); }
+  if (!response.ok) {
+    const status = response.status;
+    await response.body?.cancel();
+    throw new ConnectOperationError(status === 429 ? "github_rate_limited" : "github_http_error", `${context} failed (${status})`, status === 429 || status >= 500);
+  }
   return response.json();
 }
 
@@ -94,6 +98,12 @@ async function installationToken(env: Env, installationId: string, repositoryNam
 }
 
 export interface DiscoveredRepository { id: string; installationId: string; owner: string; name: string; defaultBranch?: string }
+export async function fetchPullRequestForWebhook(env: Env, payload: unknown): Promise<unknown | null> {
+  if (!record(payload) || !record(payload.issue) || payload.issue.pull_request === undefined || !positiveInteger(payload.issue.number) || !record(payload.repository) || typeof payload.repository.name !== "string" || !record(payload.repository.owner) || typeof payload.repository.owner.login !== "string" || !record(payload.installation) || !positiveInteger(payload.installation.id)) return null;
+  const token = await installationToken(env, String(payload.installation.id), payload.repository.name, { metadata: "read", pull_requests: "read" });
+  return jsonResponse(await github(`/repos/${encodeURIComponent(payload.repository.owner.login)}/${encodeURIComponent(payload.repository.name)}/pulls/${payload.issue.number}`, token), "Pull request webhook enrichment");
+}
+
 export async function discoverRepositories(env: Env, installationId: string): Promise<DiscoveredRepository[]> {
   const tokenData = await jsonResponse(await github(`/app/installations/${installationId}/access_tokens`, await appJwt(env), { method: "POST", body: JSON.stringify({ permissions: { metadata: "read" } }) }), "Installation token request");
   if (!record(tokenData) || typeof tokenData.token !== "string") throw new Error("Installation token response was invalid");
@@ -111,15 +121,24 @@ export async function discoverRepositories(env: Env, installationId: string): Pr
   return repositories;
 }
 
-export type OperationResult = { status: "applied" | "already-applied"; githubId?: number | string; url?: string };
-type IssueOperation = Extract<Operation, { issueNumber: number }>;
+export type OperationResult = { status: "applied" | "already-applied"; githubId?: number | string; url?: string; providerRequestId?: string };
+export class ConnectOperationError extends Error {
+  constructor(public readonly code: string, message: string, public readonly retryable = false) { super(message); this.name = "ConnectOperationError"; }
+}
+type IssueOperation = Extract<Operation, { kind: "issue.label.add" | "issue.label.remove" | "issue.comment.create" | "issue.comment.update" | "issue.close" | "issue.reopen" }>;
 type ExistingPullOperation = Extract<Operation, { pullNumber: number }>;
 
+const IMPLEMENTED_OPERATION_KINDS = new Set<Operation["kind"]>([
+  "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen",
+  "pull_request.review.submit", "pull_request.update", "branch.create", "commit.create", "pull_request.open_draft", "pull_request.merge",
+]);
+
 function operationPermissions(operation: Operation): RepositoryPermissions {
+  if (!IMPLEMENTED_OPERATION_KINDS.has(operation.kind)) throw new ConnectOperationError("unsupported_operation", `Connect does not implement verified GitHub execution for ${operation.kind}`);
   if ("issueNumber" in operation) return { issues: "write", metadata: "read" };
   if (operation.kind === "branch.create" || operation.kind === "commit.create") return { contents: "write", metadata: "read" };
   if (operation.kind === "pull_request.merge") return { administration: "read", checks: "read", contents: "write", metadata: "read", pull_requests: "read", statuses: "read" };
-  if (operation.kind === "pull_request.open") return { contents: "read", metadata: "read", pull_requests: "write" };
+  if (operation.kind === "pull_request.open_draft") return { contents: "read", metadata: "read", pull_requests: "write" };
   return { metadata: "read", pull_requests: "write" };
 }
 
@@ -174,6 +193,7 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
   if (!record(issue) || (issue.state !== "open" && issue.state !== "closed") || issue.pull_request !== undefined) throw new Error("Resource is not an issue");
   const desired = operation.kind === "issue.close" ? "closed" : operation.kind === "issue.reopen" ? "open" : null;
   if (issue.state !== operation.expectedIssueState) throw new Error(`Precondition failed: issue state is ${String(issue.state)}`);
+  if (issue.updated_at !== operation.expectedIssueUpdatedAt) throw new Error("Precondition failed: issue changed after the operation was approved");
 
   if (operation.kind === "issue.label.add" || operation.kind === "issue.label.remove") {
     const labels = Array.isArray(issue.labels) ? issue.labels.flatMap((label) => record(label) && typeof label.name === "string" ? [label.name] : []) : [];
@@ -182,7 +202,7 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
     const response = operation.kind === "issue.label.add"
       ? await github(`${issuePath}/labels`, token, { method: "POST", body: JSON.stringify({ labels: [operation.label] }) })
       : await github(`${issuePath}/labels/${encodeURIComponent(operation.label)}`, token, { method: "DELETE" });
-    if (!response.ok) throw new Error(`GitHub label mutation failed (${response.status})`);
+    if (!response.ok) throw new ConnectOperationError(response.status === 429 ? "github_rate_limited" : "github_http_error", `GitHub label mutation failed (${response.status})`, response.status === 429 || response.status >= 500);
     await response.body?.cancel();
     return { status: "applied" };
   }
@@ -197,6 +217,7 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
     const expectedLogin = `${env.GITHUB_APP_SLUG}[bot]`.toLowerCase();
     const expectedIssueUrl = `${API}${issuePath}`;
     if (!record(existing) || existing.issue_url !== expectedIssueUrl) throw new Error("Comment is outside the granted issue");
+    if (existing.updated_at !== operation.expectedCommentUpdatedAt) throw new Error("Precondition failed: comment changed after the operation was approved");
     if (!record(existing.user) || String(existing.user.login).toLowerCase() !== expectedLogin) throw new Error("Only comments owned by this GitHub App may be updated");
     if (existing.body === operation.body) return { status: "already-applied", ...(positiveInteger(existing.id) ? { githubId: existing.id } : {}), ...(typeof existing.html_url === "string" ? { url: existing.html_url } : {}) };
     return parseCommentResult(await jsonResponse(await github(`${repoPath}/issues/comments/${operation.commentId}`, token, { method: "PATCH", body: JSON.stringify({ body: operation.body }) }), "Comment update"));
@@ -223,6 +244,7 @@ function assertPullRevision(pull: JsonRecord, operation: ExistingPullOperation):
 function assertPullEventState(pull: JsonRecord, operation: ExistingPullOperation): void {
   if (pull.state !== operation.expectedState) throw new Error(`Precondition failed: pull request state is ${String(pull.state)}`);
   if (pull.draft !== operation.expectedDraft) throw new Error("Precondition failed: pull request draft state changed");
+  if (pull.updated_at !== operation.expectedPullUpdatedAt) throw new Error("Precondition failed: pull request changed after the operation was approved");
 }
 
 async function executeReview(env: Env, operation: Extract<Operation, { kind: "pull_request.review.submit" }>, token: string): Promise<OperationResult> {
@@ -243,7 +265,7 @@ async function executeReview(env: Env, operation: Extract<Operation, { kind: "pu
       commit_id: operation.expectedHeadSha,
       event: operation.event.toUpperCase(),
       body: `${operation.body}${operation.body ? "\n" : ""}${marker}`,
-      comments: operation.comments.map((comment) => ({ path: comment.path, line: comment.line, side: "RIGHT", body: comment.body })),
+      comments: operation.comments.map((comment) => ({ path: comment.path, line: comment.line, side: comment.side, body: comment.body })),
     }),
   }), "Pull request review");
   if (!record(result) || !positiveInteger(result.id)) throw new Error("GitHub review response was invalid");
@@ -273,7 +295,7 @@ async function executeCommitCreate(env: Env, operation: Extract<Operation, { kin
   if (operation.files.some((file) => !isSafeFilePath(file.path))) throw new Error("Commit contains an invalid file path");
   const deniedPaths = [".github/workflows/", ".github/actions/", ".github/dependabot.yml", ".github/codeowners", "codeowners", "docs/codeowners"];
   if (operation.files.some((file) => deniedPaths.some((prefix) => file.path.toLowerCase() === prefix || file.path.toLowerCase().startsWith(prefix)))) throw new Error("Commit touches a protected repository path");
-  const totalBytes = operation.files.reduce((total, file) => total + (file.content === null ? 0 : new TextEncoder().encode(file.content).byteLength), 0);
+  const totalBytes = operation.files.reduce((total, file) => total + (file.contentBase64 === null ? 0 : Math.floor(file.contentBase64.length * 3 / 4)), 0);
   if (totalBytes > 5_000_000) throw new Error("Commit content exceeds the 5 MB operation limit");
   const repoPath = repositoryPath(operation);
   const reference = await getReference(repoPath, operation.branch, token);
@@ -291,14 +313,15 @@ async function executeCommitCreate(env: Env, operation: Extract<Operation, { kin
   const parentTree = await jsonResponse(await github(`${repoPath}/git/trees/${encodeURIComponent(parent.tree.sha)}?recursive=1`, token), "Parent tree lookup");
   if (!record(parentTree) || !Array.isArray(parentTree.tree) || parentTree.truncated === true) throw new Error("Parent tree response was invalid or truncated");
   const existingEntries = new Map(parentTree.tree.flatMap((entry) => record(entry) && typeof entry.path === "string" ? [[entry.path, entry] as const] : []));
-  const tree = operation.files.map((file) => {
+  const tree = await Promise.all(operation.files.map(async (file) => {
     const existing = existingEntries.get(file.path);
     const mode = existing?.mode;
     if (existing && (existing.type !== "blob" || (mode !== "100644" && mode !== "100755"))) throw new Error(`Commit cannot replace unsupported Git object: ${file.path}`);
-    return file.content === null
-      ? { path: file.path, mode: mode === "100755" ? "100755" : "100644", type: "blob", sha: null }
-      : { path: file.path, mode: mode === "100755" ? "100755" : "100644", type: "blob", content: file.content };
-  });
+    if (file.contentBase64 === null) return { path: file.path, mode: mode === "100755" ? "100755" : "100644", type: "blob", sha: null };
+    const blob = await jsonResponse(await github(`${repoPath}/git/blobs`, token, { method: "POST", body: JSON.stringify({ content: file.contentBase64, encoding: "base64" }) }), "Git blob creation");
+    if (!record(blob) || typeof blob.sha !== "string") throw new Error("Git blob response was invalid");
+    return { path: file.path, mode: mode === "100755" ? "100755" : "100644", type: "blob", sha: blob.sha };
+  }));
   const createdTree = await jsonResponse(await github(`${repoPath}/git/trees`, token, { method: "POST", body: JSON.stringify({ base_tree: parent.tree.sha, tree }) }), "Git tree creation");
   if (!record(createdTree) || typeof createdTree.sha !== "string") throw new Error("Git tree response was invalid");
   const createdCommit = await jsonResponse(await github(`${repoPath}/git/commits`, token, { method: "POST", body: JSON.stringify({ message: `${operation.message}\n\n${marker}`, tree: createdTree.sha, parents: [operation.expectedHeadSha] }) }), "Git commit creation");
@@ -307,7 +330,7 @@ async function executeCommitCreate(env: Env, operation: Extract<Operation, { kin
   return { status: "applied", githubId: createdCommit.sha, url: `https://github.com/${operation.repository.owner}/${operation.repository.name}/commit/${createdCommit.sha}` };
 }
 
-async function executePullOpen(env: Env, operation: Extract<Operation, { kind: "pull_request.open" }>, token: string): Promise<OperationResult> {
+async function executePullOpen(env: Env, operation: Extract<Operation, { kind: "pull_request.open_draft" }>, token: string): Promise<OperationResult> {
   if (!isValidGitBranchName(operation.head) || !isValidGitBranchName(operation.base) || !operation.head.startsWith("gardener/")) throw new Error("Pull request branches are invalid or the head is outside the gardener/ namespace");
   const repoPath = repositoryPath(operation);
   const [head, base] = await Promise.all([getReference(repoPath, operation.head, token), getReference(repoPath, operation.base, token)]);
@@ -457,14 +480,22 @@ async function executePullMerge(operation: Extract<Operation, { kind: "pull_requ
 export async function executeGitHubOperation(env: Env, operation: Operation): Promise<OperationResult> {
   const { installationId, name } = operation.repository;
   const token = await installationToken(env, installationId, name, operationPermissions(operation));
-  if ("issueNumber" in operation) return executeIssueOperation(env, operation, token);
+  if (operation.kind === "issue.label.add" || operation.kind === "issue.label.remove" || operation.kind === "issue.comment.create" || operation.kind === "issue.comment.update" || operation.kind === "issue.close" || operation.kind === "issue.reopen") return executeIssueOperation(env, operation, token);
   switch (operation.kind) {
     case "pull_request.review.submit": return executeReview(env, operation, token);
     case "branch.create": return executeBranchCreate(operation, token);
     case "commit.create": return executeCommitCreate(env, operation, token);
-    case "pull_request.open": return executePullOpen(env, operation, token);
+    case "pull_request.open_draft": return executePullOpen(env, operation, token);
     case "pull_request.update": return executePullUpdate(operation, token);
     case "pull_request.merge": return executePullMerge(operation, token);
+    case "issue.assignee.add": case "issue.assignee.remove":
+    case "pull_request.comment.create": case "pull_request.comment.update":
+    case "pull_request.reviewer.request": case "pull_request.reviewer.remove":
+    case "discussion.comment.create": case "discussion.comment.update":
+    case "discussion.answer.mark": case "discussion.answer.unmark": case "discussion.close": case "discussion.reopen":
+    case "check.rerun":
+    case "release.create": case "release.update": case "release.publish": case "release.delete":
+      throw new ConnectOperationError("unsupported_operation", `Connect does not implement verified GitHub execution for ${operation.kind}`);
   }
 }
 

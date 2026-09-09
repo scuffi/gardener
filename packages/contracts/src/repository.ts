@@ -1,29 +1,25 @@
 import { z } from "zod";
+import { githubNumericIdSchema } from "./identity";
 
-const identifier = z.string().trim().min(1).max(255);
+const name = z.string().trim().min(1).max(255).regex(/^[A-Za-z0-9_.-]+$/);
 
-/** A connector-independent, immutable reference to one GitHub repository. */
+/** Immutable Connect-resolved repository identity. Owner/name are display hints. */
 export const repositoryRefSchema = z.object({
-  provider: z.literal("github").default("github"),
-  id: identifier,
-  installationId: identifier,
-  owner: identifier.regex(/^[A-Za-z0-9_.-]+$/),
-  name: identifier.regex(/^[A-Za-z0-9_.-]+$/),
-  defaultBranch: z.string().trim().min(1).max(255).optional(),
+  provider: z.literal("github"),
+  id: githubNumericIdSchema,
+  installationId: githubNumericIdSchema,
+  owner: name,
+  name,
+  defaultBranch: z.string().trim().min(1).max(255),
 }).strict();
-
-export const repositorySchema = repositoryRefSchema;
 export type RepositoryRef = z.infer<typeof repositoryRefSchema>;
-export type Repository = RepositoryRef;
 
-export const issueRefSchema = z.object({
-  id: identifier,
-  number: z.number().int().positive(),
-}).strict();
+export const repositorySelectorSchema = z.union([githubNumericIdSchema, z.literal("this")]);
+export type RepositorySelector = z.infer<typeof repositorySelectorSchema>;
+
+export const issueRefSchema = z.object({ id: githubNumericIdSchema, number: z.number().int().positive() }).strict();
+export const pullRequestRefSchema = z.object({ id: githubNumericIdSchema, number: z.number().int().positive() }).strict();
+export const discussionRefSchema = z.object({ id: githubNumericIdSchema, number: z.number().int().positive() }).strict();
 export type IssueRef = z.infer<typeof issueRefSchema>;
-
-export const pullRequestRefSchema = z.object({
-  id: identifier,
-  number: z.number().int().positive(),
-}).strict();
 export type PullRequestRef = z.infer<typeof pullRequestRefSchema>;
+export type DiscussionRef = z.infer<typeof discussionRefSchema>;

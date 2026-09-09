@@ -1,64 +1,53 @@
 # Gardener
 
-Gardener is a repository-maintenance agent that users deploy into their own Cloudflare account. It observes GitHub issue events, runs a bounded Workers AI workflow, and turns agent output into typed operations that can be disabled, approved by a human, or executed automatically.
+Gardener is an Agent-native repository steward that customers deploy into their own Cloudflare account. Gardener Agents are portable `AGENT.md` packages: Markdown describes judgment and behavior, while strict structural capabilities, instance policy, human decisions, and managed Connect determine authority.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/scuffi/gardener)
 
-> **Current iteration:** the Issue Gardener workflow is live, and the complete typed maintainer operation surface—issues, branches, bounded commits, pull-request reviews and lifecycle changes, and protected merge—is policy-controlled in Gardener and bounded and revalidated by Connect. New code and pull-request policies start off. Computer-based code generation, scheduled stewardship, and additional workflows remain deferred. See [`docs/first-iteration.md`](docs/first-iteration.md).
+> **Foundation status — not production-ready:** the repository contains the strict Agent contracts/compiler, Agent-native D1 schema and persistence, Cloudflare Computer workspace adapter, replaceable harness adapters, OAuth MCP authoring boundary, Inbox/Agents dashboard, converged deployment configuration, management endpoints, and a fail-closed `AgentRunWorkflow` entrypoint. The trusted tool facade, Connect V2 observation/effect runtime integration, complete durable run loop, and real-resource end-to-end staging validation are still blockers. The current runtime deliberately records `agent_runtime_not_integrated` and performs no model, workspace, or GitHub action. Do not deploy this branch as a working automation product. See [Foundation status](docs/foundation-status.md).
 
-## How it is managed
+## Deployment boundaries
 
-This repository contains both deployment boundaries:
+This monorepo contains two independently deployed Workers:
 
-- **`apps/connect`** is operated centrally by the Gardener team. It owns the shared GitHub App and is the only component that can mint GitHub installation tokens.
-- **`apps/gardener`** is deployed into each user's Cloudflare account. It owns workflows, policy, Workers AI execution, runs, approvals, and audit history.
-- **`packages/contracts`** defines signed events, scoped grants, workflows, policies, runtime results, and typed operations.
-- **`packages/core`** implements immutable workflow compilation, policy evaluation, stable IDs, and the initial replaceable agent runtime.
+- **`apps/connect` — managed Gardener Connect.** The Gardener operator holds the shared GitHub App credentials, verifies webhooks, signs `RepositoryEventV2` envelopes, mints narrowly scoped grants, and executes strict typed GitHub operations. It is the only component that may hold GitHub installation tokens.
+- **`apps/gardener` — customer Gardener.** The customer owns Agents, immutable revisions, policies, runs, interruptions, effects, receipts, audit history, the dashboard, model usage, Computer workspaces, and artifacts in their Cloudflare account.
+- **`packages/contracts`** defines strict Agent, event, capability, policy, interruption, run, and operation schemas.
+- **`packages/core`** parses and compiles `AGENT.md`, resolves repository selectors to immutable IDs, creates stable hashes, evaluates trusted eligibility, and evaluates policy.
 
-GitHub credentials never enter the customer Worker, browser, model prompt, or agent workspace. See [`docs/architecture.md`](docs/architecture.md) and [`SECURITY.md`](SECURITY.md).
+The normal human flow remains:
 
-The hosted Connect service is the simplest path. Organizations that want to own the GitHub App, keys, connector data, and availability can follow the advanced [self-hosted Connect guide](docs/self-hosted-connect.md); the Gardener application and security contracts remain the same.
-
-Cloudflare Access is not required for Gardener's primary sign-in or signed event delivery. Organizations that already operate Zero Trust may optionally protect the complete Gardener hostname with a human policy plus a Connect service token. This layered mode avoids unreliable public path exceptions while preserving the existing GitHub owner flow; see [Optional Cloudflare Access protection](docs/cloudflare-access.md).
-
-## User deployment
-
-Once the managed Connect Worker is running:
-
-> The development repository is currently private. Cloudflare's Deploy button requires a public GitHub or GitLab source, so the button becomes shareable when this repository is made public or moved to its final public home. Direct Wrangler deployment remains available during private development.
-
-1. Open the Connect landing page and continue with GitHub.
-2. Gardener creates a one-time `GARDENER_INSTANCE_TOKEN`; select **Copy token & deploy to Cloudflare** and paste that single secret when prompted.
-3. Cloudflare provisions the Worker, D1 database, Queue, dead-letter Queue, static assets, and Workers AI binding.
-4. Open the deployed Worker and select **Configure Gardener**.
-5. The guided setup confirms the owner, opens the shared GitHub App repository picker, synchronizes every selected repository, and offers three understandable automation profiles.
-6. Select **Activate Gardener**. The selected policies, Issue Gardener workflow, and global activity are configured together; no manual settings tour is required.
-
-The bootstrap token carries its non-secret instance ID, so no second instance identifier is required. Connect stores only its SHA-256 hash. The customer Worker discovers Connect's public signing key from JWKS. The standard deployment needs no Cloudflare Access configuration; optional Access service credentials are registered separately and encrypted by managed Connect.
-
-The root `wrangler.jsonc` is the customer deployment configuration. It automatically provisions D1, a Queue and dead-letter Queue, static assets, and Workers AI. Gardener installs its idempotent initial D1 schema on first use, so a fresh deployment does not require a local migration command. It also reapplies additive policy-catalog compatibility rows safely at startup. Structural schema upgrades must run `pnpm exec wrangler d1 migrations apply DB --remote` (or an equivalent managed deploy step) before the updated Worker is released.
-
-Before publishing under a different repository URL, update the deploy badge and `DEPLOY_REPOSITORY_URL` in `apps/connect/wrangler.jsonc`.
-
-## Operating Connect
-
-Create one managed GitHub App with:
-
-- Callback URLs: `https://<connect-host>/v1/landing/callback` and `https://<connect-host>/v1/auth/github/callback`
-- Setup URL: `https://<connect-host>/v1/installations/callback`
-- Webhook URL: `https://<connect-host>/github/webhook`
-- Repository permissions: **Metadata, Administration, Checks, and Commit statuses: read**; **Contents, Issues, and Pull requests: read and write**
-- Events: **Issues** and **Pull requests**; installation lifecycle events are implicit
-
-Create a D1 database, configure its ID in `apps/connect/wrangler.jsonc`, apply `apps/connect/migrations`, and set the required secrets listed in `apps/connect/.dev.vars.example`. The Connect JWT signing key and GitHub App private key must be separate RSA keys. Operators offering optional Cloudflare Access service authentication must also configure an independent `ACCESS_CREDENTIAL_ENCRYPTION_KEY` for per-instance credential encryption.
-
-```bash
-pnpm install
-pnpm --filter @gardener/connect db:migrate
-pnpm deploy:connect
+```text
+Gardener → managed Connect → shared Gardener GitHub App → Gardener owner session
 ```
 
-The public `/v1/bootstrap` endpoint only creates an inert instance record and one-time token; it grants no GitHub access. Apply Cloudflare rate limiting/WAF policy to that endpoint before a broad public launch.
+GitHub credentials never enter the customer Worker, browser, model prompt, MCP client, Agent package, Computer workspace, or local tool. Self-hosting Connect is an [advanced operating mode](docs/self-hosted-connect.md), not an onboarding requirement.
+
+## Product model
+
+An owner creates an Agent by describing it in the dashboard, editing `AGENT.md`, publishing through Git, or using the draft-only OAuth MCP server. Every channel uses the same source parser, compiler, simulation, revision, and management boundaries.
+
+The lifecycle is deliberately multi-step:
+
+1. Edit a mutable, paused draft.
+2. Review strict requested capabilities and simulate without persistent effects.
+3. Publish an immutable **paused** revision.
+4. Explicitly activate that revision.
+5. Separately enable the Agent.
+
+Agent instructions cannot grant repositories, credentials, network access, tools, effect kinds, or policy modes. Omitted capabilities mean none. Unknown keys, trigger names, capabilities, operations, and package paths fail validation.
+
+At runtime, the target design uses one generic Cloudflare `AgentRunWorkflow` for every Agent revision. D1 is authoritative; Workflows owns durable continuation, retry, sleep, waits, cancellation, and replay. Independent runs and child tasks execute in parallel by default, while each writable run/task/principal receives an isolated Cloudflare Computer Durable Object workspace.
+
+Read [Agent authoring](docs/agent-authoring.md), [Architecture](docs/architecture.md), and [Security](SECURITY.md).
+
+## Managed deployment
+
+The intended public deployment deploys **Gardener only**; managed Connect already exists. The only required secret is the one-time `GARDENER_INSTANCE_TOKEN` created by Connect. The AI binding is used directly, including current AI Gateway model routing support, so the standard path does not require a model-provider secret.
+
+The repository is currently private, and Cloudflare deploy buttons require a public GitHub or GitLab source. The button above is not usable by external customers until the source is public. The root deployment configuration now describes the same Agent-native resources as `apps/gardener/wrangler.jsonc`; nevertheless, do not claim one-click deployment until the runtime foundation, real-resource staging checks, and public-source release gate are complete.
+
+Optional Cloudflare Access protection is defense in depth. It uses one full-host application with a human Allow policy and a dedicated Connect Service Auth policy; there is no public `/hooks/connect` bypass. See [Optional Cloudflare Access](docs/cloudflare-access.md).
 
 ## Local development
 
@@ -72,30 +61,28 @@ pnpm --filter @gardener/connect db:migrate:local
 pnpm --filter @gardener/app db:migrate:local
 ```
 
-Run Connect and Gardener in separate terminals, using different ports and local URLs in their development variables:
+Run the two Workers separately:
 
 ```bash
 pnpm --filter @gardener/connect exec wrangler dev --port 8788
 pnpm --filter @gardener/app exec wrangler dev --port 8787
 ```
 
+`LOCAL_DEV_BYPASS=true` is for private local development only. It must never be enabled on a public deployment.
+
 ## Validation
 
 ```bash
 pnpm check
-pnpm smoke:onboarding
 ```
 
-`smoke:onboarding` launches a local Connect simulator, a fresh local Gardener Worker, and headless Chrome. It drives the real account → repository picker → automation profile → live dashboard flow, verifies two synchronized repositories and the safe policy preset, delivers a signed issue webhook, processes the Queue run with the deterministic test adapter, and confirms an automatic typed label operation reached simulated Connect. It creates no GitHub App or remote Cloudflare resource. Set `CHROME_BIN` when Chrome is installed outside the standard macOS path.
+The complete Agent-native release gate is broader than this command: package tests and typechecks, Worker dry runs, migration tests, browser and accessibility review, deployed Workers AI, Workflows, Dynamic Worker, Durable Object, R2, and Container staging tests, Connect/GitHub permission verification, and exact-effect end-to-end tests must all pass. The Agent-native onboarding smoke validates local authoring lifecycle separation, Authorization-only event admission, fail-closed runtime behavior, responsive reflow, light/dark rendering, keyboard focus, and serious/critical Axe checks; it does not substitute for real Cloudflare staging.
 
-The `check` command:
+Dependencies are exactly pinned. Cloudflare Computer and Think are preview-only, and Flue is experimental; all remain behind Gardener-owned adapters. See [Version policy](docs/version-policy.md).
 
-1. Verifies every dependency is pinned to the latest npm release.
-2. Typechecks every workspace.
-3. Runs contract, core, Connect, and Gardener tests.
-4. Performs dry-run Wrangler builds for both Workers.
+## Destructive cutover
 
-Versions are exact and checked automatically; Dependabot also scans the workspace weekly. Current Cloudflare Agents, Computer, Sandbox, Wrangler, and Workers type releases were checked explicitly. After deploying, use **Settings & health → Test deployed model** to run the exact Workers AI JSON Schema request against the hosted model without creating a GitHub operation; a dry-run build cannot replace that deployed smoke test. See [`docs/version-policy.md`](docs/version-policy.md).
+The Agent-native schema intentionally removes old automation objects without export: old definitions, revisions, events, runs, proposals, results, and audit rows are deleted. Repository selections, instance settings/owner state where applicable, and operation policy modes are retained. Apply the reset only after review and deployment preparation; see [Foundation status](docs/foundation-status.md).
 
 ## License
 

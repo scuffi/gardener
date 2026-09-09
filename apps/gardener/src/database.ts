@@ -1,64 +1,113 @@
 import initialSchema from "../migrations/0001_initial.sql";
-import maintainerPolicies from "../migrations/0002_maintainer_policies.sql";
-import workflowRevisions from "../migrations/0003_workflow_revisions.sql";
+import agentNativeReset from "../migrations/0004_agent_native_reset.sql";
+
+export const AGENT_SCHEMA_VERSION = 4;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
-function statements(sql: string): string[] {
-  return sql.split(";").map((statement) => statement.trim()).filter((statement) => statement && !statement.startsWith("PRAGMA"));
-}
+/**
+ * D1 accepts one prepared statement at a time. Keep trigger bodies intact while
+ * splitting the migration files and ignore PRAGMAs (D1 controls them itself).
+ */
+export function migrationStatements(sql: string): string[] {
+  const result: string[] = [];
+  let buffer = "";
+  let trigger = false;
 
-async function workflowColumns(db: D1Database): Promise<Set<string>> {
-  const { results } = await db.prepare("PRAGMA table_info(workflows)").all<{ name: string }>();
-  return new Set(results.map((column) => column.name));
-}
+  for (const rawLine of sql.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!buffer && (!line || line.startsWith("--") || /^PRAGMA\b/i.test(line))) continue;
+    if (!line || line.startsWith("--")) continue;
 
-async function addWorkflowColumn(db: D1Database, columns: Set<string>, name: string, definition: string): Promise<void> {
-  if (columns.has(name)) return;
-  try {
-    await db.prepare(`ALTER TABLE workflows ADD COLUMN ${name} ${definition}`).run();
-    columns.add(name);
-  } catch (error) {
-    // Another isolate may have completed the additive migration after table_info ran.
-    if (!(await workflowColumns(db)).has(name)) throw error;
-    columns.add(name);
+    buffer += `${rawLine}\n`;
+    if (!trigger && /^\s*CREATE\s+TRIGGER\b/i.test(buffer)) trigger = true;
+
+    if (trigger) {
+      if (/^\s*END;\s*$/i.test(rawLine)) {
+        result.push(buffer.trim().replace(/;\s*$/, ""));
+        buffer = "";
+        trigger = false;
+      }
+      continue;
+    }
+
+    if (/;\s*$/.test(rawLine)) {
+      result.push(buffer.trim().replace(/;\s*$/, ""));
+      buffer = "";
+    }
   }
+
+  if (buffer.trim()) result.push(buffer.trim().replace(/;\s*$/, ""));
+  return result;
 }
 
-async function ensureWorkflowRevisionStorage(db: D1Database): Promise<void> {
-  const columns = await workflowColumns(db);
-  await addWorkflowColumn(db, columns, "active_revision", "INTEGER CHECK (active_revision IS NULL OR active_revision > 0)");
-  await addWorkflowColumn(db, columns, "revision_counter", "INTEGER NOT NULL DEFAULT 0 CHECK (revision_counter >= 0)");
+async function tableExists(db: D1Database, name: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .bind(name)
+    .first<{ name: string }>();
+  return row !== null;
+}
 
-  // ALTER TABLE is handled above because SQLite has no ADD COLUMN IF NOT EXISTS.
-  // The remaining CREATE statements are safe to reapply and intentionally do not backfill revisions.
-  const schemaObjects = statements(workflowRevisions)
-    .map((statement) => statement.replace(/^(?:\s*--[^\n]*(?:\n|$))+/, "").trim())
-    .filter((statement) => /^CREATE (?:TABLE|INDEX) IF NOT EXISTS\b/i.test(statement));
-  await db.batch(schemaObjects.map((statement) => db.prepare(statement)));
+async function installedVersion(db: D1Database): Promise<number | null> {
+  if (!(await tableExists(db, "gardener_schema"))) return null;
+  const row = await db
+    .prepare("SELECT version FROM gardener_schema WHERE singleton = 1")
+    .first<{ version: number }>();
+  return row?.version ?? null;
+}
+
+async function apply(db: D1Database, sql: string): Promise<void> {
+  const prepared = migrationStatements(sql).map((statement) => db.prepare(statement));
+  if (prepared.length > 0) await db.batch(prepared);
+}
+
+async function initialize(db: D1Database): Promise<void> {
+  const version = await installedVersion(db);
+  if (version === AGENT_SCHEMA_VERSION) return;
+  if (version !== null) {
+    throw new Error(`Unsupported Gardener database schema version ${version}`);
+  }
+
+  const legacy = await tableExists(db, "workflows")
+    || await tableExists(db, "workflow_revisions")
+    || await tableExists(db, "events")
+    || await tableExists(db, "runs")
+    || await tableExists(db, "proposals")
+    || await tableExists(db, "audit_records");
+
+  try {
+    await apply(db, legacy ? agentNativeReset : initialSchema);
+    if (!legacy) {
+      // 0001 intentionally leaves the marker empty so a fresh numbered chain can
+      // reach 0004. First-use provisioning claims the completed schema here.
+      await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, ?)")
+        .bind(AGENT_SCHEMA_VERSION)
+        .run();
+    }
+  } catch (error) {
+    // 0004's first write is a plain unique INSERT in the same atomic batch. A
+    // losing initializer aborts before any DROP. Fresh initializers race only
+    // on the marker after applying an entirely idempotent schema.
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw error;
+  }
+
+  if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) {
+    throw new Error("Gardener Agent schema initialization did not complete");
+  }
 }
 
 /**
  * Deploy to Cloudflare provisions D1 but does not run Wrangler migrations.
- * Initialize the idempotent schema on first use so a button deployment
- * needs no local CLI. Later schema changes still use numbered migrations.
+ * Fresh databases receive the Agent-native schema. Databases from 0001-0003
+ * receive the guarded one-time destructive reset. Agent data is never reset.
  */
 export function ensureDatabase(db: D1Database): Promise<void> {
   const key = db as unknown as object;
   const existing = initialization.get(key);
   if (existing) return existing;
 
-  const pending = (async () => {
-    try {
-      await db.prepare("SELECT key FROM settings LIMIT 1").first();
-    } catch {
-      await db.batch(statements(initialSchema).map((statement) => db.prepare(statement)));
-    }
-    await ensureWorkflowRevisionStorage(db);
-    // This additive compatibility migration is safe to reapply and prevents a deployed Worker
-    // from silently running with a partial operation-policy catalog.
-    await db.batch(statements(maintainerPolicies).map((statement) => db.prepare(statement)));
-  })();
+  const pending = initialize(db);
   initialization.set(key, pending);
   pending.catch(() => initialization.delete(key));
   return pending;

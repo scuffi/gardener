@@ -5,7 +5,7 @@ import { setupPolicyProfile } from "../src/setup";
 const maintainerOperations = [
   "branch.create",
   "commit.create",
-  "pull_request.open",
+  "pull_request.open_draft",
   "pull_request.update",
   "pull_request.review.submit",
   "pull_request.merge",

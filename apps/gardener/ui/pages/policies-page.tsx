@@ -1,5 +1,4 @@
 import { Banner } from "@cloudflare/kumo/components/banner";
-import type { OperationKind } from "@gardener/contracts";
 import { Button } from "@cloudflare/kumo/components/button";
 import { FloppyDiskIcon, ShieldCheckIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,27 +17,17 @@ const modeCopy: Record<PolicyMode, { label: string; description: string }> = {
   automatic: { label: "Automatic", description: "Valid proposals may execute without review." },
 };
 
-const policyGroups: Array<{ title: string; description: string; operations: readonly OperationKind[] }> = [
-  {
-    title: "Issues",
-    description: "Labels, comments, and issue state.",
-    operations: ["issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen"],
-  },
-  {
-    title: "Code changes",
-    description: "Branches and commits that modify repository content.",
-    operations: ["branch.create", "commit.create"],
-  },
-  {
-    title: "Pull requests",
-    description: "Opening, updating, reviewing, and merging pull requests.",
-    operations: ["pull_request.open", "pull_request.update", "pull_request.review.submit", "pull_request.merge"],
-  },
+const policyGroups: Array<{ title: string; description: string; operations: readonly string[] }> = [
+  { title: "Issues", description: "Labels, comments, assignees, and issue state.", operations: ["issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove"] },
+  { title: "Pull requests", description: "Comments, reviewers, reviews, metadata, drafts, and protected merges.", operations: ["pull_request.comment.create", "pull_request.comment.update", "pull_request.reviewer.request", "pull_request.reviewer.remove", "pull_request.review.submit", "pull_request.update", "pull_request.open_draft", "pull_request.merge"] },
+  { title: "Code", description: "Bounded branches and local-workspace-generated commits.", operations: ["branch.create", "commit.create"] },
+  { title: "Discussions", description: "Discussion comments, answers, and state.", operations: ["discussion.comment.create", "discussion.comment.update", "discussion.answer.mark", "discussion.answer.unmark", "discussion.close", "discussion.reopen"] },
+  { title: "Checks and releases", description: "Check reruns and draft, update, publication, or deletion of releases.", operations: ["check.rerun", "release.create", "release.update", "release.publish", "release.delete"] },
 ];
 
 function metadataFor(operation: string): { name: string; description: string } {
   return operation in operationMetadata
-    ? operationMetadata[operation as OperationKind]
+    ? operationMetadata[operation]!
     : { name: operation, description: "Control this GitHub operation." };
 }
 
@@ -79,7 +68,7 @@ export function PoliciesPage() {
 
   const policiesByKind = new Map(state.policies.map((policy) => [policy.operation_kind, policy]));
   const knownKinds = new Set(policyGroups.flatMap((group) => group.operations));
-  const unknownPolicies = state.policies.filter((policy) => !knownKinds.has(policy.operation_kind as OperationKind));
+  const unknownPolicies = state.policies.filter((policy) => !knownKinds.has(policy.operation_kind));
   const renderPolicy = (policy: Policy) => <PolicyRow
     key={policy.operation_kind}
     policy={policy}

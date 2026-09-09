@@ -33,6 +33,22 @@ const rootManifest = JSON.parse(await readFile(new URL("package.json", root), "u
 const [manager, managerVersion] = rootManifest.packageManager.split("@");
 configured.set(manager, { range: managerVersion, manifests: ["package.json#packageManager"] });
 
+// These packages are deliberately qualification-pinned. A newer release is a review
+// signal, not an automatic upgrade, because it can change preview/runtime behavior or
+// the repository's supported package-manager baseline.
+const qualificationPins = new Map([
+  ["@cloudflare/computer", "preview workspace adapter"],
+  ["@cloudflare/think", "preview harness adapter"],
+  ["@flue/cli", "qualified Flue adapter family"],
+  ["@flue/runtime", "qualified Flue adapter family"],
+  ["@flue/vite", "qualified Flue adapter family"],
+  ["@cloudflare/workers-oauth-provider", "qualified OAuth boundary"],
+  ["@modelcontextprotocol/server", "qualified MCP boundary"],
+  ["agents", "qualified Cloudflare Agents adapter"],
+  ["pnpm", "supported repository package-manager baseline"],
+  ["valibot", "qualified Flue runtime peer"],
+]);
+
 const exactVersion = (range) => range.match(/^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/)?.[1];
 const results = await Promise.all(
   [...configured].sort(([a], [b]) => a.localeCompare(b)).map(async ([name, detail]) => {
@@ -51,6 +67,8 @@ for (const { name, current, latest, detail } of results) {
   if (!current) {
     failed = true;
     console.error(`INVALID  ${name}@${detail.range} must be pinned to an exact version`);
+  } else if (current !== latest && qualificationPins.has(name)) {
+    console.log(`PINNED   ${name}@${current}; latest is ${latest} (${qualificationPins.get(name)})`);
   } else if (current !== latest) {
     failed = true;
     console.error(`OUTDATED ${name}@${current}; latest is ${latest} (${detail.manifests.join(", ")})`);

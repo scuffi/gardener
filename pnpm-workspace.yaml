@@ -3,7 +3,12 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  '@google/genai': false
+  '@mongodb-js/zstd': false
+  core-js-pure: false
   esbuild: true
+  node-liblzma: false
+  protobufjs: false
   workerd: true
 
 # These packages were explicitly version-checked against npm and are required
@@ -13,10 +18,15 @@ minimumReleaseAgeExclude:
   - "@types/node"
   - miniflare
   - wrangler
-  - "@cloudflare/kumo@2.13.0"
-  - "@cloudflare/vite-plugin@1.54.3"
+  - '@cloudflare/kumo@2.13.1 || 2.13.2'
+  - '@cloudflare/vite-plugin@1.54.4 || 1.54.6'
   - "@testing-library/user-event@14.6.7"
   - "@types/react-dom@19.2.7"
   - "vitest@5.0.0"
   - "@vitest/mocker@5.0.0"
   - "@vitest/spy@5.0.0"
+  - jose@6.2.11
+  - '@ai-sdk/gateway@4.0.76'
+  - '@ai-sdk/provider-utils@5.0.37'
+  - '@ai-sdk/provider@4.0.11'
+  - ai@7.0.94

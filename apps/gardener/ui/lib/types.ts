@@ -1,5 +1,3 @@
-import type { OperationKind, WorkflowSpecV2 } from "@gardener/contracts";
-
 export type Flag = boolean | 0 | 1;
 export type PolicyMode = "disabled" | "approval" | "automatic";
 export type SetupProfile = "safe" | "review" | "labels";
@@ -7,133 +5,141 @@ export type SetupProfile = "safe" | "review" | "labels";
 export interface HealthState {
   ok: boolean;
   database: boolean;
-  queue: boolean;
+  durableOrchestration?: boolean;
   workersAi: boolean;
   connectConfigured: boolean;
   localDevelopment: boolean;
-  codeExecution?: { enabled: boolean; status: string; experimental: boolean };
+  computer?: boolean | { configured: boolean; experimental: boolean };
+  artifactStorage?: boolean;
+  agentRuntime: { enabled: boolean; status: string };
+  oauthMcp?: boolean | { configured: boolean; route: string };
 }
 
 export interface Viewer { login: string }
 export interface SetupState { completed: boolean; profile?: SetupProfile | null; activeRepositories: number }
-export interface Workflow {
-  id: string;
-  name: string;
-  version: number;
-  enabled: Flag;
-  trigger_kind: string;
-  active_revision: number | null;
-  revision_counter: number;
-  latest_definition?: string | null;
-  updated_at?: string;
-}
 export interface Policy { operation_kind: string; mode: PolicyMode; updated_at?: string }
 export interface Repository { id: string; owner: string; name: string; active: Flag; paused: boolean; updated_at?: string; default_branch?: string | null }
-export interface Run {
-  id: string;
-  status: string;
-  summary?: string | null;
-  usage?: string | RunUsage | null;
-  error?: string | null;
-  created_at: string;
-  started_at?: string | null;
-  completed_at?: string | null;
-  workflow_name: string;
-  action: string;
-  owner: string;
-  name: string;
-}
 export interface RunUsage { model?: string; inputTokens?: number; outputTokens?: number; costUsd?: number }
-export interface Approval {
-  id: string;
-  run_id: string;
-  operation_kind: string;
-  policy_mode: PolicyMode;
-  rationale: string;
-  operation: string;
-  created_at: string;
-  summary?: string | null;
-  event_kind: string;
-  action: string;
-  resource_id: string;
-  owner: string;
-  name: string;
-}
-export interface AuditRecord { actor: string; action: string; resource_type: string; resource_id: string; created_at: string }
-export interface CapabilityState {
-  issueGardening: string;
-  pullRequestReview: string;
-  computerCodeChanges: string;
-  protectedMerge: string;
-}
+export interface CapabilityState { [name: string]: string }
 export interface AppState {
   globalPaused: boolean;
   viewer: Viewer;
   setup: SetupState;
-  workflows: Workflow[];
   policies: Policy[];
   repositories: Repository[];
-  runs: Run[];
-  approvals: Approval[];
-  audits: AuditRecord[];
-  capabilities: CapabilityState;
+  capabilities?: CapabilityState;
+  inboxCount?: number;
 }
-export interface RunProposal {
-  id: string;
-  run_id: string;
-  operation_kind: string;
-  rationale: string;
-  operation: string;
-  status: string;
-  receipt?: string | null;
-  error?: string | null;
-  created_at: string;
-  decided_at?: string | null;
-}
-export interface RunDetail { run: Record<string, unknown>; proposals: RunProposal[] }
 
-export interface WorkflowDiagnostic {
-  code: string;
-  path: string;
-  message: string;
-  capabilityId?: string;
+export type AgentLifecycle = "draft" | "paused" | "active";
+export interface AgentSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  lifecycle: AgentLifecycle;
+  activeRevision: number | null;
+  latestRevision: number | null;
+  hasDraft: boolean;
+  updatedAt: string;
 }
-export interface WorkflowValidation {
-  valid: boolean;
-  activatable: boolean;
-  diagnostics: WorkflowDiagnostic[];
-  spec?: WorkflowSpecV2;
-}
-export interface WorkflowRevision {
-  workflowId: string;
+export interface AgentRevisionSummary {
+  id: string;
   revision: number;
-  definition: { schemaVersion: "v2"; workflowId: string; revision: number; contentHash: string; spec: WorkflowSpecV2 };
-  compiledPlan: Record<string, unknown> | null;
-  contentHash: string;
-  validatorVersion: string;
-  sourceKind: "system" | "dashboard" | "agent";
-  createdBy: string;
+  sourceHash: string;
+  compiledHash?: string;
+  publishedAt: string;
+  publishedBy?: string;
+  active: boolean;
+}
+export interface AgentDraft {
+  id: string;
+  sourceMd: string;
+  sourceHash?: string;
+  updatedAt?: string;
+  thisRepositoryId?: string;
+}
+export interface AgentDetailResponse {
+  agent: AgentSummary;
+  draft: AgentDraft | null;
+  /** Latest immutable source used only to seed a new mutable draft. */
+  sourceMd?: string;
+  thisRepositoryId?: string;
+  revisions: AgentRevisionSummary[];
+}
+export interface AgentValidationDiagnostic { code: string; path?: string; message: string; severity?: "error" | "warning" }
+export interface AgentCapabilityReview {
+  observation: string[];
+  workspace: Array<string | { capability: string; mode?: PolicyMode }>;
+  effects: Array<string | { capability: string; mode?: PolicyMode }>;
+}
+export interface AgentValidation {
+  valid: boolean;
+  publishable?: boolean;
+  diagnostics: AgentValidationDiagnostic[];
+  capabilities?: AgentCapabilityReview;
+}
+export interface AgentSimulation {
+  status: "completed" | "blocked" | "failed";
+  summary: string;
+  proposedEffects?: Array<{ kind: string; summary?: string }>;
+  diagnostics?: AgentValidationDiagnostic[];
+}
+
+export type InboxItemKind = "interruption" | "effect" | "failed_run" | "draft_activation" | "eval_regression" | "workspace_cleanup";
+export interface InboxItem {
+  id: string;
+  kind: InboxItemKind;
+  status: "open" | "resolved" | "dismissed";
+  priority: "low" | "normal" | "high" | "urgent";
+  title: string;
+  summary: string;
+  runId?: string | null;
+  createdAt: string;
+  expiresAt?: string | null;
+  actions?: Array<"approve" | "reject" | "dismiss">;
+}
+export interface HistoryItem {
+  id: string;
+  kind: "run" | "decision" | "revision" | "agent" | "policy" | "system";
+  title: string;
+  summary?: string;
+  status?: string;
+  actor?: string;
+  agentId?: string;
+  runId?: string;
   createdAt: string;
 }
-export interface WorkflowDetail {
-  workflow: Workflow & { instructions: string; compiled_plan: string; created_at: string };
-  activeRevision: WorkflowRevision | null;
-  latestRevision: number;
-}
-export interface WorkflowRevisionDetail { revision: WorkflowRevision; currentValidation: WorkflowValidation }
-export interface WorkflowCreateResult { workflowId: string; duplicate: boolean; revision: WorkflowRevision }
 
-export const operationMetadata = {
+export const operationMetadata: Record<string, { name: string; description: string }> = {
   "issue.label.add": { name: "Add issue labels", description: "Add labels to issues." },
   "issue.label.remove": { name: "Remove issue labels", description: "Remove labels from issues." },
-  "issue.comment.create": { name: "Post issue comments", description: "Post new comments on issues." },
-  "issue.comment.update": { name: "Update issue comments", description: "Edit issue comments previously posted by Gardener." },
+  "issue.comment.create": { name: "Post issue comments", description: "Post comments on issues." },
+  "issue.comment.update": { name: "Update issue comments", description: "Edit comments previously posted by Gardener." },
   "issue.close": { name: "Close issues", description: "Close open issues." },
   "issue.reopen": { name: "Reopen issues", description: "Reopen closed issues." },
-  "branch.create": { name: "Create branches", description: "Create branches from a specific commit." },
-  "commit.create": { name: "Create commits", description: "Create commits that add, update, or delete files on a branch." },
-  "pull_request.open": { name: "Open pull requests", description: "Open draft or ready-for-review pull requests from a branch." },
-  "pull_request.update": { name: "Update pull requests", description: "Edit titles, descriptions, or draft status, and close or reopen pull requests." },
-  "pull_request.review.submit": { name: "Submit pull request reviews", description: "Submit review comments, approvals, or change requests." },
-  "pull_request.merge": { name: "Merge pull requests", description: "Merge eligible pull requests using an allowed merge method." },
-} satisfies Record<OperationKind, { name: string; description: string }>;
+  "issue.assignee.add": { name: "Add issue assignees", description: "Assign people to issues." },
+  "issue.assignee.remove": { name: "Remove issue assignees", description: "Remove people from issues." },
+  "pull_request.comment.create": { name: "Comment on pull requests", description: "Post pull request comments." },
+  "pull_request.comment.update": { name: "Update pull request comments", description: "Edit Gardener pull request comments." },
+  "pull_request.review.submit": { name: "Submit reviews", description: "Submit bounded pull request reviews." },
+  "pull_request.reviewer.request": { name: "Request reviewers", description: "Request pull request reviewers." },
+  "pull_request.reviewer.remove": { name: "Remove reviewers", description: "Remove requested reviewers." },
+  "pull_request.update": { name: "Update pull requests", description: "Update pull request metadata or state." },
+  "branch.create": { name: "Create branches", description: "Create a Gardener branch at an exact commit." },
+  "commit.create": { name: "Create commits", description: "Commit bounded file changes." },
+  "pull_request.open_draft": { name: "Open draft pull requests", description: "Open a draft pull request from a Gardener branch." },
+  "pull_request.merge": { name: "Merge pull requests", description: "Merge an eligible pull request after live revalidation." },
+  "discussion.comment.create": { name: "Comment on discussions", description: "Post discussion comments." },
+  "discussion.comment.update": { name: "Update discussion comments", description: "Edit Gardener discussion comments." },
+  "discussion.answer.mark": { name: "Mark discussion answers", description: "Mark a discussion comment as the answer." },
+  "discussion.answer.unmark": { name: "Unmark discussion answers", description: "Remove a discussion answer." },
+  "discussion.close": { name: "Close discussions", description: "Close discussions." },
+  "discussion.reopen": { name: "Reopen discussions", description: "Reopen discussions." },
+  "check.rerun": { name: "Rerun checks", description: "Rerun completed check runs." },
+  "release.create": { name: "Create draft releases", description: "Create draft releases." },
+  "release.update": { name: "Update releases", description: "Update release metadata." },
+  "release.publish": { name: "Publish releases", description: "Publish an exact draft release." },
+  "release.delete": { name: "Delete releases", description: "Delete a release after live revalidation." },
+};
