@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@gardener/contracts": "workspace:*",
-    "hono": "4.13.5",
-    "jose": "6.2.10",
+    "hono": "4.13.7",
+    "jose": "6.2.12",
     "zod": "4.5.4"
   },
   "devDependencies": {
