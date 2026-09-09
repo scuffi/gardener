@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, importSPKI, jwtVerify, type JWTPayload } from "jose";
 import { repositoryEventV2Schema, type RepositoryEventV2 } from "./domain";
-import { instanceId, type Env } from "./env";
+import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 
 const keyCache = new Map<string, Promise<CryptoKey>>();
 const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
@@ -21,7 +21,13 @@ function remoteKey(env: Env): ReturnType<typeof createRemoteJWKSet> {
   const url = new URL("/.well-known/jwks.json", env.CONNECT_URL).toString();
   let key = jwksCache.get(url);
   if (!key) {
-    key = createRemoteJWKSet(new URL(url));
+    const access = cloudflareAccessCredentials(env);
+    key = createRemoteJWKSet(new URL(url), access ? {
+      headers: {
+        "CF-Access-Client-Id": access.clientId,
+        "CF-Access-Client-Secret": access.clientSecret,
+      },
+    } : undefined);
     jwksCache.set(url, key);
   }
   return key;

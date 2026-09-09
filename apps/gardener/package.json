@@ -26,7 +26,7 @@
     "@phosphor-icons/react": "2.1.10",
     "@tanstack/react-query": "5.102.8",
     "agents": "0.22.0",
-    "ai": "7.0.94",
+    "ai": "7.0.95",
     "hono": "4.13.7",
     "jose": "6.2.12",
     "react": "19.2.8",

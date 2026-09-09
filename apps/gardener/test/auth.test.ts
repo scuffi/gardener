@@ -1,5 +1,5 @@
-import { exportSPKI, generateKeyPair, SignJWT } from "jose";
-import { describe, expect, it } from "vitest";
+import { exportJWK, exportSPKI, generateKeyPair, SignJWT } from "jose";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { bearerToken, verifyEventToken, verifyIdentityToken } from "../src/auth";
 import { cloudflareAccessCredentials, instanceId, type Env } from "../src/env";
 
@@ -15,6 +15,8 @@ async function fixture() {
   } as unknown as Env;
   return { privateKey, env };
 }
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("Connect authentication", () => {
   it("derives the non-secret instance id from the one copied bootstrap token", async () => {
@@ -45,6 +47,26 @@ describe("Connect authentication", () => {
       .setExpirationTime("5m")
       .sign(privateKey);
     await expect(verifyIdentityToken(token, env)).resolves.toMatchObject({ sub: "42" });
+  });
+
+  it("authenticates protected Connect JWKS discovery with the optional Access service token", async () => {
+    const { privateKey, publicKey } = await generateKeyPair("RS256");
+    const jwk = { ...await exportJWK(publicKey), kid: "protected-test", alg: "RS256", use: "sig" };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ keys: [jwk] }), { status: 200, headers: { "content-type": "application/json" } }));
+    const env = {
+      CONNECT_ISSUER: "https://protected-connect.example",
+      CONNECT_URL: "https://protected-connect.example",
+      GARDENER_INSTANCE_TOKEN: "gdn_instance-1.abcdefghijklmnopqrstuvwxyz012345",
+      CLOUDFLARE_ACCESS_CLIENT_ID: "access-id",
+      CLOUDFLARE_ACCESS_CLIENT_SECRET: "access-secret",
+    } as unknown as Env;
+    const token = await new SignJWT({ typ: "gardener-identity", githubLogin: "owner" })
+      .setProtectedHeader({ alg: "RS256", kid: "protected-test" })
+      .setIssuer(env.CONNECT_ISSUER).setAudience(instanceId(env)).setSubject("42").setExpirationTime("5m").sign(privateKey);
+    await expect(verifyIdentityToken(token, env)).resolves.toMatchObject({ sub: "42" });
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("cf-access-client-id")).toBe("access-id");
+    expect(headers.get("cf-access-client-secret")).toBe("access-secret");
   });
 
   it("rejects events for another instance", async () => {
