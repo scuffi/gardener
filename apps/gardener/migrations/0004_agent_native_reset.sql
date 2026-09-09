@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS gardener_schema (
   version INTEGER NOT NULL CHECK (version >= 4),
   installed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) STRICT;
-INSERT INTO gardener_schema (singleton, version) VALUES (1, 4);
+INSERT INTO gardener_schema (singleton, version) VALUES (1, 5);
 
 -- Child tables are removed before parents so foreign-key enforcement can stay on.
 DROP TABLE IF EXISTS run_agent_results;
@@ -185,6 +185,11 @@ CREATE TABLE IF NOT EXISTS repository_events (
   envelope_hash TEXT NOT NULL CHECK (length(envelope_hash) = 64),
   occurred_at TEXT,
   received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  admission_status TEXT NOT NULL DEFAULT 'pending' CHECK (admission_status IN ('pending', 'processing', 'completed')),
+  admission_token TEXT,
+  admission_lease_expires_at TEXT,
+  admission_completed_at TEXT,
+  CHECK ((admission_status = 'processing') = (admission_token IS NOT NULL AND admission_lease_expires_at IS NOT NULL)),
   UNIQUE(provider, delivery_id),
   FOREIGN KEY (repository_id) REFERENCES repositories(id)
 ) STRICT;

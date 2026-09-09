@@ -2,7 +2,7 @@
 
 ## Status
 
-This document describes the target architecture and identifies what exists in the current foundation. It is not a claim that end-to-end Agent execution is ready. The current `AgentRunWorkflow` fails closed before model or tool execution because trusted observation, tool, and exact-effect integrations are incomplete.
+This document describes the target architecture and identifies what exists in the current foundation. The current `AgentRunWorkflow` implements one experimental end-to-end slice: an immutable issue-opened event can produce a bounded model-only comment proposal and, under automatic policy, one host-constructed exact `issue.comment.create` effect through Connect V2. Tools, workspaces, approvals, multi-effect plans, and other event/operation kinds remain fail closed.
 
 ## Two independent deployment boundaries
 

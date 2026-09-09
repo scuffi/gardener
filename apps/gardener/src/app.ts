@@ -14,9 +14,19 @@ import { audit, getSetting, repositoryPauseSetting, setSetting } from "./instanc
 import { operationKindSchema, policyModeSchema, type RepositoryEventV2 } from "./domain";
 import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 import { createGardenerMcpOAuthProvider, type ConsentConsumeResult, type ConsentStateStore, type GardenerMcpEnv, type StoredConsentState } from "./mcp";
-import { admitRepositoryEvent, getRun, listAgents, listOpenInbox } from "./persistence";
+import {
+  admitRepositoryEvent,
+  claimRepositoryEventAdmission,
+  completeRepositoryEventAdmission,
+  getRun,
+  listAgents,
+  listOpenInbox,
+  listRepositoryEventRunIds,
+  releaseRepositoryEventAdmission,
+} from "./persistence";
 import { setupPolicyProfile, setupProfileIds } from "./setup";
 import { agentCatalog, agentManagement, createGardenerMcpServices } from "./agent-management";
+import { admitAgentRunsForEvent } from "./run-admission";
 
 interface AppBindings {
   Bindings: Env;
@@ -43,7 +53,7 @@ app.get("/api/health", async (c) => {
   let connectConfigured = false;
   try { connectConfigured = Boolean(c.env.CONNECT_URL && c.env.CONNECT_ISSUER && instanceId(c.env)); } catch { /* invalid bootstrap */ }
   const oauthConfigured = Boolean(c.env.OAUTH_KV);
-  const agentRuntime = { enabled: false, status: "fail-closed-foundation" } as const;
+  const agentRuntime = { enabled: true, status: "bounded-issue-comment-v1" } as const;
   return c.json({
     ok: database && Boolean(c.env.AI) && connectConfigured && agentRuntime.enabled,
     durableOrchestration: agentRuntime.enabled,
@@ -84,9 +94,28 @@ app.post("/hooks/connect", async (c) => {
     occurredAt: event.occurredAt,
   });
   if (admitted.admitted) await audit(c.env.DB, "connect", "repository_event.received", "repository_event", event.id, { deliveryId: event.deliveryId, kind: event.kind, action: event.action });
-  // Event admission is intentionally decoupled from execution until AgentRunWorkflow
-  // has trusted tools and Connect V2 exact-effect interfaces.
-  return c.json({ accepted: true, duplicate: !admitted.admitted, runs: [], runtime: "fail-closed" }, admitted.admitted ? 202 : 200);
+  const admissionToken = crypto.randomUUID();
+  const now = new Date();
+  const claimed = await claimRepositoryEventAdmission(c.env.DB, {
+    eventId: event.id,
+    token: admissionToken,
+    now: now.toISOString(),
+    leaseExpiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
+  });
+  if (!claimed) {
+    const runIds = await listRepositoryEventRunIds(c.env.DB, event.id);
+    return c.json({ accepted: true, duplicate: !admitted.admitted, runs: runIds.map((runId) => ({ runId, created: false })), runtime: "bounded-issue-comment-v1" }, 200);
+  }
+  try {
+    const runs = await admitAgentRunsForEvent(c.env, admitted.event.envelope, admitted.event.envelopeHash);
+    if (!await completeRepositoryEventAdmission(c.env.DB, { eventId: event.id, token: admissionToken, now: new Date().toISOString() })) {
+      throw new Error("Repository event admission completion lost its lease");
+    }
+    return c.json({ accepted: true, duplicate: !admitted.admitted, runs, runtime: "bounded-issue-comment-v1" }, admitted.admitted ? 202 : 200);
+  } catch (error) {
+    await releaseRepositoryEventAdmission(c.env.DB, { eventId: event.id, token: admissionToken });
+    throw error;
+  }
 });
 
 app.get("/api/auth/start", async (c) => c.redirect(await beginGitHubLogin(c.env, new URL(c.req.url).origin), 302));
@@ -222,7 +251,7 @@ app.get("/api/state", async (c) => {
     globalPaused: paused !== "false", viewer: { login: c.get("actorLogin") }, setup: { completed: onboardingCompleted === "true", profile: setupProfile, activeRepositories: repositories.results.filter((item) => Boolean(item.active)).length },
     agents, policies: policies.results, repositories: repositories.results.map((item) => ({ ...item, paused: pausedRepositories.has(String(item.id)) })),
     runs: runs.results, inbox, audits: audits.results,
-    capabilities: { agentAuthoring: "available", agentRuntime: "fail-closed", computerWorkspace: "preview", oauthMcp: c.env.OAUTH_KV ? "available" : "needs-kv-binding" },
+    capabilities: { agentAuthoring: "available", agentRuntime: "bounded-issue-comment", computerWorkspace: "preview", oauthMcp: c.env.OAUTH_KV ? "available" : "needs-kv-binding" },
   });
 });
 

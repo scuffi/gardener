@@ -4,7 +4,7 @@ Gardener is under active Agent-native integration and is not an SLA-backed servi
 
 ## Fail-closed release status
 
-The current foundation must not be treated as an operational Agent runtime. `AgentRunWorkflow` records `agent_runtime_not_integrated` and performs no model, workspace, or provider effect. Trusted harness tools, Connect V2 observations/effects, complete orchestration, and real Cloudflare staging remain required before release.
+The current runtime is operational only for one experimental bounded path: an eligible `github.issue.opened` event may produce one model-only proposal and an automatic-policy `issue.comment.create` exact effect through Connect V2. All tools, workspaces, approval-mode effects, other events/operations, and general orchestration remain unavailable. Do not treat this slice as a complete production Agent runtime; real Cloudflare staging and independent review remain required before broader release.
 
 ## Credential invariants
 

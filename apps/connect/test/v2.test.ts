@@ -107,4 +107,35 @@ describe("Operation V2 exact execution", () => {
     expect(JSON.parse(String(requests[0]!.init.body)).permissions).toEqual({ contents: "write", metadata: "read" });
     expect(JSON.parse(String(requests.at(-1)!.init.body))).toEqual({ ref: "refs/heads/gardener/fix", sha });
   });
+
+  it("recovers an ambiguously successful issue comment before mutable issue preconditions", async () => {
+    const requests: Array<{ url: URL; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input)); requests.push({ url, init });
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/issues/3") return json({ ...issue, state: "closed", updated_at: "2026-01-02T00:00:00Z" });
+      if (url.pathname === "/repos/acme/widgets/issues/3/comments") return json([{ id: 88, body: "Triage response\n<!-- gardener-operation:comment-retry -->", html_url: "https://github.com/acme/widgets/issues/3#issuecomment-88", user: { login: "gardener-connect-dev[bot]" } }]);
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "comment-retry", kind: "issue.comment.create", repository, issueNumber: 3, expectedIssueState: "open", expectedIssueUpdatedAt: issue.updated_at, body: "Triage response" });
+
+    await expect(executeGitHubOperation(env, operation)).resolves.toEqual({ status: "already-applied", githubId: 88, url: "https://github.com/acme/widgets/issues/3#issuecomment-88" });
+    expect(requests).toHaveLength(3);
+    expect(requests.some(({ init }) => init.method === "POST" && String(init.body).includes("Triage response"))).toBe(false);
+  });
+
+  it("enforces issue preconditions before posting when no operation marker exists", async () => {
+    const requests: Array<{ url: URL; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input)); requests.push({ url, init });
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/issues/3") return json({ ...issue, state: "closed", updated_at: "2026-01-02T00:00:00Z" });
+      if (url.pathname === "/repos/acme/widgets/issues/3/comments") return json([]);
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "comment-new", kind: "issue.comment.create", repository, issueNumber: 3, expectedIssueState: "open", expectedIssueUpdatedAt: issue.updated_at, body: "Triage response" });
+
+    await expect(executeGitHubOperation(env, operation)).rejects.toThrow("Precondition failed: issue state is closed");
+    expect(requests).toHaveLength(3);
+  });
 });

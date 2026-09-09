@@ -4,7 +4,7 @@ Gardener is an Agent-native repository steward that customers deploy into their 
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/scuffi/gardener)
 
-> **Foundation status — not production-ready:** the repository contains the strict Agent contracts/compiler, Agent-native D1 schema and persistence, Cloudflare Computer workspace adapter, replaceable harness adapters, OAuth MCP authoring boundary, Inbox/Agents dashboard, converged deployment configuration, management endpoints, and a fail-closed `AgentRunWorkflow` entrypoint. The trusted tool facade, Connect V2 observation/effect runtime integration, complete durable run loop, and real-resource end-to-end staging validation are still blockers. The current runtime deliberately records `agent_runtime_not_integrated` and performs no model, workspace, or GitHub action. Do not deploy this branch as a working automation product. See [Foundation status](docs/foundation-status.md).
+> **Experimental bounded runtime:** Gardener now admits enabled Agent revisions into one generic `AgentRunWorkflow` and supports one deliberately narrow live path: `github.issue.opened` → a model-only structured proposal → a host-constructed, automatic-policy `issue.comment.create` exact effect → Connect V2 receipt. The path uses immutable snapshots, strict budgets, live policy/pause revalidation, deterministic IDs, and durable retries. Approval-mode effects, harness tools, Computer/Container execution, child tasks, waits, and the rest of the operation catalog remain fail closed and are not production-ready. See [Foundation status](docs/foundation-status.md).
 
 ## Deployment boundaries
 
@@ -76,7 +76,7 @@ pnpm --filter @gardener/app exec wrangler dev --port 8787
 pnpm check
 ```
 
-The complete Agent-native release gate is broader than this command: package tests and typechecks, Worker dry runs, migration tests, browser and accessibility review, deployed Workers AI, Workflows, Dynamic Worker, Durable Object, R2, and Container staging tests, Connect/GitHub permission verification, and exact-effect end-to-end tests must all pass. The Agent-native onboarding smoke validates local authoring lifecycle separation, Authorization-only event admission, fail-closed runtime behavior, responsive reflow, light/dark rendering, keyboard focus, and serious/critical Axe checks; it does not substitute for real Cloudflare staging.
+The complete Agent-native release gate is broader than this command: package tests and typechecks, Worker dry runs, migration tests, browser and accessibility review, deployed Workers AI, Workflows, Dynamic Worker, Durable Object, R2, and Container staging tests, Connect/GitHub permission verification, and exact-effect end-to-end tests must all pass. The Agent-native onboarding smoke validates local authoring lifecycle separation, Authorization-only bounded run admission, validation-only simulation, responsive reflow, light/dark rendering, keyboard focus, and serious/critical Axe checks; it does not substitute for real Cloudflare staging.
 
 Dependencies are exactly pinned. Cloudflare Computer and Think are preview-only, and Flue is experimental; all remain behind Gardener-owned adapters. See [Version policy](docs/version-policy.md).
 

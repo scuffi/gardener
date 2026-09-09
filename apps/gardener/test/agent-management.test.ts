@@ -155,7 +155,7 @@ describe("Agent-native management API", () => {
     }
   });
 
-  it("exposes simulation only as an explicit fail-closed validation boundary", async () => {
+  it("exposes simulation only as an explicit validation-only boundary", async () => {
     const { sqlite, db } = newAgentDatabase();
     try {
       sqlite.prepare("INSERT INTO agents (id, slug, name, created_by) VALUES ('agent-one', 'agent-one', 'Agent', 'owner')").run();
@@ -163,7 +163,7 @@ describe("Agent-native management API", () => {
       await testApp.request("https://gardener.example/api/agents/agent-one/drafts", json("POST", { draftId: "draft-one", source }), env);
       const response = await testApp.request("https://gardener.example/api/agents/agent-one/drafts/draft-one/simulate", json("POST", {}), env);
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ mode: "validate-only", executed: false, persistentEffects: false, blockedReason: "Agent runtime is not integrated" });
+      expect(await response.json()).toMatchObject({ mode: "validate-only", executed: false, persistentEffects: false, blockedReason: "Simulation is validation-only; live execution is limited to the bounded issue-comment runtime" });
     } finally {
       sqlite.close();
     }

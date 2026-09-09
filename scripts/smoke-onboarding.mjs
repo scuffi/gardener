@@ -23,7 +23,7 @@ const screenshots = Object.fromEntries(["inbox", "agents", "agent-light", "agent
 const agentSource = `---
 schema: gardener.agent/v1
 name: Smoke issue gardener
-description: Reviews newly opened issues without persistent effects
+description: Proposes one bounded response for newly opened test issues
 triggers:
   - github.issue.opened
 repositories:
@@ -32,14 +32,15 @@ capabilities:
   observation:
     - github.issue.read
   workspace: []
-  effects: []
-authority-ceiling: approval
+  effects:
+    - issue.comment.create
+authority-ceiling: automatic
 limits:
   max-turns: 4
   max-tool-calls: 10
   max-parallel-tasks: 3
 ---
-Read the issue carefully and summarize missing context. Never claim an effect was executed.
+Read the issue carefully and summarize missing context. Propose a concise issue comment, but never claim an effect was executed.
 `;
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -110,10 +111,11 @@ try {
 
   await json("/api/repositories/sync", { method: "POST" });
   await json("/api/setup/activate", { method: "POST", body: JSON.stringify({ profile: "safe" }) });
+  await json("/api/policies/issue.comment.create", { method: "PUT", body: JSON.stringify({ mode: "automatic" }) });
   const validation = (await json("/api/agents/validate", { method: "POST", body: JSON.stringify({ sourceMd: agentSource }) })).body;
   if (!validation.valid || !validation.publishable) throw new Error(`Agent source did not validate: ${JSON.stringify(validation)}`);
   const simulation = (await json("/api/agents/simulate", { method: "POST", body: JSON.stringify({ sourceMd: agentSource }) })).body;
-  if (simulation.status !== "blocked" || simulation.executed !== false) throw new Error(`Simulation was not fail closed: ${JSON.stringify(simulation)}`);
+  if (simulation.status !== "blocked" || simulation.executed !== false) throw new Error(`Validation-only simulation unexpectedly executed: ${JSON.stringify(simulation)}`);
   const created = (await json("/api/agents", { method: "POST", body: JSON.stringify({ sourceMd: agentSource }) })).body;
   const agentId = created.agent.id;
   const published = (await json(`/api/agents/${agentId}/revisions`, { method: "POST", body: JSON.stringify({ sourceMd: agentSource }) })).body;
@@ -125,7 +127,7 @@ try {
 
   const delivery = await fetch(`${appUrl}/hooks/connect`, { method: "POST", headers: { authorization: `Bearer ${eventToken}` } });
   const deliveryBody = await delivery.json();
-  if (delivery.status !== 202 || deliveryBody.runtime !== "fail-closed" || deliveryBody.runs.length !== 0) throw new Error(`Event admission did not fail closed: ${JSON.stringify(deliveryBody)}`);
+  if (delivery.status !== 202 || deliveryBody.runtime !== "bounded-issue-comment-v1" || deliveryBody.runs.length !== 1) throw new Error(`Event did not admit exactly one bounded run: ${JSON.stringify(deliveryBody)}`);
   const duplicate = await fetch(`${appUrl}/hooks/connect`, { method: "POST", headers: { authorization: `Bearer ${eventToken}` } });
   if (duplicate.status !== 200 || !(await duplicate.json()).duplicate) throw new Error("Event deduplication failed");
   const missingApi = await fetch(`${appUrl}/api/does-not-exist`);
@@ -187,7 +189,7 @@ try {
   await visit("/policies", "Policies", screenshots.policies);
   await visit("/settings", "Settings", screenshots.settings);
   const runtimeReady = await evaluate(`([...document.querySelectorAll('.health-row')].find((row)=>row.textContent.includes('Durable orchestration'))?.textContent)||''`);
-  if (!runtimeReady.includes("Unavailable") || !runtimeReady.toLowerCase().includes("fail closed")) throw new Error(`Settings hid fail-closed runtime: ${runtimeReady}`);
+  if (!runtimeReady.includes("Ready") || !runtimeReady.includes("Bounded issue comment v1")) throw new Error(`Settings hid bounded runtime status: ${runtimeReady}`);
   await command("Emulation.setDeviceMetricsOverride", { width: 720, height: 900, deviceScaleFactor: 1, mobile: false });
   await visit(`/agents/${agentId}/draft`, "Edit Smoke issue gardener", screenshots["editor-zoom"]);
   if (!await evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")) throw new Error("Agent editor fails 200% reflow");

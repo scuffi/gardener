@@ -15,6 +15,9 @@ beforeAll(async () => {
   vi.doMock("../migrations/0004_agent_native_reset.sql", () => ({
     default: readFileSync(new URL("../migrations/0004_agent_native_reset.sql", import.meta.url), "utf8"),
   }));
+  vi.doMock("../migrations/0005_agent_runtime_admission.sql?raw", () => ({
+    default: readFileSync(new URL("../migrations/0005_agent_runtime_admission.sql", import.meta.url), "utf8"),
+  }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -24,7 +27,7 @@ describe("Agent-native database initialization", () => {
     try {
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 4 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 5 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
       for (const removed of ["workflows", "workflow_revisions", "events", "proposals"]) {
         expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(removed)).toBeUndefined();
@@ -40,6 +43,24 @@ describe("Agent-native database initialization", () => {
       expect(sqlite.prepare("SELECT mode FROM instance_capability_policies WHERE capability_kind = 'workspace.exec.container'").get()).toEqual({ mode: "approval" });
       expect(sqlite.prepare("SELECT mode FROM instance_capability_policies WHERE capability_kind = 'workspace.network.connect'").get()).toEqual({ mode: "disabled" });
       expect(sqlite.prepare("SELECT mode FROM instance_capability_policies WHERE capability_kind = 'workspace.dependencies.install'").get()).toEqual({ mode: "disabled" });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("upgrades an existing Agent-native v4 schema without losing data", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    try {
+      sqlite.exec("CREATE TABLE gardener_schema (singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT");
+      sqlite.exec("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)");
+      sqlite.exec("CREATE TABLE repository_events (id TEXT PRIMARY KEY) STRICT");
+      sqlite.exec("CREATE TABLE agents (id TEXT PRIMARY KEY) STRICT");
+      sqlite.prepare("INSERT INTO agents (id) VALUES (?)").run("agent-v4");
+      await ensureDatabase(d1Database(sqlite));
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 5 });
+      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v4" }]);
+      const columns = sqlite.prepare("PRAGMA table_info(repository_events)").all() as Array<{ name: string }>;
+      expect(columns.map((column) => column.name)).toContain("admission_status");
     } finally {
       sqlite.close();
     }

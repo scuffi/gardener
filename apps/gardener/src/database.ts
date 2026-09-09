@@ -1,7 +1,8 @@
 import initialSchema from "../migrations/0001_initial.sql";
 import agentNativeReset from "../migrations/0004_agent_native_reset.sql";
+import agentRuntimeAdmission from "../migrations/0005_agent_runtime_admission.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 4;
+export const AGENT_SCHEMA_VERSION = 5;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -65,6 +66,11 @@ async function apply(db: D1Database, sql: string): Promise<void> {
 async function initialize(db: D1Database): Promise<void> {
   const version = await installedVersion(db);
   if (version === AGENT_SCHEMA_VERSION) return;
+  if (version === 4) {
+    await apply(db, agentRuntimeAdmission);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime admission migration did not complete");
+    return;
+  }
   if (version !== null) {
     throw new Error(`Unsupported Gardener database schema version ${version}`);
   }

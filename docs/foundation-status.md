@@ -2,7 +2,7 @@
 
 ## Release state
 
-The hard Agent-native cutover is in progress. This branch is a foundation under integration, not a working end-to-end stewardship release. It must remain fail closed until every runtime authority boundary is connected and independently reviewed.
+The hard Agent-native cutover is complete. This branch now includes an experimental end-to-end runtime slice for explicitly labeled issue-opened events and automatic `issue.comment.create` policy. It is not yet a general repository-stewardship release: every unsupported event, non-automatic effect, tool, workspace, and orchestration path remains fail closed.
 
 ## Implemented foundations
 
@@ -14,7 +14,7 @@ The hard Agent-native cutover is in progress. This branch is a foundation under 
 - `@cloudflare/computer` workspace adapter with exact-SHA hydration, local-only Git, network-denied Worker execution, lazy Container, bounded outputs, sync blocking, frozen artifacts, ambiguous-replay handling, and cleanup leases.
 - Gardener-owned harness contract and conformance tests for Flue, Think, and direct Cloudflare Agents SDK + AI binding adapters.
 - OAuth-protected stateless MCP contract for read/validate/simulate/paused-draft/redacted-trace authoring.
-- One generic `AgentRunWorkflow` deployment entrypoint that currently fails closed.
+- One generic `AgentRunWorkflow` with a bounded model-only issue-comment path, immutable snapshot validation, deterministic admission/effect identities, live authority revalidation, Connect V2 execution, and strict receipt persistence.
 - Converged Agent-native root/app deployment configuration, Authorization-only Connect relay, local migration/dry-run validation, and Agent-native browser smoke coverage for lifecycle separation, event admission, light/dark, keyboard focus, responsive reflow, and serious/critical Axe findings.
 - Independent foundation security review and focused re-review of relay authentication, callback SSRF controls, run-state CAS, and fail-closed readiness reporting.
 
@@ -22,7 +22,7 @@ Passing focused tests for an individual foundation are useful but do not establi
 
 ## Current blockers
 
-- Implement the durable model/tool loop, deterministic parallel task groups, child joins, interruption waits, budget accounting, cancellation, effect sequencing, and cleanup in `AgentRunWorkflow`.
+- Generalize the currently single-turn, single-effect runtime into a durable tool loop with deterministic parallel task groups, child joins, interruption waits, complete budget accounting, cancellation, multi-effect sequencing, and cleanup.
 - Bind a trusted `GARDENER_HARNESS_TOOLS` facade that revalidates the immutable run snapshot, capabilities, budgets, and tool arguments and exposes no persistent-effect authority.
 - Finish Connect V2 trusted observations, exact-SHA snapshot delivery, the supported operation executors, live preconditions, and strict receipts. Verify GitHub webhook actions, API endpoints, App permissions, and owner reauthorization rather than guessing.
 - Keep operation policy seeds aligned with the canonical contract and leave unsupported operation kinds fail closed until their Connect executors are verified.
@@ -31,12 +31,12 @@ Passing focused tests for an individual foundation are useful but do not establi
 - Extend the Agent-native smoke with runtime-only cases—parallelism, interruptions, retries, stale responses, and exact receipts—after those trusted paths are implemented.
 - Complete real Cloudflare staging for Workflows, Worker Loader, harness Durable Objects/request storage, R2, Container, waits, joins, sync recovery, OAuth, and cleanup.
 
-## Fail-closed behavior today
+## Bounded and fail-closed behavior today
 
-- Connect hooks may persist a verified V2 event, but no Agent run is admitted for execution.
-- Draft simulation validates source and reports `executed: false`; it does not run the model or effects.
-- `AgentRunWorkflow` validates the run/snapshot binding and records `agent_runtime_not_integrated`.
-- Computer and harness adapters exist but are not generally reachable through an authoritative run.
+- Connect hooks persist verified V2 events and use a narrow admission lease. Eligible enabled revisions receive independent immutable runs only when the instance and repository are unpaused.
+- The live runtime accepts only `github.issue.opened` and only an effective automatic `issue.comment.create` capability. The model proposes comment text; trusted host code supplies repository identity, issue preconditions, operation ID, and hash.
+- Draft simulation remains validation-only and reports `executed: false`; it does not run the model or effects.
+- Approval-mode effects, typed interruption waits, workspace tools, Computer, Container, and delegated child tasks remain unavailable through the runtime.
 - Catalog operation kinds without a verified Connect executor must return a permanent typed unsupported result.
 - OAuth MCP returns unavailable unless its required storage binding is configured.
 

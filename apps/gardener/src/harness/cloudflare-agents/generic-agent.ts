@@ -1,3 +1,4 @@
+import { canonicalJson } from "@gardener/core";
 import { Agent } from "agents";
 import { NarrowedHarnessToolFacade } from "../adapter";
 import { outcomeFromDecision, parseHarnessDecision, unsupportedResponseOutcome } from "../structured";
@@ -16,6 +17,7 @@ import {
   emptyUsage,
   expectedHarnessBinding,
   harnessError,
+  parseHarnessOutcome,
 } from "../validation";
 
 export interface GardenerCloudflareAgentsEnv extends Cloudflare.Env {
@@ -57,15 +59,40 @@ export class GardenerCloudflareAgentsHarness extends Agent<
   private activeAbort: AbortController | null = null;
 
   async executeHarnessRequest(request: HarnessRequest): Promise<DirectHarnessExecution> {
-    assertHarnessRequest(request, expectedHarnessBinding("cloudflare-agents"));
-    const submission: HarnessSubmission = {
-      schemaVersion: "gardener.harness.submission/v1",
-      harness: request.snapshot.harness,
-      runId: request.runId,
-      requestId: request.requestId,
-      submissionId: request.requestId,
-      acceptedAt: new Date().toISOString(),
-    };
+    const binding = expectedHarnessBinding("cloudflare-agents");
+    assertHarnessRequest(request, binding);
+
+    const persistedRequest = this.state.requests[request.requestId];
+    const persistedOutcome = this.state.outcomes[request.requestId];
+    if (persistedRequest !== undefined || persistedOutcome !== undefined) {
+      if (persistedRequest === undefined) {
+        throw new HarnessContractError(
+          "integration-unavailable",
+          `Harness request ${request.requestId} has an outcome without its immutable request`,
+        );
+      }
+      assertHarnessRequest(persistedRequest, binding);
+      if (canonicalJson(persistedRequest) !== canonicalJson(request)) {
+        throw new HarnessContractError(
+          "invalid-request",
+          `Harness request ${request.requestId} conflicts with the persisted immutable request`,
+        );
+      }
+      if (persistedOutcome === undefined) {
+        throw new HarnessContractError(
+          "integration-unavailable",
+          `Harness request ${request.requestId} has an ambiguous in-flight execution; refusing duplicate inference`,
+        );
+      }
+      const submission = submissionFor(request, new Date(0).toISOString());
+      return {
+        request: persistedRequest,
+        submission,
+        outcome: parseHarnessOutcome(persistedOutcome, submission),
+      };
+    }
+
+    const submission = submissionFor(request, new Date().toISOString());
     this.setState({
       ...this.state,
       request,
@@ -88,18 +115,8 @@ export class GardenerCloudflareAgentsHarness extends Agent<
     const request = this.state.requests[requestId];
     const outcome = this.state.outcomes[requestId];
     if (!request || !outcome) return null;
-    return {
-      request,
-      submission: {
-        schemaVersion: "gardener.harness.submission/v1",
-        harness: request.snapshot.harness,
-        runId: request.runId,
-        requestId,
-        submissionId: requestId,
-        acceptedAt: new Date(0).toISOString(),
-      },
-      outcome,
-    };
+    const submission = submissionFor(request, new Date(0).toISOString());
+    return { request, submission, outcome };
   }
 
   cancelHarness(reason?: string): boolean {
@@ -275,6 +292,17 @@ export class GardenerCloudflareAgentsHarness extends Agent<
 
     return failure(submission, usage, events, "budget-exceeded", "Harness turn budget is exhausted");
   }
+}
+
+function submissionFor(request: HarnessRequest, acceptedAt: string): HarnessSubmission {
+  return {
+    schemaVersion: "gardener.harness.submission/v1",
+    harness: request.snapshot.harness,
+    runId: request.runId,
+    requestId: request.requestId,
+    submissionId: request.requestId,
+    acceptedAt,
+  };
 }
 
 function parseDirectResponse(value: unknown): DirectModelResponse | null {

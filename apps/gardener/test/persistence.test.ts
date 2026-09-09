@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import { canonicalOperationHash, canonicalSha256 } from "@gardener/core";
 import { describe, expect, it } from "vitest";
 import {
   activateAgentRevision,
@@ -6,9 +7,11 @@ import {
   admitRepositoryEvent,
   claimEffectExecution,
   claimInterruptionResponse,
+  claimRepositoryEventAdmission,
   claimRunStep,
   claimRunTask,
   claimWorkspaceCleanup,
+  completeRepositoryEventAdmission,
   completeRunStep,
   completeRunTask,
   completeWorkspaceCleanup,
@@ -23,7 +26,8 @@ import {
   getAgentDraft,
   getWorkspaceLease,
   publishAgentDraft,
-  recordEffectReceipt,
+  recordEffectOutcome,
+  releaseRepositoryEventAdmission,
   saveAgentDraft,
   setAgentEnabled,
   updateRunState,
@@ -236,6 +240,21 @@ describe("Agent persistence", () => {
         occurredAt: "2026-09-09T10:00:00.000Z",
       };
       expect((await admitRepositoryEvent(db, eventInput)).admitted).toBe(true);
+      expect(await claimRepositoryEventAdmission(db, {
+        eventId: "event-1", token: "lease-a", now: "2026-09-09T10:00:01.000Z", leaseExpiresAt: "2026-09-09T10:05:01.000Z",
+      })).toBe(true);
+      expect(await claimRepositoryEventAdmission(db, {
+        eventId: "event-1", token: "lease-b", now: "2026-09-09T10:00:02.000Z", leaseExpiresAt: "2026-09-09T10:05:02.000Z",
+      })).toBe(false);
+      expect(await releaseRepositoryEventAdmission(db, { eventId: "event-1", token: "wrong" })).toBe(false);
+      expect(await releaseRepositoryEventAdmission(db, { eventId: "event-1", token: "lease-a" })).toBe(true);
+      expect(await claimRepositoryEventAdmission(db, {
+        eventId: "event-1", token: "lease-c", now: "2026-09-09T10:00:03.000Z", leaseExpiresAt: "2026-09-09T10:05:03.000Z",
+      })).toBe(true);
+      expect(await completeRepositoryEventAdmission(db, { eventId: "event-1", token: "lease-c", now: "2026-09-09T10:00:04.000Z" })).toBe(true);
+      expect(await claimRepositoryEventAdmission(db, {
+        eventId: "event-1", token: "lease-d", now: "2026-09-09T10:10:00.000Z", leaseExpiresAt: "2026-09-09T10:15:00.000Z",
+      })).toBe(false);
       expect((await admitRepositoryEvent(db, { ...eventInput, id: "event-duplicate" })).admitted).toBe(false);
       await expect(admitRepositoryEvent(db, {
         ...eventInput,
@@ -426,6 +445,17 @@ describe("Agent persistence", () => {
     try {
       const { agentId, revisionId } = await createPublishedAgent(db);
       await createRun(db, runInput("manual-effect", agentId, revisionId, "manual", null));
+      const operation = {
+        schemaVersion: "v2" as const,
+        id: "operation-1",
+        kind: "issue.comment.create" as const,
+        repository: { provider: "github" as const, id: "123", installationId: "456", owner: "owner", name: "repo", defaultBranch: "main" },
+        issueNumber: 1,
+        expectedIssueState: "open" as const,
+        expectedIssueUpdatedAt: "2026-09-09T11:00:00.000Z",
+        body: "Hello",
+      };
+      const operationHash = await canonicalOperationHash(operation);
       await createEffect(db, {
         id: "effect-1",
         operationId: "operation-1",
@@ -434,8 +464,8 @@ describe("Agent persistence", () => {
         stepId: null,
         interruptionId: null,
         effectKind: "issue.comment.create",
-        operation: { body: "Hello" },
-        operationHash: hash("operation-exact"),
+        operation,
+        operationHash,
         rationale: "Respond",
         policyMode: "automatic",
         policySnapshotHash: hash("policy-manual-effect"),
@@ -447,30 +477,37 @@ describe("Agent persistence", () => {
       })).toBe(false);
       expect(await claimEffectExecution(db, {
         effectId: "effect-1",
-        operationHash: hash("operation-exact"),
+        operationHash,
       })).toBe(true);
       expect(await claimEffectExecution(db, {
         effectId: "effect-1",
-        operationHash: hash("operation-exact"),
-      })).toBe(false);
-      expect(await recordEffectReceipt(db, {
+        operationHash,
+      })).toBe(true);
+      const receipt = {
+        schemaVersion: "v2" as const,
+        operationId: operation.id,
+        operationHash,
+        kind: operation.kind,
+        status: "succeeded" as const,
+        attempt: 1,
+        attemptedAt: "2026-09-09T12:00:00.000Z",
+        completedAt: "2026-09-09T12:00:01.000Z",
+      };
+      await expect(recordEffectOutcome(db, {
         effectId: "effect-1",
         operationHash: hash("wrong-operation"),
-        receipt: { id: 10 },
-        receiptHash: hash("receipt-1"),
-        executedAt: "2026-09-09T12:00:00.000Z",
-      })).toBe(false);
-      expect(await recordEffectReceipt(db, {
+        receipt,
+      })).rejects.toThrow("stale or invalid");
+      const recorded = await recordEffectOutcome(db, {
         effectId: "effect-1",
-        operationHash: hash("operation-exact"),
-        receipt: { id: 10 },
-        receiptHash: hash("receipt-1"),
-        executedAt: "2026-09-09T12:00:00.000Z",
-      })).toBe(true);
+        operationHash,
+        receipt,
+      });
+      expect(recorded.effect.status).toBe("executed");
       expect(sqlite.prepare("SELECT status, operation_hash, receipt_hash FROM effects WHERE id = 'effect-1'").get()).toEqual({
         status: "executed",
-        operation_hash: hash("operation-exact"),
-        receipt_hash: hash("receipt-1"),
+        operation_hash: operationHash,
+        receipt_hash: await canonicalSha256(receipt),
       });
     } finally {
       sqlite.close();

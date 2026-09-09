@@ -30,3 +30,6 @@ minimumReleaseAgeExclude:
   - '@ai-sdk/provider-utils@5.0.37'
   - '@ai-sdk/provider@4.0.11'
   - ai@7.0.94 || 7.0.95
+  - react-dom@19.3.0
+  - react@19.3.0
+  - scheduler@0.28.0

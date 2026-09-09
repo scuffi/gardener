@@ -8,7 +8,7 @@ This is a hard Agent-native cutover. The old form-defined automation product and
 
 ## Current delivery status
 
-The Agent contracts/compiler, data model, Computer workspace, model harness, OAuth MCP, management API, Agent-native dashboard, converged deployment configuration, and fail-closed generic runtime entrypoint are foundations under integration. The trusted tool/effect loop, complete Connect V2 execution, and real staging validation remain incomplete. The application must report this honestly and perform no Agent action until those boundaries are complete. See [`docs/foundation-status.md`](docs/foundation-status.md).
+The Agent contracts/compiler, data model, Computer workspace, model harness, OAuth MCP, management API, Agent-native dashboard, and deployment configuration are foundations under integration. One experimental generic-runtime slice now supports a bounded model-only proposal and automatic `issue.comment.create` effect for eligible issue-opened events through Connect V2. The general trusted tool/effect loop, approval waits, broader operation execution, and full real-resource staging remain incomplete; unsupported paths must continue to fail closed. See [`docs/foundation-status.md`](docs/foundation-status.md).
 
 ## Users and outcomes
 

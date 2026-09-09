@@ -1,8 +1,10 @@
+import type { OperationReceipt } from "@gardener/contracts";
+import { validateOperationReceiptBinding } from "@gardener/core";
 import { operationSchema, type Operation } from "./domain";
 import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 
-async function connectRequest(env: Env, path: string, init: RequestInit): Promise<Response> {
-  const response = await fetch(new URL(path, env.CONNECT_URL), {
+async function fetchConnect(env: Env, path: string, init: RequestInit): Promise<Response> {
+  return fetch(new URL(path, env.CONNECT_URL), {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -10,11 +12,17 @@ async function connectRequest(env: Env, path: string, init: RequestInit): Promis
     },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 1_000);
-    throw new Error(`Connect ${path} failed (${response.status}): ${detail}`);
-  }
+}
+
+async function connectRequest(env: Env, path: string, init: RequestInit): Promise<Response> {
+  const response = await fetchConnect(env, path, init);
+  if (!response.ok) throw await connectResponseError(path, response);
   return response;
+}
+
+async function connectResponseError(path: string, response: Response, body?: string): Promise<Error> {
+  const detail = (body ?? await response.text()).slice(0, 1_000);
+  return new Error(`Connect ${path} failed (${response.status}): ${detail}`);
 }
 
 export async function claimGardenerInstance(env: Env, origin: string): Promise<void> {
@@ -76,7 +84,7 @@ export async function executeThroughConnect(
   runId: string,
   eventId: string,
   operationInput: Operation,
-): Promise<unknown> {
+): Promise<Readonly<OperationReceipt>> {
   const operation = operationSchema.parse(operationInput);
   const grantResponse = await connectRequest(env, "/v1/grants", {
     method: "POST",
@@ -92,10 +100,19 @@ export async function executeThroughConnect(
   const grantBody = (await grantResponse.json()) as { grant?: string };
   if (!grantBody.grant) throw new Error("Connect returned no run grant");
 
-  const operationResponse = await connectRequest(env, "/v1/operations", {
+  const operationResponse = await fetchConnect(env, "/v1/operations", {
     method: "POST",
     headers: { authorization: `Bearer ${grantBody.grant}` },
     body: JSON.stringify({ operation }),
   });
-  return operationResponse.json();
+  const responseBody = await operationResponse.text();
+  const receiptStatus = operationResponse.ok || operationResponse.status === 409 || operationResponse.status === 422 || operationResponse.status === 503;
+  if (receiptStatus) {
+    try {
+      return await validateOperationReceiptBinding(JSON.parse(responseBody), operation);
+    } catch (error) {
+      if (operationResponse.ok) throw error;
+    }
+  }
+  throw await connectResponseError("/v1/operations", operationResponse, responseBody);
 }

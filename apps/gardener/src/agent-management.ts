@@ -357,7 +357,7 @@ agentManagement.get("/agents/:id/drafts/:draftId", async (c) => {
 agentManagement.post("/agents/:id/drafts/:draftId/simulate", async (c) => {
   const draft = await getAgentDraft(c.env.DB, c.req.param("draftId"));
   if (!draft || draft.agentId !== c.req.param("id")) return c.json({ error: "Draft not found" }, 404);
-  return c.json({ mode: "validate-only", executed: false, persistentEffects: false, validation: draft.validation, blockedReason: "Agent runtime is not integrated" });
+  return c.json({ mode: "validate-only", executed: false, persistentEffects: false, validation: draft.validation, blockedReason: "Simulation is validation-only; live execution is limited to the bounded issue-comment runtime" });
 });
 agentManagement.post("/agents/:id/drafts/:draftId/publish", async (c) => {
   const denied = requireOwnerDashboard(c); if (denied) return denied;
@@ -421,7 +421,7 @@ agentManagement.post("/agents/simulate", async (c) => {
   return c.json({
     status: validation.valid ? "blocked" : "failed",
     summary: validation.valid
-      ? "Source is valid. Runtime simulation remains fail closed until trusted Agent execution is integrated."
+      ? "Source is valid. Simulation is validation-only and cannot invoke the bounded live runtime or persistent effects."
       : "Source validation failed; no simulation or persistent effect was executed.",
     diagnostics: validation.issues.map((issue) => ({ code: "invalid_agent_source", path: issue.path, message: issue.message, severity: "error" as const })),
     proposedEffects: [], executed: false,
@@ -543,7 +543,7 @@ class D1AgentAuthoringService implements AgentAuthoringService {
   }
   async simulate(input: SimulateInput): Promise<JsonObject> {
     const validation = input.source ? validateAgentSource(createAgentSource(input.source)) : { valid: true, issues: [] };
-    return JSON.parse(JSON.stringify({ mode: "validate-only", executed: false, persistentEffects: false, validation, event: input.event, blockedReason: "Agent runtime is not integrated" })) as JsonObject;
+    return JSON.parse(JSON.stringify({ mode: "validate-only", executed: false, persistentEffects: false, validation, event: input.event, blockedReason: "Simulation is validation-only; live execution is limited to the bounded issue-comment runtime" })) as JsonObject;
   }
   async savePausedDraft(input: PublishDraftInput, principal: GardenerMcpPrincipal): Promise<PausedDraftReceipt> {
     if (!input.agentId && input.expectedDraftVersion !== undefined && input.expectedDraftVersion !== 0) {

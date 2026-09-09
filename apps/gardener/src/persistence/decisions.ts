@@ -1,3 +1,5 @@
+import { operationSchema, type OperationReceipt } from "@gardener/contracts";
+import { canonicalOperationHash, canonicalSha256, validateOperationReceiptBinding } from "@gardener/core";
 import { changed, decodeJson, encodeJson, type PolicyMode } from "./shared";
 
 export type InterruptionKind = "clarification" | "capability" | "plan_review" | "effect_approval" | "patch_review" | "budget";
@@ -294,8 +296,16 @@ export async function getEffect(db: D1Database, effectId: string): Promise<Effec
 }
 
 export async function createEffect(db: D1Database, input: CreateEffectInput): Promise<EffectDto> {
+  const operation = operationSchema.parse(input.operation);
+  const operationHash = await canonicalOperationHash(operation);
+  if (operation.id !== input.operationId || operation.kind !== input.effectKind || operationHash !== input.operationHash) {
+    throw new Error("Effect is not bound to the canonical exact operation");
+  }
+  if (input.status === "approved" && (input.policyMode !== "automatic" || input.interruptionId !== null)) {
+    throw new Error("Only an automatic policy decision may create an approved effect");
+  }
   await db.prepare(`
-    INSERT INTO effects (
+    INSERT OR IGNORE INTO effects (
       id, operation_id, run_id, task_id, step_id, interruption_id, effect_kind,
       operation_json, operation_hash, rationale, policy_mode, policy_snapshot_hash, status
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -307,8 +317,8 @@ export async function createEffect(db: D1Database, input: CreateEffectInput): Pr
     input.stepId,
     input.interruptionId,
     input.effectKind,
-    encodeJson(input.operation),
-    input.operationHash,
+    encodeJson(operation),
+    operationHash,
     input.rationale,
     input.policyMode,
     input.policySnapshotHash,
@@ -316,6 +326,14 @@ export async function createEffect(db: D1Database, input: CreateEffectInput): Pr
   ).run();
   const effect = await getEffect(db, input.id);
   if (!effect) throw new Error("Effect creation failed");
+  if (
+    effect.operationId !== input.operationId
+    || effect.runId !== input.runId
+    || effect.operationHash !== operationHash
+    || effect.effectKind !== operation.kind
+    || effect.policyMode !== input.policyMode
+    || effect.policySnapshotHash !== input.policySnapshotHash
+  ) throw new Error("Effect dedupe conflict");
   return effect;
 }
 
@@ -327,24 +345,49 @@ export async function claimEffectExecution(
     UPDATE effects SET status = 'executing'
     WHERE id = ? AND operation_hash = ? AND status = 'approved'
   `).bind(input.effectId, input.operationHash).run();
-  return changed(result);
+  if (changed(result)) return true;
+  const effect = await getEffect(db, input.effectId);
+  return effect?.status === "executing" && effect.operationHash === input.operationHash;
 }
 
-export async function recordEffectReceipt(
+export async function recordEffectOutcome(
   db: D1Database,
-  input: { effectId: string; operationHash: string; receipt: unknown; receiptHash: string; executedAt: string },
-): Promise<boolean> {
+  input: { effectId: string; operationHash: string; receipt: unknown },
+): Promise<{ effect: EffectDto; receipt: Readonly<OperationReceipt>; retryable: boolean }> {
+  const effect = await getEffect(db, input.effectId);
+  if (!effect || effect.status !== "executing" || effect.operationHash !== input.operationHash) {
+    throw new Error("Effect execution claim is stale or invalid");
+  }
+  const receipt = await validateOperationReceiptBinding(input.receipt, effect.operation);
+  const receiptHash = await canonicalSha256(receipt);
+  const status: EffectStatus = receipt.status === "succeeded" || receipt.status === "skipped"
+    ? "executed"
+    : receipt.status === "conflicted"
+      ? "stale"
+      : receipt.error?.retryable
+        ? "executing"
+        : "failed";
+  const error = receipt.error ?? (receipt.status === "conflicted"
+    ? { code: "operation_conflicted", message: "The exact operation no longer matched live provider state", retryable: false }
+    : null);
   const result = await db.prepare(`
-    UPDATE effects SET status = 'executed', receipt_json = ?, receipt_hash = ?, executed_at = ?
+    UPDATE effects SET status = ?, receipt_json = ?, receipt_hash = ?, error_json = ?,
+      executed_at = CASE WHEN ? = 'executed' THEN ? ELSE executed_at END
     WHERE id = ? AND operation_hash = ? AND status = 'executing'
   `).bind(
-    encodeJson(input.receipt),
-    input.receiptHash,
-    input.executedAt,
+    status,
+    encodeJson(receipt),
+    receiptHash,
+    error === null ? null : encodeJson(error),
+    status,
+    receipt.completedAt,
     input.effectId,
     input.operationHash,
   ).run();
-  return changed(result);
+  if (!changed(result)) throw new Error("Effect outcome persistence conflict");
+  const updated = await getEffect(db, input.effectId);
+  if (!updated) throw new Error("Effect disappeared after outcome persistence");
+  return { effect: updated, receipt, retryable: status === "executing" };
 }
 
 export interface PutInboxItemInput {

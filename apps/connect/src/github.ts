@@ -191,6 +191,11 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
   const issuePath = `${repoPath}/issues/${operation.issueNumber}`;
   const issue = await jsonResponse(await github(issuePath, token), "Issue precondition lookup");
   if (!record(issue) || (issue.state !== "open" && issue.state !== "closed") || issue.pull_request !== undefined) throw new Error("Resource is not an issue");
+  if (operation.kind === "issue.comment.create") {
+    const marker = operationMarker(operation.id);
+    const comments = await paginatedArray(`${issuePath}/comments?sort=created&direction=desc`, token, "Comment idempotency lookup");
+    for (const comment of comments) if (authoredByApp(comment, env) && typeof comment.body === "string" && comment.body.includes(marker)) return { status: "already-applied", ...(positiveInteger(comment.id) ? { githubId: comment.id } : {}), ...(typeof comment.html_url === "string" ? { url: comment.html_url } : {}) };
+  }
   const desired = operation.kind === "issue.close" ? "closed" : operation.kind === "issue.reopen" ? "open" : null;
   if (issue.state !== operation.expectedIssueState) throw new Error(`Precondition failed: issue state is ${String(issue.state)}`);
   if (issue.updated_at !== operation.expectedIssueUpdatedAt) throw new Error("Precondition failed: issue changed after the operation was approved");
@@ -223,8 +228,6 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
     return parseCommentResult(await jsonResponse(await github(`${repoPath}/issues/comments/${operation.commentId}`, token, { method: "PATCH", body: JSON.stringify({ body: operation.body }) }), "Comment update"));
   }
   const marker = operationMarker(operation.id);
-  const comments = await paginatedArray(`${issuePath}/comments?sort=created&direction=desc`, token, "Comment idempotency lookup");
-  for (const comment of comments) if (authoredByApp(comment, env) && typeof comment.body === "string" && comment.body.includes(marker)) return { status: "already-applied", ...(positiveInteger(comment.id) ? { githubId: comment.id } : {}), ...(typeof comment.html_url === "string" ? { url: comment.html_url } : {}) };
   return parseCommentResult(await jsonResponse(await github(`${issuePath}/comments`, token, { method: "POST", body: JSON.stringify({ body: `${operation.body}\n${marker}` }) }), "Comment creation"));
 }
 

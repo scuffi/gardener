@@ -3,6 +3,11 @@ declare module "*.sql" {
   export default source;
 }
 
+declare module "*.sql?raw" {
+  const source: string;
+  export default source;
+}
+
 declare module "virtual:flue/worker" {
   const worker: ExportedHandler;
   export default worker;

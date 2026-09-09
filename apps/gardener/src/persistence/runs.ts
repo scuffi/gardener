@@ -34,6 +34,10 @@ interface EventRow {
   envelope_hash: string;
   occurred_at: string | null;
   received_at: string;
+  admission_status: "pending" | "processing" | "completed";
+  admission_token: string | null;
+  admission_lease_expires_at: string | null;
+  admission_completed_at: string | null;
 }
 
 export interface RepositoryEventDto {
@@ -53,6 +57,8 @@ export interface RepositoryEventDto {
   envelopeHash: string;
   occurredAt: string | null;
   receivedAt: string;
+  admissionStatus: "pending" | "processing" | "completed";
+  admissionCompletedAt: string | null;
 }
 
 function eventDto(row: EventRow): RepositoryEventDto {
@@ -73,6 +79,8 @@ function eventDto(row: EventRow): RepositoryEventDto {
     envelopeHash: row.envelope_hash,
     occurredAt: row.occurred_at,
     receivedAt: row.received_at,
+    admissionStatus: row.admission_status,
+    admissionCompletedAt: row.admission_completed_at,
   };
 }
 
@@ -117,6 +125,57 @@ export async function admitRepositoryEvent(
     throw new Error("Repository event dedupe conflict");
   }
   return { event: eventDto(row), admitted: changed(result) };
+}
+
+export async function getRepositoryEvent(db: D1Database, eventId: string): Promise<RepositoryEventDto | null> {
+  const row = await db.prepare("SELECT * FROM repository_events WHERE id = ?").bind(eventId).first<EventRow>();
+  return row ? eventDto(row) : null;
+}
+
+export async function claimRepositoryEventAdmission(
+  db: D1Database,
+  input: { eventId: string; token: string; now: string; leaseExpiresAt: string },
+): Promise<boolean> {
+  const result = await db.prepare(`
+    UPDATE repository_events
+    SET admission_status = 'processing', admission_token = ?, admission_lease_expires_at = ?
+    WHERE id = ? AND (
+      admission_status = 'pending'
+      OR (admission_status = 'processing' AND admission_lease_expires_at <= ?)
+    )
+  `).bind(input.token, input.leaseExpiresAt, input.eventId, input.now).run();
+  return changed(result);
+}
+
+export async function completeRepositoryEventAdmission(
+  db: D1Database,
+  input: { eventId: string; token: string; now: string },
+): Promise<boolean> {
+  const result = await db.prepare(`
+    UPDATE repository_events
+    SET admission_status = 'completed', admission_token = NULL,
+      admission_lease_expires_at = NULL, admission_completed_at = ?
+    WHERE id = ? AND admission_status = 'processing' AND admission_token = ?
+  `).bind(input.now, input.eventId, input.token).run();
+  return changed(result);
+}
+
+export async function releaseRepositoryEventAdmission(
+  db: D1Database,
+  input: { eventId: string; token: string },
+): Promise<boolean> {
+  const result = await db.prepare(`
+    UPDATE repository_events
+    SET admission_status = 'pending', admission_token = NULL, admission_lease_expires_at = NULL
+    WHERE id = ? AND admission_status = 'processing' AND admission_token = ?
+  `).bind(input.eventId, input.token).run();
+  return changed(result);
+}
+
+export async function listRepositoryEventRunIds(db: D1Database, eventId: string): Promise<string[]> {
+  const { results } = await db.prepare("SELECT id FROM agent_runs WHERE repository_event_id = ? ORDER BY id")
+    .bind(eventId).all<{ id: string }>();
+  return results.map((row) => row.id);
 }
 
 export type RunKind = "live" | "simulation" | "manual" | "scheduled";
