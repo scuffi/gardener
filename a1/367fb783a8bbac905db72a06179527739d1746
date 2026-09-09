@@ -1,0 +1,21 @@
+pnpm-lock.yaml
+  s_83a29251dfe610::t_51ad601dce7078 62,68,98,100-101,135,138,1870-1871,4331,4337,4340,4347,4376,4378,4386,4390-4394,4396,4614,4617,4683,4687,4907,4917,4927-4928,5416,5435-5437,5447,5463-5465,5475,5622,5632,7598,7601
+pnpm-workspace.yaml
+  s_83a29251dfe610::t_06a7b45bcb615d 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a1367fb783a8bbac905db72a06179527739d1746",
+  "prompts": {},
+  "sessions": {
+    "s_83a29251dfe610": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a06203-7eff-772e-86a2-71f2bdeae66a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
