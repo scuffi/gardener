@@ -3,14 +3,14 @@ import { validateOperationReceiptBinding } from "@gardener/core";
 import { operationSchema, type Operation } from "./domain";
 import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 
-async function fetchConnect(env: Env, path: string, init: RequestInit): Promise<Response> {
+async function fetchConnect(env: Env, path: string, init: RequestInit, timeoutMs = 15_000): Promise<Response> {
   return fetch(new URL(path, env.CONNECT_URL), {
     ...init,
     headers: {
       "content-type": "application/json",
       ...(init.headers ?? {}),
     },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 }
 
@@ -79,12 +79,12 @@ export async function listConnectedRepositories(env: Env): Promise<ConnectedRepo
   return body.repositories;
 }
 
-export async function executeThroughConnect(
+export async function createConnectRunGrant(
   env: Env,
   runId: string,
   eventId: string,
   operationInput: Operation,
-): Promise<Readonly<OperationReceipt>> {
+): Promise<string> {
   const operation = operationSchema.parse(operationInput);
   const grantResponse = await connectRequest(env, "/v1/grants", {
     method: "POST",
@@ -99,12 +99,20 @@ export async function executeThroughConnect(
   });
   const grantBody = (await grantResponse.json()) as { grant?: string };
   if (!grantBody.grant) throw new Error("Connect returned no run grant");
+  return grantBody.grant;
+}
 
+export async function executeConnectOperation(
+  env: Env,
+  grant: string,
+  operationInput: Operation,
+): Promise<Readonly<OperationReceipt>> {
+  const operation = operationSchema.parse(operationInput);
   const operationResponse = await fetchConnect(env, "/v1/operations", {
     method: "POST",
-    headers: { authorization: `Bearer ${grantBody.grant}` },
+    headers: { authorization: `Bearer ${grant}` },
     body: JSON.stringify({ operation }),
-  });
+  }, 150_000);
   const responseBody = await operationResponse.text();
   const receiptStatus = operationResponse.ok || operationResponse.status === 409 || operationResponse.status === 422 || operationResponse.status === 503;
   if (receiptStatus) {
@@ -115,4 +123,15 @@ export async function executeThroughConnect(
     }
   }
   throw await connectResponseError("/v1/operations", operationResponse, responseBody);
+}
+
+export async function executeThroughConnect(
+  env: Env,
+  runId: string,
+  eventId: string,
+  operationInput: Operation,
+): Promise<Readonly<OperationReceipt>> {
+  const operation = operationSchema.parse(operationInput);
+  const grant = await createConnectRunGrant(env, runId, eventId, operation);
+  return executeConnectOperation(env, grant, operation);
 }

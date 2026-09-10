@@ -130,7 +130,7 @@ export async function admitAgentRunsForEvent(
       created = result.created;
     }
 
-    await ensureWorkflow(env.AGENT_RUN_WORKFLOW, runId, { runId, runSnapshotHash });
+    await ensureWorkflow(env, runId, { runId, runSnapshotHash }, created);
     if (created) {
       await audit(env.DB, "runtime", "agent_run.admitted", "agent_run", runId, {
         eventId: event.id,
@@ -144,25 +144,32 @@ export async function admitAgentRunsForEvent(
 }
 
 async function ensureWorkflow(
-  binding: Workflow<AgentRunWorkflowPayload>,
+  env: Pick<Env, "DB" | "AGENT_RUN_WORKFLOW">,
   id: string,
   params: AgentRunWorkflowPayload,
+  newlyCreated: boolean,
 ): Promise<void> {
-  try {
-    await (await binding.get(id)).status();
-    return;
-  } catch {
-    // A deterministic instance may not exist yet after D1 admission.
-  }
-  try {
+  const binding = env.AGENT_RUN_WORKFLOW as Workflow<AgentRunWorkflowPayload>;
+  if (newlyCreated) {
     await binding.create({ id, params });
-  } catch (error) {
-    // Resolve a concurrent create without relying on unstable error messages.
-    try {
-      await (await binding.get(id)).status();
-      return;
-    } catch {
-      throw error;
-    }
+    return;
+  }
+  let instance: WorkflowInstance;
+  let status: Awaited<ReturnType<WorkflowInstance["status"]>>;
+  try {
+    instance = await binding.get(id);
+    status = await instance.status();
+  } catch {
+    await binding.create({ id, params });
+    return;
+  }
+  if (["queued", "running", "paused", "waiting", "waitingForPause", "complete"].includes(status.status)) return;
+  if (status.status === "unknown") {
+    await binding.create({ id, params });
+    return;
+  }
+  const run = await getRun(env.DB, id);
+  if (run && !["completed", "completed_with_errors", "failed", "cancelled"].includes(run.status)) {
+    await instance.restart();
   }
 }

@@ -166,11 +166,6 @@ CREATE TABLE IF NOT EXISTS repository_events (
   envelope_hash TEXT NOT NULL CHECK (length(envelope_hash) = 64),
   occurred_at TEXT,
   received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  admission_status TEXT NOT NULL DEFAULT 'pending' CHECK (admission_status IN ('pending', 'processing', 'completed')),
-  admission_token TEXT,
-  admission_lease_expires_at TEXT,
-  admission_completed_at TEXT,
-  CHECK ((admission_status = 'processing') = (admission_token IS NOT NULL AND admission_lease_expires_at IS NOT NULL)),
   UNIQUE(provider, delivery_id),
   FOREIGN KEY (repository_id) REFERENCES repositories(id)
 ) STRICT;

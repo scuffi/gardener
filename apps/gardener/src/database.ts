@@ -85,12 +85,11 @@ async function initialize(db: D1Database): Promise<void> {
   try {
     await apply(db, legacy ? agentNativeReset : initialSchema);
     if (!legacy) {
-      // 0001 intentionally leaves the marker empty so a fresh numbered chain can
-      // reach 0004. First-use provisioning claims the completed schema here.
-      await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, ?)")
-        .bind(AGENT_SCHEMA_VERSION)
-        .run();
+      // 0001 intentionally leaves the marker empty. First-use provisioning
+      // establishes the historical v4 baseline before applying numbered 0005.
+      await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)").run();
     }
+    await apply(db, agentRuntimeAdmission);
   } catch (error) {
     // 0004's first write is a plain unique INSERT in the same atomic batch. A
     // losing initializer aborts before any DROP. Fresh initializers race only

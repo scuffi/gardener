@@ -328,7 +328,9 @@ app.post("/v1/operations", async (c) => {
   const now = Math.floor(Date.now() / 1000);
   if (existing?.status === "executing" && (existing.lease_expires_at ?? Number.POSITIVE_INFINITY) > now) return c.json({ error: "Operation is already executing" }, 409);
   const attemptToken = crypto.randomUUID();
-  const leaseExpiresAt = now + 600;
+  // Gardener's operation request is bounded to 150 seconds and retries only
+  // after this 180-second ambiguity lease can be reclaimed safely.
+  const leaseExpiresAt = now + 180;
   if (!existing) await c.env.DB.prepare("INSERT INTO operation_receipts (operation_id, instance_id, grant_jti, operation_kind, operation, operation_hash, repository_id, resource_number, attempt_token, lease_expires_at, attempt_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)").bind(operation.id, grant.instanceId, grant.jti, operation.kind, serializedOperation, operationHash, grant.repositoryId, grant.resourceNumber, attemptToken, leaseExpiresAt).run();
   else {
     const claimed = await c.env.DB.prepare("UPDATE operation_receipts SET status = 'executing', grant_jti = ?, attempt_token = ?, lease_expires_at = ?, attempt_count = attempt_count + 1, operation_hash = ?, error = NULL, completed_at = NULL WHERE operation_id = ? AND attempt_count < 20 AND (status = 'failed' OR (status = 'executing' AND lease_expires_at <= ?))").bind(grant.jti, attemptToken, leaseExpiresAt, operationHash, operation.id, now).run();

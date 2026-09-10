@@ -2,6 +2,7 @@ import {
   agentRunSnapshotV1Schema,
   operationSchema,
   repositoryEventV2Schema,
+  runBudgetUsageV1Schema,
   type AgentRunSnapshotV1,
   type Operation,
   type RepositoryEventV2,
@@ -14,7 +15,7 @@ import {
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { getAgentByName } from "agents";
 import { z } from "zod";
-import { executeThroughConnect } from "./connect";
+import { createConnectRunGrant, executeConnectOperation } from "./connect";
 import type { Env } from "./env";
 import {
   createCloudflareAgentsHarness,
@@ -133,7 +134,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
 
       const taskId = `task_${runId.slice(4, 52)}`;
       const modelResultJson = await step.do<string>("bounded-model-proposal-v1", {
-        retries: { limit: context.snapshot.revision.spec.limits.retriesPerStep, delay: "2 seconds", backoff: "exponential" },
+        retries: { limit: context.snapshot.revision.spec.limits.retriesPerStep, delay: "3 seconds", backoff: "exponential" },
         timeout: Math.min(context.snapshot.revision.spec.limits.runtimeSeconds * 1_000, 15 * 60 * 1_000),
       }, async () => JSON.stringify(await this.runModelStep(runId, taskId, context.snapshot, context.repositoryEvent)));
       const modelResult = JSON.parse(modelResultJson) as { outcome: HarnessOutcome };
@@ -144,7 +145,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
       const completedOutcome = modelResult.outcome;
       if (completedOutcome.result.kind === "abstain") {
         await step.do("complete-abstained-run-v1", async () => {
-          await this.completeTaskAndRun(runId, taskId, completedOutcome, { kind: "abstain", summary: completedOutcome.result.summary }, false);
+          await this.completeTaskAndRun(runId, taskId, completedOutcome, { kind: "abstain", summary: completedOutcome.result.summary }, false, 0);
         });
         return;
       }
@@ -157,8 +158,8 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
       const effect = { ...effectValue, operation: operationSchema.parse(effectValue.operation) };
 
       const executionJson = await step.do<string>("execute-exact-comment-effect-v1", {
-        retries: { limit: context.snapshot.revision.spec.limits.retriesPerStep, delay: "5 seconds", backoff: "exponential" },
-        timeout: 60_000,
+        retries: { limit: context.snapshot.revision.spec.limits.retriesPerStep, delay: "190 seconds", backoff: "exponential" },
+        timeout: 160_000,
       }, async () => JSON.stringify(await this.executeEffect(runId, taskId, effect.effectId, effect.operation, effect.operationHash)));
       const execution = JSON.parse(executionJson) as { status: string; receipt: unknown };
 
@@ -171,17 +172,19 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
           operationHash: effect.operationHash,
           status: execution.status,
           receipt: execution.receipt,
-        }, hasErrors);
+        }, hasErrors, 1);
       });
     } catch (error) {
       await step.do("record-terminal-runtime-failure-v1", async () => {
         const run = await getRun(this.env.DB, runId);
-        if (!run || ["completed", "completed_with_errors", "failed", "cancelled"].includes(run.status)) return;
+        if (!run) return;
         const failure = {
           code: "agent_runtime_failed",
           message: error instanceof Error ? error.message.slice(0, 2_000) : "Unknown runtime failure",
           runtimeVersion,
         };
+        const task = await this.env.DB.prepare("SELECT input_hash FROM run_tasks WHERE id = ?").bind(taskIdForRun(runId)).first<{ input_hash: string }>();
+        if (task) await failRunTask(this.env.DB, { taskId: taskIdForRun(runId), inputHash: task.input_hash, error: failure, usage: run.usage });
         if (run.status === "running" || run.status === "waiting" || run.status === "queued" || run.status === "admitted") {
           await updateRunState(this.env.DB, {
             runId,
@@ -191,8 +194,6 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
             error: failure,
           });
         }
-        const task = await this.env.DB.prepare("SELECT input_hash FROM run_tasks WHERE id = ?").bind(taskIdForRun(runId)).first<{ input_hash: string }>();
-        if (task) await failRunTask(this.env.DB, { taskId: taskIdForRun(runId), inputHash: task.input_hash, error: failure, usage: run.usage });
       });
     }
   }
@@ -224,7 +225,6 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
 
     const prompt = buildPrompt(snapshot.revision.spec.behavior, repositoryEvent);
     const modelInputHash = await canonicalSha256({ prompt, snapshotHash: snapshot.snapshotHash, eventId: repositoryEvent.id });
-    const requestId = `model_${modelInputHash}`;
     const stepId = `step_${modelInputHash}`;
     const runStep = await createRunStep(this.env.DB, {
       id: stepId,
@@ -232,7 +232,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
       taskId,
       stableKey: "model-proposal-v1",
       kind: "model",
-      input: { requestId, promptHash: modelInputHash },
+      input: { promptHash: modelInputHash },
       inputHash: modelInputHash,
       maxAttempts: 1 + limits.retriesPerStep,
     });
@@ -246,6 +246,9 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
     } else if (runStep.step.status !== "running") {
       throw new Error(`Model step cannot resume from ${runStep.step.status}`);
     }
+    const claimedStep = await getRunStep(this.env.DB, stepId);
+    if (!claimedStep || claimedStep.status !== "running" || claimedStep.attemptCount < 1) throw new Error("Model step claim was not persisted");
+    const requestId = `model_${modelInputHash}_${claimedStep.attemptCount}`;
 
     const request: HarnessRequest = {
       schemaVersion: "gardener.harness.request/v1",
@@ -286,12 +289,14 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
           artifactRefs: [],
         });
       } else {
+        const retryable = outcome.status === "failed" && outcome.error.retryable;
         await failRunStep(this.env.DB, {
           stepId,
           inputHash: modelInputHash,
           error: outcome.status === "failed" || outcome.status === "cancelled" ? outcome.error : outcome.interruption,
-          retryAt: null,
+          retryAt: retryable ? new Date(Date.now() + 2_000).toISOString() : null,
         });
+        if (retryable) throw new Error(`Retryable harness failure: ${outcome.error.code}`);
       }
       return { outcome };
     } catch (error) {
@@ -362,18 +367,11 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
   ): Promise<{ status: string; receipt: unknown }> {
     const operation = operationSchema.parse(operationInput);
     if (await canonicalOperationHash(operation) !== operationHash) throw new Error("Exact effect hash changed before execution");
-    const priorEffect = await getEffect(this.env.DB, effectId);
-    if (
-      priorEffect?.operationHash === operationHash
-      && ["executed", "failed", "stale"].includes(priorEffect.status)
-    ) return { status: priorEffect.status, receipt: priorEffect.receipt };
-    await assertLiveAutomaticAuthority(this.env, runId, operation);
-    if (!await claimEffectExecution(this.env.DB, { effectId, operationHash })) throw new Error("Exact effect could not be claimed");
-
     const inputHash = await canonicalSha256({ effectId, operationHash });
     const stepId = `step_effect_${operationHash}`;
     const run = await getRun(this.env.DB, runId);
-    const retries = agentRunSnapshotV1Schema.parse(run?.runSnapshot).revision.spec.limits.retriesPerStep;
+    if (!run?.repositoryEventId) throw new Error("Run event binding disappeared before effect execution");
+    const retries = agentRunSnapshotV1Schema.parse(run.runSnapshot).revision.spec.limits.retriesPerStep;
     const runStep = await createRunStep(this.env.DB, {
       id: stepId,
       runId,
@@ -384,14 +382,33 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
       inputHash,
       maxAttempts: 1 + retries,
     });
-    if (runStep.step.status === "pending" || runStep.step.status === "failed") {
-      await claimRunStep(this.env.DB, { stepId, inputHash, now: new Date().toISOString() });
+    if (runStep.step.status === "succeeded") {
+      const result = z.object({ effectId: z.string(), status: z.string(), receipt: z.unknown() }).parse(runStep.step.result);
+      return { status: result.status, receipt: result.receipt };
     }
+    if (runStep.step.status === "pending" || runStep.step.status === "failed") {
+      if (!await claimRunStep(this.env.DB, { stepId, inputHash, now: new Date().toISOString() })) {
+        throw new Error("Effect step retry budget or retry time is not available");
+      }
+    } else if (runStep.step.status !== "running") {
+      throw new Error(`Effect step cannot execute from ${runStep.step.status}`);
+    }
+
+    const priorEffect = await getEffect(this.env.DB, effectId);
+    if (priorEffect?.operationHash === operationHash && ["executed", "failed", "stale"].includes(priorEffect.status)) {
+      const result = { effectId, status: priorEffect.status, receipt: priorEffect.receipt };
+      await completeRunStep(this.env.DB, { stepId, inputHash, result, resultHash: await canonicalSha256(result), artifactRefs: [] });
+      return { status: priorEffect.status, receipt: priorEffect.receipt };
+    }
+    if (!await claimEffectExecution(this.env.DB, { effectId, operationHash })) throw new Error("Exact effect could not be claimed");
+    await assertLiveAutomaticAuthority(this.env, runId, operation);
     try {
-      const receipt = await executeThroughConnect(this.env, runId, run!.repositoryEventId!, operation);
+      const grant = await createConnectRunGrant(this.env, runId, run.repositoryEventId, operation);
+      await assertLiveAutomaticAuthority(this.env, runId, operation);
+      const receipt = await executeConnectOperation(this.env, grant, operation);
       const recorded = await recordEffectOutcome(this.env.DB, { effectId, operationHash, receipt });
       if (recorded.retryable) {
-        await failRunStep(this.env.DB, { stepId, inputHash, error: recorded.receipt.error, retryAt: new Date(Date.now() + 5_000).toISOString() });
+        await failRunStep(this.env.DB, { stepId, inputHash, error: recorded.receipt.error, retryAt: new Date(Date.now() + 190_000).toISOString() });
         throw new Error(`Retryable Connect failure: ${recorded.receipt.error?.code ?? "unknown"}`);
       }
       await completeRunStep(this.env.DB, {
@@ -409,7 +426,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
           stepId,
           inputHash,
           error: { code: "effect_execution_failed", message: error instanceof Error ? error.message : "Unknown effect failure" },
-          retryAt: new Date(Date.now() + 5_000).toISOString(),
+          retryAt: new Date(Date.now() + 190_000).toISOString(),
         });
       }
       throw error;
@@ -422,7 +439,22 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
     outcome: HarnessOutcome,
     result: unknown,
     hasErrors: boolean,
+    operationCount: number,
   ): Promise<void> {
+    const run = await getRun(this.env.DB, runId);
+    const runtimeSeconds = run?.startedAt ? Math.max(0, (Date.now() - Date.parse(run.startedAt)) / 1_000) : 0;
+    const usage = runBudgetUsageV1Schema.parse({
+      turns: outcome.usage.turns,
+      toolCalls: outcome.usage.toolCalls,
+      tasksCreated: 1,
+      activeParallelTasks: 0,
+      inputTokens: outcome.usage.inputTokens,
+      outputTokens: outcome.usage.outputTokens,
+      costUsd: 0,
+      operations: operationCount,
+      artifactBytes: 0,
+      runtimeSeconds,
+    });
     const task = await this.env.DB.prepare("SELECT input_hash, status FROM run_tasks WHERE id = ?").bind(taskId).first<{ input_hash: string; status: string }>();
     if (task?.status === "running") {
       await completeRunTask(this.env.DB, {
@@ -430,16 +462,15 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
         inputHash: task.input_hash,
         result,
         resultHash: await canonicalSha256(result),
-        usage: outcome.usage,
+        usage,
       });
     }
-    const run = await getRun(this.env.DB, runId);
     if (run?.status === "running") {
       await updateRunState(this.env.DB, {
         runId,
         expectedStatus: "running",
         status: hasErrors ? "completed_with_errors" : "completed",
-        usage: outcome.usage,
+        usage,
         error: hasErrors ? { code: "effect_not_executed", message: "The exact effect did not execute successfully" } : null,
       });
     }
