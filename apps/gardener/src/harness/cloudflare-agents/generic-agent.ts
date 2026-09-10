@@ -1,6 +1,7 @@
 import { canonicalJson } from "@gardener/core";
 import { Agent } from "agents";
 import { NarrowedHarnessToolFacade } from "../adapter";
+import { resultDataSchemaIssue } from "../result-schema";
 import { outcomeFromDecision, parseHarnessDecision, unsupportedResponseOutcome } from "../structured";
 import type {
   HarnessActivityEvent,
@@ -232,11 +233,19 @@ export class GardenerCloudflareAgentsHarness extends Agent<
       }
       try {
         const parsed = parseHarnessDecision(decision);
+        if (request.resultDataSchema) {
+          if (parsed.status !== "completed") return unsupportedResponseOutcome(submission, usage, events, "Workers AI returned an interruption for a completed-only request");
+          const issue = resultDataSchemaIssue(request.resultDataSchema, parsed.result.data);
+          if (issue) return unsupportedResponseOutcome(submission, usage, events, `Workers AI result violated resultDataSchema: ${issue}`);
+        }
         return outcomeFromDecision(parsed, submission, usage, events);
       } catch {
         // It may be a bounded workspace/observation tool decision.
       }
 
+      if (request.resultDataSchema) {
+        return unsupportedResponseOutcome(submission, usage, events, "Workers AI returned a non-completed decision for a completed-only request");
+      }
       const toolDecision = parseToolDecision(decision);
       if (!toolDecision) {
         return unsupportedResponseOutcome(submission, usage, events, "Workers AI returned an unknown decision shape");
@@ -402,9 +411,15 @@ function completedDecisionJsonSchema(resultDataSchema: { [key: string]: JsonValu
 }
 
 function systemPrompt(request: HarnessRequest): string {
-  return [
+  const common = [
     "You are the reasoning component of a Gardener repository run.",
     "You cannot approve policy, access credentials, or directly mutate GitHub.",
+  ];
+  if (request.resultDataSchema) {
+    return [...common, "This request is completed-only and has no tools or interruption path.", 'Return JSON only: {"status":"completed","result":{"kind":"result|abstain","summary":"...","data":{...}}}.', "result.data must satisfy the host-provided JSON Schema."].join("\n");
+  }
+  return [
+    ...common,
     `Available tools: ${JSON.stringify(request.tools.map(({ name, description }) => ({ name, description })))}`,
     'Return JSON only: {"status":"tool","toolName":"...","input":{...}},',
     'or {"status":"completed","result":{"kind":"result|abstain","summary":"...","data":null}},',

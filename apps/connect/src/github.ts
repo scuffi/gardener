@@ -8,10 +8,11 @@ const API = "https://api.github.com";
 const TIMEOUT = 10_000;
 
 type JsonRecord = Record<string, unknown>;
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 function record(value: unknown): value is JsonRecord { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function positiveInteger(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 function sameInstant(left: unknown, right: string): boolean {
-  if (typeof left !== "string") return false;
+  if (typeof left !== "string" || !ISO_INSTANT.test(left) || !ISO_INSTANT.test(right)) return false;
   const leftMs = Date.parse(left);
   const rightMs = Date.parse(right);
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
@@ -228,7 +229,7 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
     const expectedLogin = `${env.GITHUB_APP_SLUG}[bot]`.toLowerCase();
     const expectedIssueUrl = `${API}${issuePath}`;
     if (!record(existing) || existing.issue_url !== expectedIssueUrl) throw new Error("Comment is outside the granted issue");
-    if (existing.updated_at !== operation.expectedCommentUpdatedAt) throw new Error("Precondition failed: comment changed after the operation was approved");
+    if (!sameInstant(existing.updated_at, operation.expectedCommentUpdatedAt)) throw new Error("Precondition failed: comment changed after the operation was approved");
     if (!record(existing.user) || String(existing.user.login).toLowerCase() !== expectedLogin) throw new Error("Only comments owned by this GitHub App may be updated");
     if (existing.body === operation.body) return { status: "already-applied", ...(positiveInteger(existing.id) ? { githubId: existing.id } : {}), ...(typeof existing.html_url === "string" ? { url: existing.html_url } : {}) };
     return parseCommentResult(await jsonResponse(await github(`${repoPath}/issues/comments/${operation.commentId}`, token, { method: "PATCH", body: JSON.stringify({ body: operation.body }) }), "Comment update"));
@@ -253,7 +254,7 @@ function assertPullRevision(pull: JsonRecord, operation: ExistingPullOperation):
 function assertPullEventState(pull: JsonRecord, operation: ExistingPullOperation): void {
   if (pull.state !== operation.expectedState) throw new Error(`Precondition failed: pull request state is ${String(pull.state)}`);
   if (pull.draft !== operation.expectedDraft) throw new Error("Precondition failed: pull request draft state changed");
-  if (pull.updated_at !== operation.expectedPullUpdatedAt) throw new Error("Precondition failed: pull request changed after the operation was approved");
+  if (!sameInstant(pull.updated_at, operation.expectedPullUpdatedAt)) throw new Error("Precondition failed: pull request changed after the operation was approved");
 }
 
 async function executeReview(env: Env, operation: Extract<Operation, { kind: "pull_request.review.submit" }>, token: string): Promise<OperationResult> {

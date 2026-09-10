@@ -124,6 +124,59 @@ describe("Operation V2 exact execution", () => {
     expect(requests.some(({ init }) => init.method === "POST" && String(init.body).includes("Triage response"))).toBe(false);
   });
 
+  it("compares comment update preconditions as instants across equivalent ISO formatting", async () => {
+    const requests: Array<{ url: URL; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input)); requests.push({ url, init });
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/issues/3") return json(issue);
+      if (url.pathname === "/repos/acme/widgets/issues/comments/44" && init.method !== "PATCH") return json({ id: 44, issue_url: "https://api.github.com/repos/acme/widgets/issues/3", updated_at: "2026-01-01T00:00:00Z", body: "Old", user: { login: "gardener-connect-dev[bot]" } });
+      if (url.pathname === "/repos/acme/widgets/issues/comments/44" && init.method === "PATCH") return json({ id: 44, html_url: "https://github.com/acme/widgets/issues/3#issuecomment-44" });
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "comment-update-iso", kind: "issue.comment.update", repository, issueNumber: 3, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-01-01T00:00:00.000Z", commentId: "44", expectedCommentUpdatedAt: "2026-01-01T00:00:00.000Z", body: "Updated" });
+    await expect(executeGitHubOperation(env, operation)).resolves.toEqual({ status: "applied", githubId: 44, url: "https://github.com/acme/widgets/issues/3#issuecomment-44" });
+    expect(requests).toHaveLength(4);
+  });
+
+  it("rejects a genuinely newer comment update instant", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/issues/3") return json(issue);
+      if (url.pathname === "/repos/acme/widgets/issues/comments/44") return json({ id: 44, issue_url: "https://api.github.com/repos/acme/widgets/issues/3", updated_at: "2026-01-01T00:00:01Z", body: "Old", user: { login: "gardener-connect-dev[bot]" } });
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "comment-update-stale", kind: "issue.comment.update", repository, issueNumber: 3, expectedIssueState: "open", expectedIssueUpdatedAt: issue.updated_at, commentId: "44", expectedCommentUpdatedAt: issue.updated_at, body: "Updated" });
+    await expect(executeGitHubOperation(env, operation)).rejects.toThrow("comment changed after the operation was approved");
+  });
+
+  it("compares pull update preconditions as instants across equivalent ISO formatting", async () => {
+    const requests: Array<{ url: URL; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input)); requests.push({ url, init });
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/pulls/4") return json(pull);
+      if (url.pathname === "/repos/acme/widgets/pulls/4/reviews" && init.method !== "POST") return json([]);
+      if (url.pathname === "/repos/acme/widgets/pulls/4/reviews" && init.method === "POST") return json({ id: 90, html_url: "https://github.com/acme/widgets/pull/4#pullrequestreview-90" }, 201);
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "review-iso", kind: "pull_request.review.submit", repository, pullNumber: 4, expectedHeadSha: sha, expectedBaseRef: "main", expectedBaseSha: baseSha, expectedState: "open", expectedDraft: true, expectedPullUpdatedAt: "2026-01-01T00:00:00.000Z", event: "approve", body: "Looks good", comments: [] });
+    await expect(executeGitHubOperation(env, operation)).resolves.toEqual({ status: "applied", githubId: 90, url: "https://github.com/acme/widgets/pull/4#pullrequestreview-90" });
+    expect(requests).toHaveLength(5);
+  });
+
+  it("rejects a genuinely newer pull update instant", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/pulls/4") return json({ ...pull, updated_at: "2026-01-01T00:00:01Z" });
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "review-stale", kind: "pull_request.review.submit", repository, pullNumber: 4, expectedHeadSha: sha, expectedBaseRef: "main", expectedBaseSha: baseSha, expectedState: "open", expectedDraft: true, expectedPullUpdatedAt: pull.updated_at, event: "approve", body: "Looks good", comments: [] });
+    await expect(executeGitHubOperation(env, operation)).rejects.toThrow("pull request changed after the operation was approved");
+  });
+
   it("compares issue update preconditions as instants across equivalent ISO formatting", async () => {
     const requests: Array<{ url: URL; init: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {

@@ -75,8 +75,9 @@ describe("harness contract", () => {
     expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@2.0.0/);
   });
 
-  it("accepts a bounded host-owned result data schema without granting authority", () => {
+  it("accepts a bounded completed-only result schema without granting authority", () => {
     const value = request();
+    value.tools = [];
     value.resultDataSchema = {
       type: "object",
       additionalProperties: false,
@@ -84,7 +85,9 @@ describe("harness contract", () => {
       required: ["body"],
     };
     expect(() => assertHarnessRequest(value)).not.toThrow();
-    expect(() => assertHarnessRequest({ ...value, resultDataSchema: { nested: () => "not JSON" } as never })).toThrow(/JSON/i);
+    expect(() => assertHarnessRequest({ ...value, tools: request().tools })).toThrow(/completed-only.*tools/i);
+    expect(() => assertHarnessRequest({ ...value, resultDataSchema: { type: "object", patternProperties: {} } as never })).toThrow(/unsupported JSON Schema keywords/i);
+    expect(() => assertHarnessRequest({ ...value, resultDataSchema: { nested: () => "not JSON" } as never })).toThrow(/unsupported JSON Schema keywords/i);
   });
 
   it("rejects unknown request data and bounds model input by UTF-8 bytes", () => {

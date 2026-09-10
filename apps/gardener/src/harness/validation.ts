@@ -14,6 +14,7 @@ import {
   type HarnessToolDescriptor,
   type JsonValue,
 } from "./types";
+import { supportedResultSchemaIssue } from "./result-schema";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -100,8 +101,12 @@ export function assertHarnessRequest(
 
   if (request.resultDataSchema !== undefined) {
     const schema = record(request.resultDataSchema, "resultDataSchema");
-    assertJsonValue(schema, "resultDataSchema");
-    if (JSON.stringify(schema).length > 32_000) invalid("resultDataSchema exceeds 32000 JSON characters");
+    const issue = supportedResultSchemaIssue(schema);
+    if (issue) invalid(issue);
+    let encoded: string;
+    try { encoded = JSON.stringify(schema); } catch { invalid("resultDataSchema must be JSON serializable"); }
+    if (encoded.length > 32_000) invalid("resultDataSchema exceeds 32000 JSON characters");
+    if (request.tools.length > 0) invalid("resultDataSchema is completed-only and cannot be combined with tools");
   }
 
   if (request.context !== undefined) {
