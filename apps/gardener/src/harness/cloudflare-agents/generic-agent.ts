@@ -14,6 +14,7 @@ import type {
 import {
   HarnessContractError,
   assertHarnessRequest,
+  assertJsonValue,
   emptyUsage,
   expectedHarnessBinding,
   harnessError,
@@ -209,7 +210,7 @@ export class GardenerCloudflareAgentsHarness extends Agent<
           submission,
           withTurnUsage(usage, turn + 1),
           events,
-          "Workers AI response did not contain a supported non-streaming string or { response, usage? } shape",
+          `Workers AI response did not contain a supported non-streaming string or { response, usage? } shape (${describeDirectResponseShape(raw)})`,
         );
       }
       if (new TextEncoder().encode(response.response).byteLength > 512_000) {
@@ -309,13 +310,32 @@ function submissionFor(request: HarnessRequest, acceptedAt: string): HarnessSubm
   };
 }
 
+export function describeDirectResponseShape(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `array(${value.length})`;
+  if (typeof value !== "object") return typeof value;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort().slice(0, 20);
+  return keys.length ? keys.map((key) => `${key}:${typeof record[key]}`).join(",") : "object(no-enumerable-keys)";
+}
+
 export function parseDirectResponse(value: unknown): DirectModelResponse | null {
   if (typeof value === "string") return { response: value };
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const response = value as Record<string, unknown>;
-  if (typeof response.response !== "string") return null;
-  if (response.usage !== undefined && (typeof response.usage !== "object" || response.usage === null)) return null;
-  return response as unknown as DirectModelResponse;
+  if (response.usage !== undefined && (typeof response.usage !== "object" || response.usage === null || Array.isArray(response.usage))) return null;
+  if (typeof response.response === "string") return response as unknown as DirectModelResponse;
+  if (typeof response.response === "object" && response.response !== null && !Array.isArray(response.response)) {
+    try {
+      assertJsonValue(response.response, "Workers AI structured response");
+      const normalized: DirectModelResponse = { response: JSON.stringify(response.response) };
+      if (response.usage !== undefined) normalized.usage = response.usage as NonNullable<DirectModelResponse["usage"]>;
+      return normalized;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function parseToolDecision(value: unknown): { toolName: string; input: JsonValue } | null {
