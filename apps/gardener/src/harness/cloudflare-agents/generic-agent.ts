@@ -176,7 +176,11 @@ export class GardenerCloudflareAgentsHarness extends Agent<
         try {
           raw = await ai.run(
             request.model.id,
-            { messages, max_tokens: Math.max(1, request.budget.maxOutputTokens - usage.outputTokens) },
+            {
+              messages,
+              max_tokens: Math.max(1, request.budget.maxOutputTokens - usage.outputTokens),
+              response_format: { type: "json_object" },
+            },
             { signal: callController.signal },
           );
         } finally {
@@ -205,7 +209,7 @@ export class GardenerCloudflareAgentsHarness extends Agent<
           submission,
           withTurnUsage(usage, turn + 1),
           events,
-          "Workers AI response did not contain the supported non-streaming { response, usage? } shape",
+          "Workers AI response did not contain a supported non-streaming string or { response, usage? } shape",
         );
       }
       if (new TextEncoder().encode(response.response).byteLength > 512_000) {
@@ -305,7 +309,8 @@ function submissionFor(request: HarnessRequest, acceptedAt: string): HarnessSubm
   };
 }
 
-function parseDirectResponse(value: unknown): DirectModelResponse | null {
+export function parseDirectResponse(value: unknown): DirectModelResponse | null {
+  if (typeof value === "string") return { response: value };
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const response = value as Record<string, unknown>;
   if (typeof response.response !== "string") return null;
