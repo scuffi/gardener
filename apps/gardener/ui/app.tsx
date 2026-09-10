@@ -4,7 +4,7 @@ import { AppDataProvider, useGardener } from "./app-context";
 import { AppShell } from "./components/app-shell";
 import { SignInPage } from "./components/sign-in-page";
 import { SetupWizard } from "./components/setup-wizard";
-import { ErrorState, LoadingState } from "./components/ui";
+import { LoadingState } from "./components/ui";
 
 const InboxPage = lazy(() => import("./pages/inbox-page").then((module) => ({ default: module.InboxPage })));
 const AgentsPage = lazy(() => import("./pages/agents-page").then((module) => ({ default: module.AgentsPage })));
@@ -16,10 +16,8 @@ const PoliciesPage = lazy(() => import("./pages/policies-page").then((module) =>
 const SettingsPage = lazy(() => import("./pages/settings-page").then((module) => ({ default: module.SettingsPage })));
 
 function AppRoutes() {
-  const { health, state, loading, error, authenticated, refresh } = useGardener();
-  if (loading) return <AppShell><div className="page-loading"><LoadingState label={health ? "Loading workspace" : "Checking deployment"} /></div></AppShell>;
-  if (error && !health) return <AppShell><ErrorState title="Unable to reach this deployment" message={error.message} onRetry={() => void refresh()} /></AppShell>;
-  if (!authenticated) return <AppShell><SignInPage /></AppShell>;
+  const { health, state, loading, error, authenticated } = useGardener();
+  if (loading || (error && !health) || !authenticated) return <SignInPage />;
   if (!state?.setup.completed) return <AppShell><SetupWizard /></AppShell>;
 
   return <AppShell><Suspense fallback={<LoadingState label="Loading page" />}><Routes>
