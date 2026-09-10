@@ -75,6 +75,18 @@ describe("harness contract", () => {
     expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@2.0.0/);
   });
 
+  it("accepts a bounded host-owned result data schema without granting authority", () => {
+    const value = request();
+    value.resultDataSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: { body: { type: "string", maxLength: 1_000 } },
+      required: ["body"],
+    };
+    expect(() => assertHarnessRequest(value)).not.toThrow();
+    expect(() => assertHarnessRequest({ ...value, resultDataSchema: { nested: () => "not JSON" } as never })).toThrow(/JSON/i);
+  });
+
   it("rejects unknown request data and bounds model input by UTF-8 bytes", () => {
     expect(() => assertHarnessRequest({ ...request(), credential: "must-not-cross-boundary" })).toThrow(/unknown fields/i);
     expect(() => assertHarnessRequest({

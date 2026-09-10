@@ -180,7 +180,9 @@ export class GardenerCloudflareAgentsHarness extends Agent<
             {
               messages,
               max_tokens: Math.max(1, request.budget.maxOutputTokens - usage.outputTokens),
-              response_format: { type: "json_object" },
+              response_format: request.resultDataSchema
+                ? { type: "json_schema", json_schema: completedDecisionJsonSchema(request.resultDataSchema) }
+                : { type: "json_object" },
             },
             { signal: callController.signal },
           );
@@ -376,6 +378,27 @@ function nonnegativeOptional(value: unknown): number | null {
 
 function conservativeTokens(messages: Array<{ content: string }>): number {
   return messages.reduce((total, message) => total + new TextEncoder().encode(message.content).byteLength, 0);
+}
+
+function completedDecisionJsonSchema(resultDataSchema: { [key: string]: JsonValue }): { [key: string]: JsonValue } {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      status: { const: "completed" },
+      result: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: { enum: ["result", "abstain"] },
+          summary: { type: "string" },
+          data: resultDataSchema,
+        },
+        required: ["kind", "summary", "data"],
+      },
+    },
+    required: ["status", "result"],
+  };
 }
 
 function systemPrompt(request: HarnessRequest): string {

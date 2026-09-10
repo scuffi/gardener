@@ -265,6 +265,16 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
       prompt,
       model: { id: this.env.AI_MODEL },
       tools: [],
+      resultDataSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: { const: "issue_comment_proposal" },
+          body: { type: "string", minLength: 1, maxLength: Math.min(65_536, snapshot.instancePolicy.maxCommentLength) },
+          rationale: { type: "string", minLength: 1, maxLength: 5_000 },
+        },
+        required: ["kind", "body", "rationale"],
+      },
       budget: {
         maxTurns: 1,
         maxToolCalls: 0,

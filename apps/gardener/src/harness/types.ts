@@ -70,6 +70,8 @@ export interface HarnessRequest {
   };
   tools: readonly HarnessToolDescriptor[];
   budget: HarnessBudget;
+  /** Optional host-owned JSON Schema for result.data; it narrows shape, never authority. */
+  resultDataSchema?: { [key: string]: JsonValue };
   context?: readonly {
     name: string;
     content: string;

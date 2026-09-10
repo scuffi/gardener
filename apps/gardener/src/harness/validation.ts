@@ -54,7 +54,7 @@ export function assertHarnessRequest(
   expected?: HarnessBindingSnapshot,
 ): asserts value is HarnessRequest {
   const request = record(value, "Harness request");
-  exactKeys(request, ["schemaVersion", "requestId", "runId", "snapshot", "prompt", "model", "tools", "budget", "context"], "Harness request");
+  exactKeys(request, ["schemaVersion", "requestId", "runId", "snapshot", "prompt", "model", "tools", "budget", "resultDataSchema", "context"], "Harness request");
   equal(request.schemaVersion, "gardener.harness.request/v1", "Harness request schemaVersion");
   identifier(request.requestId, "requestId");
   identifier(request.runId, "runId");
@@ -96,6 +96,12 @@ export function assertHarnessRequest(
     const name = (tool as HarnessToolDescriptor).name;
     if (names.has(name)) invalid(`Duplicate harness tool ${name}`);
     names.add(name);
+  }
+
+  if (request.resultDataSchema !== undefined) {
+    const schema = record(request.resultDataSchema, "resultDataSchema");
+    assertJsonValue(schema, "resultDataSchema");
+    if (JSON.stringify(schema).length > 32_000) invalid("resultDataSchema exceeds 32000 JSON characters");
   }
 
   if (request.context !== undefined) {
