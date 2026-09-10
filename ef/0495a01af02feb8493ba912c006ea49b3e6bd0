@@ -1,0 +1,19 @@
+apps/gardener/ui/components/ascii-garden.tsx
+  s_ef2a81ec66f66a::t_5a5102be200aa2 1-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ef0495a01af02feb8493ba912c006ea49b3e6bd0",
+  "prompts": {},
+  "sessions": {
+    "s_ef2a81ec66f66a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a08bcd-e0ea-70e3-94ea-1920856bd061",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
