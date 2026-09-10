@@ -40,6 +40,19 @@ describe("ASCII garden", () => {
     expect(Math.max(...changedColumns)).toBeLessThanOrEqual(66);
   });
 
+  it("maps interaction near the right edge to right-edge grass", () => {
+    const wide = { ...options, columns: 220 };
+    const calm = renderAsciiGarden(wide).split("\n");
+    const moved = renderAsciiGarden({ ...wide, pointer: { column: 210, row: 12, strength: 1 } }).split("\n");
+    const changedColumns: number[] = [];
+    for (let row = 0; row < calm.length; row += 1) for (let column = 0; column < calm[row]!.length; column += 1) {
+      if (calm[row]![column] !== moved[row]![column]) changedColumns.push(column);
+    }
+
+    expect(changedColumns.length).toBeGreaterThan(0);
+    expect(Math.min(...changedColumns)).toBeGreaterThanOrEqual(185);
+  });
+
   it("clamps tiny and oversized fields to safe rendering limits", () => {
     const tiny = renderAsciiGarden({ ...options, columns: 1, rows: 1 }).split("\n");
     const large = renderAsciiGarden({ ...options, columns: 2_000, rows: 2_000 }).split("\n");

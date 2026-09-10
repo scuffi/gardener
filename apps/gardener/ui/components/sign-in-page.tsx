@@ -23,12 +23,6 @@ export function SignInPage() {
 
     <main id="main-content" className="signin-main">
       <div className="signin-hero">
-        <div className="signin-intro">
-          <p className="signin-instance"><span aria-hidden="true" /> Private Gardener instance</p>
-          <p className="signin-tagline">Repository care,<br /><em>continuously.</em></p>
-          <p className="signin-description">A quiet place to guide the Agents that keep your repositories healthy.</p>
-        </div>
-
         <Surface className="signin-card auth-panel" padded={false}>
           <section className="auth-content" aria-labelledby="signin-heading">
             {loading ? <>
