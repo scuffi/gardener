@@ -10,6 +10,12 @@ const TIMEOUT = 10_000;
 type JsonRecord = Record<string, unknown>;
 function record(value: unknown): value is JsonRecord { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function positiveInteger(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
+function sameInstant(left: unknown, right: string): boolean {
+  if (typeof left !== "string") return false;
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
 
 function concatBytes(...parts: Uint8Array[]): Uint8Array {
   const result = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
@@ -198,7 +204,7 @@ async function executeIssueOperation(env: Env, operation: IssueOperation, token:
   }
   const desired = operation.kind === "issue.close" ? "closed" : operation.kind === "issue.reopen" ? "open" : null;
   if (issue.state !== operation.expectedIssueState) throw new Error(`Precondition failed: issue state is ${String(issue.state)}`);
-  if (issue.updated_at !== operation.expectedIssueUpdatedAt) throw new Error("Precondition failed: issue changed after the operation was approved");
+  if (!sameInstant(issue.updated_at, operation.expectedIssueUpdatedAt)) throw new Error("Precondition failed: issue changed after the operation was approved");
 
   if (operation.kind === "issue.label.add" || operation.kind === "issue.label.remove") {
     const labels = Array.isArray(issue.labels) ? issue.labels.flatMap((label) => record(label) && typeof label.name === "string" ? [label.name] : []) : [];

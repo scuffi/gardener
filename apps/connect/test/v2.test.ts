@@ -124,6 +124,34 @@ describe("Operation V2 exact execution", () => {
     expect(requests.some(({ init }) => init.method === "POST" && String(init.body).includes("Triage response"))).toBe(false);
   });
 
+  it("compares issue update preconditions as instants across equivalent ISO formatting", async () => {
+    const requests: Array<{ url: URL; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input)); requests.push({ url, init });
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/issues/3") return json(issue);
+      if (url.pathname === "/repos/acme/widgets/issues/3/comments" && init.method !== "POST") return json([]);
+      if (url.pathname === "/repos/acme/widgets/issues/3/comments" && init.method === "POST") return json({ id: 89, html_url: "https://github.com/acme/widgets/issues/3#issuecomment-89" }, 201);
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "comment-iso", kind: "issue.comment.create", repository, issueNumber: 3, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-01-01T00:00:00.000Z", body: "Triage response" });
+
+    await expect(executeGitHubOperation(env, operation)).resolves.toEqual({ status: "applied", githubId: 89, url: "https://github.com/acme/widgets/issues/3#issuecomment-89" });
+    expect(requests).toHaveLength(4);
+  });
+
+  it("rejects a genuinely newer issue update instant", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/app/installations/7/access_tokens") return json({ token: "token" }, 201);
+      if (url.pathname === "/repos/acme/widgets/issues/3") return json({ ...issue, updated_at: "2026-01-01T00:00:01Z" });
+      if (url.pathname === "/repos/acme/widgets/issues/3/comments") return json([]);
+      return json({ message: "unexpected" }, 500);
+    }));
+    const operation = operationSchema.parse({ schemaVersion: "v2", id: "comment-stale", kind: "issue.comment.create", repository, issueNumber: 3, expectedIssueState: "open", expectedIssueUpdatedAt: issue.updated_at, body: "Triage response" });
+    await expect(executeGitHubOperation(env, operation)).rejects.toThrow("issue changed after the operation was approved");
+  });
+
   it("enforces issue preconditions before posting when no operation marker exists", async () => {
     const requests: Array<{ url: URL; init: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
