@@ -282,30 +282,17 @@ p { margin-bottom: 0; }
 .signin-hero { width: min(100%, 430px); }
 
 .signin-card {
+  --signin-border-base: color-mix(in srgb, var(--gd-line-strong) 82%, transparent);
   position: relative;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--gd-line-strong) 82%, transparent);
-  background: color-mix(in srgb, var(--gd-surface) 92%, transparent);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--gd-surface), var(--gd-surface)) padding-box,
+    conic-gradient(from var(--signin-border-angle), var(--signin-border-base) 0 31%, color-mix(in srgb, var(--gd-leaf) 76%, var(--signin-border-base)) 40%, color-mix(in srgb, var(--gd-leaf-strong) 90%, white) 47%, color-mix(in srgb, var(--gd-leaf) 74%, var(--signin-border-base)) 54%, var(--signin-border-base) 63% 100%) border-box;
   box-shadow: 0 30px 90px color-mix(in srgb, #07160f 13%, transparent), 0 1px 0 color-mix(in srgb, white 32%, transparent) inset;
-  backdrop-filter: blur(18px) saturate(115%);
-  animation: signin-rise .65s .14s cubic-bezier(.2, .75, .25, 1) both;
+  animation: signin-rise .65s .14s cubic-bezier(.2, .75, .25, 1) both, signin-border-orbit 7s linear infinite;
 }
-.signin-card::before {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: conic-gradient(from var(--signin-border-angle), transparent 0 24%, color-mix(in srgb, var(--gd-line-strong) 50%, transparent) 34%, color-mix(in srgb, var(--gd-leaf) 75%, transparent) 43%, color-mix(in srgb, var(--gd-leaf-strong) 92%, white) 48%, color-mix(in srgb, var(--gd-leaf) 72%, transparent) 53%, color-mix(in srgb, var(--gd-line-strong) 45%, transparent) 62%, transparent 72% 100%);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  animation: signin-border-orbit 7s linear infinite;
-  content: "";
-  pointer-events: none;
-}
-:root[data-mode="dark"] .signin-card { background: color-mix(in srgb, var(--gd-surface) 88%, transparent); box-shadow: 0 30px 100px rgb(0 0 0 / 36%), 0 1px 0 rgb(255 255 255 / 5%) inset; }
+:root[data-mode="dark"] .signin-card { box-shadow: 0 30px 100px rgb(0 0 0 / 36%), 0 1px 0 rgb(255 255 255 / 5%) inset; }
 .auth-content { position: relative; z-index: 2; padding: 30px 32px 28px; }
 .signin-card__topline { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .signin-card__topline code { color: var(--gd-text-subtle); font-size: 9px; font-weight: 600; letter-spacing: .09em; }
