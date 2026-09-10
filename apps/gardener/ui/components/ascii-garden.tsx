@@ -38,16 +38,15 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
   const elapsed = timeMs / 1_000;
   const density = .58 + depth * .24;
   const tallest = Math.max(2, Math.min(6, Math.floor(height * (.13 + depth * .12))));
-
-  for (let column = 0; column < width; column += 1) {
-    const presence = unit(seed, column, 3);
-    if (presence > density) continue;
-    const bladeHeight = 1 + Math.floor(unit(seed, column, 11) * tallest);
-    const ambient = Math.sin(elapsed * .68 + column * .145 + seed) * .46
-      + Math.sin(elapsed * .27 + column * .051 + seed * .37) * .2;
+  const put = (row: number, column: number, glyph: string) => {
+    if (row >= 0 && row < height && column >= 0 && column < width) field[row]![column] = glyph;
+  };
+  const leanAt = (column: number, plantHeight: number, phase = 0) => {
+    const ambient = Math.sin(elapsed * .68 + column * .145 + seed + phase) * .46
+      + Math.sin(elapsed * .27 + column * .051 + seed * .37 + phase * .43) * .2;
     let disturbance = 0;
     if (pointer?.strength) {
-      const tipRow = height - bladeHeight;
+      const tipRow = height - plantHeight;
       const deltaColumn = column - pointer.column;
       const deltaRow = (tipRow - pointer.row) * 1.65;
       const radius = 9 + depth * 4;
@@ -58,7 +57,14 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
         disturbance = direction * influence * pointer.strength * 1.55;
       }
     }
-    const lean = clamp((ambient + disturbance) * (.55 + depth * .18), -1.2, 1.2);
+    return clamp((ambient + disturbance) * (.55 + depth * .18), -1.2, 1.2);
+  };
+
+  for (let column = 0; column < width; column += 1) {
+    const presence = unit(seed, column, 3);
+    if (presence > density) continue;
+    const bladeHeight = 1 + Math.floor(unit(seed, column, 11) * tallest);
+    const lean = leanAt(column, bladeHeight);
 
     for (let segment = 0; segment < bladeHeight; segment += 1) {
       const row = height - 2 - segment;
@@ -86,6 +92,66 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
   for (let column = 0; column < width; column += 1) {
     if (field[height - 1]![column] === " " && unit(seed, column, 41) < .4 + depth * .18) {
       field[height - 1]![column] = unit(seed, column, 43) > .5 ? "." : ",";
+    }
+  }
+
+  if (depth > .72) for (let column = 2; column < width - 2; column += 1) {
+    const rarity = unit(seed, column, 71);
+    if (rarity >= .1) continue;
+    let localMinimum = true;
+    for (let neighbor = Math.max(1, column - 3); neighbor <= Math.min(width - 2, column + 3); neighbor += 1) {
+      if (neighbor !== column && unit(seed, neighbor, 71) < rarity) localMinimum = false;
+    }
+    if (!localMinimum) continue;
+
+    const species = unit(seed, column, 79);
+    const shape = unit(seed, column, 83);
+    const kind = species < .36 ? "flower" : species < .61 ? "seed" : species < .84 ? "weed" : "clover";
+    const maximumHeight = kind === "clover" ? 3 : kind === "weed" ? 6 : kind === "seed" ? 7 : 8;
+    const minimumHeight = kind === "clover" ? 2 : kind === "weed" ? 3 : kind === "seed" ? 5 : 5;
+    const plantHeight = Math.min(height - 3, minimumHeight + Math.floor(unit(seed, column, 89) * (maximumHeight - minimumHeight + 1)));
+    const lean = leanAt(column, plantHeight, species * 4);
+    const positions: Array<{ row: number; column: number }> = [];
+
+    for (let segment = 0; segment < plantHeight; segment += 1) {
+      const progress = (segment + 1) / plantHeight;
+      const curve = lean * Math.pow(progress, 1.5);
+      const target = column + Math.round(curve * segment * .2);
+      const row = height - 2 - segment;
+      positions.push({ row, column: target });
+      put(row, target, segment > 0 && curve < -.38 ? "\\" : segment > 0 && curve > .38 ? "/" : "|");
+    }
+
+    const tip = positions.at(-1)!;
+    const middle = positions[Math.max(1, Math.floor(positions.length * .45))]!;
+    if (kind === "flower") {
+      const bloom = shape < .34 ? "*" : shape < .67 ? "+" : "o";
+      put(tip.row, tip.column, bloom);
+      if (shape > .46) {
+        put(tip.row, tip.column - 1, "(");
+        put(tip.row, tip.column + 1, ")");
+      }
+      put(middle.row, middle.column - 1, "/");
+      if (shape > .25) put(middle.row, middle.column + 1, "\\");
+    } else if (kind === "seed") {
+      put(tip.row, tip.column, ":");
+      put(tip.row, tip.column - 1, ".");
+      put(tip.row, tip.column + 1, ".");
+      if (positions.length > 2) {
+        const crown = positions.at(-2)!;
+        put(crown.row, crown.column - 1, "\\");
+        put(crown.row, crown.column + 1, "/");
+      }
+    } else if (kind === "weed") {
+      put(tip.row, tip.column, "'");
+      put(tip.row, tip.column - 1, "\\");
+      put(tip.row, tip.column + 1, "/");
+      put(middle.row, middle.column - 1, "/");
+      if (shape > .4) put(middle.row, middle.column + 1, "\\");
+    } else {
+      put(tip.row, tip.column, "'");
+      put(tip.row, tip.column - 1, "o");
+      put(tip.row, tip.column + 1, "o");
     }
   }
 

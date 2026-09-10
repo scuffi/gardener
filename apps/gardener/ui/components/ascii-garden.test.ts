@@ -13,7 +13,16 @@ describe("ASCII garden", () => {
     expect(lines).toHaveLength(16);
     expect(lines.every((line) => line.length === 80)).toBe(true);
     expect(first).toMatch(/[|/\\]/);
-    expect(first.replace(/[ |/\\'_,.\n]/g, "")).toBe("");
+    expect(first.replace(/[ |/\\'_,.():*+o\n]/g, "")).toBe("");
+  });
+
+  it("mixes sparse flowers, seed heads, weeds, and low plants into the near field", () => {
+    const garden = renderAsciiGarden({ ...options, columns: 220, seed: 53 });
+
+    expect(garden).toMatch(/[+*]/);
+    expect(garden).toContain(":");
+    expect(garden).toContain("o");
+    expect((garden.match(/[+*:o]/g) ?? []).length).toBeGreaterThan(5);
   });
 
   it("animates with ambient time while preserving its dimensions", () => {
