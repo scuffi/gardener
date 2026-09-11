@@ -4,7 +4,7 @@ export const HARNESS_IDS = ["flue"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 export const HARNESS_ADAPTER_VERSIONS = {
-  flue: "2.0.0",
+  flue: "2.0.2",
 } as const satisfies Record<HarnessId, string>;
 
 export type JsonPrimitive = string | number | boolean | null;

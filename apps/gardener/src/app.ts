@@ -53,7 +53,7 @@ app.get("/api/health", async (c) => {
   let connectConfigured = false;
   try { connectConfigured = Boolean(c.env.CONNECT_URL && c.env.CONNECT_ISSUER && instanceId(c.env)); } catch { /* invalid bootstrap */ }
   const oauthConfigured = Boolean(c.env.OAUTH_KV);
-  const agentRuntime = { enabled: true, status: "bounded-issue-comment-v1" } as const;
+  const agentRuntime = { enabled: true, status: "bounded-issue-comment-v3" } as const;
   return c.json({
     ok: database && Boolean(c.env.AI) && connectConfigured && agentRuntime.enabled,
     durableOrchestration: agentRuntime.enabled,
@@ -104,14 +104,14 @@ app.post("/hooks/connect", async (c) => {
   });
   if (!claimed) {
     const runIds = await listRepositoryEventRunIds(c.env.DB, event.id);
-    return c.json({ accepted: true, duplicate: !admitted.admitted, runs: runIds.map((runId) => ({ runId, created: false })), runtime: "bounded-issue-comment-v1" }, 200);
+    return c.json({ accepted: true, duplicate: !admitted.admitted, runs: runIds.map((runId) => ({ runId, created: false })), runtime: "bounded-issue-comment-v3" }, 200);
   }
   try {
     const runs = await admitAgentRunsForEvent(c.env, admitted.event.envelope, admitted.event.envelopeHash);
     if (!await completeRepositoryEventAdmission(c.env.DB, { eventId: event.id, token: admissionToken, now: new Date().toISOString() })) {
       throw new Error("Repository event admission completion lost its lease");
     }
-    return c.json({ accepted: true, duplicate: !admitted.admitted, runs, runtime: "bounded-issue-comment-v1" }, admitted.admitted ? 202 : 200);
+    return c.json({ accepted: true, duplicate: !admitted.admitted, runs, runtime: "bounded-issue-comment-v3" }, admitted.admitted ? 202 : 200);
   } catch (error) {
     await releaseRepositoryEventAdmission(c.env.DB, { eventId: event.id, token: admissionToken });
     throw error;

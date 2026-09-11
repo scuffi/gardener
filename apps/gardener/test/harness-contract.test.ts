@@ -38,14 +38,14 @@ function request(id: HarnessId = "flue"): HarnessRequest {
 describe("harness contract", () => {
   it("exposes Flue as the only product harness", () => {
     expect(HARNESS_IDS).toEqual(["flue"]);
-    expect(expectedHarnessBinding("flue")).toEqual({ id: "flue", adapterVersion: "2.0.0" });
+    expect(expectedHarnessBinding("flue")).toEqual({ id: "flue", adapterVersion: "2.0.2" });
   });
 
   it("requires snapshots to pin the selected adapter version", () => {
     const value = request("flue");
     expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).not.toThrow();
     value.snapshot.harness.adapterVersion = "1.0.0";
-    expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@1.0.0, not flue@2.0.0/);
+    expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@1.0.0, not flue@2.0.2/);
   });
 
   it("accepts a bounded completed-only result schema without granting authority", () => {

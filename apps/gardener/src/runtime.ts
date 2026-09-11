@@ -55,7 +55,7 @@ const proposalSchema = z.object({
   rationale: z.string().trim().min(1).max(5_000),
 }).strict();
 
-const runtimeVersion = "bounded-issue-comment-v1";
+const runtimeVersion = "bounded-issue-comment-v3";
 
 /**
  * First production runtime slice: one bounded model-only planning step followed

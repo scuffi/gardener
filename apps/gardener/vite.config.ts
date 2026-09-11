@@ -8,6 +8,8 @@ const fluePlugins = flue({
   app: "src/app.ts",
   agents: "harness/flue/generic-agent.ts",
   providers: ["cloudflare"],
+  // Repository and model content must never be copied into Workers Traces.
+  tracing: false,
 }).map((plugin): Plugin => ({
   ...plugin,
   // Gardener also has a React client environment. Flue's source transforms

@@ -141,6 +141,17 @@ class FlueBackend implements HarnessBackend {
       if (error instanceof AgentRunError && error.outcome === "aborted") {
         return { request, outcome: failedOutcome(accepted, request.model.id, "cancelled", "Flue run was cancelled", "cancelled") };
       }
+      if (error instanceof AgentRunError) {
+        return {
+          request,
+          outcome: failedOutcome(
+            accepted,
+            request.model.id,
+            "integration-unavailable",
+            safeAgentFailureMessage(error.cause),
+          ),
+        };
+      }
       throw error;
     }
   }
@@ -151,6 +162,34 @@ class FlueBackend implements HarnessBackend {
     await init(GardenerFlueAgent, { id: request.runId }).abort();
     return { runId: request.runId, cancelled: true };
   }
+}
+
+function safeAgentFailureMessage(cause: unknown): string {
+  const record = typeof cause === "object" && cause !== null && !Array.isArray(cause)
+    ? cause as Record<string, unknown>
+    : null;
+  const meta = record && typeof record.meta === "object" && record.meta !== null && !Array.isArray(record.meta)
+    ? record.meta as Record<string, unknown>
+    : null;
+  const candidate = cause instanceof Error
+    ? cause.message
+    : record && typeof record.message === "string"
+      ? record.message
+      : typeof cause === "string"
+        ? cause
+        : "";
+  // Flue's OperationFailedError keeps the original, already-sanitized model
+  // failure in meta.reason even when its display message prefixes a dynamic
+  // operation label. Prefer that structured field. The prompt-prefix fallback
+  // covers older/direct Flue projections that omit meta.
+  const structuredReason = typeof meta?.reason === "string" ? meta.reason : "";
+  const prefixedReason = candidate.startsWith("prompt failed: ")
+    ? candidate.slice("prompt failed: ".length)
+    : candidate;
+  const providerReason = [structuredReason, prefixedReason]
+    .find((value) => /^(?:Gardener|Workers AI) [A-Za-z0-9 ()_.:,-]{1,500}$/u.test(value));
+  if (providerReason) return `Flue model execution failed: ${providerReason}`;
+  return "Flue model execution failed with a content-redacted provider error";
 }
 
 function parseStructuredReply(text: string): unknown {

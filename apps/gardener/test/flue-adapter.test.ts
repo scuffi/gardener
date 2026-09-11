@@ -20,7 +20,15 @@ const flue = vi.hoisted(() => ({
 }));
 
 vi.mock("@flue/runtime", () => ({
-  AgentRunError: class AgentRunError extends Error { outcome = "failed"; },
+  AgentRunError: class AgentRunError extends Error {
+    outcome: "failed" | "aborted";
+    submissionId: string;
+    constructor(options: { outcome: "failed" | "aborted"; submissionId: string; cause?: unknown }) {
+      super("Flue agent run failed", options.cause === undefined ? undefined : { cause: options.cause });
+      this.outcome = options.outcome;
+      this.submissionId = options.submissionId;
+    }
+  },
   getAgentInstance: flue.getAgentInstance,
   init: flue.init,
   setProvider: flue.setProvider,
@@ -170,6 +178,71 @@ describe("Flue harness adapter", () => {
     await expect(harness.read({ ...submission, submissionId: "different-submission" }))
       .rejects.toMatchObject({ code: "invalid-request" });
     expect(flue.read).not.toHaveBeenCalled();
+  });
+
+  it("surfaces only allowlisted content-free causes from failed Flue settlements", async () => {
+    const { AgentRunError } = await import("@flue/runtime");
+    flue.read.mockRejectedValueOnce(new AgentRunError({
+      outcome: "failed",
+      submissionId: "submission-1",
+      cause: { message: "Workers AI rejected request with HTTP 400" },
+    }));
+    const harness = createFlueHarness(new MemoryRequestStore());
+    const submission = await harness.start(request());
+
+    await expect(harness.read(submission)).resolves.toMatchObject({
+      status: "failed",
+      error: {
+        code: "integration-unavailable",
+        message: "Flue model execution failed: Workers AI rejected request with HTTP 400",
+      },
+    });
+  });
+
+  it("reads only the sanitized structured reason from Flue operation failures", async () => {
+    const { AgentRunError } = await import("@flue/runtime");
+    flue.read.mockRejectedValueOnce(new AgentRunError({
+      outcome: "failed",
+      submissionId: "submission-1",
+      cause: {
+        name: "OperationFailedError",
+        message: "direct(submission-dynamic) failed: Gardener model input exceeds its immutable 12000-token budget",
+        type: "operation_failed",
+        meta: {
+          operation: "direct(submission-dynamic)",
+          reason: "Gardener model input exceeds its immutable 12000-token budget",
+        },
+      },
+    }));
+    const harness = createFlueHarness(new MemoryRequestStore());
+    const submission = await harness.start(request());
+
+    await expect(harness.read(submission)).resolves.toMatchObject({
+      status: "failed",
+      error: {
+        code: "integration-unavailable",
+        message: "Flue model execution failed: Gardener model input exceeds its immutable 12000-token budget",
+      },
+    });
+  });
+
+  it("redacts arbitrary failed-settlement causes", async () => {
+    const { AgentRunError } = await import("@flue/runtime");
+    flue.read.mockRejectedValueOnce(new AgentRunError({
+      outcome: "failed",
+      submissionId: "submission-1",
+      cause: { message: "raw model output or secret detail" },
+    }));
+    const harness = createFlueHarness(new MemoryRequestStore());
+    const submission = await harness.start(request());
+    const result = await harness.read(submission);
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { message: "Flue model execution failed with a content-redacted provider error" },
+    });
+    expect(JSON.stringify(result)).not.toContain("raw model output");
+    expect(JSON.stringify(result)).not.toContain("secret detail");
   });
 
   it("fails closed when Flue normalizes missing provider usage to zero", async () => {
