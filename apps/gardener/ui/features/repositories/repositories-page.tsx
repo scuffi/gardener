@@ -7,7 +7,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useGardener } from "../../app-context";
 import { gardenerApi } from "../../lib/api";
-import { formatRelativeTime, isEnabled } from "../../lib/format";
+import { formatRelativeTime, isEnabled, sentenceCase } from "../../lib/format";
 import { queryPrefixes } from "../../lib/query-keys";
 import { useNotifications } from "../../providers/notifications";
 import {
@@ -18,6 +18,7 @@ import {
   PageHeader,
   Panel,
   StatusBadge,
+  statusTone,
   Table,
   TableSkeleton,
   Text,
@@ -76,7 +77,23 @@ export function RepositoriesPage() {
             <div className="p-4">
               <ErrorState message={error.message} onRetry={() => void refresh()} />
             </div>
-          ) : null}
+          ) : (
+            <EmptyState
+              icon={GithubLogoIcon}
+              title="No repository data available"
+              description="Connect the Gardener GitHub App to load repository access for this workspace."
+              action={
+                <Button
+                  variant="primary"
+                  icon={GithubLogoIcon}
+                  loading={installMutation.isPending}
+                  onClick={() => installMutation.mutate()}
+                >
+                  Connect GitHub
+                </Button>
+              }
+            />
+          )}
         </Panel>
       </>
     );
@@ -120,8 +137,11 @@ export function RepositoriesPage() {
               <Table.Body>
                 {state.repositories.map((repository) => {
                   const accessRemoved = !isEnabled(repository.active);
-                  const status = accessRemoved ? "Access removed" : repository.paused ? "Paused" : "Connected";
-                  const tone = accessRemoved ? "danger" : repository.paused ? "warning" : "success";
+                  const status = accessRemoved
+                    ? "access_removed"
+                    : repository.paused
+                      ? "paused"
+                      : "connected";
                   return (
                     <Table.Row key={repository.id} data-repository-id={repository.id}>
                       <Table.Cell sticky="left">
@@ -142,7 +162,7 @@ export function RepositoriesPage() {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <StatusBadge tone={tone}>{status}</StatusBadge>
+                        <StatusBadge tone={statusTone(status)}>{sentenceCase(status)}</StatusBadge>
                       </Table.Cell>
                       <Table.Cell>
                         <Mono tone="default">{repository.default_branch ?? "—"}</Mono>
@@ -176,7 +196,7 @@ export function RepositoriesPage() {
           />
         )}
       </Panel>
-      <div className="mt-3.5 flex items-start gap-2.5 rounded-lg border border-kumo-hairline bg-kumo-base px-4 py-3">
+      <Panel className="mt-4 flex items-start gap-2.5 py-3">
         <ShieldCheckIcon
           size={18}
           weight="fill"
@@ -196,11 +216,11 @@ export function RepositoriesPage() {
             variant="secondary"
             DANGEROUS_className="mt-0.5 leading-relaxed"
           >
-            This Worker receives normalized events and scoped operation receipts. GitHub App credentials remain in
-            Gardener Connect.
+            This Worker receives normalized events and scoped operation receipts. GitHub App credentials remain
+            in Gardener Connect.
           </Text>
         </div>
-      </div>
+      </Panel>
     </>
   );
 }

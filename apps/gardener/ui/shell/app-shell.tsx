@@ -2,11 +2,12 @@ import { ListIcon, LockSimpleIcon, PlantIcon } from "@phosphor-icons/react";
 import { useEffect, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useGardener } from "../app-context";
-import { cn, Sidebar, useSidebar } from "../primitives";
+import { cn, PoweredByCloudflare, Sidebar, useSidebar } from "../primitives";
 import { defaultRoute, isRouteActive, navigationGroups, resolveRoute } from "../routes";
 import { ThemeToggle } from "../theme";
 import { AccountMenu } from "./account-menu";
 import { AutomationMenu } from "./automation-menu";
+import { CommandPaletteProvider, CommandPaletteTrigger } from "./command-palette";
 import { SkipLink } from "./skip-link";
 
 /** Collapse the mobile drawer whenever the route changes. */
@@ -29,7 +30,7 @@ function GardenerBrand() {
       <span
         className={cn(
           "relative grid size-7 flex-none place-items-center rounded-md",
-          "border border-kumo-hairline bg-kumo-success/10 text-kumo-success",
+          "border border-kumo-hairline bg-kumo-brand/12 text-kumo-brand",
         )}
       >
         <PlantIcon size={19} weight="bold" aria-hidden="true" />
@@ -100,12 +101,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const contextLabel = setupComplete ? (current?.label ?? "Gardener") : "Setup";
 
   return (
-    <Sidebar.Provider
-      defaultOpen
-      mobileBreakpoint={900}
-      collapsible="offcanvas"
-      className="min-h-svh bg-kumo-canvas"
-    >
+    <CommandPaletteProvider>
+      <Sidebar.Provider
+        defaultOpen
+        mobileBreakpoint={900}
+        collapsible="offcanvas"
+        className="min-h-svh bg-kumo-canvas"
+      >
       <SkipLink />
       <SidebarRouteSync />
       <Sidebar
@@ -125,6 +127,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Sidebar.Content>
         <Sidebar.Footer className="overflow-visible">
           {authenticated ? <AccountMenu /> : null}
+          <div className="flex justify-center px-2 pt-2 pb-1 opacity-70">
+            <PoweredByCloudflare />
+          </div>
         </Sidebar.Footer>
       </Sidebar>
 
@@ -143,14 +148,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="max-[360px]:hidden">{contextLabel}</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {setupComplete ? <CommandPaletteTrigger /> : null}
             <ThemeToggle />
             {setupComplete ? <AutomationMenu /> : null}
           </div>
         </header>
-        <main id="main-content" className="mx-auto w-full max-w-[1280px] px-8 pt-7 pb-16 max-sm:px-4">
+        <main
+          id="main-content"
+          className="mx-auto w-full max-w-[1280px] px-8 pt-7 pb-16 max-sm:px-4"
+        >
           {children}
         </main>
       </div>
-    </Sidebar.Provider>
+      </Sidebar.Provider>
+    </CommandPaletteProvider>
   );
 }

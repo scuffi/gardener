@@ -28,6 +28,81 @@ export interface Repository {
   default_branch?: string | null;
 }
 export interface RunUsage { model?: string; inputTokens?: number; outputTokens?: number; costUsd?: number }
+
+/**
+ * Run observability.
+ *
+ * Field names are snake_case because these rows are returned straight from D1 by
+ * `GET /api/runs` and `GET /api/runs/:id`. Do not camelCase them in the UI — the wire shape is
+ * the contract, and renaming here only hides where the data came from.
+ */
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "completed_with_errors"
+  | "failed"
+  | "cancelled";
+
+export interface RunSummary {
+  id: string;
+  kind: string;
+  agent_id: string | null;
+  agent_revision_id?: string | null;
+  status: RunStatus | string;
+  harness_id?: string | null;
+  harness_version?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+/** A unit of work in the run graph. `parent_task_id` and `depth` describe the tree. */
+export interface RunTask {
+  id: string;
+  parent_task_id: string | null;
+  stable_key: string;
+  kind: string;
+  status: string;
+  /** Tasks sharing a group ran concurrently. */
+  parallel_group: string | null;
+  depth: number;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface RunStep {
+  id: string;
+  task_id: string;
+  stable_key: string;
+  kind: string;
+  status: string;
+  attempt_count: number;
+  max_attempts: number;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+/** A side effect on GitHub, gated by policy. This is the receipt an operator audits. */
+export interface RunEffect {
+  id: string;
+  operation_id: string;
+  effect_kind: string;
+  policy_mode: PolicyMode | string;
+  status: string;
+  created_at: string;
+  decided_at?: string | null;
+  executed_at?: string | null;
+}
+
+export interface RunDetailResponse {
+  run: RunSummary & Record<string, unknown>;
+  tasks: RunTask[];
+  steps: RunStep[];
+  effects: RunEffect[];
+}
 export interface CapabilityState { [name: string]: string }
 export interface AppState {
   globalPaused: boolean;
@@ -37,6 +112,8 @@ export interface AppState {
   repositories: Repository[];
   capabilities?: CapabilityState;
   inboxCount?: number;
+  /** Most recent runs, newest first. Served inline by `/api/state`. */
+  runs?: RunSummary[];
 }
 
 export type AgentLifecycle = "draft" | "paused" | "active";

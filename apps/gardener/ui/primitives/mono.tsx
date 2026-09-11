@@ -15,11 +15,16 @@ export function Mono({
   className,
 }: {
   children: string;
-  /** Full value shown on hover when the rendered text is shortened. */
-  title?: string;
-  truncate?: boolean;
-  tone?: "subtle" | "default" | "strong";
-  className?: string;
+  /**
+   * Full value shown on hover when the rendered text is shortened.
+   *
+   * Explicitly allows `undefined` because `exactOptionalPropertyTypes` is on and callers
+   * routinely pass a nullable identifier as `title={value ?? undefined}`.
+   */
+  title?: string | undefined;
+  truncate?: boolean | undefined;
+  tone?: "subtle" | "default" | "strong" | undefined;
+  className?: string | undefined;
 }) {
   const color =
     tone === "strong"

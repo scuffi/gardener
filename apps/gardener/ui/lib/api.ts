@@ -1,5 +1,7 @@
 import type {
   AgentDetailResponse,
+  RunDetailResponse,
+  RunSummary,
   AgentSimulation,
   AgentSummary,
   AgentValidation,
@@ -130,4 +132,7 @@ export const gardenerApi = {
     api<{ enabled: boolean }>(`${agentPath(id)}/status`, json({ enabled })),
 
   history: () => api<{ items: HistoryItem[] }>("/api/history"),
+
+  runs: (limit = 50) => api<{ runs: RunSummary[] }>(`/api/runs?limit=${limit}`),
+  run: (id: string) => api<RunDetailResponse>(`/api/runs/${encodeURIComponent(id)}`),
 };

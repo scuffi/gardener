@@ -31,8 +31,8 @@ function AppRoutes() {
   return (
     <AppShell>
       <Suspense fallback={<PageHeaderSkeleton />}>
+        {/* `/` is a real route (Overview), so it is rendered from the registry like any other. */}
         <Routes>
-          <Route path="/" element={<Navigate to={defaultRoute} replace />} />
           {routes.flatMap((route) => {
             const Page = pages.get(route.id)!;
             const element = <Page />;

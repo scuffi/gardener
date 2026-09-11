@@ -47,13 +47,20 @@ This is the whole procedure. It should touch no shared file except `routes.ts`.
    incomplete.
 5. Add a query key to `lib/query-keys.ts` if it fetches.
 
+Step 1 is genuinely sufficient for navigation: `ui/actions.ts` derives the ⌘K palette from the same
+registry, and `ui/actions.test.ts` fails if a sidebar surface is ever missing from it. Routes whose
+path contains `:` are excluded automatically, because they cannot be navigated without an id.
+
 ## Adding a guarded action
 
-From phase 1, actions that change state (pause, activate, enable, approve, publish) go in
-`ui/actions.ts` so that the command palette, keyboard shortcuts, and confirmation copy stay in one
-place. Until then they live with their feature. Either way: **an action names the exact operation it
-performs** — never a generic "Approve" or "Confirm". Use `ConfirmDialog` from `primitives` for
-anything that widens authority or destroys data.
+Actions that change state (pause, activate, enable, approve, publish) belong in `ui/actions.ts` so
+the command palette, keyboard shortcuts, and confirmation copy stay in one place. Feature-local
+buttons may call the same mutation, but anything an operator might reach for from anywhere should
+be in the palette.
+
+**An action names the exact operation it performs** — never a generic "Approve" or "Confirm", and
+label it by what it will do, not by the current state ("Pause Gardener globally", not "Paused").
+Use `ConfirmDialog` from `primitives` for anything that widens authority or destroys data.
 
 ## Directory map
 

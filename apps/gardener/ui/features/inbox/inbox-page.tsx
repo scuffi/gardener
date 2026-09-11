@@ -1,26 +1,21 @@
-import { CheckIcon, TrayIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, RobotIcon, TrayIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime, sentenceCase } from "../../lib/format";
 import { queryKeys, queryPrefixes } from "../../lib/query-keys";
-import type { InboxItem } from "../../lib/types";
 import { useNotifications } from "../../providers/notifications";
 import {
   Button,
   CardSkeleton,
   EmptyState,
   ErrorState,
+  LinkButton,
+  Mono,
   PageHeader,
   Panel,
   StatusBadge,
-  type StatusTone,
+  statusTone,
 } from "../../primitives";
-
-function priorityTone(item: InboxItem): StatusTone {
-  if (item.priority === "urgent") return "danger";
-  if (item.priority === "high") return "warning";
-  return "neutral";
-}
 
 export function InboxPage() {
   const queryClient = useQueryClient();
@@ -60,7 +55,7 @@ export function InboxPage() {
           onRetry={() => void query.refetch()}
         />
       ) : items.length ? (
-        <div className="grid gap-2.5">
+        <div className="grid gap-4">
           {items.map((item) => (
             <Panel
               key={item.id}
@@ -77,11 +72,15 @@ export function InboxPage() {
                 <div className="flex items-start justify-between gap-4 max-sm:flex-col">
                   <div>
                     <h2 className="text-[15px] font-semibold text-kumo-strong">{item.title}</h2>
-                    <p className="mt-0.5 text-xs text-kumo-subtle">
-                      {sentenceCase(item.kind)} · {formatRelativeTime(item.createdAt)}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-kumo-subtle">
+                      <Mono>{item.kind}</Mono>
+                      <span aria-hidden="true">·</span>
+                      <span>{formatRelativeTime(item.createdAt)}</span>
                     </p>
                   </div>
-                  <StatusBadge tone={priorityTone(item)}>{sentenceCase(item.priority)}</StatusBadge>
+                  <StatusBadge tone={statusTone(item.priority)}>
+                    {sentenceCase(item.priority)}
+                  </StatusBadge>
                 </div>
                 <p className="mt-2.5 text-sm leading-relaxed text-kumo-default">
                   {item.summary || "This item needs your attention."}
@@ -126,6 +125,11 @@ export function InboxPage() {
           icon={TrayIcon}
           title="Inbox clear"
           description="Interruptions, failed runs, pending effects, and regressions will appear here."
+          action={
+            <LinkButton href="/agents" variant="secondary" icon={RobotIcon}>
+              View Agents
+            </LinkButton>
+          }
         />
       )}
     </>

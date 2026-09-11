@@ -2,8 +2,10 @@ import {
   ClockCounterClockwiseIcon,
   GearIcon,
   GitBranchIcon,
+  PulseIcon,
   RobotIcon,
   ShieldCheckIcon,
+  SquaresFourIcon,
   TrayIcon,
   type Icon,
 } from "@phosphor-icons/react";
@@ -60,6 +62,16 @@ export interface RouteDefinition {
 
 export const routes: readonly RouteDefinition[] = [
   {
+    id: "overview",
+    path: "/",
+    label: "Overview",
+    icon: SquaresFourIcon,
+    group: "operate",
+    description: "Fleet health, live work, and what needs a decision",
+    load: () =>
+      import("./features/overview/overview-page").then((m) => ({ default: m.OverviewPage })),
+  },
+  {
     id: "inbox",
     path: "/inbox",
     label: "Inbox",
@@ -68,6 +80,25 @@ export const routes: readonly RouteDefinition[] = [
     description: "Review decisions, blocked work, failures, and regressions",
     load: () => import("./features/inbox/inbox-page").then((m) => ({ default: m.InboxPage })),
     badge: (state) => state?.inboxCount,
+  },
+  {
+    id: "runs",
+    path: "/runs",
+    label: "Runs",
+    icon: PulseIcon,
+    group: "operate",
+    description: "Every Agent run, its steps, and the effects it produced",
+    load: () => import("./features/runs/runs-page").then((m) => ({ default: m.RunsPage })),
+    matchPrefix: true,
+  },
+  {
+    id: "run-detail",
+    path: "/runs/:id",
+    label: "Run detail",
+    icon: PulseIcon,
+    description: "Inspect a run's task graph, step timeline, and effect receipts",
+    load: () =>
+      import("./features/runs/run-detail-page").then((m) => ({ default: m.RunDetailPage })),
   },
   {
     id: "agents",
@@ -143,7 +174,7 @@ export const routes: readonly RouteDefinition[] = [
 ];
 
 /** Where the dashboard lands after sign-in and setup. */
-export const defaultRoute = "/inbox";
+export const defaultRoute = "/";
 
 /** Routes that appear in the sidebar, in group order. */
 export function navigationGroups(): Array<{ group: NavGroup; items: RouteDefinition[] }> {
