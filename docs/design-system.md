@@ -85,11 +85,21 @@ Use these names directly. Tailwind utility form is shown; the CSS custom propert
 
 ### Brand and status
 
+Kumo's own `--color-kumo-brand` is **blue**. Gardener redefines it in `ui/accents.css`, which is
+the only file in the UI allowed to hold a colour value. The accent is selectable: Cloudflare
+orange (default) or Gardener green, chosen in Settings and stored as `data-accent` on `<html>`.
+
+`bg-kumo-brand` and `text-kumo-brand` resolve to **different** colours on purpose. Cloudflare
+orange is 2.52:1 on the light canvas, so it is a fill only; the text token is a darker orange at
+4.59:1. Use `bg-kumo-brand` when a label sits on top of the colour, and `text-kumo-brand` when the
+colour sits on the canvas. Full table and measurements: `docs/dashboard-redesign.md` §6.1.
+
 | Utility | Meaning in Gardener |
 | --- | --- |
-| `kumo-brand` (`#f6821f`) | **Primary.** Primary buttons, active nav, focus, live indicators. |
+| `kumo-brand` | **Primary.** Primary buttons, active nav, focus, live indicators. Accent-dependent. |
 | `kumo-info` | Informational only. Links, neutral notes, "observing". Never a primary action. |
 | `kumo-success` | Executed, healthy, enabled, connected. Gardener's secondary identity colour. |
+| | ⚠️ Under the green accent, brand and success are both green (hue 147 vs 163). Never put a brand-filled control and a success badge in the same row without another differentiator. |
 | `kumo-warning` | Awaiting a human decision, paused, degraded. |
 | `kumo-danger` | Failed, blocked, access removed, destructive actions. |
 

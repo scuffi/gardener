@@ -12,6 +12,7 @@
           const mode = stored === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : stored;
           document.documentElement.dataset.mode = mode;
           document.documentElement.dataset.themePreference = stored;
+          document.documentElement.dataset.accent = localStorage.getItem("gardener.accent") === "green" ? "green" : "orange";
           document.querySelector('meta[name="theme-color"]').content = mode === "dark" ? "#0f0f0f" : "#fcfcfc";
         } catch {}
       })();

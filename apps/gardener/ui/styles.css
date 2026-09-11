@@ -6,11 +6,15 @@
  * Do NOT add: colour values (use `bg-kumo-*` / `text-kumo-*` / `border-kumo-*`),
  * `[data-mode="dark"]` blocks (Kumo owns the scheme switch and redefines every token),
  * or any component/page styling (that belongs in the component, as utilities).
+ *
+ * Brand colours live in `accents.css`, which is imported last so it can re-point Kumo's brand
+ * token. That is the only file permitted to define a colour value.
  */
 
 @source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 @import "@cloudflare/kumo/styles/tailwind";
 @import "tailwindcss";
+@import "./accents.css";
 
 @theme {
   --font-sans:

@@ -19,7 +19,7 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "../../primitives";
-import { ThemePicker } from "../../theme";
+import { AccentPicker, ThemePicker } from "../../theme";
 
 export function SettingsPage() {
   const { state, health } = useGardener();
@@ -131,6 +131,13 @@ export function SettingsPage() {
             description="Choose how this Gardener workspace looks on this device."
           />
           <ThemePicker />
+          <div className="border-t border-kumo-hairline">
+            <PanelHeader
+              title="Accent"
+              description="Cloudflare orange, or green to match the gardening metaphor."
+            />
+            <AccentPicker />
+          </div>
         </Panel>
 
         <Grid variant="2up" gap="base">

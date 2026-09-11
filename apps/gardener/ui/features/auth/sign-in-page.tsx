@@ -4,6 +4,21 @@ import { useGardener } from "../../app-context";
 import { Banner, Button, LoadingState, Panel, PoweredByCloudflare } from "../../primitives";
 import { SkipLink } from "../../shell/skip-link";
 import { ThemeToggle } from "../../theme";
+import { AsciiGarden } from "./ascii-garden";
+
+/**
+ * Ambient wash behind the garden: a soft green bloom near the card and a fainter one bottom-left,
+ * over the canvas. Kept as an inline style because it composes three layered gradients.
+ */
+const stageStyle: CSSProperties = {
+  background: [
+    "radial-gradient(circle at 52% 18%,",
+    "color-mix(in srgb, var(--color-kumo-success-tint) 82%, transparent) 0, transparent 34%),",
+    "radial-gradient(circle at 8% 82%,",
+    "color-mix(in srgb, var(--text-color-kumo-success) 7%, transparent) 0, transparent 28%),",
+    "var(--color-kumo-canvas)",
+  ].join(" "),
+};
 
 const brandRingStyle: CSSProperties = {
   background: [
@@ -20,7 +35,10 @@ export function SignInPage() {
   const unavailable = Boolean(error && !health);
 
   return (
-    <div className="grid min-h-svh grid-rows-[auto_1fr] bg-kumo-canvas text-kumo-default">
+    <div
+      className="relative isolate grid min-h-svh grid-rows-[auto_1fr] overflow-x-clip text-kumo-default"
+      style={stageStyle}
+    >
       <SkipLink href="#main-content">Skip to sign in</SkipLink>
       <header className="flex w-full items-center justify-between px-5 py-5 sm:px-10 lg:px-14">
         <div className="inline-flex items-center gap-3" aria-label="Gardener repository stewardship">
@@ -39,8 +57,11 @@ export function SignInPage() {
         <ThemeToggle />
       </header>
 
-      <main id="main-content" className="grid place-items-center px-4 py-10 sm:px-6 sm:py-16">
-        <div className="w-full max-w-[430px]">
+      <main
+        id="main-content"
+        className="grid place-items-center px-4 pt-10 pb-[clamp(150px,22vh,210px)] sm:px-6 sm:pt-16"
+      >
+        <div className="relative z-[3] w-full max-w-[430px]">
           <div className="rounded-xl border border-transparent shadow-lg" style={brandRingStyle}>
             <Panel className="rounded-[11px]" padded={false}>
               <section className="p-6 sm:p-8" aria-labelledby="signin-heading">
@@ -169,6 +190,10 @@ export function SignInPage() {
           </footer>
         </div>
       </main>
+
+      {/* Decorative only, and marked aria-hidden inside the component. */}
+      <AsciiGarden />
+      <div className="signin-horizon" aria-hidden="true" />
     </div>
   );
 }

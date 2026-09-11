@@ -31,7 +31,7 @@ Measured state of `apps/gardener/ui` (2,068 lines):
 | `--gd-*` re-alias tokens | 30 | Indirection layer that hides the real token names from humans and agents |
 | Longest source line | 1,622 chars (`agent-detail-page.tsx`) | 55 lines exceed 200 chars — unreviewable, unpatchable |
 | Kumo components available / used | 41 available, ~12 used | Paying the dependency cost, skipping the value |
-| Largest UI component | `ascii-garden.tsx`, 329 lines | Decorative ASCII grass on the login screen outweighs every real product surface |
+| Largest UI component | `ascii-garden.tsx`, 329 lines | Noted for scale only. **Kept** — see §11. The problem was never that the garden exists, it is that no comparable effort went into the product surfaces |
 | Run observability surface | **does not exist** | `/api/runs/:id` already serves nested tasks, steps, effects |
 | Overview / home surface | **does not exist** | The `Metric` component is exported and imported by nobody |
 
@@ -70,7 +70,9 @@ Fixing pages one at a time will not work, because the failures are systemic.
 4. **The source is machine-hostile.** Single-line JSX blocks of 500–1,600 characters cannot be
    patched by exact-match edits, cannot be reviewed in a diff, and cannot be reasoned about in
    isolation. This directly conflicts with the requirement that coding agents maintain this codebase.
-5. **Effort is in the wrong place.** 329 lines of animated ASCII grass; zero lines of run inspection.
+5. **Effort is unevenly distributed.** 329 lines of animated ASCII grass; zero lines of run
+   inspection. The fix is to raise the product surfaces to match the care already spent on the
+   sign-in screen, not to level the sign-in screen down.
 
 ---
 
@@ -98,7 +100,8 @@ Three principles, in priority order when they conflict.
 | Typeface | Inter Variable for prose and UI. **JetBrains Mono for the machine layer** — run IDs, source hashes, operation kinds, receipts, revision numbers, policy keys. Applied deliberately and consistently, this single change does more for "software factory" than any illustration. |
 | Cloudflare presence | Real `CloudflareLogo` in the sidebar footer; `PoweredByCloudflare` on sign-in. |
 | Motion | Purposeful only: live-run pulse, status transitions, streaming step appends, gate unlocks. All behind `prefers-reduced-motion`. |
-| Decoration | Cut. The ASCII garden is reduced to a single small static mark or deleted. |
+| Decoration | Earned, not sprinkled. The sign-in ASCII garden stays exactly as built — it is the product's signature. Decoration is not added elsewhere without the same level of craft. |
+| Accent | Selectable. Cloudflare orange by default, Gardener green as an opt-in. Defined once in `ui/accents.css`; see §6.1. |
 
 ---
 
@@ -245,9 +248,14 @@ on this page, and currently it visually dominates.
 
 ### 5.8 Sign-in and setup
 
-Sign-in: keep the single focused card and the security note; cut the animated ASCII garden to a small
-static mark; add `PoweredByCloudflare`. The current conic-gradient orbiting border is the one piece of
-existing decoration worth keeping, retuned to brand orange.
+Sign-in: **keep the animated ASCII garden**. It is hand-built, seeded, parallaxed, pointer-reactive
+and reduced-motion aware, and it is the single strongest piece of personality the project has. An
+OSS project is allowed a signature; this is Gardener's. Keep the single focused card, the security
+note and the conic-gradient orbiting border, and add `PoweredByCloudflare`.
+
+The garden owns its styling in `features/auth/ascii-garden.css`, colocated with the component, so it
+loads only on this route and stays deletable in one move. Its foliage derives from the Kumo success
+token and deliberately does *not* follow the brand accent — plants are green in both accents.
 
 Setup: keep the two-step wizard. Reframe profile selection so each profile *shows the policy matrix
 it produces* rather than three abstract chips — the operator is choosing an authority posture and
@@ -272,6 +280,42 @@ Non-negotiable, and enforced in review:
    faces, focus ring, skip link, keyframes. Target: **678 → under 100 lines**.
 5. **Kumo first.** Before writing a component, check the registry. Nothing hand-rolled that Kumo
    provides.
+6. **Brand colour lives in exactly one file.** `ui/accents.css` and nowhere else (§6.1).
+
+Rules 1–4 and 6 are enforced by `scripts/check-ui-conventions.mjs`, which runs in `pnpm check`.
+They are not review conventions; they fail the build.
+
+### 6.1 Brand accent
+
+Kumo ships `--color-kumo-brand` as **blue** (`oklch(0.5772 0.2324 260)`). Gardener is not a blue
+product, so the token is redefined in `ui/accents.css` — the only file permitted to contain a colour
+value. Selecting an accent sets `data-accent` on `<html>`; `index.html` applies the stored value
+before first paint so there is no flash.
+
+Two brand tokens exist and they are **not** interchangeable:
+
+| Token | Utility | Use |
+| --- | --- | --- |
+| `--color-kumo-brand` | `bg-kumo-brand` | Fill. A label sits on top of it. |
+| `--text-color-kumo-brand` | `text-kumo-brand` | Text, icon and border. Sits on the canvas. |
+
+They differ because Cloudflare orange measures **2.52:1** against the light canvas — it fails AA as
+text. Orange is therefore a fill only, and the text token drops to a darker orange at 4.59:1.
+
+| Accent | Light fill | Dark fill | Light text | Dark text |
+| --- | --- | --- | --- | --- |
+| Orange (default) | `#f6821f` | `#f6821f` | `#b55b04` | `#fc9d5b` |
+| Green | `#1b8636` | `#62c471` | `#1b8636` | `#7cd687` |
+
+Brand green sits at hue 147; Kumo's success green sits at hue 163. That 16° gap is deliberate so
+"brand green" and "healthy green" do not read as the same colour. Even so, **never place a
+brand-filled control and a success badge in the same row** without another differentiator.
+
+One known deviation: orange fill on the light canvas is 2.52:1, under the 3.0 that SC 1.4.11 asks of
+a component boundary. The value is Cloudflare's brand colour and is not ours to change; the label
+inside the fill is 8.13:1, so the control is never unidentifiable. `ui/accents.test.ts` parses the
+stylesheet and pins every number above, so a colour edit that breaks contrast fails the test suite
+rather than shipping.
 
 ### Mapping: hand-rolled → Kumo
 
@@ -378,7 +422,9 @@ Each phase is independently shippable and leaves the app working.
 Deleted the `--gd-*` layer and the `[data-mode="dark"]` colour overrides. Moved to Kumo tokens and
 Tailwind utilities. Reformatted every file to the 120-char rule. Created `primitives/`, `shell/`,
 `providers/`, `features/`, `routes.ts`, `lib/query-keys.ts`, `ui/AGENTS.md`, `docs/design-system.md`.
-Deleted the 30 dead selectors, `components/ui.tsx`, `ascii-garden.tsx`, and the whole `pages/` tree.
+Deleted the 30 dead selectors, `components/ui.tsx`, and the whole `pages/` tree. Added the brand
+accent layer (§6.1) with a contrast test, and kept the ASCII garden — moved to `features/auth/`
+with a colocated stylesheet.
 
 Measured outcome:
 
@@ -402,7 +448,7 @@ tag, which browser chrome cannot read from a CSS custom property).
 
 **Phase 1 — Shell and identity.**
 Orange as primary. Two nav groups. `CloudflareLogo`. App-bar live status pill and persistent kill
-switch. `⌘K` palette wired to `actions.ts`. Mono for the machine layer. Cut the ASCII garden.
+switch. `⌘K` palette wired to `actions.ts`. Mono for the machine layer.
 
 **Phase 2 — Runs (flagship).**
 `gardenerApi.runs` / `gardenerApi.run`. `/runs` table. `/runs/:id` with `Flow` graph, step timeline
@@ -430,7 +476,9 @@ then update `smoke:onboarding` to cover the new routes.
 
 ### Kill list
 
-- `ui/components/ascii-garden.tsx` + its test (329 + 91 lines) — reduce to a static mark or delete
+- ~~`ui/components/ascii-garden.tsx` + its test~~ — **reversed.** This was the wrong call: it
+  proposed deleting hand-crafted work to satisfy a tidiness rule. The garden is kept, moved to
+  `features/auth/`, and given a colocated stylesheet and a restored test.
 - 30 dead CSS selectors, including the never-built run-detail styling
 - The entire `--gd-*` token layer (30 tokens) and all 3 dark-mode override blocks
 - All 29 `!important` declarations

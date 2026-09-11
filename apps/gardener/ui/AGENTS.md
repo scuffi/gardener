@@ -100,8 +100,15 @@ pnpm --filter @gardener/app build
 
 `pnpm ui:check` (`scripts/check-ui-conventions.mjs`, also part of `pnpm check`) mechanically
 enforces: the 120-char limit, no Kumo import outside `primitives/`, no raw hex or Tailwind palette
-colours or `dark:` variants, no inline `queryKey` arrays, and the `styles.css` budget (max 100
-lines, no hex, no `--gd-*`, no `[data-mode]` overrides, no `!important`).
+colours or `dark:` variants, no inline `queryKey` arrays, the `styles.css` budget (max 80 effective
+lines, no hex, no `--gd-*`, no `[data-mode]` overrides, no `!important`), and that `accents.css`
+stays a pure token layer.
+
+**Colour lives in two files and nowhere else.** `ui/accents.css` defines the brand accents;
+`features/auth/ascii-garden.css` defines the decorative garden palette. Everything else uses Kumo
+semantic tokens. Note that `bg-kumo-brand` and `text-kumo-brand` are deliberately different
+colours — see `docs/dashboard-redesign.md` §6.1 before touching either. `ui/accents.test.ts` pins
+the contrast numbers, so a colour change that breaks WCAG fails the suite.
 
 If a raw colour is genuinely unavoidable, put a `design-system-exempt: <reason>` comment on the
 line or just above it. Exemptions are printed on every run so they cannot pile up unnoticed. There

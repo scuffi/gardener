@@ -1,0 +1,119 @@
+/**
+ * Styling for the sign-in ASCII garden.
+ *
+ * This is the one place in the UI that legitimately owns bespoke CSS. The garden is a layered
+ * <pre> composition with parallax, per-layer masking and bloom glow; Tailwind utilities cannot
+ * express it. It is colocated with its component rather than living in the global stylesheet, so
+ * it loads only on the sign-in route and stays deletable in one move.
+ *
+ * Colour rules:
+ * - Foliage derives from the Kumo success token. Plants are green regardless of the selected
+ *   brand accent, so this deliberately does NOT follow --color-kumo-brand.
+ * - The four bloom hues are a decorative palette with no semantic meaning. They are hand-tuned
+ *   per scheme for contrast against the canvas and have no Kumo equivalent.
+ */
+
+.signin-garden {
+  /* design-system-exempt: decorative bloom palette, hand-tuned per scheme. Not semantic colour. */
+  --signin-grass: color-mix(in srgb, var(--text-color-kumo-success) 72%, #157f52);
+  --signin-grass-far: color-mix(in srgb, var(--text-color-kumo-success) 45%, var(--text-color-kumo-subtle));
+  --signin-bloom-rose: #c43f67;
+  --signin-bloom-gold: #ae6f08;
+  --signin-bloom-violet: #7655b8;
+  --signin-bloom-blue: #247f9f;
+
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: clamp(220px, 43vh, 430px);
+  overflow: hidden;
+  color: var(--signin-grass);
+  mask-image: linear-gradient(to bottom, transparent 0, rgb(0 0 0 / 14%) 12%, black 42%);
+  pointer-events: none;
+  user-select: none;
+}
+
+:root[data-mode="dark"] .signin-garden {
+  /* design-system-exempt: decorative bloom palette, dark-scheme tuning. */
+  --signin-grass: #62dba5;
+  --signin-grass-far: #317b60;
+  --signin-bloom-rose: #ff8faf;
+  --signin-bloom-gold: #ffd166;
+  --signin-bloom-violet: #c4a7ff;
+  --signin-bloom-blue: #7dd3fc;
+}
+
+.signin-garden__layer {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: inherit;
+  font: 500 clamp(8px, .72vw, 11px)/1 "JetBrains Mono Variable", ui-monospace, monospace;
+  white-space: pre;
+  transform-origin: center bottom;
+}
+
+.signin-garden__layer--far {
+  bottom: 5px;
+  color: var(--signin-grass-far);
+  opacity: .36;
+  transform: scaleY(.78);
+}
+
+.signin-garden__layer--near {
+  z-index: 1;
+  opacity: .72;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--text-color-kumo-success) 12%, transparent);
+}
+
+.signin-garden__layer--bloom {
+  z-index: 2;
+  opacity: .94;
+  text-shadow: 0 0 8px currentColor;
+}
+
+.signin-garden__layer--rose { color: var(--signin-bloom-rose); }
+.signin-garden__layer--gold { color: var(--signin-bloom-gold); }
+.signin-garden__layer--violet { color: var(--signin-bloom-violet); }
+.signin-garden__layer--blue { color: var(--signin-bloom-blue); }
+
+/* Fades the garden into the page floor so the glyph grid does not end on a hard edge. */
+.signin-horizon {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 100px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--color-kumo-canvas) 76%, transparent) 76%,
+    var(--color-kumo-canvas)
+  );
+  pointer-events: none;
+}
+
+@media (min-width: 901px) and (max-height: 760px) {
+  .signin-garden { height: 36vh; min-height: 190px; }
+}
+
+@media (max-width: 900px) {
+  .signin-garden { height: clamp(190px, 32vh, 300px); }
+}
+
+@media (max-width: 480px) {
+  .signin-garden { height: 210px; opacity: .85; }
+}
+
+@media (forced-colors: active) {
+  .signin-horizon { display: none; }
+  .signin-garden { color: CanvasText; opacity: .2; }
+  .signin-garden__layer--bloom { color: CanvasText; text-shadow: none; }
+}

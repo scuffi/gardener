@@ -14,7 +14,16 @@ import path from "node:path";
 
 const UI_ROOT = new URL("../apps/gardener/ui/", import.meta.url);
 const MAX_LINE = 120;
-const MAX_CSS_LINES = 100;
+/**
+ * Budget for `styles.css`, counted in effective lines (comments and blanks excluded). The point
+ * is to cap bespoke STYLING, not to discourage explaining why a rule exists.
+ *
+ * 80 leaves roughly a half-dozen lines of headroom over the current content, which is all
+ * genuinely global: resets, base typography, ::selection, :focus-visible, the @property brand
+ * ring, and the reduced-motion block. If this budget starts to bind, the answer is almost never
+ * to raise it — it is that page or component styling has leaked in and belongs in the component.
+ */
+const MAX_CSS_RULE_LINES = 80;
 
 const failures = [];
 const exemptions = [];
@@ -92,17 +101,42 @@ for (const file of files) {
   });
 }
 
+// `accents.css` is the one sanctioned home for brand colour values. Guard it so it stays a pure
+// token layer: custom properties only, no component styling leaking in.
+const accents = await readFile(new URL("accents.css", UI_ROOT), "utf8");
+const accentBody = accents.replace(/\/\*[\s\S]*?\*\//g, "");
+for (const [, selector, block] of accentBody.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  if (/@media/.test(selector)) continue;
+  if (!/data-accent|:root/.test(selector)) {
+    fail("accents.css", null, `selector "${selector.trim()}" is not an accent scope`);
+  }
+  for (const declaration of block.split(";")) {
+    const property = declaration.split(":")[0]?.trim();
+    if (property && !property.startsWith("--")) {
+      fail("accents.css", null, `declares "${property}"; this file may only define tokens`);
+    }
+  }
+}
+
 // styles.css must remain globals-only.
 const css = await readFile(new URL("styles.css", UI_ROOT), "utf8");
 const cssLineCount = css.split("\n").length;
+const cssRuleLines = css
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .split("\n")
+  .filter((line) => line.trim()).length;
 // The reduced-motion block legitimately needs `!important` to defeat component-level animation,
 // so it is excluded before the `!important` check.
 const cssCode = css
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/@media\s*\(prefers-reduced-motion[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
 
-if (cssLineCount > MAX_CSS_LINES) {
-  fail("styles.css", null, `${cssLineCount} lines (max ${MAX_CSS_LINES}); move styling into components`);
+if (cssRuleLines > MAX_CSS_RULE_LINES) {
+  fail(
+    "styles.css",
+    null,
+    `${cssRuleLines} effective lines (max ${MAX_CSS_RULE_LINES}); move styling into components`,
+  );
 }
 for (const [pattern, message] of [
   [/#[0-9a-fA-F]{3,8}\b/, "hardcoded colour; use a Kumo token"],
@@ -113,7 +147,11 @@ for (const [pattern, message] of [
   if (pattern.test(cssCode)) fail("styles.css", null, message);
 }
 
-console.log(`Checked ${files.length} UI source files and styles.css (${cssLineCount} lines).`);
+console.log(
+  `Checked ${files.length} UI source files, styles.css `
+    + `(${cssRuleLines}/${MAX_CSS_RULE_LINES} effective lines, ${cssLineCount} total) `
+    + `and accents.css.`,
+);
 
 if (exemptions.length) {
   console.log(`\n${exemptions.length} documented colour exemption(s):`);
