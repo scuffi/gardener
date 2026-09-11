@@ -15,6 +15,11 @@ export interface AsciiGardenOptions {
   pointer?: GardenPointer;
 }
 
+export interface AsciiGardenScene {
+  field: string;
+  blooms: readonly [string, string, string, string];
+}
+
 const MIN_COLUMNS = 24;
 const MAX_COLUMNS = 220;
 const MIN_ROWS = 8;
@@ -31,15 +36,20 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, pointer }: AsciiGardenOptions): string {
+export function renderAsciiGardenScene({ columns, rows, timeMs, seed, depth = 1, pointer }: AsciiGardenOptions): AsciiGardenScene {
   const width = clamp(Math.floor(columns), MIN_COLUMNS, MAX_COLUMNS);
   const height = clamp(Math.floor(rows), MIN_ROWS, MAX_ROWS);
   const field = Array.from({ length: height }, () => Array<string>(width).fill(" "));
+  const bloomFields = Array.from({ length: 4 }, () => Array.from({ length: height }, () => Array<string>(width).fill(" ")));
   const elapsed = timeMs / 1_000;
   const density = .58 + depth * .24;
   const tallest = Math.max(2, Math.min(6, Math.floor(height * (.13 + depth * .12))));
   const put = (row: number, column: number, glyph: string) => {
     if (row >= 0 && row < height && column >= 0 && column < width) field[row]![column] = glyph;
+  };
+  const putBloom = (row: number, column: number, glyph: string, tone: number) => {
+    put(row, column, glyph);
+    if (row >= 0 && row < height && column >= 0 && column < width) bloomFields[tone]![row]![column] = glyph;
   };
   const leanAt = (column: number, plantHeight: number, phase = 0) => {
     const ambient = Math.sin(elapsed * .68 + column * .145 + seed + phase) * .46
@@ -95,9 +105,10 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
     }
   }
 
+  let flowerOrdinal = 0;
   if (depth > .72) for (let column = 2; column < width - 2; column += 1) {
     const rarity = unit(seed, column, 71);
-    if (rarity >= .1) continue;
+    if (rarity >= .12) continue;
     let localMinimum = true;
     for (let neighbor = Math.max(1, column - 3); neighbor <= Math.min(width - 2, column + 3); neighbor += 1) {
       if (neighbor !== column && unit(seed, neighbor, 71) < rarity) localMinimum = false;
@@ -106,9 +117,9 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
 
     const species = unit(seed, column, 79);
     const shape = unit(seed, column, 83);
-    const kind = species < .36 ? "flower" : species < .61 ? "seed" : species < .84 ? "weed" : "clover";
-    const maximumHeight = kind === "clover" ? 3 : kind === "weed" ? 6 : kind === "seed" ? 7 : 8;
-    const minimumHeight = kind === "clover" ? 2 : kind === "weed" ? 3 : kind === "seed" ? 5 : 5;
+    const kind = species < .45 ? "flower" : species < .65 ? "seed" : species < .86 ? "weed" : "clover";
+    const maximumHeight = kind === "clover" ? 3 : kind === "weed" ? 6 : kind === "seed" ? 7 : 9;
+    const minimumHeight = kind === "clover" ? 2 : kind === "weed" ? 3 : kind === "seed" ? 5 : 6;
     const plantHeight = Math.min(height - 3, minimumHeight + Math.floor(unit(seed, column, 89) * (maximumHeight - minimumHeight + 1)));
     const lean = leanAt(column, plantHeight, species * 4);
     const positions: Array<{ row: number; column: number }> = [];
@@ -125,11 +136,20 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
     const tip = positions.at(-1)!;
     const middle = positions[Math.max(1, Math.floor(positions.length * .45))]!;
     if (kind === "flower") {
-      const bloom = shape < .34 ? "*" : shape < .67 ? "+" : "o";
-      put(tip.row, tip.column, bloom);
-      if (shape > .46) {
-        put(tip.row, tip.column - 1, "(");
-        put(tip.row, tip.column + 1, ")");
+      const tone = (Math.abs(seed) + flowerOrdinal * 3) % 4;
+      flowerOrdinal += 1;
+      const patterns = [
+        ["\\|/", "-o-", "/|\\"],
+        ["\\./", "-*-", "/.\\"],
+        [".-.", "(o)", "'-'"],
+        ["\\_/", "(+)", "/|\\"],
+      ] as const;
+      const pattern = patterns[Math.min(3, Math.floor(shape * patterns.length))]!;
+      for (let patternRow = 0; patternRow < pattern.length; patternRow += 1) {
+        for (let patternColumn = 0; patternColumn < 3; patternColumn += 1) {
+          const glyph = pattern[patternRow]![patternColumn]!;
+          if (glyph !== " ") putBloom(tip.row - 1 + patternRow, tip.column - 1 + patternColumn, glyph, tone);
+        }
       }
       put(middle.row, middle.column - 1, "/");
       if (shape > .25) put(middle.row, middle.column + 1, "\\");
@@ -155,19 +175,36 @@ export function renderAsciiGarden({ columns, rows, timeMs, seed, depth = 1, poin
     }
   }
 
-  return field.map((row) => row.join("")).join("\n");
+  const serialize = (rows: string[][]) => rows.map((row) => row.join("")).join("\n");
+  return {
+    field: serialize(field),
+    blooms: bloomFields.map(serialize) as [string, string, string, string],
+  };
+}
+
+export function renderAsciiGarden(options: AsciiGardenOptions): string {
+  return renderAsciiGardenScene(options).field;
 }
 
 export function AsciiGarden() {
   const rootRef = useRef<HTMLDivElement>(null);
   const farRef = useRef<HTMLPreElement>(null);
   const nearRef = useRef<HTMLPreElement>(null);
+  const roseBloomRef = useRef<HTMLPreElement>(null);
+  const goldBloomRef = useRef<HTMLPreElement>(null);
+  const violetBloomRef = useRef<HTMLPreElement>(null);
+  const blueBloomRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     const root = rootRef.current;
     const far = farRef.current;
     const near = nearRef.current;
-    if (!root || !far || !near) return;
+    const roseBloom = roseBloomRef.current;
+    const goldBloom = goldBloomRef.current;
+    const violetBloom = violetBloomRef.current;
+    const blueBloom = blueBloomRef.current;
+    if (!root || !far || !near || !roseBloom || !goldBloom || !violetBloom || !blueBloom) return;
+    const bloomLayers = [roseBloom, goldBloom, violetBloom, blueBloom] as const;
 
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const finePointer = window.matchMedia("(pointer: fine)");
@@ -189,8 +226,7 @@ export function AsciiGarden() {
       const characterWidth = metricContext?.measureText("M").width || fontSize * .62;
       const columns = clamp(Math.floor(bounds.width / characterWidth), MIN_COLUMNS, MAX_COLUMNS);
       const letterSpacing = columns > 1 ? Math.max(0, (bounds.width - characterWidth * columns) / columns) : 0;
-      far.style.letterSpacing = `${letterSpacing}px`;
-      near.style.letterSpacing = `${letterSpacing}px`;
+      for (const layer of [far, near, ...bloomLayers]) layer.style.letterSpacing = `${letterSpacing}px`;
       dimensions = {
         columns,
         rows: clamp(Math.floor(bounds.height / lineHeight), MIN_ROWS, MAX_ROWS),
@@ -202,7 +238,9 @@ export function AsciiGarden() {
       const activePointer = pointer && fade > 0 ? { ...pointer, strength: pointer.strength * fade } : undefined;
       const timeMs = still ? 0 : now;
       far.textContent = renderAsciiGarden({ ...dimensions, timeMs, seed: 17, depth: .45, ...(activePointer ? { pointer: { ...activePointer, strength: activePointer.strength * .45 } } : {}) });
-      near.textContent = renderAsciiGarden({ ...dimensions, timeMs, seed: 53, depth: 1, ...(activePointer ? { pointer: activePointer } : {}) });
+      const nearScene = renderAsciiGardenScene({ ...dimensions, timeMs, seed: 53, depth: 1, ...(activePointer ? { pointer: activePointer } : {}) });
+      near.textContent = nearScene.field;
+      for (let tone = 0; tone < bloomLayers.length; tone += 1) bloomLayers[tone]!.textContent = nearScene.blooms[tone]!;
     };
 
     const reduced = () => motion.matches || saveData;
@@ -257,5 +295,9 @@ export function AsciiGarden() {
   return <div ref={rootRef} className="signin-garden" aria-hidden="true">
     <pre ref={farRef} className="signin-garden__layer signin-garden__layer--far" />
     <pre ref={nearRef} className="signin-garden__layer signin-garden__layer--near" />
+    <pre ref={roseBloomRef} className="signin-garden__layer signin-garden__layer--bloom signin-garden__layer--rose" />
+    <pre ref={goldBloomRef} className="signin-garden__layer signin-garden__layer--bloom signin-garden__layer--gold" />
+    <pre ref={violetBloomRef} className="signin-garden__layer signin-garden__layer--bloom signin-garden__layer--violet" />
+    <pre ref={blueBloomRef} className="signin-garden__layer signin-garden__layer--bloom signin-garden__layer--blue" />
   </div>;
 }

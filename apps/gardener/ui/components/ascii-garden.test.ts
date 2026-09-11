@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderAsciiGarden } from "./ascii-garden";
+import { renderAsciiGarden, renderAsciiGardenScene } from "./ascii-garden";
 
 const options = { columns: 80, rows: 16, timeMs: 1_000, seed: 17, depth: 1 } as const;
 
@@ -13,16 +13,25 @@ describe("ASCII garden", () => {
     expect(lines).toHaveLength(16);
     expect(lines.every((line) => line.length === 80)).toBe(true);
     expect(first).toMatch(/[|/\\]/);
-    expect(first.replace(/[ |/\\'_,.():*+o\n]/g, "")).toBe("");
+    expect(first.replace(/[ |/\\'_,.():*+o\n-]/g, "")).toBe("");
   });
 
-  it("mixes sparse flowers, seed heads, weeds, and low plants into the near field", () => {
-    const garden = renderAsciiGarden({ ...options, columns: 220, seed: 53 });
+  it("mixes obvious flowers, seed heads, weeds, and low plants into the near field", () => {
+    const scene = renderAsciiGardenScene({ ...options, columns: 220, seed: 53 });
+    const activeBloomLayers = scene.blooms.filter((layer) => layer.replace(/[ \n]/g, "").length > 0);
 
-    expect(garden).toMatch(/[+*]/);
-    expect(garden).toContain(":");
-    expect(garden).toContain("o");
-    expect((garden.match(/[+*:o]/g) ?? []).length).toBeGreaterThan(5);
+    expect(scene.field).toMatch(/-[+*o]-|\([+*o]\)/);
+    expect(scene.field).toContain(":");
+    expect(scene.field).toContain("o");
+    expect(activeBloomLayers).toHaveLength(4);
+    expect(scene.blooms.join("").replace(/[ \n]/g, "").length).toBeGreaterThan(20);
+    for (const layer of scene.blooms) {
+      expect(layer.split("\n")).toHaveLength(16);
+      expect(layer.split("\n").every((line) => line.length === 220)).toBe(true);
+      for (let index = 0; index < layer.length; index += 1) {
+        if (layer[index] !== " " && layer[index] !== "\n") expect(scene.field[index]).toBe(layer[index]);
+      }
+    }
   });
 
   it("animates with ambient time while preserving its dimensions", () => {

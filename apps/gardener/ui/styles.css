@@ -198,6 +198,10 @@ p { margin-bottom: 0; }
 .signin-stage {
   --signin-grass: color-mix(in srgb, var(--gd-leaf-strong) 72%, #157f52);
   --signin-grass-far: color-mix(in srgb, var(--gd-leaf-strong) 45%, var(--gd-text-subtle));
+  --signin-bloom-rose: #c43f67;
+  --signin-bloom-gold: #ae6f08;
+  --signin-bloom-violet: #7655b8;
+  --signin-bloom-blue: #247f9f;
   position: relative;
   isolation: isolate;
   min-height: 100vh;
@@ -226,6 +230,10 @@ p { margin-bottom: 0; }
 :root[data-mode="dark"] .signin-stage {
   --signin-grass: #62dba5;
   --signin-grass-far: #317b60;
+  --signin-bloom-rose: #ff8faf;
+  --signin-bloom-gold: #ffd166;
+  --signin-bloom-violet: #c4a7ff;
+  --signin-bloom-blue: #7dd3fc;
   background:
     radial-gradient(circle at 52% 18%, color-mix(in srgb, #163d2e 50%, transparent) 0, transparent 35%),
     radial-gradient(circle at 8% 82%, color-mix(in srgb, #216348 16%, transparent) 0, transparent 30%),
@@ -325,7 +333,12 @@ p { margin-bottom: 0; }
 }
 .signin-garden__layer { position: absolute; right: 0; bottom: -1px; left: 0; width: 100%; margin: 0; overflow: hidden; color: inherit; font: 500 clamp(8px, .72vw, 11px)/1 "JetBrains Mono Variable", ui-monospace, monospace; white-space: pre; transform-origin: center bottom; }
 .signin-garden__layer--far { bottom: 5px; color: var(--signin-grass-far); opacity: .36; transform: scaleY(.78); }
-.signin-garden__layer--near { opacity: .72; text-shadow: 0 0 14px color-mix(in srgb, var(--gd-leaf) 12%, transparent); }
+.signin-garden__layer--near { z-index: 1; opacity: .72; text-shadow: 0 0 14px color-mix(in srgb, var(--gd-leaf) 12%, transparent); }
+.signin-garden__layer--bloom { z-index: 2; opacity: .94; text-shadow: 0 0 8px currentColor; }
+.signin-garden__layer--rose { color: var(--signin-bloom-rose); }
+.signin-garden__layer--gold { color: var(--signin-bloom-gold); }
+.signin-garden__layer--violet { color: var(--signin-bloom-violet); }
+.signin-garden__layer--blue { color: var(--signin-bloom-blue); }
 .signin-horizon { position: absolute; z-index: 2; right: 0; bottom: 0; left: 0; height: 100px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--gd-canvas) 76%, transparent) 76%, var(--gd-canvas)); pointer-events: none; }
 
 @property --signin-border-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
@@ -657,6 +670,7 @@ p { margin-bottom: 0; }
   .signin-stage::before, .signin-horizon { display: none; }
   .signin-card { border: 1px solid CanvasText; background: Canvas; backdrop-filter: none; }
   .signin-garden { color: CanvasText; opacity: .2; }
+  .signin-garden__layer--bloom { color: CanvasText; text-shadow: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
