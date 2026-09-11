@@ -44,7 +44,7 @@ export function GardenerFlueAgent(): string {
     ? new NarrowedHarnessToolFacade(request, requireToolFacade())
     : null;
 
-  useModel(boundedCloudflareModel(request.model.id, request.budget), { compaction: false });
+  useModel(boundedCloudflareModel(request.model.id, request.budget, request.resultDataSchema), { compaction: false });
   useInstruction(renderContext(request));
   useResponseFinish(({ response }) => ({
     gardenerHarnessUsage: {

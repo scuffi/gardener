@@ -87,7 +87,7 @@ describe("Flue harness adapter", () => {
 
     expect(GardenerFlueAgent()).toBe(value.prompt);
     expect(flue.useModel).toHaveBeenCalledWith(
-      expect.stringMatching(/^cloudflare\/gardener-bounded-v1:1000:500:30000:\d+:%40cf%2Ftest%2Fmodel$/),
+      expect.stringMatching(/^cloudflare\/gardener-bounded-v1:1000:500:30000:\d+:%40cf%2Ftest%2Fmodel:[A-Za-z0-9_-]+$/),
       { compaction: false },
     );
     expect(flue.useTool).not.toHaveBeenCalled();

@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HarnessBudget } from "../src/harness";
 
 const mocks = vi.hoisted(() => ({
-  baseStream: vi.fn(() => "stream-result"),
-  baseStreamSimple: vi.fn(() => "simple-result"),
+  baseStream: vi.fn((_model: unknown, _context: unknown, _options?: { onPayload?: (payload: unknown, model: { api: string }) => Promise<unknown> }) => "stream-result"),
+  baseStreamSimple: vi.fn((_model: unknown, _context: unknown, _options?: { onPayload?: (payload: unknown, model: { api: string }) => Promise<unknown> }) => "simple-result"),
   setProvider: vi.fn(),
 }));
 
@@ -36,10 +36,11 @@ const budget: HarnessBudget = {
 describe("bounded Flue Cloudflare provider", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("passes immutable output and deadline bounds into the provider call", () => {
+  it("passes immutable bounds and host-owned structured output into the provider call", async () => {
     installBoundedCloudflareProvider({ run: vi.fn() });
     const provider = mocks.setProvider.mock.calls.at(-1)?.[0];
-    const encoded = boundedCloudflareModel("@cf/test/model", budget).slice("cloudflare/".length);
+    const resultDataSchema = { type: "object", additionalProperties: false, properties: { body: { type: "string" } }, required: ["body"] };
+    const encoded = boundedCloudflareModel("@cf/test/model", budget, resultDataSchema).slice("cloudflare/".length);
 
     expect(provider.stream(
       { id: encoded, name: encoded, provider: "cloudflare", api: "cloudflare-ai-binding" },
@@ -49,8 +50,77 @@ describe("bounded Flue Cloudflare provider", () => {
     expect(mocks.baseStream).toHaveBeenCalledWith(
       expect.objectContaining({ id: "@cf/test/model", name: "@cf/test/model" }),
       { messages: [{ role: "user", content: "hello" }] },
-      expect.objectContaining({ maxTokens: 77, signal: expect.any(AbortSignal) }),
+      expect.objectContaining({ maxTokens: 77, signal: expect.any(AbortSignal), onPayload: expect.any(Function) }),
     );
+    const options = mocks.baseStream.mock.calls.at(-1)![2]!;
+    await expect(options.onPayload!(
+      { messages: [], stream: true },
+      { api: "cloudflare-ai-binding" },
+    )).resolves.toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: { properties: { result: { properties: { data: resultDataSchema } } } },
+      },
+    });
+  });
+
+  it("uses the OpenAI Chat Completions structured-output payload shape", async () => {
+    installBoundedCloudflareProvider({ run: vi.fn() });
+    const provider = mocks.setProvider.mock.calls.at(-1)?.[0];
+    const encoded = boundedCloudflareModel("openai/test", budget, { type: "object" }).slice("cloudflare/".length);
+    provider.stream(
+      { id: encoded, name: encoded, provider: "cloudflare", api: "openai-completions" },
+      { messages: [] },
+      {},
+    );
+    const options = mocks.baseStream.mock.calls.at(-1)![2]!;
+    await expect(options.onPayload!(
+      { messages: [], stream: true },
+      { api: "openai-completions" },
+    )).resolves.toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "gardener_harness_decision", strict: true, schema: expect.any(Object) },
+      },
+    });
+  });
+
+  it("uses the OpenAI Responses structured-output payload shape", async () => {
+    installBoundedCloudflareProvider({ run: vi.fn() });
+    const provider = mocks.setProvider.mock.calls.at(-1)?.[0];
+    const encoded = boundedCloudflareModel("openai/test", budget, { type: "object" }).slice("cloudflare/".length);
+    provider.stream(
+      { id: encoded, name: encoded, provider: "cloudflare", api: "openai-responses" },
+      { messages: [] },
+      {},
+    );
+    const options = mocks.baseStream.mock.calls.at(-1)![2]!;
+    await expect(options.onPayload!(
+      { input: [], stream: true },
+      { api: "openai-responses" },
+    )).resolves.toMatchObject({
+      text: { format: { type: "json_schema", name: "gardener_harness_decision", strict: true } },
+    });
+  });
+
+  it("remeasures the final provider payload after injecting the result schema", async () => {
+    installBoundedCloudflareProvider({ run: vi.fn() });
+    const provider = mocks.setProvider.mock.calls.at(-1)?.[0];
+    const limited = { ...budget, maxInputTokens: 100 };
+    const encoded = boundedCloudflareModel("@cf/test/model", limited, {
+      type: "object",
+      description: "x".repeat(300),
+    }).slice("cloudflare/".length);
+    provider.stream(
+      { id: encoded, name: encoded, provider: "cloudflare", api: "cloudflare-ai-binding" },
+      { messages: [] },
+      {},
+    );
+    const options = mocks.baseStream.mock.calls.at(-1)![2]!;
+    await expect(options.onPayload!(
+      { messages: [], stream: true },
+      { api: "cloudflare-ai-binding" },
+    )).rejects.toThrow(/exceeds its immutable 100-token budget/i);
   });
 
   it("rejects output budgets below the AI-binding provider floor", () => {
