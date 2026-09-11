@@ -3,8 +3,6 @@
 export * from "./app";
 export { ComputerWorkspace } from "./workspace/computer-workspace";
 export { WorkspaceProxy, WorkspaceServiceProxy } from "./workspace/exports";
-export { GardenerThinkHarnessAgent } from "./harness/think/generic-agent";
-export { GardenerCloudflareAgentsHarness } from "./harness/cloudflare-agents/generic-agent";
 export { AgentRunWorkflow } from "./runtime";
 export * from "virtual:flue/worker";
 

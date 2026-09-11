@@ -520,7 +520,7 @@ class D1AgentAuthoringService implements AgentAuthoringService {
   }
   async catalog(input: CatalogInput): Promise<JsonObject> {
     const entries = capabilityCatalog.filter((entry) => !input.query || entry.id.includes(input.query)).slice(0, input.limit);
-    return { version: CAPABILITY_CATALOG_VERSION, capabilities: entries as unknown as JsonObject["capabilities"], harnesses: ["flue", "think", "cloudflare-agents"] } as JsonObject;
+    return { version: CAPABILITY_CATALOG_VERSION, capabilities: entries as unknown as JsonObject["capabilities"], harnesses: ["flue"] } as JsonObject;
   }
   async validate(input: ValidateInput): Promise<JsonObject> {
     const source = sourceFromMcp(input); const validation = validateAgentSource(source);

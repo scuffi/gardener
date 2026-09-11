@@ -11,12 +11,12 @@ export function SettingsPage() {
   const services = [
     { name: "D1 database", description: "Agents, decisions, runs, effects, and audit records", ready: health.database, icon: DatabaseIcon },
     { name: "Durable orchestration", description: `Run continuation, retries, waits, and cancellation · ${sentenceCase(health.agentRuntime.status)}`, ready: health.agentRuntime.enabled, icon: HardDrivesIcon },
-    { name: "Cloudflare AI", description: "Replaceable model harness through the AI binding", ready: health.workersAi, icon: CpuIcon },
+    { name: "Flue + Cloudflare AI", description: "Flue Agent runtime through the Cloudflare AI binding", ready: health.workersAi, icon: CpuIcon },
     { name: "Gardener Connect", description: "GitHub identity, installation access, and writes", ready: health.connectConfigured, icon: GithubLogoIcon },
   ];
 
   return <>
-    <PageHeader title="Settings" description="Inspect this instance's Cloudflare services, model harness, workspace availability, and runtime limits." />
+    <PageHeader title="Settings" description="Inspect this instance's Cloudflare services, Flue runtime, workspace availability, and runtime limits." />
     {!health.ok ? <Banner variant="error" icon={<WarningCircleIcon size={20} weight="fill" />} title="Agent execution is fail closed" description="Authoring and review are available, but this foundation cannot run Agents or execute effects until the trusted runtime is integrated and staged." /> : null}
 
     <Surface padded={false}>

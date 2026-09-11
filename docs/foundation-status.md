@@ -12,7 +12,7 @@ The hard Agent-native cutover is complete. This branch now includes an experimen
 - Agent-native D1 tables/persistence for drafts, revisions, activation, enablement, events, admissions, runs, tasks, steps, artifacts, interruptions, grants, effects, Inbox, evals, and workspace leases.
 - Agent management endpoints and dashboard flows for validation, capability review, repository-context binding, simulation, drafts, paused publication, activation, enablement, Inbox, and History.
 - `@cloudflare/computer` workspace adapter with exact-SHA hydration, local-only Git, network-denied Worker execution, lazy Container, bounded outputs, sync blocking, frozen artifacts, ambiguous-replay handling, and cleanup leases.
-- Gardener-owned harness contract and conformance tests for Flue, Think, and direct Cloudflare Agents SDK + AI binding adapters.
+- Flue-only product runtime behind a Gardener-owned, framework-neutral harness contract, with immutable D1 request/submission storage, pre-dispatch model bounds, absolute runtime cancellation, authoritative receipt reads, and host-side request/outcome/schema/usage validation retained as the portability seam.
 - OAuth-protected stateless MCP contract for read/validate/simulate/paused-draft/redacted-trace authoring.
 - One generic `AgentRunWorkflow` with a bounded model-only issue-comment path, immutable snapshot validation, deterministic admission/effect identities, live authority revalidation, Connect V2 execution, and strict receipt persistence.
 - Converged Agent-native root/app deployment configuration, Authorization-only Connect relay, local migration/dry-run validation, and Agent-native browser smoke coverage for lifecycle separation, event admission, light/dark, keyboard focus, responsive reflow, and serious/critical Axe findings.
@@ -29,7 +29,7 @@ Passing focused tests for an individual foundation are useful but do not establi
 - Configure and test OAuth storage/server metadata on real Cloudflare resources; the local consent/audience/client/owner review and tests do not replace staging.
 - Add parallel run/task detail surfaces when the trusted runtime exists; do not fabricate them while execution is disabled.
 - Extend the Agent-native smoke with runtime-only cases—parallelism, interruptions, retries, stale responses, and exact receipts—after those trusted paths are implemented.
-- Complete real Cloudflare staging for Workflows, Worker Loader, harness Durable Objects/request storage, R2, Container, waits, joins, sync recovery, OAuth, and cleanup.
+- Complete broader real Cloudflare staging for Workflows, Worker Loader, the Flue Durable Object, R2, Container, waits, joins, sync recovery, OAuth, and cleanup.
 
 ## Bounded and fail-closed behavior today
 

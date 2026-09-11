@@ -1,8 +1,9 @@
 import initialSchema from "../migrations/0001_initial.sql";
 import agentNativeReset from "../migrations/0004_agent_native_reset.sql";
 import agentRuntimeAdmission from "../migrations/0005_agent_runtime_admission.sql?raw";
+import flueHarnessRequests from "../migrations/0006_flue_harness_requests.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 5;
+export const AGENT_SCHEMA_VERSION = 6;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -66,9 +67,15 @@ async function apply(db: D1Database, sql: string): Promise<void> {
 async function initialize(db: D1Database): Promise<void> {
   const version = await installedVersion(db);
   if (version === AGENT_SCHEMA_VERSION) return;
+  if (version === 5) {
+    await apply(db, flueHarnessRequests);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue request migration did not complete");
+    return;
+  }
   if (version === 4) {
     await apply(db, agentRuntimeAdmission);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime admission migration did not complete");
+    await apply(db, flueHarnessRequests);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime migrations did not complete");
     return;
   }
   if (version !== null) {
@@ -86,10 +93,11 @@ async function initialize(db: D1Database): Promise<void> {
     await apply(db, legacy ? agentNativeReset : initialSchema);
     if (!legacy) {
       // 0001 intentionally leaves the marker empty. First-use provisioning
-      // establishes the historical v4 baseline before applying numbered 0005.
+      // establishes the historical v4 baseline before applying later migrations.
       await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)").run();
     }
     await apply(db, agentRuntimeAdmission);
+    await apply(db, flueHarnessRequests);
   } catch (error) {
     // 0004's first write is a plain unique INSERT in the same atomic batch. A
     // losing initializer aborts before any DROP. Fresh initializers race only

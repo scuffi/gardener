@@ -10,7 +10,7 @@ import {
   type HarnessSubmission,
 } from "../src/harness";
 
-const ids: HarnessId[] = ["flue", "think", "cloudflare-agents"];
+const ids: HarnessId[] = ["flue"];
 
 function fixture(id: HarnessId): HarnessRequest {
   return {
@@ -34,6 +34,7 @@ function fixture(id: HarnessId): HarnessRequest {
       maxInputTokens: 100,
       maxOutputTokens: 50,
       maxRuntimeMs: 5_000,
+      deadlineAt: "2099-01-01T00:00:00.000Z",
     },
   };
 }
@@ -49,7 +50,7 @@ function submission(request: HarnessRequest): HarnessSubmission {
   };
 }
 
-function completed(request: HarnessRequest, target = submission(request)): HarnessOutcome {
+function completed(request: HarnessRequest, target = submission(request)): Extract<HarnessOutcome, { status: "completed" }> {
   return {
     schemaVersion: "gardener.harness.outcome/v1",
     harness: request.snapshot.harness,
@@ -127,6 +128,27 @@ describe.each(ids)("%s harness conformance", (id) => {
     await expect(adapter.read(started)).resolves.toMatchObject({
       status: "failed",
       error: { code: "budget-exceeded", retryable: false },
+    });
+  });
+
+  it("fails closed when completed data violates the host-owned result schema", async () => {
+    const request = fixture(id);
+    request.tools = [];
+    request.resultDataSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: { confidence: { type: "number", maximum: 1 } },
+      required: ["confidence"],
+    };
+    const outcome = completed(request);
+    outcome.result.data = { confidence: 2 };
+    outcome.usage.toolCalls = 0;
+    const adapter = harness(id, backendFor(request, outcome));
+    const started = await adapter.start(request);
+
+    await expect(adapter.read(started)).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "unsupported-model-response", retryable: false },
     });
   });
 

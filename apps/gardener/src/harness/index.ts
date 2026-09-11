@@ -28,6 +28,7 @@ export {
 export {
   HarnessContractError,
   assertHarnessRequest,
+  assertHarnessSubmission,
   emptyUsage,
   expectedHarnessBinding,
   parseHarnessOutcome,
@@ -38,14 +39,8 @@ export {
   type HarnessBackend,
   type HarnessBackendRead,
   type HarnessRequestStore,
+  type HarnessSubmissionStore,
 } from "./adapter";
-export {
-  DEFAULT_HARNESS_ID,
-  HarnessRegistry,
-  createHarnessRegistry,
-  type HarnessFactoryOptions,
-} from "./registry";
-
 // Provider adapters intentionally have separate entry points. Importing this
 // framework-neutral barrel must not evaluate a Durable Object runtime or leak
 // provider/AI SDK types into Workflow and D1 contracts.

@@ -17,8 +17,6 @@ export interface Env {
   COMPUTER_WORKSPACES: DurableObjectNamespace;
   COMPUTER_LOADER: unknown;
   COMPUTER_INPUTS?: R2Bucket;
-  GARDENER_THINK_HARNESS: DurableObjectNamespace;
-  GARDENER_DIRECT_HARNESS: DurableObjectNamespace;
   AGENT_RUN_WORKFLOW: Workflow;
   GARDENER_HARNESS_TOOLS?: HarnessToolFacade;
 

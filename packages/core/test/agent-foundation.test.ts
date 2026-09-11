@@ -190,7 +190,7 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
 
   it("pins revision, policy, capabilities, harness, and versions into a hash", async () => {
     const result = await compile();
-    const snapshot = await createAgentRunSnapshot(result.compiled, policy(), { runId: "run-1", harness: { id: "think", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date(now) });
+    const snapshot = await createAgentRunSnapshot(result.compiled, policy(), { runId: "run-1", harness: { id: "historical-harness", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date(now) });
     expect(snapshot.revision.revisionId).toBe("agent-1-r1");
     expect(snapshot.instancePolicy.id).toBe("policy:1");
     expect(snapshot.snapshotHash).toMatch(/^[a-f0-9]{64}$/);

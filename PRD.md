@@ -36,7 +36,7 @@ Gardener owns:
 - repository selection, capability policy, operation policy, and pauses;
 - D1 event/run/task/step/interruption/grant/effect/receipt/audit records;
 - one generic `AgentRunWorkflow`;
-- AI binding and selected harness adapter;
+- AI binding and the Flue runtime adapter;
 - isolated Cloudflare Computer workspaces;
 - R2 snapshots and artifacts.
 
@@ -176,9 +176,9 @@ Computer is preview-only and code execution remains experimental until real plat
 
 ## Harnesses and models
 
-A Gardener-owned contract supports Flue (default), Think, and a minimal direct Cloudflare Agents SDK + AI binding adapter. Selection is an instance setting, not portable Agent authority. Each run pins adapter ID/version. There is one static generic class/function per adapter, never generated code per Agent.
+Flue is Gardener's only product Agent runtime. It is selected by host code, never by Agent prose or an instance setting. Each run pins the Flue adapter ID/version, and one static generic Flue Agent executes all user-authored Agent revisions as immutable data. Gardener retains a framework-neutral internal request/submission/outcome contract so a future runtime pivot remains an adapter change rather than a product-authority change.
 
-The standard deployment uses the Cloudflare AI binding and current AI Gateway routing support; no model-provider secret is required. Framework internals may use AI SDK, but Gardener exposes no generic AI SDK harness.
+The standard deployment uses Flue with the Cloudflare AI binding and current AI Gateway routing support; no model-provider secret is required. Gardener exposes no generic AI SDK harness and performs no automatic runtime fallback.
 
 Adapters must pass the same conformance suite for identity binding, structured output, budgets, tool narrowing, cancellation, errors, and no persistent authority expansion. Preview/experimental failures are typed and fail closed.
 
@@ -225,4 +225,4 @@ The reset occurs only after exhaustive validation and owner acknowledgement.
 - Model-scored authorization.
 - Per-Agent Worker classes or deployments.
 - GitLab in the initial cutover.
-- An SLA claim for preview Computer/Think or experimental Flue dependencies.
+- An SLA claim for preview Computer or experimental Flue dependencies.

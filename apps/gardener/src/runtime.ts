@@ -13,14 +13,10 @@ import {
   emptyRunBudgetUsage,
 } from "@gardener/core";
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
-import { getAgentByName } from "agents";
 import { z } from "zod";
 import { createConnectRunGrant, executeConnectOperation } from "./connect";
 import type { Env } from "./env";
-import {
-  createCloudflareAgentsHarness,
-  type CloudflareAgentsHarnessStub,
-} from "./harness/cloudflare-agents/adapter";
+import { createFlueHarness } from "./harness/flue/adapter";
 import {
   HARNESS_ADAPTER_VERSIONS,
   parseHarnessOutcome,
@@ -29,6 +25,7 @@ import {
 } from "./harness";
 import { getSetting, repositoryPauseSetting } from "./instance-state";
 import {
+  D1HarnessRequestStore,
   claimEffectExecution,
   claimRunStep,
   claimRunTask,
@@ -89,8 +86,8 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
           || await canonicalSha256(snapshotContent) !== run.runSnapshotHash
           || await canonicalSha256(snapshot.instancePolicy) !== run.policySnapshotHash
           || await canonicalSha256(snapshot.effectiveCapabilities) !== run.capabilitySnapshotHash
-          || snapshot.harness.id !== "cloudflare-agents"
-          || snapshot.harness.version !== HARNESS_ADAPTER_VERSIONS["cloudflare-agents"]
+          || snapshot.harness.id !== "flue"
+          || snapshot.harness.version !== HARNESS_ADAPTER_VERSIONS.flue
           || run.harnessId !== snapshot.harness.id
           || run.harnessVersion !== snapshot.harness.version
           || snapshot.revision.agentId !== run.agentId
@@ -248,7 +245,11 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
     }
     const claimedStep = await getRunStep(this.env.DB, stepId);
     if (!claimedStep || claimedStep.status !== "running" || claimedStep.attemptCount < 1) throw new Error("Model step claim was not persisted");
-    const requestId = `model_${modelInputHash}_${claimedStep.attemptCount}`;
+    // Retries reuse the same Flue idempotency key. If dispatch was accepted
+    // before the Worker lost execution, Flue returns the original submission.
+    const requestId = `model_${modelInputHash}`;
+    const maxRuntimeMs = Math.min(limits.runtimeSeconds * 1_000, 15 * 60 * 1_000);
+    const deadlineAt = new Date(parseD1Timestamp(claimedStep.createdAt) + maxRuntimeMs).toISOString();
 
     const request: HarnessRequest = {
       schemaVersion: "gardener.harness.request/v1",
@@ -260,7 +261,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
         promptReference: modelInputHash,
         policySnapshotReference: await canonicalSha256(snapshot.instancePolicy),
         toolCatalogVersion: snapshot.revision.capabilityCatalogVersion,
-        harness: { id: "cloudflare-agents", adapterVersion: HARNESS_ADAPTER_VERSIONS["cloudflare-agents"] },
+        harness: { id: "flue", adapterVersion: HARNESS_ADAPTER_VERSIONS.flue },
       },
       prompt,
       model: { id: this.env.AI_MODEL },
@@ -280,13 +281,12 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
         maxToolCalls: 0,
         maxInputTokens: limits.inputTokens,
         maxOutputTokens: limits.outputTokens,
-        maxRuntimeMs: Math.min(limits.runtimeSeconds * 1_000, 15 * 60 * 1_000),
+        maxRuntimeMs,
+        deadlineAt,
       },
     };
     try {
-      const harness = createCloudflareAgentsHarness({
-        get: async (name) => await getAgentByName(this.env.GARDENER_DIRECT_HARNESS as never, name) as unknown as CloudflareAgentsHarnessStub,
-      });
+      const harness = createFlueHarness(new D1HarnessRequestStore(this.env.DB));
       const submission = await harness.start(request);
       const outcome = await harness.read(submission);
       const storedResult = { submission, outcome };
@@ -524,6 +524,12 @@ async function assertLiveAutomaticAuthority(env: Env, runId: string, operation: 
   if (row?.active !== 1 || row.enabled !== 1 || row.revision_id !== run.agentRevisionId || row.mode !== "automatic") {
     throw new Error("Live policy, repository, or Agent activation no longer authorizes the effect");
   }
+}
+
+function parseD1Timestamp(value: string): number {
+  const parsed = Date.parse(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
+  if (!Number.isFinite(parsed)) throw new Error("Run step has an invalid creation timestamp");
+  return parsed;
 }
 
 function taskIdForRun(runId: string): string {

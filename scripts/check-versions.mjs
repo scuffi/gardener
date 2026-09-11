@@ -38,13 +38,12 @@ configured.set(manager, { range: managerVersion, manifests: ["package.json#packa
 // the repository's supported package-manager baseline.
 const qualificationPins = new Map([
   ["@cloudflare/computer", "preview workspace adapter"],
-  ["@cloudflare/think", "preview harness adapter"],
   ["@flue/cli", "qualified Flue adapter family"],
   ["@flue/runtime", "qualified Flue adapter family"],
   ["@flue/vite", "qualified Flue adapter family"],
   ["@cloudflare/workers-oauth-provider", "qualified OAuth boundary"],
   ["@modelcontextprotocol/server", "qualified MCP boundary"],
-  ["agents", "qualified Cloudflare Agents adapter"],
+  ["agents", "qualified stateless MCP helpers"],
   ["pnpm", "supported repository package-manager baseline"],
   ["valibot", "qualified Flue runtime peer"],
 ]);

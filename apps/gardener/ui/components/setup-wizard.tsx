@@ -98,7 +98,7 @@ export function SetupWizard() {
 
     <div className="trust-note">
       <ShieldCheckIcon size={20} weight="fill" aria-hidden="true" />
-      <div><strong>Credentials stay isolated</strong><p>GitHub credentials remain in Gardener Connect and are never sent to this Worker, Agents, model harnesses, or Computer workspaces.</p></div>
+      <div><strong>Credentials stay isolated</strong><p>GitHub credentials remain in Gardener Connect and are never sent to this Worker, the Flue runtime, models, or Computer workspaces.</p></div>
     </div>
   </div>;
 }

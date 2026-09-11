@@ -11,6 +11,7 @@ import type {
   HarnessToolInvocation,
   JsonValue,
 } from "./types";
+import { resultDataSchemaIssue } from "./result-schema";
 import {
   HarnessContractError,
   assertHarnessRequest,
@@ -30,6 +31,12 @@ export interface HarnessBackendRead {
 export interface HarnessRequestStore {
   put(request: HarnessRequest): Promise<void>;
   get(runId: string, requestId: string): Promise<HarnessRequest | null>;
+}
+
+/** Durable request plus dispatch-receipt storage for reattaching after a crash. */
+export interface HarnessSubmissionStore extends HarnessRequestStore {
+  putSubmission(submission: HarnessSubmission): Promise<void>;
+  getSubmission(runId: string, requestId: string): Promise<HarnessSubmission | null>;
 }
 
 /** Provider bridge. Provider-specific handles stay behind this interface. */
@@ -73,7 +80,23 @@ export function createValidatedHarness(
         throw new HarnessContractError("invalid-outcome", "Harness read returned a different immutable request");
       }
       const parsed = parseHarnessOutcome(read.outcome, submission);
-      const bounded = enforceOutcomeBudget(parsed, read.request);
+      const schemaIssue = parsed.status === "completed" && read.request.resultDataSchema
+        ? resultDataSchemaIssue(read.request.resultDataSchema, parsed.result.data)
+        : null;
+      const validated: HarnessOutcome = schemaIssue
+        ? {
+            schemaVersion: parsed.schemaVersion,
+            harness: parsed.harness,
+            runId: parsed.runId,
+            requestId: parsed.requestId,
+            submissionId: parsed.submissionId,
+            status: "failed",
+            usage: parsed.usage,
+            events: parsed.events,
+            error: harnessError("unsupported-model-response", `Harness result violated resultDataSchema: ${schemaIssue}`),
+          }
+        : parsed;
+      const bounded = enforceOutcomeBudget(validated, read.request);
       for (const event of bounded.events) options?.onEvent?.(event);
       return bounded;
     },

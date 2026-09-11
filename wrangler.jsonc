@@ -31,14 +31,17 @@
   "durable_objects": {
     "bindings": [
       { "name": "COMPUTER_WORKSPACES", "class_name": "ComputerWorkspace" },
-      { "name": "GARDENER_THINK_HARNESS", "class_name": "GardenerThinkHarnessAgent" },
-      { "name": "GARDENER_DIRECT_HARNESS", "class_name": "GardenerCloudflareAgentsHarness" }
+      { "name": "FLUE_GARDENER_HARNESS_AGENT", "class_name": "FlueGardenerHarnessAgent" }
     ]
   },
   "migrations": [
     {
       "tag": "agent-native-foundation-v1",
       "new_sqlite_classes": ["ComputerWorkspace", "GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness", "FlueGardenerHarnessAgent"]
+    },
+    {
+      "tag": "flue-only-runtime-v1",
+      "deleted_classes": ["GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness"]
     }
   ],
   "containers": [

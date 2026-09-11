@@ -65,7 +65,7 @@ Each writable run/task/principal receives a separate Cloudflare Computer Durable
 - Handles are disposed; durable leases and a sweeper must release expired workspaces and surface cleanup failure in Inbox.
 - Model-facing token-bearing Cloudflare Artifacts access is disabled; host-controlled R2 is the artifact boundary.
 
-Computer and Think are preview-only and Flue is experimental. Adapters are untrusted integration boundaries and must pass conformance and real platform staging. Preview unavailability produces a typed failure, never a broader fallback.
+Computer is preview-only and Flue is experimental. Flue is the only configured Agent runtime, remains an untrusted integration boundary, and must pass contract validation and real platform staging. Runtime unavailability produces a typed failure; Gardener never falls back to another framework or a broader authority path.
 
 ## Data and logs
 

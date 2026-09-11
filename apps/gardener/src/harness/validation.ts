@@ -267,12 +267,13 @@ function assertHarnessBinding(value: unknown, label: string): asserts value is H
 
 function assertBudget(value: unknown): asserts value is HarnessBudget {
   const budget = record(value, "budget");
-  exactKeys(budget, ["maxTurns", "maxToolCalls", "maxInputTokens", "maxOutputTokens", "maxRuntimeMs"], "budget");
+  exactKeys(budget, ["maxTurns", "maxToolCalls", "maxInputTokens", "maxOutputTokens", "maxRuntimeMs", "deadlineAt"], "budget");
   integer(budget.maxTurns, "budget.maxTurns", 1, 64);
   integer(budget.maxToolCalls, "budget.maxToolCalls", 0, 256);
   integer(budget.maxInputTokens, "budget.maxInputTokens", 1, 2_000_000);
   integer(budget.maxOutputTokens, "budget.maxOutputTokens", 1, 128_000);
   integer(budget.maxRuntimeMs, "budget.maxRuntimeMs", 1_000, 3_600_000);
+  isoDate(budget.deadlineAt, "budget.deadlineAt");
 }
 
 function assertTool(value: unknown): asserts value is HarnessToolDescriptor {

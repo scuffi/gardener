@@ -22,6 +22,10 @@ interface ActiveRevisionRow {
   compiled_hash: string;
 }
 
+export function isCurrentFlueRun(run: { harnessId: string; harnessVersion: string }): boolean {
+  return run.harnessId === "flue" && run.harnessVersion === HARNESS_ADAPTER_VERSIONS.flue;
+}
+
 export interface AdmittedAgentRun {
   runId: string;
   agentId: string;
@@ -85,11 +89,17 @@ export async function admitAgentRunsForEvent(
     let runSnapshotHash: string;
     let created = false;
     if (existing) {
+      // Historical runs retain their original harness identity. A webhook
+      // redelivery must never restart one through a different runtime.
+      if (!isCurrentFlueRun(existing)) {
+        admitted.push({ runId, agentId: row.agent_id, revisionId: row.revision_id, created: false });
+        continue;
+      }
       runSnapshotHash = existing.runSnapshotHash;
     } else {
       const snapshot = await createAgentRunSnapshot(revision, policy, {
         runId,
-        harness: { id: "cloudflare-agents", version: HARNESS_ADAPTER_VERSIONS["cloudflare-agents"] },
+        harness: { id: "flue", version: HARNESS_ADAPTER_VERSIONS.flue },
         versions: {
           runtime: revision.runtimeVersion,
           capabilityCatalog: revision.capabilityCatalogVersion,
@@ -122,8 +132,8 @@ export async function admitAgentRunsForEvent(
         policySnapshotHash,
         capabilitySnapshot: snapshot.effectiveCapabilities,
         capabilitySnapshotHash,
-        harnessId: "cloudflare-agents",
-        harnessVersion: HARNESS_ADAPTER_VERSIONS["cloudflare-agents"],
+        harnessId: "flue",
+        harnessVersion: HARNESS_ADAPTER_VERSIONS.flue,
         budgets: revision.spec.limits,
       });
       runSnapshotHash = result.run.runSnapshotHash;

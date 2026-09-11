@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { canonicalOperationHash, canonicalSha256 } from "@gardener/core";
 import { describe, expect, it } from "vitest";
+import { expectedHarnessBinding, type HarnessRequest, type HarnessSubmission } from "../src/harness";
 import {
   activateAgentRevision,
   admitEventAgentRun,
@@ -16,6 +17,7 @@ import {
   completeRunTask,
   completeWorkspaceCleanup,
   createAgent,
+  D1HarnessRequestStore,
   createEffect,
   createInterruption,
   createRun,
@@ -95,8 +97,8 @@ function runInput(
     policySnapshotHash: hash(`policy-${id}`),
     capabilitySnapshot: { capabilities: [] },
     capabilitySnapshotHash: hash(`caps-${id}`),
-    harnessId: "gardener-agent",
-    harnessVersion: "v1",
+    harnessId: "flue",
+    harnessVersion: expectedHarnessBinding("flue").adapterVersion,
     budgets: { turns: 20 },
   };
 }
@@ -354,6 +356,57 @@ describe("Agent persistence", () => {
         resultHash: hash("step-b-result"),
         artifactRefs: [],
       })).toBe(true);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("stores immutable Flue requests for durable submission reads", async () => {
+    const { sqlite, db } = newAgentDatabase();
+    try {
+      const { agentId, revisionId } = await createPublishedAgent(db);
+      await createRun(db, runInput("flue-run", agentId, revisionId, "manual", null));
+      const request: HarnessRequest = {
+        schemaVersion: "gardener.harness.request/v1",
+        requestId: "flue-request-1",
+        runId: "flue-run",
+        snapshot: {
+          agentRevisionId: revisionId,
+          agentRevisionHash: "a".repeat(64),
+          promptReference: "prompt:1",
+          policySnapshotReference: "policy:1",
+          toolCatalogVersion: "tools:1",
+          harness: expectedHarnessBinding("flue"),
+        },
+        prompt: "Return one bounded proposal.",
+        model: { id: "@cf/test/model" },
+        tools: [],
+        budget: { maxTurns: 1, maxToolCalls: 0, maxInputTokens: 1_000, maxOutputTokens: 500, maxRuntimeMs: 30_000, deadlineAt: "2099-01-01T00:00:00.000Z" },
+      };
+      const store = new D1HarnessRequestStore(db);
+
+      await store.put(request);
+      await store.put(request);
+      await expect(store.get(request.runId, request.requestId)).resolves.toEqual(request);
+      await expect(store.put({ ...request, prompt: "Conflicting prompt" })).rejects.toThrow(/immutable harness request conflict/i);
+      expect(() => sqlite.prepare("UPDATE harness_requests SET request_json = ? WHERE run_id = ? AND request_id = ?")
+        .run(JSON.stringify({ ...request, prompt: "Tampered" }), request.runId, request.requestId)).toThrow(/harness requests are immutable/i);
+
+      const submission: HarnessSubmission = {
+        schemaVersion: "gardener.harness.submission/v1",
+        harness: expectedHarnessBinding("flue"),
+        runId: request.runId,
+        requestId: request.requestId,
+        submissionId: "flue-submission-1",
+        acceptedAt: "2026-09-11T10:00:00.000Z",
+      };
+      await store.putSubmission(submission);
+      await store.putSubmission(submission);
+      await expect(store.getSubmission(request.runId, request.requestId)).resolves.toEqual(submission);
+      await expect(store.putSubmission({ ...submission, submissionId: "flue-submission-conflict" }))
+        .rejects.toThrow(/immutable harness submission conflict/i);
+      expect(() => sqlite.prepare("UPDATE harness_submissions SET submission_json = ? WHERE run_id = ? AND request_id = ?")
+        .run(JSON.stringify({ ...submission, submissionId: "tampered" }), request.runId, request.requestId)).toThrow(/harness submissions are immutable/i);
     } finally {
       sqlite.close();
     }

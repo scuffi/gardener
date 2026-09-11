@@ -23,7 +23,7 @@ Advanced customers may operate the same boundary themselves. Self-hosting change
 
 `apps/gardener` owns owner sessions, repository selection, Agent packages, mutable drafts, immutable revisions, activation and enablement state, policy, Inbox decisions, events, runs, tasks, steps, interruptions, temporary grants, effect intents, receipts, leases, artifacts, and audit history.
 
-Gardener has an AI binding but no GitHub credential. Standard deployment needs no model-provider secret. An instance setting selects a Gardener-owned harness adapter; the immutable run snapshot pins the actual harness ID and adapter version.
+Gardener has an AI binding but no GitHub credential. Standard deployment needs no model-provider secret. Host code always selects Gardener's Flue adapter; the immutable run snapshot pins the Flue harness ID and adapter version.
 
 ## Authority layers
 
@@ -64,7 +64,7 @@ D1 is authoritative for:
 
 Cloudflare Workflows owns durable continuation, deterministic step retry, sleeps, waits, cancellation, and replay. Large snapshots, patches, transcripts, logs, and tool output are referenced from host-controlled R2 instead of being embedded in Workflow state. Promise-based parallel groups must be deterministic; authoritative orchestration must not use `Promise.race()` or `Promise.any()` because losing work continues and replay selection can diverge.
 
-The current entrypoint only verifies the run/snapshot binding and records a terminal integration error. The durable model/tool loop, interruption waits, child joins, exact effects, and cleanup sequencing remain release blockers.
+The current entrypoint supports one bounded Flue model-only proposal followed by a host-constructed automatic `issue.comment.create` exact effect. General tools, approval waits, child joins, broader effects, and cleanup sequencing remain release blockers.
 
 ## Computer workspaces
 
@@ -83,17 +83,13 @@ Local Git rejects network-bearing operations such as clone, fetch, pull, push, a
 
 Computer `0.2.1` is preview software and depends on experimental Worker Loader support. Unit tests cannot establish deployment safety; real workerd/Cloudflare and Container tests remain mandatory.
 
-## Replaceable model harnesses
+## Flue runtime and portability boundary
 
-Gardener owns one framework-neutral lifecycle and conformance suite. Static generic adapters exist for:
+Flue is Gardener's only product Agent runtime. Host code admits every new run with the qualified Flue adapter version and dispatches it to one generated `GardenerFlueAgent`; users cannot select a framework and Agent source cannot grant or change runtime authority.
 
-- **Flue** — default instance selection;
-- **Think** — supported preview adapter;
-- **Cloudflare Agents SDK + AI binding** — minimal direct adapter.
+Gardener still owns a framework-neutral internal lifecycle contract—`start`, `submit`, `read`, and `cancel`—plus typed request, submission, interruption, usage, and outcome envelopes. This is a maintenance and future-pivot seam, not a multi-harness product feature. There is no automatic fallback and no public generic AI SDK harness.
 
-There is no public generic AI SDK harness. Each adapter may call only the Gardener-supplied observation/workspace facade. Persistent GitHub effects are deliberately unrepresentable in the harness tool contract. User Agents never generate framework classes.
-
-The adapters and static classes exist, but the trusted `GARDENER_HARNESS_TOOLS` facade, Flue build transform/export, Durable Object locator wiring, and run orchestration are not yet fully integrated.
+Flue may call only the Gardener-supplied observation/workspace facade. Persistent GitHub effects are deliberately unrepresentable in the harness tool contract. Model-only runs require no tool binding; a run requesting tools fails closed until the trusted `GARDENER_HARNESS_TOOLS` facade is provisioned. Immutable Flue requests and accepted submission receipts are persisted in D1 so Workflow retries reattach to the exact request and receipt. Reads are bound back to that receipt. The Flue Cloudflare provider wrapper conservatively checks the complete provider input before dispatch, supplies the immutable maximum output-token count, and propagates an absolute run deadline through an abort signal; the host also durably aborts an overdue Flue instance. Flue requests below the AI-binding provider's 16-token output floor are rejected before persistence or dispatch. Missing, zero-normalized, or internally inconsistent usage metadata fails closed, and cached input is charged to the immutable input budget. User Agents remain versioned data and never generate framework classes.
 
 ## Effects and optimistic coordination
 

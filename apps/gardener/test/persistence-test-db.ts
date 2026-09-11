@@ -54,6 +54,7 @@ export function newAgentDatabase(): { sqlite: DatabaseSync; db: D1Database } {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(migration());
   sqlite.exec(migration("0005_agent_runtime_admission.sql"));
+  sqlite.exec(migration("0006_flue_harness_requests.sql"));
   return { sqlite, db: d1Database(sqlite) };
 }
 

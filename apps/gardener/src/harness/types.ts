@@ -1,11 +1,10 @@
-export const HARNESS_IDS = ["flue", "think", "cloudflare-agents"] as const;
+/** Flue is the only product runtime. This list is changed only by a reviewed code release, never instance or Agent configuration. */
+export const HARNESS_IDS = ["flue"] as const;
 
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 export const HARNESS_ADAPTER_VERSIONS = {
-  flue: "1.0.0",
-  think: "1.0.0",
-  "cloudflare-agents": "1.0.0",
+  flue: "2.0.0",
 } as const satisfies Record<HarnessId, string>;
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -46,6 +45,8 @@ export interface HarnessBudget {
   maxInputTokens: number;
   maxOutputTokens: number;
   maxRuntimeMs: number;
+  /** Absolute deadline derived once from the durable model-step creation time. */
+  deadlineAt: string;
 }
 
 /**
@@ -194,6 +195,8 @@ export interface HarnessReadOptions {
 
 /**
  * Framework-neutral lifecycle used by the durable Gardener orchestrator.
+ * Flue is the sole implementation; the interface remains as a deliberate
+ * portability seam for a future code-level pivot, not runtime selection.
  * start() creates a run and admits its first request; submit() admits another
  * request to that same run; read() reattaches to one durable submission.
  */

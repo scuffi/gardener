@@ -18,6 +18,9 @@ beforeAll(async () => {
   vi.doMock("../migrations/0005_agent_runtime_admission.sql?raw", () => ({
     default: readFileSync(new URL("../migrations/0005_agent_runtime_admission.sql", import.meta.url), "utf8"),
   }));
+  vi.doMock("../migrations/0006_flue_harness_requests.sql?raw", () => ({
+    default: readFileSync(new URL("../migrations/0006_flue_harness_requests.sql", import.meta.url), "utf8"),
+  }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -27,8 +30,9 @@ describe("Agent-native database initialization", () => {
     try {
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 5 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 6 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       for (const removed of ["workflows", "workflow_revisions", "events", "proposals"]) {
         expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(removed)).toBeUndefined();
       }
@@ -57,10 +61,37 @@ describe("Agent-native database initialization", () => {
       sqlite.exec("CREATE TABLE agents (id TEXT PRIMARY KEY) STRICT");
       sqlite.prepare("INSERT INTO agents (id) VALUES (?)").run("agent-v4");
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 5 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 6 });
       expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v4" }]);
       const columns = sqlite.prepare("PRAGMA table_info(repository_events)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("admission_status");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("upgrades production v5 while preserving a historical direct run byte-for-byte", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    try {
+      sqlite.exec(readFileSync(new URL("../migrations/0001_initial.sql", import.meta.url), "utf8"));
+      sqlite.exec("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)");
+      sqlite.exec(readFileSync(new URL("../migrations/0005_agent_runtime_admission.sql", import.meta.url), "utf8"));
+      sqlite.exec("PRAGMA foreign_keys = OFF");
+      const digest = "a".repeat(64);
+      sqlite.prepare(`
+        INSERT INTO agent_runs
+          (id, kind, agent_id, agent_revision_id, status, run_snapshot_json, run_snapshot_hash,
+           policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json, capability_snapshot_hash,
+           harness_id, harness_version, budgets_json, usage_json, completed_at)
+        VALUES (?, 'manual', ?, ?, 'completed', ?, ?, '{}', ?, '{}', ?, 'cloudflare-agents', '1.0.0', '{}', '{}', ?)
+      `).run("historical-run", "historical-agent", "historical-revision", JSON.stringify({ harness: { id: "cloudflare-agents", version: "1.0.0" } }), digest, digest, digest, "2026-09-10T12:00:00.000Z");
+      const before = sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get();
+
+      await ensureDatabase(d1Database(sqlite));
+
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 6 });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
+      expect(sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get()).toEqual(before);
     } finally {
       sqlite.close();
     }

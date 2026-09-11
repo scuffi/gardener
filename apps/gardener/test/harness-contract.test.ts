@@ -1,14 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_HARNESS_ID,
-  HARNESS_ADAPTER_VERSIONS,
-  HarnessContractError,
-  HarnessRegistry,
+  HARNESS_IDS,
   NarrowedHarnessToolFacade,
-  createHarnessRegistry,
   assertHarnessRequest,
   expectedHarnessBinding,
-  type AgentHarness,
   type HarnessId,
   type HarnessRequest,
 } from "../src/harness";
@@ -35,44 +30,22 @@ function request(id: HarnessId = "flue"): HarnessRequest {
       maxInputTokens: 1_000,
       maxOutputTokens: 500,
       maxRuntimeMs: 30_000,
+      deadlineAt: "2099-01-01T00:00:00.000Z",
     },
-  };
-}
-
-function fakeHarness(id: HarnessId): AgentHarness {
-  return {
-    descriptor: {
-      id,
-      adapterVersion: HARNESS_ADAPTER_VERSIONS[id],
-      capabilities: ["reasoning", "structured-outcome", "cancellation"],
-      preview: false,
-    },
-    start: vi.fn(),
-    submit: vi.fn(),
-    read: vi.fn(),
-    cancel: vi.fn(),
   };
 }
 
 describe("harness contract", () => {
-  it("uses stable harness ids and selects Flue by default", () => {
-    const flue = fakeHarness("flue");
-    const think = fakeHarness("think");
-    const direct = fakeHarness("cloudflare-agents");
-    const registry = createHarnessRegistry({ flue, think, cloudflareAgents: direct });
-
-    expect(DEFAULT_HARNESS_ID).toBe("flue");
-    expect(registry.select(undefined)).toBe(flue);
-    expect(registry.select("think")).toBe(think);
-    expect(registry.select("cloudflare-agents")).toBe(direct);
-    expect(() => registry.select("ai-sdk")).toThrow(/Unknown harness setting/);
+  it("exposes Flue as the only product harness", () => {
+    expect(HARNESS_IDS).toEqual(["flue"]);
+    expect(expectedHarnessBinding("flue")).toEqual({ id: "flue", adapterVersion: "2.0.0" });
   });
 
   it("requires snapshots to pin the selected adapter version", () => {
     const value = request("flue");
     expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).not.toThrow();
-    value.snapshot.harness.adapterVersion = "2.0.0";
-    expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@2.0.0/);
+    value.snapshot.harness.adapterVersion = "1.0.0";
+    expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@1.0.0, not flue@2.0.0/);
   });
 
   it("accepts a bounded completed-only result schema without granting authority", () => {
@@ -130,12 +103,5 @@ describe("harness contract", () => {
     await facade.invoke({ ...allowed, toolCallId: "call-5" });
     await expect(facade.invoke({ ...allowed, toolCallId: "call-6" })).rejects.toMatchObject({ code: "budget-exceeded" });
     expect(invoke).toHaveBeenCalledTimes(3);
-  });
-
-  it("rejects duplicate adapters and incorrect adapter versions", () => {
-    expect(() => new HarnessRegistry([fakeHarness("flue"), fakeHarness("flue")])).toThrow(/Duplicate/);
-    const wrong = fakeHarness("think");
-    wrong.descriptor.adapterVersion = "old";
-    expect(() => new HarnessRegistry([wrong])).toThrow(HarnessContractError);
   });
 });
