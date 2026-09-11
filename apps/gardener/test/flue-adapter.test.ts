@@ -226,6 +226,34 @@ describe("Flue harness adapter", () => {
     expect(flue.read).not.toHaveBeenCalled();
   });
 
+  it("normalizes one schema-valid JSON object wrapped by streaming-model prose", async () => {
+    flue.read.mockResolvedValueOnce({
+      text: 'Here is the result:\n```json\n{"status":"completed","result":{"kind":"result","summary":"Proposal","data":{"body":"Hello"}}}\n```',
+      metadata: { gardenerHarnessUsage: { uncachedInputTokens: 4, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 6, totalTokens: 10, turns: 1, toolCalls: 0 } },
+    });
+    const harness = createFlueHarness(new MemoryRequestStore());
+    const submission = await harness.start(request());
+
+    await expect(harness.read(submission)).resolves.toMatchObject({
+      status: "completed",
+      result: { data: { body: "Hello" } },
+    });
+  });
+
+  it("fails closed when wrapping contains more than one JSON object", async () => {
+    flue.read.mockResolvedValueOnce({
+      text: '{"status":"completed"}\n{"status":"completed"}',
+      metadata: { gardenerHarnessUsage: { uncachedInputTokens: 4, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 6, totalTokens: 10, turns: 1, toolCalls: 0 } },
+    });
+    const harness = createFlueHarness(new MemoryRequestStore());
+    const submission = await harness.start(request());
+
+    await expect(harness.read(submission)).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "unsupported-model-response", retryable: false },
+    });
+  });
+
   it("fails closed when Flue returns non-JSON output", async () => {
     flue.read.mockResolvedValueOnce({
       text: "not json",

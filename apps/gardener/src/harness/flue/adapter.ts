@@ -113,11 +113,11 @@ class FlueBackend implements HarnessBackend {
       }
       let raw: unknown;
       try {
-        raw = JSON.parse(reply.text);
+        raw = parseStructuredReply(reply.text);
       } catch {
         return {
           request,
-          outcome: unsupportedResponseOutcome(accepted, usage, [], "Flue final response was not one structured JSON decision"),
+          outcome: unsupportedResponseOutcome(accepted, usage, [], "Flue final response did not contain one structured JSON decision"),
         };
       }
       try {
@@ -150,6 +150,25 @@ class FlueBackend implements HarnessBackend {
     if (!exists) return { runId: request.runId, cancelled: false };
     await init(GardenerFlueAgent, { id: request.runId }).abort();
     return { runId: request.runId, cancelled: true };
+  }
+}
+
+function parseStructuredReply(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed || new TextEncoder().encode(trimmed).byteLength > 512_000) {
+    throw new Error("Flue response is empty or oversized");
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    // Some streaming models retain presentation wrappers even when the
+    // provider received a JSON Schema. Extract exactly the outermost object;
+    // strict decision/result validation remains the authority boundary.
+    const first = trimmed.indexOf("{");
+    const last = trimmed.lastIndexOf("}");
+    if (first < 0 || last <= first) throw new Error("Flue response contains no JSON object");
+    const candidate = trimmed.slice(first, last + 1);
+    return JSON.parse(candidate) as unknown;
   }
 }
 
