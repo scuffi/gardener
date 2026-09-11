@@ -22,7 +22,9 @@ export function formatRelativeTime(value?: string | null): string {
     ["hour", 3_600_000], ["minute", 60_000], ["second", 1_000],
   ];
   for (const [unit, milliseconds] of ranges) {
-    if (Math.abs(delta) >= milliseconds || unit === "second") return formatter.format(Math.round(delta / milliseconds), unit);
+    if (Math.abs(delta) >= milliseconds || unit === "second") {
+      return formatter.format(Math.round(delta / milliseconds), unit);
+    }
   }
   return "Just now";
 }

@@ -1,5 +1,3 @@
-import { TooltipProvider } from "@cloudflare/kumo/components/tooltip";
-import { LinkProvider, type LinkComponentProps } from "@cloudflare/kumo/utils";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { forwardRef, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -7,8 +5,9 @@ import { BrowserRouter, Link as RouterLink } from "react-router-dom";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import { App } from "./app";
-import { NotificationsProvider } from "./components/notifications";
 import { consumeReturnedIdentity } from "./lib/api";
+import { LinkProvider, TooltipProvider, type LinkComponentProps } from "./primitives";
+import { NotificationsProvider } from "./providers/notifications";
 import { ThemeProvider } from "./theme";
 import "./styles.css";
 
@@ -19,9 +18,10 @@ const queryClient = new QueryClient({
   },
 });
 
-const AppLink = forwardRef<HTMLAnchorElement, LinkComponentProps>(({ href, to: _to, ...props }, ref) => (
-  <RouterLink ref={ref} to={href ?? ""} {...props} />
-));
+/** Routes every Kumo `href` through the router so links do not trigger a full page load. */
+const AppLink = forwardRef<HTMLAnchorElement, LinkComponentProps>(
+  ({ href, to: _to, ...props }, ref) => <RouterLink ref={ref} to={href ?? ""} {...props} />,
+);
 AppLink.displayName = "AppLink";
 
 const root = document.getElementById("root");

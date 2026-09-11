@@ -18,7 +18,15 @@ export interface HealthState {
 export interface Viewer { login: string }
 export interface SetupState { completed: boolean; profile?: SetupProfile | null; activeRepositories: number }
 export interface Policy { operation_kind: string; mode: PolicyMode; updated_at?: string }
-export interface Repository { id: string; owner: string; name: string; active: Flag; paused: boolean; updated_at?: string; default_branch?: string | null }
+export interface Repository {
+  id: string;
+  owner: string;
+  name: string;
+  active: Flag;
+  paused: boolean;
+  updated_at?: string;
+  default_branch?: string | null;
+}
 export interface RunUsage { model?: string; inputTokens?: number; outputTokens?: number; costUsd?: number }
 export interface CapabilityState { [name: string]: string }
 export interface AppState {
@@ -68,7 +76,12 @@ export interface AgentDetailResponse {
   thisRepositoryId?: string;
   revisions: AgentRevisionSummary[];
 }
-export interface AgentValidationDiagnostic { code: string; path?: string; message: string; severity?: "error" | "warning" }
+export interface AgentValidationDiagnostic {
+  code: string;
+  path?: string;
+  message: string;
+  severity?: "error" | "warning";
+}
 export interface AgentCapabilityReview {
   observation: string[];
   workspace: Array<string | { capability: string; mode?: PolicyMode }>;
@@ -87,7 +100,13 @@ export interface AgentSimulation {
   diagnostics?: AgentValidationDiagnostic[];
 }
 
-export type InboxItemKind = "interruption" | "effect" | "failed_run" | "draft_activation" | "eval_regression" | "workspace_cleanup";
+export type InboxItemKind =
+  | "interruption"
+  | "effect"
+  | "failed_run"
+  | "draft_activation"
+  | "eval_regression"
+  | "workspace_cleanup";
 export interface InboxItem {
   id: string;
   kind: InboxItemKind;
@@ -116,24 +135,42 @@ export const operationMetadata: Record<string, { name: string; description: stri
   "issue.label.add": { name: "Add issue labels", description: "Add labels to issues." },
   "issue.label.remove": { name: "Remove issue labels", description: "Remove labels from issues." },
   "issue.comment.create": { name: "Post issue comments", description: "Post comments on issues." },
-  "issue.comment.update": { name: "Update issue comments", description: "Edit comments previously posted by Gardener." },
+  "issue.comment.update": {
+    name: "Update issue comments",
+    description: "Edit comments previously posted by Gardener.",
+  },
   "issue.close": { name: "Close issues", description: "Close open issues." },
   "issue.reopen": { name: "Reopen issues", description: "Reopen closed issues." },
   "issue.assignee.add": { name: "Add issue assignees", description: "Assign people to issues." },
   "issue.assignee.remove": { name: "Remove issue assignees", description: "Remove people from issues." },
   "pull_request.comment.create": { name: "Comment on pull requests", description: "Post pull request comments." },
-  "pull_request.comment.update": { name: "Update pull request comments", description: "Edit Gardener pull request comments." },
+  "pull_request.comment.update": {
+    name: "Update pull request comments",
+    description: "Edit Gardener pull request comments.",
+  },
   "pull_request.review.submit": { name: "Submit reviews", description: "Submit bounded pull request reviews." },
   "pull_request.reviewer.request": { name: "Request reviewers", description: "Request pull request reviewers." },
   "pull_request.reviewer.remove": { name: "Remove reviewers", description: "Remove requested reviewers." },
   "pull_request.update": { name: "Update pull requests", description: "Update pull request metadata or state." },
   "branch.create": { name: "Create branches", description: "Create a Gardener branch at an exact commit." },
   "commit.create": { name: "Create commits", description: "Commit bounded file changes." },
-  "pull_request.open_draft": { name: "Open draft pull requests", description: "Open a draft pull request from a Gardener branch." },
-  "pull_request.merge": { name: "Merge pull requests", description: "Merge an eligible pull request after live revalidation." },
+  "pull_request.open_draft": {
+    name: "Open draft pull requests",
+    description: "Open a draft pull request from a Gardener branch.",
+  },
+  "pull_request.merge": {
+    name: "Merge pull requests",
+    description: "Merge an eligible pull request after live revalidation.",
+  },
   "discussion.comment.create": { name: "Comment on discussions", description: "Post discussion comments." },
-  "discussion.comment.update": { name: "Update discussion comments", description: "Edit Gardener discussion comments." },
-  "discussion.answer.mark": { name: "Mark discussion answers", description: "Mark a discussion comment as the answer." },
+  "discussion.comment.update": {
+    name: "Update discussion comments",
+    description: "Edit Gardener discussion comments.",
+  },
+  "discussion.answer.mark": {
+    name: "Mark discussion answers",
+    description: "Mark a discussion comment as the answer.",
+  },
   "discussion.answer.unmark": { name: "Unmark discussion answers", description: "Remove a discussion answer." },
   "discussion.close": { name: "Close discussions", description: "Close discussions." },
   "discussion.reopen": { name: "Reopen discussions", description: "Reopen discussions." },

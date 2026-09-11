@@ -3,7 +3,12 @@ import { gardenerApi } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 function respond(body: unknown) {
-  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
+  const fetch = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
   vi.stubGlobal("fetch", fetch);
   return fetch;
 }
