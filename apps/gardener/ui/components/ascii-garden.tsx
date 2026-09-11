@@ -36,6 +36,16 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function createPageSeed(): number {
+  try {
+    const value = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(value);
+    return value[0]!;
+  } catch {
+    return (Date.now() ^ Math.floor((globalThis.performance?.now() ?? 0) * 1_000)) >>> 0;
+  }
+}
+
 export function renderAsciiGardenScene({ columns, rows, timeMs, seed, depth = 1, pointer }: AsciiGardenOptions): AsciiGardenScene {
   const width = clamp(Math.floor(columns), MIN_COLUMNS, MAX_COLUMNS);
   const height = clamp(Math.floor(rows), MIN_ROWS, MAX_ROWS);
@@ -105,7 +115,7 @@ export function renderAsciiGardenScene({ columns, rows, timeMs, seed, depth = 1,
     }
   }
 
-  let flowerOrdinal = 0;
+  let bloomOrdinal = 0;
   if (depth > .72) for (let column = 2; column < width - 2; column += 1) {
     const rarity = unit(seed, column, 71);
     if (rarity >= .12) continue;
@@ -117,9 +127,9 @@ export function renderAsciiGardenScene({ columns, rows, timeMs, seed, depth = 1,
 
     const species = unit(seed, column, 79);
     const shape = unit(seed, column, 83);
-    const kind = species < .45 ? "flower" : species < .65 ? "seed" : species < .86 ? "weed" : "clover";
-    const maximumHeight = kind === "clover" ? 3 : kind === "weed" ? 6 : kind === "seed" ? 7 : 9;
-    const minimumHeight = kind === "clover" ? 2 : kind === "weed" ? 3 : kind === "seed" ? 5 : 6;
+    const kind = species < .38 ? "flower" : species < .5 ? "bud" : species < .68 ? "seed" : species < .88 ? "weed" : "clover";
+    const maximumHeight = kind === "clover" ? 3 : kind === "weed" ? 6 : kind === "seed" ? 7 : kind === "bud" ? 6 : 9;
+    const minimumHeight = kind === "clover" ? 2 : kind === "weed" ? 3 : kind === "seed" ? 5 : kind === "bud" ? 4 : 6;
     const plantHeight = Math.min(height - 3, minimumHeight + Math.floor(unit(seed, column, 89) * (maximumHeight - minimumHeight + 1)));
     const lean = leanAt(column, plantHeight, species * 4);
     const positions: Array<{ row: number; column: number }> = [];
@@ -136,23 +146,35 @@ export function renderAsciiGardenScene({ columns, rows, timeMs, seed, depth = 1,
     const tip = positions.at(-1)!;
     const middle = positions[Math.max(1, Math.floor(positions.length * .45))]!;
     if (kind === "flower") {
-      const tone = (Math.abs(seed) + flowerOrdinal * 3) % 4;
-      flowerOrdinal += 1;
+      const tone = (Math.abs(seed) + bloomOrdinal * 3) % 4;
+      bloomOrdinal += 1;
       const patterns = [
         ["\\|/", "-o-", "/|\\"],
         ["\\./", "-*-", "/.\\"],
         [".-.", "(o)", "'-'"],
         ["\\_/", "(+)", "/|\\"],
+        ["\\ | /", "-(@)-", "/ | \\"],
+        [" . ", "(*)", "`-'"],
       ] as const;
-      const pattern = patterns[Math.min(3, Math.floor(shape * patterns.length))]!;
+      const pattern = patterns[Math.min(patterns.length - 1, Math.floor(shape * patterns.length))]!;
+      const patternCenter = Math.floor(pattern[0]!.length / 2);
       for (let patternRow = 0; patternRow < pattern.length; patternRow += 1) {
-        for (let patternColumn = 0; patternColumn < 3; patternColumn += 1) {
+        for (let patternColumn = 0; patternColumn < pattern[patternRow]!.length; patternColumn += 1) {
           const glyph = pattern[patternRow]![patternColumn]!;
-          if (glyph !== " ") putBloom(tip.row - 1 + patternRow, tip.column - 1 + patternColumn, glyph, tone);
+          if (glyph !== " ") putBloom(tip.row - 1 + patternRow, tip.column - patternCenter + patternColumn, glyph, tone);
         }
       }
       put(middle.row, middle.column - 1, "/");
       if (shape > .25) put(middle.row, middle.column + 1, "\\");
+    } else if (kind === "bud") {
+      const tone = (Math.abs(seed) + bloomOrdinal * 3) % 4;
+      bloomOrdinal += 1;
+      const bud = shape < .5 ? [".-.", "(_)"] : ["(_)", "\\_/"];
+      for (let budRow = 0; budRow < bud.length; budRow += 1) for (let budColumn = 0; budColumn < 3; budColumn += 1) {
+        const glyph = bud[budRow]![budColumn]!;
+        if (glyph !== " ") putBloom(tip.row - 1 + budRow, tip.column - 1 + budColumn, glyph, tone);
+      }
+      put(middle.row, middle.column + (shape < .5 ? -1 : 1), shape < .5 ? "/" : "\\");
     } else if (kind === "seed") {
       put(tip.row, tip.column, ":");
       put(tip.row, tip.column - 1, ".");
@@ -205,6 +227,9 @@ export function AsciiGarden() {
     const blueBloom = blueBloomRef.current;
     if (!root || !far || !near || !roseBloom || !goldBloom || !violetBloom || !blueBloom) return;
     const bloomLayers = [roseBloom, goldBloom, violetBloom, blueBloom] as const;
+    const pageSeed = createPageSeed();
+    const farSeed = (pageSeed ^ 0x5f356495) >>> 0;
+    const nearSeed = (pageSeed ^ 0x27d4eb2d) >>> 0;
 
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const finePointer = window.matchMedia("(pointer: fine)");
@@ -237,8 +262,8 @@ export function AsciiGarden() {
       const fade = pointer ? clamp(1 - (now - pointerAt) / 680, 0, 1) : 0;
       const activePointer = pointer && fade > 0 ? { ...pointer, strength: pointer.strength * fade } : undefined;
       const timeMs = still ? 0 : now;
-      far.textContent = renderAsciiGarden({ ...dimensions, timeMs, seed: 17, depth: .45, ...(activePointer ? { pointer: { ...activePointer, strength: activePointer.strength * .45 } } : {}) });
-      const nearScene = renderAsciiGardenScene({ ...dimensions, timeMs, seed: 53, depth: 1, ...(activePointer ? { pointer: activePointer } : {}) });
+      far.textContent = renderAsciiGarden({ ...dimensions, timeMs, seed: farSeed, depth: .45, ...(activePointer ? { pointer: { ...activePointer, strength: activePointer.strength * .45 } } : {}) });
+      const nearScene = renderAsciiGardenScene({ ...dimensions, timeMs, seed: nearSeed, depth: 1, ...(activePointer ? { pointer: activePointer } : {}) });
       near.textContent = nearScene.field;
       for (let tone = 0; tone < bloomLayers.length; tone += 1) bloomLayers[tone]!.textContent = nearScene.blooms[tone]!;
     };

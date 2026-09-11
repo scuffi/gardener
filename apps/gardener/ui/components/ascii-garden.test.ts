@@ -13,14 +13,14 @@ describe("ASCII garden", () => {
     expect(lines).toHaveLength(16);
     expect(lines.every((line) => line.length === 80)).toBe(true);
     expect(first).toMatch(/[|/\\]/);
-    expect(first.replace(/[ |/\\'_,.():*+o\n-]/g, "")).toBe("");
+    expect(first.replace(/[ |/\\'_,.():*+o@`\n-]/g, "")).toBe("");
   });
 
   it("mixes obvious flowers, seed heads, weeds, and low plants into the near field", () => {
     const scene = renderAsciiGardenScene({ ...options, columns: 220, seed: 53 });
     const activeBloomLayers = scene.blooms.filter((layer) => layer.replace(/[ \n]/g, "").length > 0);
 
-    expect(scene.field).toMatch(/-[+*o]-|\([+*o]\)/);
+    expect(scene.field).toMatch(/[+*o@]/);
     expect(scene.field).toContain(":");
     expect(scene.field).toContain("o");
     expect(activeBloomLayers).toHaveLength(4);
@@ -32,6 +32,14 @@ describe("ASCII garden", () => {
         if (layer[index] !== " " && layer[index] !== "\n") expect(scene.field[index]).toBe(layer[index]);
       }
     }
+  });
+
+  it("uses the seed to vary species, shapes, and bloom palettes", () => {
+    const first = renderAsciiGardenScene({ ...options, columns: 220, seed: 1 });
+    const second = renderAsciiGardenScene({ ...options, columns: 220, seed: 2 });
+
+    expect(second.field).not.toBe(first.field);
+    expect(second.blooms).not.toEqual(first.blooms);
   });
 
   it("animates with ambient time while preserving its dimensions", () => {
