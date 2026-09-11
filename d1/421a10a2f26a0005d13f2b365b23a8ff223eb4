@@ -1,0 +1,19 @@
+apps/gardener/ui/features/auth/ascii-garden.test.ts
+  s_52c7f0677c31a9::t_29e9b85cf65420 1-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d1421a10a2f26a0005d13f2b365b23a8ff223eb4",
+  "prompts": {},
+  "sessions": {
+    "s_52c7f0677c31a9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a09120-5b11-76d8-812e-ff40f299a840",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
