@@ -9,6 +9,7 @@ import { useGardener } from "../../app-context";
 import { sentenceCase } from "../../lib/format";
 import {
   Banner,
+  ErrorState,
   Grid,
   GridItem,
   Mono,
@@ -22,7 +23,17 @@ import {
 import { AccentPicker, ThemePicker } from "../../theme";
 
 export function SettingsPage() {
-  const { state, health } = useGardener();
+  const { state, health, error, refresh } = useGardener();
+
+  // A failed load must not sit on a skeleton forever; offer the same recovery as Overview.
+  if (error && (!state || !health)) {
+    return (
+      <ErrorState
+        message={error.message || "Gardener could not load this deployment."}
+        onRetry={() => void refresh()}
+      />
+    );
+  }
 
   // Shared health/state is still in flight. Render the shape of the page rather than a blank
   // screen, so the layout does not jump when the data lands.

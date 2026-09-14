@@ -13,6 +13,7 @@ import {
   PageHeader,
   Panel,
   StatusBadge,
+  statusTone,
 } from "../../primitives";
 
 export function AgentsPage() {
@@ -42,12 +43,12 @@ export function AgentsPage() {
           onRetry={() => void query.refetch()}
         />
       ) : agents.length ? (
-        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
           {agents.map((agent) => (
             <Panel
               key={agent.id}
               as="article"
-              className="transition-colors hover:border-kumo-line"
+              className="transition-colors hover:border-kumo-line focus-within:ring-2 focus-within:ring-kumo-focus"
             >
               <div className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)] gap-3">
                 <span
@@ -63,10 +64,10 @@ export function AgentsPage() {
                       <Link href={`/agents/${encodeURIComponent(agent.id)}`}>{agent.name}</Link>
                     </h2>
                     <span className="flex flex-wrap justify-end gap-1 max-sm:justify-start">
-                      <StatusBadge tone={agent.lifecycle === "active" ? "success" : "warning"}>
+                      <StatusBadge tone={statusTone(agent.lifecycle)}>
                         {agent.lifecycle === "active" ? "Active revision" : agent.lifecycle}
                       </StatusBadge>
-                      <StatusBadge tone={agent.enabled ? "success" : "neutral"}>
+                      <StatusBadge tone={statusTone(agent.enabled ? "enabled" : "disabled")}>
                         {agent.enabled ? "Enabled" : "Disabled"}
                       </StatusBadge>
                     </span>
@@ -76,17 +77,19 @@ export function AgentsPage() {
                   </p>
                   <footer
                     className={
-                      "mt-3 flex flex-wrap justify-between gap-2 border-t border-kumo-hairline " +
+                      "mt-3 flex flex-wrap items-center gap-1 border-t border-kumo-hairline " +
                       "pt-2.5 text-xs text-kumo-subtle"
                     }
                   >
                     {agent.latestRevision ? (
-                      <span className="flex items-center gap-1">
-                        Revision <Mono>{String(agent.latestRevision)}</Mono>
-                      </span>
+                      <>
+                        <span>Revision</span>
+                        <Mono>{String(agent.latestRevision)}</Mono>
+                      </>
                     ) : (
                       <span>Unpublished draft</span>
                     )}
+                    <span aria-hidden="true">·</span>
                     <span>Updated {formatRelativeTime(agent.updatedAt)}</span>
                   </footer>
                 </div>

@@ -20,12 +20,13 @@ import {
   ErrorState,
   Field,
   Grid,
-  LoadingState,
   Mono,
   PageHeader,
+  PageHeaderSkeleton,
   Panel,
   PanelHeader,
   Select,
+  TableSkeleton,
   Textarea,
 } from "../../primitives";
 import { CapabilityReview } from "./components/capability-review";
@@ -87,7 +88,8 @@ export function AgentEditorPage() {
   const storedRepositoryId =
     detail.data?.draft?.thisRepositoryId ?? detail.data?.thisRepositoryId;
   const initialRepositoryId = storedRepositoryId ?? repositories[0]?.id ?? "";
-  const dirty = !editing || source !== (storedSource ?? "") || thisRepositoryId !== initialRepositoryId;
+  const dirty =
+    !editing || source !== (storedSource ?? "") || thisRepositoryId !== initialRepositoryId;
   const validationErrors = useMemo(
     () => validation?.diagnostics.filter((item) => item.severity !== "warning") ?? [],
     [validation],
@@ -160,7 +162,21 @@ export function AgentEditorPage() {
       }),
   });
 
-  if (detail.isLoading) return <LoadingState label="Loading Agent draft" />;
+  if (detail.isLoading) {
+    return (
+      <>
+        <PageHeaderSkeleton />
+        <Grid variant="2-1" gap="base" className="items-start [&>*]:min-w-0">
+          <Panel padded={false}>
+            <TableSkeleton rows={6} columns={1} />
+          </Panel>
+          <Panel padded={false}>
+            <TableSkeleton rows={4} columns={1} />
+          </Panel>
+        </Grid>
+      </>
+    );
+  }
   if (detail.error) {
     return (
       <ErrorState
@@ -189,11 +205,7 @@ export function AgentEditorPage() {
           </Button>
         }
       />
-      <Grid
-        variant="2-1"
-        gap="base"
-        className="items-start"
-      >
+      <Grid variant="2-1" gap="base" className="items-start [&>*]:min-w-0">
         <Panel padded={false}>
           <PanelHeader
             title="AGENT.md"
@@ -223,9 +235,10 @@ export function AgentEditorPage() {
               ) : (
                 repositories.map((repository) => (
                   <Select.Option key={repository.id} value={repository.id}>
-                    <span className="flex min-w-0 items-center gap-1">
-                      <span>{repository.owner}/{repository.name} ·</span>
-                      <Mono>{repository.id}</Mono>
+                    <span className="flex min-w-0 flex-wrap items-center gap-1">
+                      <span className="break-words">{repository.owner}/{repository.name}</span>
+                      <span aria-hidden="true">·</span>
+                      <Mono className="break-all">{repository.id}</Mono>
                     </span>
                   </Select.Option>
                 ))
@@ -242,7 +255,8 @@ export function AgentEditorPage() {
                 }}
                 aria-describedby="agent-source-help"
                 className={
-                  "min-h-[600px] resize-y bg-kumo-recessed p-3.5 font-mono text-sm leading-relaxed"
+                  "min-h-[480px] w-full max-w-full resize-y bg-kumo-recessed p-3.5 font-mono " +
+                  "text-sm leading-relaxed md:min-h-[600px]"
                 }
               />
             </Field>
@@ -252,7 +266,7 @@ export function AgentEditorPage() {
             </p>
           </div>
         </Panel>
-        <aside className="grid gap-4 md:sticky md:top-20" aria-label="Agent review">
+        <aside className="grid min-w-0 gap-4 md:sticky md:top-20" aria-label="Agent review">
           <Panel padded={false}>
             <PanelHeader
               title="Capability review"

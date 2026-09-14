@@ -11,6 +11,7 @@ import {
   CodeBlock,
   EmptyState,
   ErrorState,
+  LinkButton,
   Mono,
   PageHeader,
   PageHeaderSkeleton,
@@ -18,6 +19,8 @@ import {
   PanelHeader,
   shortHash,
   StatusBadge,
+  statusTone,
+  Table,
   TableSkeleton,
 } from "../../primitives";
 
@@ -140,7 +143,7 @@ export function AgentDetailPage() {
               <div className="min-w-0">
                 <dt className="text-xs font-semibold text-kumo-subtle">Runtime</dt>
                 <dd className="mt-1">
-                  <StatusBadge tone={agent.enabled ? "success" : "neutral"}>
+                  <StatusBadge tone={statusTone(agent.enabled ? "enabled" : "disabled")}>
                     {agent.enabled ? "Enabled" : "Disabled"}
                   </StatusBadge>
                 </dd>
@@ -183,7 +186,7 @@ export function AgentDetailPage() {
                   Activate revision
                 </Button>
               ) : selected?.active ? (
-                <StatusBadge tone="success">Active</StatusBadge>
+                <StatusBadge tone={statusTone("active")}>Active</StatusBadge>
               ) : null
             }
           />
@@ -191,7 +194,10 @@ export function AgentDetailPage() {
             <TableSkeleton rows={6} columns={1} />
           ) : revision.error ? (
             <div className="p-4">
-              <ErrorState message={(revision.error as Error).message} />
+              <ErrorState
+                message={(revision.error as Error).message}
+                onRetry={() => void revision.refetch()}
+              />
             </div>
           ) : (
             <div className="max-h-[680px] overflow-auto bg-kumo-recessed p-4 text-sm">
@@ -209,49 +215,71 @@ export function AgentDetailPage() {
             }
           />
           {revisions.length ? (
-            <div>
-              {revisions.map((item) => (
-                <article
-                  key={item.id}
-                  className={
-                    "grid min-h-16 grid-cols-[minmax(0,1fr)_auto_90px] items-center gap-4 " +
-                    "border-b border-kumo-hairline px-4 py-3 last:border-b-0 max-sm:grid-cols-1"
-                  }
-                >
-                  <div className="grid min-w-0 gap-0.5">
-                    <strong className="flex items-center gap-1 text-sm text-kumo-strong">
-                      Revision <Mono tone="strong">{String(item.revision)}</Mono>
-                    </strong>
-                    <span className="text-xs text-kumo-subtle">
-                      Published {formatRelativeTime(item.publishedAt)}
-                      {item.publishedBy ? ` by ${item.publishedBy}` : ""}
-                    </span>
-                  </div>
-                  <Mono title={item.sourceHash}>{shortHash(item.sourceHash)}</Mono>
-                  <div className="justify-self-end max-sm:justify-self-start">
-                    {item.active ? (
-                      <StatusBadge tone="success">Active</StatusBadge>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          navigate(
-                            `/agents/${encodeURIComponent(agent.id)}/revisions/${item.revision}`,
-                          )
-                        }
-                      >
-                        Review
-                      </Button>
-                    )}
-                  </div>
-                </article>
-              ))}
+            <div className="min-w-0 overflow-x-auto">
+              <Table className="min-w-[620px] text-sm">
+                <Table.Header variant="compact">
+                  <Table.Row>
+                    <Table.Head>Revision</Table.Head>
+                    <Table.Head>Published</Table.Head>
+                    <Table.Head>Source hash</Table.Head>
+                    <Table.Head sticky="right">
+                      <span className="sr-only">Action</span>
+                    </Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {revisions.map((item) => (
+                    <Table.Row key={item.id}>
+                      <Table.Cell>
+                        <Mono tone="strong">{String(item.revision)}</Mono>
+                      </Table.Cell>
+                      <Table.Cell className="whitespace-nowrap">
+                        <span>{formatRelativeTime(item.publishedAt)}</span>
+                        {item.publishedBy ? (
+                          <>
+                            <span aria-hidden="true"> · </span>
+                            <Mono>{item.publishedBy}</Mono>
+                          </>
+                        ) : null}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Mono title={item.sourceHash}>{shortHash(item.sourceHash)}</Mono>
+                      </Table.Cell>
+                      <Table.Cell sticky="right" className="text-right">
+                        {item.active ? (
+                          <StatusBadge tone={statusTone("active")}>Active</StatusBadge>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            onClick={() =>
+                              navigate(
+                                `/agents/${encodeURIComponent(agent.id)}/revisions/${item.revision}`,
+                              )
+                            }
+                          >
+                            Review
+                          </Button>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
             </div>
           ) : (
             <EmptyState
               compact
               title="No immutable revision has been published. The Agent cannot run."
-              description=""
+              description="Publish the current draft to create immutable revision history."
+              action={
+                <LinkButton
+                  href={`/agents/${encodeURIComponent(agent.id)}/draft`}
+                  variant="secondary"
+                  icon={PencilSimpleIcon}
+                >
+                  Edit draft
+                </LinkButton>
+              }
             />
           )}
         </Panel>

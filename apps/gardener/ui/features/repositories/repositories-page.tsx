@@ -21,7 +21,6 @@ import {
   statusTone,
   Table,
   TableSkeleton,
-  Text,
 } from "../../primitives";
 
 export function RepositoriesPage() {
@@ -204,21 +203,11 @@ export function RepositoriesPage() {
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
-          <Text
-            bold
-            size="xs"
-            DANGEROUS_className="text-kumo-strong"
-          >
-            Scoped GitHub access
-          </Text>
-          <Text
-            size="xs"
-            variant="secondary"
-            DANGEROUS_className="mt-0.5 leading-relaxed"
-          >
-            This Worker receives normalized events and scoped operation receipts. GitHub App credentials remain
-            in Gardener Connect.
-          </Text>
+          <p className="text-xs font-semibold text-kumo-strong">Scoped GitHub access</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-kumo-subtle">
+            This Worker receives normalized events and scoped operation receipts. GitHub App
+            credentials remain in Gardener Connect.
+          </p>
         </div>
       </Panel>
     </>

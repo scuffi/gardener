@@ -1,6 +1,6 @@
 import type { Icon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { cn } from "./kumo";
+import { cn, Link } from "./kumo";
 
 export type StatTone = "default" | "success" | "warning" | "danger" | "info";
 
@@ -24,21 +24,19 @@ export function Stat({
   detail,
   tone = "default",
   icon: IconComponent,
+  href,
 }: {
   label: string;
   value: ReactNode;
-  detail?: string;
-  tone?: StatTone;
-  icon?: Icon;
+  detail?: string | undefined;
+  tone?: StatTone | undefined;
+  icon?: Icon | undefined;
+  /** Drill-down target. Makes the whole cell a link. */
+  href?: string | undefined;
 }) {
   const colors = accent[tone];
-  return (
-    <article
-      className={cn(
-        "min-w-0 rounded-lg border border-kumo-hairline bg-kumo-base p-4",
-        "min-h-[104px] transition-colors hover:border-kumo-line",
-      )}
-    >
+  const body = (
+    <>
       <div className="flex items-center gap-2">
         {IconComponent ? (
           <span className={cn("grid size-7 place-items-center rounded-md", colors.icon)}>
@@ -51,6 +49,26 @@ export function Stat({
         {value}
       </strong>
       {detail ? <span className="mt-1.5 block text-xs text-kumo-subtle">{detail}</span> : null}
-    </article>
+    </>
+  );
+
+  const shell = cn(
+    "block min-w-0 rounded-lg border border-kumo-hairline bg-kumo-base p-4",
+    "min-h-[104px] transition-colors",
+  );
+
+  if (!href) return <article className={cn(shell, "hover:border-kumo-line")}>{body}</article>;
+
+  return (
+    <Link
+      href={href}
+      variant="plain"
+      className={cn(
+        shell,
+        "text-kumo-default no-underline hover:border-kumo-line hover:bg-kumo-tint",
+      )}
+    >
+      {body}
+    </Link>
   );
 }

@@ -13,10 +13,11 @@ import {
   ConfirmDialog,
   EmptyState,
   ErrorState,
-  LoadingState,
+  LinkButton,
   PageHeader,
   Panel,
   PanelHeader,
+  TableSkeleton,
 } from "../../primitives";
 import { PolicyRow } from "./components/policy-row";
 
@@ -154,8 +155,8 @@ export function PoliciesPage() {
           description="Choose which GitHub actions are off, require approval, or can run automatically."
         />
         {stateLoading ? (
-          <Panel>
-            <LoadingState label="Loading policies" />
+          <Panel padded={false}>
+            <TableSkeleton rows={7} columns={2} />
           </Panel>
         ) : error ? (
           <ErrorState message={error.message} onRetry={() => void refresh()} />
@@ -212,7 +213,7 @@ export function PoliciesPage() {
         }
       />
       {state.policies.length ? (
-        <div className="mt-5 grid gap-5">
+        <div className="mt-5 grid gap-4">
           {policyGroups.map((group) => {
             const policies = group.operations.flatMap((operation) => {
               const policy = policiesByKind.get(operation);
@@ -244,6 +245,11 @@ export function PoliciesPage() {
             icon={ShieldCheckIcon}
             title="No policies available"
             description="This Gardener version did not provide any GitHub operation policies."
+            action={
+              <LinkButton href="/settings" variant="secondary">
+                View deployment settings
+              </LinkButton>
+            }
           />
         </Panel>
       )}

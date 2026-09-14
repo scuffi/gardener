@@ -1,5 +1,5 @@
 import type { AgentCapabilityReview as AgentCapabilityReviewData } from "../../../lib/types";
-import { Mono, StatusBadge } from "../../../primitives";
+import { Mono, StatusBadge, statusTone } from "../../../primitives";
 
 function capabilityName(value: string | { capability: string }) {
   return typeof value === "string" ? value : value.capability;
@@ -34,11 +34,11 @@ export function CapabilityReview({ review }: { review?: AgentCapabilityReviewDat
             <ul className="mt-2 grid list-none gap-2 p-0">
               {values.map((value) => (
                 <li key={value} className="flex min-w-0 items-center justify-between gap-2">
-                  <Mono className="min-w-0 break-all" tone="default">
+                  <Mono className="min-w-0 break-all" tone="default" title={value}>
                     {value}
                   </Mono>
                   {label === "Persistent effects" ? (
-                    <StatusBadge tone="warning">Policy checked</StatusBadge>
+                    <StatusBadge tone={statusTone("pending")}>Policy checked</StatusBadge>
                   ) : null}
                 </li>
               ))}

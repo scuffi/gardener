@@ -1,5 +1,5 @@
 import type { Policy, PolicyMode } from "../../../lib/types";
-import { Grid, Mono, Radio, Text } from "../../../primitives";
+import { Grid, Mono, Radio } from "../../../primitives";
 
 type ModeCopy = Record<PolicyMode, { label: string; description: string }>;
 
@@ -24,13 +24,7 @@ export function PolicyRow({
     >
       <div className="min-w-0">
         <h3 className="text-sm font-semibold text-kumo-strong">{metadata.name}</h3>
-        <Text
-          size="xs"
-          variant="secondary"
-          DANGEROUS_className="mt-1 leading-relaxed"
-        >
-          {metadata.description}
-        </Text>
+        <p className="mt-1 text-xs leading-relaxed text-kumo-subtle">{metadata.description}</p>
         <Mono className="mt-1 block" tone="subtle">
           {policy.operation_kind}
         </Mono>
@@ -54,14 +48,9 @@ export function PolicyRow({
             />
           ))}
         </Radio.Group>
-        <Text
-          as="small"
-          size="xs"
-          variant="secondary"
-          DANGEROUS_className="mt-2 block"
-        >
+        <small className="mt-2 block text-xs text-kumo-subtle">
           {modeCopy[value].description}
-        </Text>
+        </small>
       </div>
     </Grid>
   );

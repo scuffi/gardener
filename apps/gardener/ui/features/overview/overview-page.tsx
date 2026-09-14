@@ -68,6 +68,7 @@ export function OverviewPage() {
 
       <div className="grid grid-cols-4 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
         <Stat
+          href="/runs"
           icon={PulseIcon}
           tone={runsTone}
           label="Runs, last 24 hours"
@@ -75,6 +76,7 @@ export function OverviewPage() {
           detail={successRate}
         />
         <Stat
+          href="/runs"
           icon={SpinnerGapIcon}
           tone={runningTone}
           label="In flight"
@@ -82,6 +84,7 @@ export function OverviewPage() {
           detail={running.length === 1 ? "1 run active now" : `${running.length} runs active now`}
         />
         <Stat
+          href="/inbox"
           icon={TrayIcon}
           tone={inboxTone}
           label="Awaiting a decision"
@@ -89,6 +92,7 @@ export function OverviewPage() {
           detail={awaiting === 0 ? "Inbox is clear" : "Waiting on an operator"}
         />
         <Stat
+          href="/repositories"
           icon={GitBranchIcon}
           tone={repositoriesTone}
           label="Active repositories"

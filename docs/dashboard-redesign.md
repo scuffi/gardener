@@ -446,14 +446,30 @@ so later phases cannot silently regress them. A line may opt out of the colour r
 `design-system-exempt: <reason>` comment; there is currently exactly one (the `theme-color` meta
 tag, which browser chrome cannot read from a CSS custom property).
 
-**Phase 1 — Shell and identity.**
-Orange as primary. Two nav groups. `CloudflareLogo`. App-bar live status pill and persistent kill
-switch. `⌘K` palette wired to `actions.ts`. Mono for the machine layer.
+**Phase 1 — Shell and identity. DONE.**
+Brand accent is selectable (§6.1) and the sidebar mark follows it. `PoweredByCloudflare` in the
+sidebar footer. The app-bar status pill and global kill switch live in `AutomationMenu`. `⌘K`
+palette wired to `ui/actions.ts`, with a visible trigger in the app bar so the shortcut is
+discoverable. Mono is applied as the machine layer across every surface.
 
-**Phase 2 — Runs (flagship).**
-`gardenerApi.runs` / `gardenerApi.run`. `/runs` table. `/runs/:id` with `Flow` graph, step timeline
-with retries and evidence, effects and receipts. Link runs from Inbox, Agents, Audit, Overview.
-This is where the "wow" is; do not defer it.
+Nav groups are still the three from the old IA (Operate, Authority, System) rather than the two
+proposed in §4. Overview, Inbox, Runs and Agents sit under Operate, which is a reasonable shape;
+collapsing Repositories + Policies into a single `/authority` surface, and renaming History to
+Audit, remain open.
+
+**Phase 2 — Runs (flagship). DONE.**
+`gardenerApi.runs` / `gardenerApi.run`, `/runs` with status filtering in one responsive table, and
+`/runs/:id` with the task graph, step timeline (retries surfaced explicitly) and the effects table
+carrying each effect's admitting policy mode plus a copyable receipt.
+
+The task graph is an **indented tree, not `Flow`**. At this density, parentage and `parallel_group`
+read more clearly as nesting than as a node diagram, and it costs no layout dependency. Revisit
+only if real runs turn out to be wide rather than deep.
+
+**Phase 6 (partial) — Overview.**
+`/` is now the home surface: a drill-down stat strip, recent runs, and a "needs attention" panel
+driven by real conditions. It reads entirely from `/api/state`, which already returns the last 50
+runs, so no new endpoint was needed. Charts (`echarts`) are still outstanding.
 
 **Phase 3 — Inbox triage.**
 Split pane, keyboard shortcuts, exact-effect approval with real diffs, provenance rail.
