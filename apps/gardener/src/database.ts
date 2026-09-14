@@ -2,8 +2,9 @@ import initialSchema from "../migrations/0001_initial.sql";
 import agentNativeReset from "../migrations/0004_agent_native_reset.sql";
 import agentRuntimeAdmission from "../migrations/0005_agent_runtime_admission.sql?raw";
 import flueHarnessRequests from "../migrations/0006_flue_harness_requests.sql?raw";
+import teamWorkspaceFoundation from "../migrations/0007_team_workspace_foundation.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 6;
+export const AGENT_SCHEMA_VERSION = 7;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -67,15 +68,22 @@ async function apply(db: D1Database, sql: string): Promise<void> {
 async function initialize(db: D1Database): Promise<void> {
   const version = await installedVersion(db);
   if (version === AGENT_SCHEMA_VERSION) return;
+  if (version === 6) {
+    await apply(db, teamWorkspaceFoundation);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener team/workspace migration did not complete");
+    return;
+  }
   if (version === 5) {
     await apply(db, flueHarnessRequests);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue request migration did not complete");
+    await apply(db, teamWorkspaceFoundation);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue and team/workspace migrations did not complete");
     return;
   }
   if (version === 4) {
     await apply(db, agentRuntimeAdmission);
     await apply(db, flueHarnessRequests);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime migrations did not complete");
+    await apply(db, teamWorkspaceFoundation);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime and team/workspace migrations did not complete");
     return;
   }
   if (version !== null) {
@@ -98,6 +106,7 @@ async function initialize(db: D1Database): Promise<void> {
     }
     await apply(db, agentRuntimeAdmission);
     await apply(db, flueHarnessRequests);
+    await apply(db, teamWorkspaceFoundation);
   } catch (error) {
     // 0004's first write is a plain unique INSERT in the same atomic batch. A
     // losing initializer aborts before any DROP. Fresh initializers race only
@@ -113,7 +122,8 @@ async function initialize(db: D1Database): Promise<void> {
 /**
  * Deploy to Cloudflare provisions D1 but does not run Wrangler migrations.
  * Fresh databases receive the Agent-native schema. Databases from 0001-0003
- * receive the guarded one-time destructive reset. Agent data is never reset.
+ * receive the guarded historical reset. The v6-to-v7 pre-V1 cutover also
+ * removes test-only Agent/runtime data while preserving repositories and policy.
  */
 export function ensureDatabase(db: D1Database): Promise<void> {
   const key = db as unknown as object;

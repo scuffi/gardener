@@ -21,6 +21,9 @@ beforeAll(async () => {
   vi.doMock("../migrations/0006_flue_harness_requests.sql?raw", () => ({
     default: readFileSync(new URL("../migrations/0006_flue_harness_requests.sql", import.meta.url), "utf8"),
   }));
+  vi.doMock("../migrations/0007_team_workspace_foundation.sql?raw", () => ({
+    default: readFileSync(new URL("../migrations/0007_team_workspace_foundation.sql", import.meta.url), "utf8"),
+  }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -30,7 +33,7 @@ describe("Agent-native database initialization", () => {
     try {
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 6 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       for (const removed of ["workflows", "workflow_revisions", "events", "proposals"]) {
@@ -52,17 +55,16 @@ describe("Agent-native database initialization", () => {
     }
   });
 
-  it("upgrades an existing Agent-native v4 schema without losing data", async () => {
+  it("upgrades a complete Agent-native v4 schema through the authorized v7 reset", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
-      sqlite.exec("CREATE TABLE gardener_schema (singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL) STRICT");
+      sqlite.exec(readFileSync(new URL("../migrations/0001_initial.sql", import.meta.url), "utf8"));
       sqlite.exec("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)");
-      sqlite.exec("CREATE TABLE repository_events (id TEXT PRIMARY KEY) STRICT");
-      sqlite.exec("CREATE TABLE agents (id TEXT PRIMARY KEY) STRICT");
-      sqlite.prepare("INSERT INTO agents (id) VALUES (?)").run("agent-v4");
+      sqlite.prepare("INSERT INTO agents (id, slug, name, created_by) VALUES (?, ?, ?, ?)")
+        .run("agent-v4", "agent-v4", "Agent v4", "legacy");
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 6 });
-      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v4" }]);
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([]);
       const columns = sqlite.prepare("PRAGMA table_info(repository_events)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("admission_status");
     } finally {
@@ -70,7 +72,7 @@ describe("Agent-native database initialization", () => {
     }
   });
 
-  it("upgrades production v5 while preserving a historical direct run byte-for-byte", async () => {
+  it("upgrades production v5 while applying the authorized pre-V1 run reset", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       sqlite.exec(readFileSync(new URL("../migrations/0001_initial.sql", import.meta.url), "utf8"));
@@ -85,13 +87,11 @@ describe("Agent-native database initialization", () => {
            harness_id, harness_version, budgets_json, usage_json, completed_at)
         VALUES (?, 'manual', ?, ?, 'completed', ?, ?, '{}', ?, '{}', ?, 'cloudflare-agents', '1.0.0', '{}', '{}', ?)
       `).run("historical-run", "historical-agent", "historical-revision", JSON.stringify({ harness: { id: "cloudflare-agents", version: "1.0.0" } }), digest, digest, digest, "2026-09-10T12:00:00.000Z");
-      const before = sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get();
-
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 6 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
-      expect(sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get()).toEqual(before);
+      expect(sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get()).toBeUndefined();
     } finally {
       sqlite.close();
     }
@@ -117,5 +117,9 @@ describe("Agent-native database initialization", () => {
     expect(triggers).toHaveLength(2);
     expect(triggers[0]).toContain("SELECT RAISE(ABORT, 'agent revisions are immutable');");
     expect(statements.some((statement) => statement.startsWith("PRAGMA"))).toBe(false);
+
+    const v7Statements = migrationStatements(readFileSync(new URL("../migrations/0007_team_workspace_foundation.sql", import.meta.url), "utf8"));
+    expect(v7Statements.filter((statement) => /^DELETE FROM/i.test(statement))).toHaveLength(20);
+    expect(v7Statements.at(-1)).toContain("version = 7");
   });
 });
