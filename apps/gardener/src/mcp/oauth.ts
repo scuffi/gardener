@@ -9,7 +9,7 @@ import {
 } from "./consent";
 import { GARDENER_MCP_SCOPES } from "./scopes";
 import { createGardenerStatelessMcpHandler } from "./server";
-import type { GardenerMcpServices } from "./services";
+import type { GardenerMcpAuthorizedServices } from "./services";
 
 export interface GardenerMcpEnv extends AuthorizationEnv {
   OAUTH_KV: KVNamespace;
@@ -33,7 +33,7 @@ export interface GardenerMcpOAuthDependencies<Env extends GardenerMcpEnv> {
   /** Must verify the existing GitHub-authenticated gardener_session owner cookie. */
   verifyOwnerSession(request: Request, env: Env): Promise<GardenerOwnerPrincipal | null>;
   /** Returns real Agent/run services backed by Gardener persistence. */
-  services(env: Env): GardenerMcpServices;
+  services(env: Env): GardenerMcpAuthorizedServices;
   /** Must atomically validate and consume short-lived consent state. */
   consentState(env: Env): ConsentStateStore;
   now?: () => number;

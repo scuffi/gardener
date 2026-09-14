@@ -27,6 +27,12 @@ export interface GardenerMcpPrincipal {
   };
 }
 
+export interface ActiveGardenerMcpPrincipal extends GardenerMcpPrincipal {
+  userId: string;
+  role: "owner" | "member";
+  principalKind: "mcp-token";
+}
+
 export interface AgentSummary extends JsonObject {
   id: string;
   name: string;
@@ -72,4 +78,9 @@ export interface RunTraceService {
 export interface GardenerMcpServices {
   agents: AgentAuthoringService;
   runs: RunTraceService;
+}
+
+export interface GardenerMcpAuthorizedServices extends GardenerMcpServices {
+  /** Re-resolved for every invocation; OAuth scopes are necessary but never sufficient. */
+  resolvePrincipal(principal: GardenerMcpPrincipal): Promise<ActiveGardenerMcpPrincipal | null>;
 }

@@ -2,7 +2,7 @@ import { webcrypto } from "node:crypto";
 import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
 import { canonicalOperationHash } from "@gardener/core";
 import type { Operation } from "@gardener/contracts";
-import { executeThroughConnect } from "../src/connect";
+import { beginGitHubInstallation, ConnectUsernameResolutionError, executeThroughConnect, resolveGitHubUser } from "../src/connect";
 import type { Env } from "../src/env";
 
 beforeAll(() => {
@@ -37,6 +37,11 @@ const env = {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
+
+describe("W3 instance-authenticated Connect calls",()=>{
+  it("starts installation setup with the instance token and immutable owner subject",async()=>{const fetchMock=vi.fn().mockResolvedValue(json({installationUrl:"https://github.com/apps/gardener/installations/new"}));vi.stubGlobal("fetch",fetchMock); await expect(beginGitHubInstallation(env,"101","https://gardener.example.test/")).resolves.toContain("github.com"); const [url,init]=fetchMock.mock.calls[0] as [URL,RequestInit]; expect(url.pathname).toBe("/v1/instances/installations/setup"); expect((init.headers as Record<string,string>).authorization).toBe(`Bearer ${env.GARDENER_INSTANCE_TOKEN}`); expect(JSON.parse(String(init.body))).toEqual({githubUserId:"101",redirectUri:"https://gardener.example.test/"}); expect(String(init.body)).not.toContain("identity_token");});
+  it("uses stable github_user_resolution errors without exposing upstream bodies",async()=>{vi.stubGlobal("fetch",vi.fn().mockResolvedValue(json({error:"private upstream detail"},429))); await expect(resolveGitHubUser(env,"octocat")).rejects.toEqual(expect.objectContaining<Partial<ConnectUsernameResolutionError>>({message:"github_user_resolution_429",status:429}));});
+});
 
 describe("Connect operation receipts", () => {
   it.each([

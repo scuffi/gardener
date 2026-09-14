@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, importSPKI, jwtVerify, type JWTPayload } from "jose";
+import { z } from "zod";
 import { repositoryEventV2Schema, type RepositoryEventV2 } from "./domain";
 import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
 
@@ -43,12 +44,25 @@ async function verify(token: string, env: Env): Promise<JWTPayload> {
   return payload;
 }
 
-export async function verifyIdentityToken(token: string, env: Env): Promise<JWTPayload> {
+const verifiedIdentityAssertionSchema = z.object({
+  typ: z.literal("gardener-identity"),
+  sub: z.string().regex(/^[1-9][0-9]{0,31}$/),
+  instanceId: z.string().min(1).max(128),
+  githubLogin: z.string().min(1).max(39),
+  instanceOwner: z.boolean(),
+  jti: z.string().min(16).max(128),
+  iss: z.string().url(),
+  aud: z.union([z.string(), z.array(z.string())]),
+  iat: z.number().int().nonnegative(),
+  exp: z.number().int().positive(),
+}).strict();
+export type VerifiedIdentityAssertion = z.infer<typeof verifiedIdentityAssertionSchema>;
+
+export async function verifyIdentityToken(token: string, env: Env): Promise<VerifiedIdentityAssertion> {
   const payload = await verify(token, env);
-  if (payload.typ !== "gardener-identity" || !payload.sub) {
-    throw new Error("Invalid identity token");
-  }
-  return payload;
+  const assertion = verifiedIdentityAssertionSchema.parse(payload);
+  if (assertion.instanceId !== instanceId(env)) throw new Error("Identity instance mismatch");
+  return assertion;
 }
 
 export async function verifyEventToken(token: string, env: Env): Promise<RepositoryEventV2> {

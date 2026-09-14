@@ -49,15 +49,35 @@ export async function beginGitHubLogin(env: Env, origin: string): Promise<string
   return body.authorizationUrl;
 }
 
-export async function beginGitHubInstallation(env: Env, identityToken: string, origin: string): Promise<string> {
-  const response = await connectRequest(env, "/v1/installations/setup", {
+export async function beginGitHubInstallation(env: Env, githubUserId: string, redirectUri: string): Promise<string> {
+  const response = await connectRequest(env, "/v1/instances/installations/setup", {
     method: "POST",
-    headers: { authorization: `Bearer ${identityToken}` },
-    body: JSON.stringify({ redirectUri: `${origin.replace(/\/$/, "")}/` }),
+    headers: { authorization: `Bearer ${env.GARDENER_INSTANCE_TOKEN}` },
+    body: JSON.stringify({ githubUserId, redirectUri }),
   });
   const body = await response.json() as { installationUrl?: string };
   if (!body.installationUrl) throw new Error("Connect returned no GitHub App installation URL");
   return body.installationUrl;
+}
+
+export class ConnectUsernameResolutionError extends Error {
+  constructor(readonly status: 404 | 409 | 429 | 502 | 503) { super(`github_user_resolution_${status}`); }
+}
+
+export async function resolveGitHubUser(env: Env, login: string): Promise<{ githubUserId: string; githubLogin: string }> {
+  const response = await fetchConnect(env, "/v1/instances/github/users/resolve", {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.GARDENER_INSTANCE_TOKEN}` },
+    body: JSON.stringify({ login }),
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    const status = ([404, 409, 429, 502, 503] as const).find((value) => value === response.status) ?? 502;
+    throw new ConnectUsernameResolutionError(status);
+  }
+  const body = await response.json() as { githubUserId?: unknown; githubLogin?: unknown };
+  if (typeof body.githubUserId !== "string" || !/^[1-9][0-9]{0,31}$/.test(body.githubUserId) || typeof body.githubLogin !== "string" || body.githubLogin.length > 39) throw new ConnectUsernameResolutionError(502);
+  return { githubUserId: body.githubUserId, githubLogin: body.githubLogin };
 }
 
 export interface ConnectedRepository {

@@ -39,11 +39,12 @@ describe("Connect authentication", () => {
 
   it("accepts an instance-audienced identity", async () => {
     const { privateKey, env } = await fixture();
-    const token = await new SignJWT({ typ: "gardener-identity" })
+    const token = await new SignJWT({ typ: "gardener-identity", instanceId: instanceId(env), githubLogin: "owner", instanceOwner: true, jti: "identity_test_1234567890" })
       .setProtectedHeader({ alg: "RS256" })
       .setIssuer(env.CONNECT_ISSUER)
       .setAudience(instanceId(env))
       .setSubject("42")
+      .setIssuedAt()
       .setExpirationTime("5m")
       .sign(privateKey);
     await expect(verifyIdentityToken(token, env)).resolves.toMatchObject({ sub: "42" });
@@ -60,9 +61,9 @@ describe("Connect authentication", () => {
       CLOUDFLARE_ACCESS_CLIENT_ID: "access-id",
       CLOUDFLARE_ACCESS_CLIENT_SECRET: "access-secret",
     } as unknown as Env;
-    const token = await new SignJWT({ typ: "gardener-identity", githubLogin: "owner" })
+    const token = await new SignJWT({ typ: "gardener-identity", instanceId: instanceId(env), githubLogin: "owner", instanceOwner: true, jti: "identity_test_0987654321" })
       .setProtectedHeader({ alg: "RS256", kid: "protected-test" })
-      .setIssuer(env.CONNECT_ISSUER).setAudience(instanceId(env)).setSubject("42").setExpirationTime("5m").sign(privateKey);
+      .setIssuer(env.CONNECT_ISSUER).setAudience(instanceId(env)).setSubject("42").setIssuedAt().setExpirationTime("5m").sign(privateKey);
     await expect(verifyIdentityToken(token, env)).resolves.toMatchObject({ sub: "42" });
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
     expect(headers.get("cf-access-client-id")).toBe("access-id");

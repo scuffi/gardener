@@ -1,14 +1,22 @@
 import { canonicalSha256 } from "@gardener/core";
 import { Hono } from "hono";
-import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { bearerToken, verifyEventToken, verifyIdentityToken } from "./auth";
+import { auditActor, compareAndSetOperationPolicies, policyMutationPermission, requirePermission, resolveMcpAuthorization, resolveRequestAuthorization, type AuthorizationVariables } from "./authorization";
 import {
   beginGitHubInstallation,
   beginGitHubLogin,
   claimGardenerInstance,
+  ConnectUsernameResolutionError,
   listConnectedRepositories,
+  resolveGitHubUser,
 } from "./connect";
+import {
+  consumeIdentityAssertion, dashboardSessionPayload, IdentityExchangeError, INVITATION_TTL_SECONDS, issueDashboardSession,
+  LOCAL_SESSION_COOKIE, resolveDashboardSession, revokeDashboardSession,
+  SECURE_SESSION_COOKIE, sessionTokenFromRequest,
+} from "./identity";
 import { ensureDatabase } from "./database";
 import { audit, getSetting, repositoryPauseSetting, setSetting } from "./instance-state";
 import { operationKindSchema, policyModeSchema, type RepositoryEventV2 } from "./domain";
@@ -30,10 +38,10 @@ import { admitAgentRunsForEvent } from "./run-admission";
 
 interface AppBindings {
   Bindings: Env;
-  Variables: { actor: string; actorLogin: string; identityToken: string };
+  Variables: AuthorizationVariables;
 }
 
-const sessionCookie = "gardener_session";
+const dashboardPrincipalKinds = ["dashboard-session", "local-dev"] as const;
 export const app = new Hono<AppBindings>();
 
 app.use("*", async (c, next) => {
@@ -120,53 +128,95 @@ app.post("/hooks/connect", async (c) => {
 
 app.get("/api/auth/start", async (c) => c.redirect(await beginGitHubLogin(c.env, new URL(c.req.url).origin), 302));
 app.post("/api/auth/session", async (c) => {
+  if (c.req.header("origin") !== new URL(c.req.url).origin) return c.json({ error: "invalid_origin" }, 403);
   const { token } = z.object({ token: z.string().min(1).max(20_000) }).strict().parse(await c.req.json());
-  const identity = await verifyIdentityToken(token, c.env);
-  const now = Math.floor(Date.now() / 1_000);
-  const maxAge = typeof identity.exp === "number" ? Math.max(1, Math.min(28_800, identity.exp - now)) : 28_800;
-  setCookie(c, sessionCookie, token, { httpOnly: true, secure: new URL(c.req.url).protocol === "https:", sameSite: "Strict", path: "/", maxAge });
-  return c.json({ authenticated: true, githubLogin: identityLogin(identity) });
+  let assertion; try { assertion=await verifyIdentityToken(token,c.env); } catch { return c.json({error:"invalid_identity_assertion"},401); }
+  let principal;
+  try { principal = await consumeIdentityAssertion(c.env.DB, assertion, c.env.CONNECT_ISSUER); }
+  catch (error) {
+    if (error instanceof IdentityExchangeError) return c.json({ error: error.code }, error.code === "identity_not_authorized" ? 403 : 409);
+    throw error;
+  }
+  clearSessionCookies(c);
+  const secure = new URL(c.req.url).protocol === "https:";
+  const session = await issueDashboardSession(c.env.DB, principal, secure);
+  setCookie(c, session.cookieName, session.token, { httpOnly: true, secure, sameSite: "Lax", path: "/", maxAge: session.maxAge });
+  return c.json(dashboardSessionPayload(principal));
 });
 app.get("/api/auth/session", async (c) => {
-  const token = getCookie(c, sessionCookie);
-  if (!token) return c.json({ authenticated: false });
-  try {
-    const identity = await verifyIdentityToken(token, c.env);
-    if (cloudflareAccessCredentials(c.env)) await claimGardenerInstance(c.env, new URL(c.req.url).origin);
-    return c.json({ authenticated: true, githubLogin: identityLogin(identity) });
-  } catch {
-    deleteCookie(c, sessionCookie, { path: "/", secure: new URL(c.req.url).protocol === "https:" });
-    return c.json({ authenticated: false });
-  }
+  const token = sessionTokenFromRequest(c.req.raw); const session = token ? await resolveDashboardSession(c.env.DB, token) : null;
+  if (!session) { clearSessionCookies(c); return c.json({ authenticated: false }); }
+  if (session.role === "owner" && cloudflareAccessCredentials(c.env)) await claimGardenerInstance(c.env, new URL(c.req.url).origin);
+  return c.json(dashboardSessionPayload(session));
 });
-app.post("/api/auth/logout", (c) => {
-  deleteCookie(c, sessionCookie, { path: "/", secure: new URL(c.req.url).protocol === "https:" });
-  return c.json({ signedOut: true });
+app.post("/api/auth/logout", async (c) => {
+  if (c.req.header("origin") !== new URL(c.req.url).origin) return c.json({ error: "invalid_origin" }, 403);
+  const token = sessionTokenFromRequest(c.req.raw); if (token) await revokeDashboardSession(c.env.DB, token);
+  clearSessionCookies(c); return c.json({ signedOut: true });
 });
 
 app.use("/api/*", async (c, next) => {
-  if (c.env.LOCAL_DEV_BYPASS === "true") {
-    c.set("actor", "local-development"); c.set("actorLogin", "Local developer"); c.set("identityToken", "local-development");
-    return next();
+  const principal = await resolveRequestAuthorization(c.req.raw, c.env);
+  if (!principal) return c.json({ error: "authentication_required", message: "Authentication required" }, 401);
+  if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method) && c.req.header("origin") !== new URL(c.req.url).origin) return c.json({ error: "invalid_origin", message: "Invalid request origin" }, 403);
+  c.set("authorization", principal); c.set("actor", principal.userId); c.set("actorLogin", principal.displayName);
+  if (principal.principalKind === "dashboard-session") {
+    const token=sessionTokenFromRequest(c.req.raw); const secure=new URL(c.req.url).protocol==="https:";
+    if(token)setCookie(c,secure?SECURE_SESSION_COOKIE:LOCAL_SESSION_COOKIE,token,{httpOnly:true,secure,sameSite:"Lax",path:"/",maxAge:30*60});
   }
-  const bearer = bearerToken(c.req.header("authorization"));
-  const cookie = getCookie(c, sessionCookie);
-  const token = bearer ?? cookie;
-  if (!token) return c.json({ error: "Authentication required" }, 401);
-  if (!bearer && !["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
-    if (c.req.header("origin") !== new URL(c.req.url).origin) return c.json({ error: "Invalid request origin" }, 403);
-  }
-  try {
-    const identity = await verifyIdentityToken(token, c.env);
-    c.set("actor", String(identity.sub)); c.set("actorLogin", identityLogin(identity)); c.set("identityToken", token);
-    return next();
-  } catch { return c.json({ error: "Invalid or expired session" }, 401); }
+  return next();
+});
+
+app.get("/api/members", async (c) => {
+  const denied=requirePermission(c, "workspace.view", dashboardPrincipalKinds); if(denied) return denied;
+  const [members, invitations] = await Promise.all([
+    c.env.DB.prepare("SELECT u.id, u.display_name, m.role, m.permanent, e.username, e.provider_subject FROM memberships m JOIN users u ON u.id=m.user_id JOIN external_identities e ON e.user_id=u.id AND e.provider='github' ORDER BY CASE m.role WHEN 'owner' THEN 0 ELSE 1 END, u.display_name").all(),
+    c.env.DB.prepare("SELECT id, username, provider_subject, created_at, datetime(created_at, ?) expires_at FROM invitations WHERE status='pending' AND created_at >= datetime('now', ?) ORDER BY created_at").bind(`+${INVITATION_TTL_SECONDS} seconds`, `-${INVITATION_TTL_SECONDS} seconds`).all(),
+  ]);
+  return c.json({ members: members.results, invitations: invitations.results });
+});
+app.post("/api/invitations", async (c) => {
+  const denied=requirePermission(c, "member.manage", dashboardPrincipalKinds); if(denied) return denied;
+  const { githubUsername }=z.object({ githubUsername:z.string().trim().min(1).max(39).regex(/^(?!.*--)[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/) }).strict().parse(await c.req.json());
+  let resolved; try { resolved=await resolveGitHubUser(c.env, githubUsername); } catch(error) { if(error instanceof ConnectUsernameResolutionError) return c.json({ error:`github_user_resolution_${error.status}` }, error.status); throw error; }
+  const existing=await c.env.DB.prepare("SELECT m.id FROM memberships m JOIN external_identities e ON e.user_id=m.user_id WHERE e.provider='github' AND e.provider_subject=?").bind(resolved.githubUserId).first();
+  if(existing) return c.json({ error:"already_a_member" },409);
+  const id=`invitation_${crypto.randomUUID().replaceAll("-","")}`; const actor=auditActor(c.get("authorization"));
+  const inserted=await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE invitations SET status='revoked', revoked_at=CURRENT_TIMESTAMP WHERE provider='github' AND provider_subject=? AND status='pending' AND created_at < datetime('now', ?)").bind(resolved.githubUserId,`-${INVITATION_TTL_SECONDS} seconds`),
+    c.env.DB.prepare("INSERT INTO invitations (id, provider, provider_subject, username, role, invited_by_user_id) SELECT ?, 'github', ?, ?, 'member', ? WHERE NOT EXISTS (SELECT 1 FROM invitations WHERE provider='github' AND provider_subject=? AND status='pending')").bind(id,resolved.githubUserId,resolved.githubLogin,c.get("authorization").userId,resolved.githubUserId),
+    c.env.DB.prepare("INSERT INTO audit_records (actor, actor_user_id, actor_identity_json, action, resource_type, resource_id, detail_json) SELECT ?, ?, ?, 'membership.invited', 'invitation', ?, ? WHERE EXISTS (SELECT 1 FROM invitations WHERE id=?)").bind(actor.actor,actor.actorUserId,actor.actorIdentityJson,id,JSON.stringify({ provider:"github", providerSubject:resolved.githubUserId, login:resolved.githubLogin }),id),
+  ]);
+  if((inserted[1]?.meta.changes??0)!==1)return c.json({error:"invitation_already_pending"},409);
+  return c.json({ invitation:{ id, githubUsername:resolved.githubLogin, role:"member" } },201);
+});
+app.delete("/api/invitations/:id", async(c)=>{
+  const denied=requirePermission(c,"member.manage",dashboardPrincipalKinds); if(denied)return denied; const id=c.req.param("id"); const actor=auditActor(c.get("authorization"));
+  const result=await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE invitations SET status='revoked', revoked_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'").bind(id),
+    c.env.DB.prepare("INSERT INTO audit_records (actor, actor_user_id, actor_identity_json, action, resource_type, resource_id, detail_json) SELECT ?, ?, ?, 'membership.invitation_revoked', 'invitation', ?, '{}' WHERE EXISTS (SELECT 1 FROM invitations WHERE id=? AND status='revoked')").bind(actor.actor,actor.actorUserId,actor.actorIdentityJson,id,id),
+  ]); if((result[0]?.meta.changes??0)!==1)return c.json({error:"pending_invitation_not_found"},404); return c.json({revoked:true});
+});
+app.delete("/api/members/:id", async(c)=>{
+  const denied=requirePermission(c,"member.manage",dashboardPrincipalKinds); if(denied)return denied; const target=await c.env.DB.prepare("SELECT m.user_id,m.role,m.permanent,u.display_name,e.provider_subject,e.username FROM memberships m JOIN users u ON u.id=m.user_id JOIN external_identities e ON e.user_id=u.id AND e.provider='github' WHERE m.user_id=?").bind(c.req.param("id")).first<{user_id:string;role:string;permanent:number;display_name:string;provider_subject:string;username:string}>();
+  if(!target)return c.json({error:"member_not_found"},404); if(target.role==="owner"||target.permanent)return c.json({error:"owner_membership_permanent"},409);
+  const actor=auditActor(c.get("authorization")); await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE dashboard_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL").bind(target.user_id),
+    c.env.DB.prepare("DELETE FROM memberships WHERE user_id=? AND role='member' AND permanent=0").bind(target.user_id),
+    c.env.DB.prepare("INSERT INTO audit_records (actor, actor_user_id, actor_identity_json, action, resource_type, resource_id, detail_json) VALUES (?, ?, ?, 'membership.removed', 'membership', ?, ?)").bind(actor.actor,actor.actorUserId,actor.actorIdentityJson,target.user_id,JSON.stringify({displayName:target.display_name,identity:{provider:"github",providerSubject:target.provider_subject,login:target.username}})),
+  ]); return c.json({removed:true});
 });
 
 app.route("/api", agentManagement);
-app.get("/api/agent-catalog", (c) => c.json(agentCatalog));
-app.post("/api/install/start", async (c) => c.json({ installationUrl: await beginGitHubInstallation(c.env, c.get("identityToken"), new URL(c.req.url).origin) }));
+app.get("/api/agent-catalog", (c) => { const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); return denied??c.json(agentCatalog); });
+app.post("/api/install/start", async (c) => {
+  const denied=requirePermission(c,"installation.manage",dashboardPrincipalKinds); if(denied)return denied;
+  const body=z.object({redirectUri:z.string().url().max(2048).optional()}).strict().parse(await c.req.json().catch(()=>({})));
+  const origin=new URL(c.req.url).origin; const redirectUri=body.redirectUri??`${origin}/`; if(new URL(redirectUri).origin!==origin)return c.json({error:"invalid_redirect_uri"},400);
+  return c.json({ installationUrl: await beginGitHubInstallation(c.env, c.get("authorization").identity.providerSubject, redirectUri) });
+});
 app.post("/api/repositories/sync", async (c) => {
+  const denied=requirePermission(c,"repository.sync",dashboardPrincipalKinds); if(denied)return denied;
   const repositories = await listConnectedRepositories(c.env);
   await c.env.DB.prepare("UPDATE repositories SET active = 0, updated_at = CURRENT_TIMESTAMP").run();
   for (const repository of repositories) {
@@ -175,28 +225,31 @@ app.post("/api/repositories/sync", async (c) => {
       "ON CONFLICT(id) DO UPDATE SET installation_id = excluded.installation_id, owner = excluded.owner, name = excluded.name, default_branch = excluded.default_branch, active = 1, updated_at = CURRENT_TIMESTAMP",
     ).bind(repository.id, repository.installationId, repository.owner, repository.name, repository.defaultBranch ?? null).run();
   }
-  await audit(c.env.DB, c.get("actor"), "repositories.synced", "instance", instanceId(c.env), { count: repositories.length });
+  await auditWithPrincipal(c.env.DB,c.get("authorization"),"repositories.synced","instance",instanceId(c.env),{count:repositories.length});
   return c.json({ repositories });
 });
-app.get("/api/policies", async (c) => c.json({ policies: (await c.env.DB.prepare("SELECT operation_kind, mode, updated_at FROM operation_policies ORDER BY operation_kind").all()).results }));
+app.get("/api/policies", async (c) => { const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied; return c.json({ policies: (await c.env.DB.prepare("SELECT operation_kind, mode, updated_at FROM operation_policies ORDER BY operation_kind").all()).results }); });
 app.put("/api/policies", async (c) => {
   const body = z.object({ policies: z.array(z.object({ operation: operationKindSchema, mode: policyModeSchema }).strict()).min(1).max(operationKindSchema.options.length) }).strict().parse(await c.req.json());
   if (new Set(body.policies.map((item) => item.operation)).size !== body.policies.length) return c.json({ error: "Duplicate policy operation" }, 400);
-  await c.env.DB.batch(body.policies.flatMap((item) => [
-    c.env.DB.prepare("UPDATE operation_policies SET mode = ?, updated_at = CURRENT_TIMESTAMP WHERE operation_kind = ?").bind(item.mode, item.operation),
-    c.env.DB.prepare("INSERT INTO audit_records (actor, action, resource_type, resource_id, detail_json) VALUES (?, 'policy.updated', 'operation', ?, ?)").bind(c.get("actor"), item.operation, JSON.stringify({ mode: item.mode })),
-  ]));
+  const current = new Map((await c.env.DB.prepare("SELECT operation_kind, mode FROM operation_policies").all<{operation_kind:string;mode:z.infer<typeof policyModeSchema>}>()).results.map(row=>[row.operation_kind,row.mode]));
+  const changes=body.policies.map(item=>({operation:item.operation,expectedMode:current.get(item.operation)??"disabled",nextMode:item.mode}));
+  const permission = changes.some(item=>policyMutationPermission(item.expectedMode,item.nextMode)==="policy.widen") ? "policy.widen" : "policy.narrow";
+  const denied=requirePermission(c,permission,dashboardPrincipalKinds); if(denied)return denied;
+  if(await compareAndSetOperationPolicies(c.env.DB,changes,auditActor(c.get("authorization")))==="conflict")return c.json({error:"policy_changed"},409);
   return c.json(body);
 });
 app.put("/api/policies/:operation", async (c) => {
   const operation = operationKindSchema.safeParse(c.req.param("operation"));
   if (!operation.success) return c.json({ error: "Unknown operation" }, 404);
   const { mode } = z.object({ mode: policyModeSchema }).strict().parse(await c.req.json());
-  await c.env.DB.prepare("UPDATE operation_policies SET mode = ?, updated_at = CURRENT_TIMESTAMP WHERE operation_kind = ?").bind(mode, operation.data).run();
-  await audit(c.env.DB, c.get("actor"), "policy.updated", "operation", operation.data, { mode });
+  const current=await c.env.DB.prepare("SELECT mode FROM operation_policies WHERE operation_kind=?").bind(operation.data).first<{mode:z.infer<typeof policyModeSchema>}>();
+  const expectedMode=current?.mode??"disabled"; const denied=requirePermission(c,policyMutationPermission(expectedMode,mode),dashboardPrincipalKinds); if(denied)return denied;
+  if(await compareAndSetOperationPolicies(c.env.DB,[{operation:operation.data,expectedMode,nextMode:mode}],auditActor(c.get("authorization")))==="conflict")return c.json({error:"policy_changed"},409);
   return c.json({ operation: operation.data, mode });
 });
 app.post("/api/setup/activate", async (c) => {
+  const denied=requirePermission(c,"policy.widen",dashboardPrincipalKinds); if(denied)return denied;
   const { profile } = z.object({ profile: z.enum(setupProfileIds) }).strict().parse(await c.req.json());
   if (!await c.env.DB.prepare("SELECT 1 FROM repositories WHERE active = 1 LIMIT 1").first()) return c.json({ error: "Connect at least one repository before completing setup" }, 409);
   const policies = setupPolicyProfile(profile);
@@ -206,28 +259,32 @@ app.post("/api/setup/activate", async (c) => {
     c.env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP"),
     c.env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('setup_profile', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(profile),
   ]);
-  await audit(c.env.DB, c.get("actor"), "setup.completed", "instance", instanceId(c.env), { profile });
+  await auditWithPrincipal(c.env.DB,c.get("authorization"),"setup.completed","instance",instanceId(c.env),{profile});
   return c.json({ activated: true, profile, agentsEnabled: false });
 });
 app.post("/api/settings/pause", async (c) => {
   const { paused } = z.object({ paused: z.boolean() }).strict().parse(await c.req.json());
+  const denied=requirePermission(c,paused?"policy.narrow":"policy.widen",dashboardPrincipalKinds); if(denied)return denied;
   await setSetting(c.env.DB, "global_paused", String(paused));
-  await audit(c.env.DB, c.get("actor"), paused ? "system.paused" : "system.resumed", "instance", instanceId(c.env));
+  await auditWithPrincipal(c.env.DB,c.get("authorization"),paused?"system.paused":"system.resumed","instance",instanceId(c.env));
   return c.json({ globalPaused: paused });
 });
 app.put("/api/repositories/:id/pause", async (c) => {
   const id = c.req.param("id"); const { paused } = z.object({ paused: z.boolean() }).strict().parse(await c.req.json());
+  const denied=requirePermission(c,paused?"assignment.pause":"assignment.resume",dashboardPrincipalKinds); if(denied)return denied;
   const repository = await c.env.DB.prepare("SELECT owner, name FROM repositories WHERE id = ? AND active = 1").bind(id).first<{ owner: string; name: string }>();
   if (!repository) return c.json({ error: "Active repository not found" }, 404);
   await setSetting(c.env.DB, repositoryPauseSetting(id), String(paused));
-  await audit(c.env.DB, c.get("actor"), paused ? "repository.paused" : "repository.resumed", "repository", id, repository);
+  await auditWithPrincipal(c.env.DB,c.get("authorization"),paused?"repository.paused":"repository.resumed","repository",id,repository);
   return c.json({ id, paused });
 });
 app.get("/api/runs", async (c) => {
+  const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
   const limit = z.coerce.number().int().min(1).max(100).default(50).parse(c.req.query("limit"));
   return c.json({ runs: (await c.env.DB.prepare("SELECT id, kind, agent_id, agent_revision_id, status, harness_id, harness_version, created_at, started_at, completed_at FROM agent_runs ORDER BY created_at DESC LIMIT ?").bind(limit).all()).results });
 });
 app.get("/api/runs/:id", async (c) => {
+  const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
   const run = await getRun(c.env.DB, c.req.param("id")); if (!run) return c.json({ error: "Run not found" }, 404);
   const [tasks, steps, effects] = await Promise.all([
     c.env.DB.prepare("SELECT id, parent_task_id, stable_key, kind, status, parallel_group, depth, created_at, started_at, completed_at FROM run_tasks WHERE run_id = ? ORDER BY created_at").bind(run.id).all(),
@@ -237,6 +294,7 @@ app.get("/api/runs/:id", async (c) => {
   return c.json({ run, tasks: tasks.results, steps: steps.results, effects: effects.results });
 });
 app.get("/api/state", async (c) => {
+  const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
   const [paused, onboardingCompleted, setupProfile, agents, policies, repositories, repositoryPauses, runs, inbox, audits] = await Promise.all([
     getSetting(c.env.DB, "global_paused"), getSetting(c.env.DB, "onboarding_completed"), getSetting(c.env.DB, "setup_profile"), listAgents(c.env.DB),
     c.env.DB.prepare("SELECT operation_kind, mode, updated_at FROM operation_policies ORDER BY operation_kind").all(),
@@ -263,14 +321,13 @@ app.notFound((c) => {
   return c.env.ASSETS.fetch(c.req.raw);
 });
 
-function identityLogin(identity: Record<string, unknown>): string {
-  return typeof identity.githubLogin === "string" ? identity.githubLogin : "GitHub user";
+async function auditWithPrincipal(db:D1Database,principal:AuthorizationVariables["authorization"],action:string,resourceType:string,resourceId:string,detail:unknown={}):Promise<void>{
+  const actor=auditActor(principal); await db.prepare("INSERT INTO audit_records(actor,actor_user_id,actor_identity_json,action,resource_type,resource_id,detail_json) VALUES(?,?,?,?,?,?,?)").bind(actor.actor,actor.actorUserId,actor.actorIdentityJson,action,resourceType,resourceId,JSON.stringify(detail)).run();
 }
 
-export function ownerPrincipalFromIdentity(identity: Record<string, unknown>, env: Env) {
-  const match = /^([1-9][0-9]{0,31})$/.exec(String(identity.sub));
-  if (!match?.[1]) return null;
-  return { githubUserId: match[1], githubLogin: identityLogin(identity), instanceId: instanceId(env) };
+function clearSessionCookies(c: Parameters<typeof deleteCookie>[0]): void {
+  deleteCookie(c, SECURE_SESSION_COOKIE, { path: "/", secure: true });
+  deleteCookie(c, LOCAL_SESSION_COOKIE, { path: "/" });
 }
 
 async function upsertEventRepository(db: D1Database, event: RepositoryEventV2): Promise<void> {
@@ -299,12 +356,6 @@ function trustedEventFacts(event: RepositoryEventV2): Record<string, unknown> {
   if ("issue" in event) return { labels: event.issue.labels, state: event.issue.state, updatedAt: event.issue.updatedAt };
   if ("discussion" in event) return { labels: event.discussion.labels, state: event.discussion.state, answered: event.discussion.answered, updatedAt: event.discussion.updatedAt };
   return {};
-}
-
-function cookieValue(request: Request, name: string): string | null {
-  const raw = request.headers.get("cookie"); if (!raw) return null;
-  for (const part of raw.split(";")) { const index = part.indexOf("="); if (index >= 0 && part.slice(0, index).trim() === name) return part.slice(index + 1).trim(); }
-  return null;
 }
 
 async function digest(value: string): Promise<string> {
@@ -352,13 +403,15 @@ export const gardenerWorker = {
     const provider = createGardenerMcpOAuthProvider<GardenerMcpEnv & Env>({
       applicationHandler: applicationHandler as ExportedHandler<GardenerMcpEnv & Env>,
       async verifyOwnerSession(ownerRequest, ownerEnv) {
-        const token = cookieValue(ownerRequest, sessionCookie); if (!token) return null;
-        try {
-          const identity = await verifyIdentityToken(token, ownerEnv);
-          return ownerPrincipalFromIdentity(identity, ownerEnv);
-        } catch { return null; }
+        const token = sessionTokenFromRequest(ownerRequest); if (!token) return null;
+        const session = await resolveDashboardSession(ownerEnv.DB, token);
+        if (!session || session.role !== "owner") return null;
+        return { githubUserId: session.identity.providerSubject, githubLogin: session.identity.login, instanceId: instanceId(ownerEnv) };
       },
-      services: createGardenerMcpServices,
+      services: (ownerEnv) => {
+        const services = createGardenerMcpServices(ownerEnv);
+        return { ...services, resolvePrincipal: (tokenPrincipal) => resolveMcpAuthorization(ownerEnv.DB,instanceId(ownerEnv),tokenPrincipal) };
+      },
       consentState: (ownerEnv) => new D1ConsentStateStore(ownerEnv.DB),
     }, { issuer: origin, audience: `${origin}/mcp` });
     return provider.fetch(request, env as GardenerMcpEnv & Env, ctx);

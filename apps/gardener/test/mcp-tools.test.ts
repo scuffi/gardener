@@ -4,13 +4,14 @@ import type { GardenerMcpTokenProps } from "../src/mcp/auth-context";
 import { redactAndBoundOutput } from "../src/mcp/redaction";
 import { GARDENER_MCP_TOOL_SCOPES, type GardenerMcpScope } from "../src/mcp/scopes";
 import { createGardenerStatelessMcpHandler } from "../src/mcp/server";
-import type { GardenerMcpServices, JsonObject } from "../src/mcp/services";
+import type { GardenerMcpAuthorizedServices, GardenerMcpServices, JsonObject } from "../src/mcp/services";
 
 const audience = "https://gardener.example.test/mcp";
 
-function services(overrides: Partial<GardenerMcpServices["agents"]> = {}): GardenerMcpServices {
+function services(overrides: Partial<GardenerMcpServices["agents"]> = {}): GardenerMcpAuthorizedServices {
   const value = (name: string): JsonObject => ({ name });
   return {
+    resolvePrincipal: vi.fn(async (principal) => ({ ...principal, userId: `internal-${principal.owner.githubUserId}`, role: "owner" as const, principalKind: "mcp-token" as const })),
     agents: {
       list: vi.fn(async () => ({ agents: [], nextCursor: null })),
       get: vi.fn(async () => value("get")),
@@ -102,6 +103,15 @@ async function callTool(
 }
 
 describe("Gardener MCP tool authority", () => {
+  it("rejects service construction without an active-membership resolver", async()=>{
+    const identity=auth(["gardener:agents:read"]); const service=services(); delete (service as unknown as Partial<GardenerMcpAuthorizedServices>).resolvePrincipal;
+    expect(()=>createGardenerStatelessMcpHandler(service,{route:"/mcp",audience,authProps:identity.props,authInfo:identity.authInfo})).toThrow("resolver is required");
+  });
+
+  it("fails closed when active membership resolution rejects a token",async()=>{
+    const service=services(); service.resolvePrincipal=vi.fn(async()=>null); const result=await callTool("gardener.agent.list",["gardener:agents:read"],service); expect(JSON.stringify(result)).toContain("forbidden"); expect(service.resolvePrincipal).toHaveBeenCalledOnce();
+  });
+
   for (const [tool, requiredScope] of Object.entries(GARDENER_MCP_TOOL_SCOPES) as [keyof typeof GARDENER_MCP_TOOL_SCOPES, GardenerMcpScope][]) {
     it(`${tool} requires exactly ${requiredScope}`, async () => {
       const denied = await callTool(tool, []);
