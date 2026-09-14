@@ -30,14 +30,20 @@ export function CommandPaletteTrigger() {
       aria-label="Open command palette"
       aria-keyshortcuts="Meta+K Control+K"
       className={cn(
-        "flex h-8 items-center gap-2 rounded-md border border-kumo-hairline bg-kumo-recessed",
-        "px-2.5 text-xs text-kumo-default transition-[border-color] duration-300 " +
-        "ease-[cubic-bezier(0.22,1,0.36,1)] max-[900px]:h-11 max-[900px]:min-w-11",
-        "hover:border-kumo-line hover:text-kumo-default",
+        "group flex h-8 items-center gap-2 rounded-md border border-kumo-hairline bg-kumo-recessed",
+        "px-2.5 text-xs text-kumo-default max-[900px]:h-11 max-[900px]:min-w-11",
+        "hover:text-kumo-default",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kumo-focus",
       )}
     >
-      <MagnifyingGlassIcon size={14} aria-hidden="true" />
+      <MagnifyingGlassIcon
+        className={
+          "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] " +
+          "group-hover:scale-110 group-focus-visible:scale-110"
+        }
+        size={14}
+        aria-hidden="true"
+      />
       <span className="max-lg:hidden">Search</span>
       <kbd
         aria-hidden="true"
@@ -64,7 +70,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [pendingAction, setPendingAction] = useState<Action | null>(null);
   const navigate = useNavigate();
   const { state } = useGardener();
-  const { resolvedTheme, setPreference, accent, setAccent } = useTheme();
+  const { resolvedTheme, setPreference } = useTheme();
   const { notify } = useNotifications();
   const queryClient = useQueryClient();
 
@@ -101,13 +107,11 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
           state,
           resolvedTheme,
           setPreference,
-          accent,
-          setAccent,
           setPaused: (paused) => pauseMutation.mutateAsync(paused),
         }),
         search,
       ),
-    [state, resolvedTheme, setPreference, accent, setAccent, pauseMutation, search],
+    [state, resolvedTheme, setPreference, pauseMutation, search],
   );
 
   const dismiss = () => {

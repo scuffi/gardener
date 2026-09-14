@@ -3,6 +3,27 @@ import { Mono, Radio } from "../../../primitives";
 
 type ModeCopy = Record<PolicyMode, { label: string; description: string }>;
 
+const modeStyles: Record<PolicyMode, string> = {
+  disabled:
+    "has-[[data-checked]]:!border-(--color-gardener-policy-disabled-edge) " +
+    "has-[[data-checked]]:!bg-(--color-gardener-policy-disabled-surface) " +
+    "has-[[data-checked]]:hover:!bg-(--color-gardener-policy-disabled-surface) " +
+    "has-[[data-checked]]:[&_[data-kumo-part=item]]:!bg-(--color-gardener-policy-disabled-mark) " +
+    "has-[[data-checked]]:[&_[data-kumo-part=item]]:!ring-(--color-gardener-policy-disabled-edge)",
+  approval:
+    "has-[[data-checked]]:!border-(--color-gardener-policy-approval-edge) " +
+    "has-[[data-checked]]:!bg-(--color-gardener-policy-approval-surface) " +
+    "has-[[data-checked]]:hover:!bg-(--color-gardener-policy-approval-surface) " +
+    "has-[[data-checked]]:[&_[data-kumo-part=item]]:!bg-(--color-gardener-policy-approval-mark) " +
+    "has-[[data-checked]]:[&_[data-kumo-part=item]]:!ring-(--color-gardener-policy-approval-edge)",
+  automatic:
+    "has-[[data-checked]]:!border-(--color-gardener-policy-automatic-edge) " +
+    "has-[[data-checked]]:!bg-(--color-gardener-policy-automatic-surface) " +
+    "has-[[data-checked]]:hover:!bg-(--color-gardener-policy-automatic-surface) " +
+    "has-[[data-checked]]:[&_[data-kumo-part=item]]:!bg-(--color-gardener-policy-automatic-mark) " +
+    "has-[[data-checked]]:[&_[data-kumo-part=item]]:!ring-(--color-gardener-policy-automatic-edge)",
+};
+
 export function PolicyRow({
   policy,
   value,
@@ -47,11 +68,7 @@ export function PolicyRow({
               key={mode}
               label={modeCopy[mode].label}
               value={mode}
-              className={
-                "min-w-0 transition-[border-color,box-shadow] duration-300 " +
-                "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base " +
-                "hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
-              }
+              className={`min-w-0 hover:!bg-kumo-base ${modeStyles[mode]}`}
             />
           ))}
         </Radio.Group>

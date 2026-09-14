@@ -1,4 +1,4 @@
-import { MoonIcon, PaletteIcon, PauseIcon, PlayIcon, SunIcon, type Icon } from "@phosphor-icons/react";
+import { MoonIcon, PauseIcon, PlayIcon, SunIcon, type Icon } from "@phosphor-icons/react";
 import type { AppState } from "./lib/types";
 import { routes } from "./routes";
 
@@ -43,8 +43,6 @@ interface CommandContext {
   state: AppState | null;
   resolvedTheme: "light" | "dark";
   setPreference: (preference: "light" | "dark") => void;
-  accent: "orange" | "green";
-  setAccent: (accent: "orange" | "green") => void;
   setPaused: (paused: boolean) => unknown | Promise<unknown>;
 }
 
@@ -64,7 +62,6 @@ function navigationActions(): Action[] {
 function commandActions(context: CommandContext): Action[] {
   const paused = Boolean(context.state?.globalPaused);
   const dark = context.resolvedTheme === "dark";
-  const green = context.accent === "green";
 
   return [
     {
@@ -92,13 +89,6 @@ function commandActions(context: CommandContext): Action[] {
       icon: dark ? SunIcon : MoonIcon,
       keywords: "appearance colour color scheme",
       run: () => context.setPreference(dark ? "light" : "dark"),
-    },
-    {
-      id: "cmd:accent",
-      title: `Use ${green ? "ember orange" : "Gardener green"} accent`,
-      icon: PaletteIcon,
-      keywords: "brand colour color accent",
-      run: () => context.setAccent(green ? "orange" : "green"),
     },
   ];
 }

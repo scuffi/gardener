@@ -11,8 +11,6 @@ const context = () => ({
   state: null,
   resolvedTheme: "light" as const,
   setPreference: vi.fn(),
-  accent: "orange" as const,
-  setAccent: vi.fn(),
   setPaused: vi.fn(),
 });
 

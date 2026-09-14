@@ -24,7 +24,7 @@ export function PageHeader({
         <h1
           ref={titleRef}
           tabIndex={-1}
-          className="mb-1.5 text-2xl font-semibold tracking-tight text-kumo-strong outline-none"
+          className="mb-1.5 text-2xl font-semibold text-kumo-strong outline-none"
         >
           {title}
         </h1>

@@ -93,15 +93,15 @@ Three principles, in priority order when they conflict.
 
 | Element | Decision |
 | --- | --- |
-| Primary accent | **Restrained botanical green** via `kumo-brand` — primary buttons, active nav, focus, live indicators. |
+| Primary accent | **Luminous system green** via `kumo-brand` — primary buttons, active nav, focus, and live indicators. |
 | Informational accent | Blue via `kumo-info` — links and neutral information only. Never a primary action. |
 | Status green | `kumo-success` means healthy or executed. It is status, not generic Gardener chrome. |
 | Status semantics | `kumo-success` executed · `kumo-warning` awaiting decision · `kumo-danger` failed/blocked · `kumo-info` observing · `kumo-subtle` paused |
 | Typeface | Inter Variable for prose and UI. **JetBrains Mono for the machine layer** — run IDs, source hashes, operation kinds, receipts, revision numbers, policy keys. Applied deliberately and consistently, this single change does more for "software factory" than any illustration. |
 | Cloudflare presence | Minimal muted text only. Never use the large `PoweredByCloudflare` banners in product chrome. |
-| Motion | Purposeful and calm: subtle tints and one-pixel lifts over 300ms. All behind `prefers-reduced-motion`. |
+| Motion | Purposeful and calm: stable geometry, soft accent washes, and restrained route transitions. All behind `prefers-reduced-motion`. |
 | Decoration | Earned, not sprinkled. The sign-in ASCII garden stays exactly as built — it is the product's signature. Decoration is not added elsewhere without the same level of craft. |
-| Accent | Selectable. Gardener green by default, muted orange as an alternative. Defined once in `ui/accents.css`; see §6.1. |
+| Accent | One vibrant system green. Brand marks use `#34c759` in light mode and `#30d158` in dark mode; white-label controls use a deeper accessible fill. Defined in `ui/accents.css`; see §6.1. |
 
 ---
 
@@ -255,7 +255,7 @@ one quiet text line; do not add a logo banner.
 
 The garden owns its styling in `features/auth/ascii-garden.css`, colocated with the component, so it
 loads only on this route and stays deletable in one move. Its foliage derives from the Kumo success
-token and deliberately does *not* follow the brand accent — plants are green in both accents.
+token and deliberately does *not* follow the brand token, keeping foliage and product identity separate.
 
 Setup: keep the two-step wizard. Reframe profile selection so each profile *shows the policy matrix
 it produces* rather than three abstract chips — the operator is choosing an authority posture and
@@ -287,30 +287,28 @@ They are not review conventions; they fail the build.
 
 ### 6.1 Brand accent
 
-Kumo ships `--color-kumo-brand` as **blue** (`oklch(0.5772 0.2324 260)`). Gardener is not a blue
-product, so the token is redefined in `ui/accents.css` — the only file permitted to contain a colour
-value. Selecting an accent sets `data-accent` on `<html>`; `index.html` applies the stored value
-before first paint so there is no flash.
+Kumo ships `--color-kumo-brand` as **blue** (`oklch(0.5772 0.2324 260)`). Gardener instead defines
+one luminous system green in `ui/accents.css`, the only file permitted to contain a colour value.
+There is no selectable alternate accent or first-paint accent state.
 
-Two brand tokens exist and they are **not** interchangeable:
+The two brand roles are intentionally different:
 
 | Token | Utility | Use |
 | --- | --- | --- |
-| `--color-kumo-brand` | `bg-kumo-brand` | Fill. A label sits on top of it. |
-| `--text-color-kumo-brand` | `text-kumo-brand` | Text, icon and border. Sits on the canvas. |
+| `--color-kumo-brand` | `bg-kumo-brand` | Deeper green fill carrying Kumo's white labels. |
+| `--text-color-kumo-brand` | `text-kumo-brand` | Accessible canvas text; luminous green in dark mode. |
+| `--color-gardener-accent-display` | Arbitrary semantic utility | Vibrant brand marks and washes. |
+| `--color-gardener-surface` | Arbitrary semantic utility | Material panels derived from Kumo neutrals. |
 
-Both accents deliberately reduce lightness and chroma from the earlier marketing colours. Green is
-a botanical hue rather than a neon success green; orange is a muted ember rather than the bright
-Cloudflare logo value.
+| Role | Light | Dark |
+| --- | --- | --- |
+| Action fill | `oklch(0.5411 0.1403 147.64)` | `oklch(0.5411 0.1403 147.64)` |
+| Canvas accent | `oklch(0.5411 0.1403 147.64)` | `oklch(0.7556 0.2082 146.98)` |
+| Display green | `oklch(0.7303 0.1944 147.44)` | `oklch(0.7556 0.2082 146.98)` |
 
-| Accent | Light fill | Dark fill | Light text | Dark text |
-| --- | --- | --- | --- | --- |
-| Green (default) | `oklch(0.52 0.11 145)` | `oklch(0.52 0.10 145)` | `oklch(0.49 0.105 145)` | `oklch(0.72 0.095 145)` |
-| Orange | `oklch(0.555 0.125 50)` | `oklch(0.555 0.115 50)` | `oklch(0.49 0.115 50)` | `oklch(0.73 0.10 50)` |
-
-Every text value clears 4.5:1 against its canvas. Every fill clears 3:1 against its canvas and 4.5:1
-against Kumo's white primary-button label. `ui/accents.test.ts` parses the actual stylesheet and
-measures these guarantees, so a colour edit that breaks contrast cannot ship.
+Every canvas text value clears 4.5:1 against its canvas. The action fill clears 3:1 against each
+canvas and 4.5:1 against Kumo's white primary-button label. `ui/accents.test.ts` parses the actual
+stylesheet and measures these guarantees, so a colour edit that breaks contrast cannot ship.
 
 ### Mapping: hand-rolled → Kumo
 
@@ -442,8 +440,11 @@ so later phases cannot silently regress them. A line may opt out of the colour r
 tag, which browser chrome cannot read from a CSS custom property).
 
 **Phase 1 — Shell and identity. DONE.**
-Brand accent is selectable (§6.1), defaults to Gardener green, and the sidebar mark follows it.
-Cloudflare attribution is a small muted text line rather than a logo banner. The app-bar status pill
+Gardener uses one luminous system green (§6.1), and the sidebar mark follows it. The desktop
+sidebar collapses to Kumo's 57px icon rail, retains automatic tooltips, and uses one stable footer
+control with a visible expanded label. Its local state persists; mobile remains off-canvas. The
+persistent shell omits vendor attribution, while sign-in retains one quiet deployment line. The
+app-bar status pill
 and global kill switch live in `AutomationMenu`. `⌘K`
 palette wired to `ui/actions.ts`, with a visible trigger in the app bar so the shortcut is
 discoverable. Mono is applied as the machine layer across every surface.

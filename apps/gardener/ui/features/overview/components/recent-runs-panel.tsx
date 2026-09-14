@@ -33,10 +33,14 @@ export function RecentRunsPanel({ runs }: { runs: RunSummary[] }) {
               href={`/runs/${run.id}`}
               variant="plain"
               className={
-                "grid min-h-[66px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 " +
-                "gap-y-1 px-4 py-3 text-kumo-default transition-[box-shadow,transform] duration-300 " +
-                "ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-px " +
-                "hover:shadow-[inset_2px_0_0_var(--color-kumo-brand)] max-[520px]:items-start"
+                "relative isolate grid! min-h-[66px] w-full min-w-0 overflow-hidden " +
+                "grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-4 py-3 " +
+                "before:pointer-events-none before:absolute before:inset-0 " +
+                "before:bg-(--color-gardener-accent-wash) " +
+                "before:opacity-0 before:transition-opacity before:duration-300 " +
+                "before:ease-[cubic-bezier(0.22,1,0.36,1)] hover:before:opacity-100 " +
+                "focus-visible:before:opacity-100 motion-reduce:before:transition-none " +
+                "!text-kumo-default transition-none hover:!text-kumo-default max-[520px]:items-start"
               }
             >
               <div className="min-w-0">

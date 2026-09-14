@@ -132,7 +132,7 @@ export function SetupWizard() {
                 className={[
                   "flex min-w-0 items-center gap-3 px-4 py-4 text-kumo-subtle",
                   index > 0 ? "border-l border-kumo-hairline" : "",
-                  active ? "bg-kumo-brand/10" : "",
+                  active ? "bg-(--color-gardener-accent-wash)" : "",
                 ].join(" ")}
                 aria-current={active ? "step" : undefined}
               >
@@ -221,11 +221,7 @@ export function SetupWizard() {
                     key={option.id}
                     data-profile={option.id}
                     value={option.id}
-                    className={
-                      "transition-[border-color,box-shadow] duration-300 " +
-                      "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line " +
-                      "hover:!bg-kumo-base hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
-                    }
+                    className="hover:!bg-kumo-base has-[[data-checked]]:hover:!bg-kumo-tint"
                     label={
                       <span className="flex items-center justify-between gap-3">
                         <strong className="text-base font-semibold text-kumo-strong">{option.name}</strong>

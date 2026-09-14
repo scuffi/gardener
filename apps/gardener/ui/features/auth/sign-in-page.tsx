@@ -42,7 +42,12 @@ export function SignInPage() {
       <SkipLink href="#main-content">Skip to sign in</SkipLink>
       <header className="flex w-full items-center justify-between px-5 py-5 sm:px-10 lg:px-14">
         <div className="inline-flex items-center gap-3" aria-label="Gardener repository stewardship">
-          <span className="grid size-9 place-items-center rounded-lg bg-kumo-brand/10 text-kumo-brand">
+          <span
+            className={
+              "grid size-9 place-items-center rounded-lg bg-(--color-gardener-accent-wash) " +
+              "text-(--color-gardener-accent-display)"
+            }
+          >
             <PlantIcon
               size={20}
               weight="bold"
@@ -75,11 +80,11 @@ export function SignInPage() {
                           aria-hidden="true"
                         />
                       </span>
-                      <code className="text-xs font-semibold tracking-widest text-kumo-subtle">
+                      <code className="text-xs font-semibold text-kumo-subtle">
                         INSTANCE_HANDSHAKE
                       </code>
                     </div>
-                    <h1 id="signin-heading" className="text-3xl font-semibold tracking-tight text-kumo-strong">
+                    <h1 id="signin-heading" className="text-3xl font-semibold text-kumo-strong">
                       Opening Gardener
                     </h1>
                     <p className="mt-2 text-base leading-relaxed text-kumo-subtle">
@@ -99,11 +104,11 @@ export function SignInPage() {
                           aria-hidden="true"
                         />
                       </span>
-                      <code className="text-xs font-semibold tracking-widest text-kumo-subtle">
+                      <code className="text-xs font-semibold text-kumo-subtle">
                         CONNECTION_ERROR
                       </code>
                     </div>
-                    <h1 id="signin-heading" className="text-3xl font-semibold tracking-tight text-kumo-strong">
+                    <h1 id="signin-heading" className="text-3xl font-semibold text-kumo-strong">
                       Unable to reach Gardener
                     </h1>
                     <p className="mt-2 text-base leading-relaxed text-kumo-subtle">
@@ -128,9 +133,9 @@ export function SignInPage() {
                           aria-hidden="true"
                         />
                       </span>
-                      <code className="text-xs font-semibold tracking-widest text-kumo-subtle">OWNER_ACCESS</code>
+                      <code className="text-xs font-semibold text-kumo-subtle">OWNER_ACCESS</code>
                     </div>
-                    <h1 id="signin-heading" className="text-3xl font-semibold tracking-tight text-kumo-strong">
+                    <h1 id="signin-heading" className="text-3xl font-semibold text-kumo-strong">
                       Welcome back
                     </h1>
                     <p id="signin-description" className="mt-2 text-base leading-relaxed text-kumo-subtle">
@@ -185,7 +190,7 @@ export function SignInPage() {
               </section>
             </Panel>
           </div>
-          <footer className="mt-6 text-center text-[10px] tracking-wide text-kumo-subtle">
+          <footer className="mt-6 text-center text-[10px] text-kumo-subtle">
             Customer-deployed on Cloudflare Workers
           </footer>
         </div>

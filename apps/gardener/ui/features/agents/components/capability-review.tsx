@@ -29,7 +29,7 @@ export function CapabilityReview({ review }: { review?: AgentCapabilityReviewDat
           key={label}
           className="border-b border-kumo-hairline px-4 py-3 last:border-b-0"
         >
-          <h3 className="text-xs font-semibold tracking-wide text-kumo-strong uppercase">{label}</h3>
+          <h3 className="text-xs font-semibold text-kumo-strong">{label}</h3>
           {values.length ? (
             <ul className="mt-2 grid list-none gap-2 p-0">
               {values.map((value) => (

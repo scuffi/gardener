@@ -52,11 +52,9 @@ export function Stat({
     </>
   );
 
-  const shell = cn(
-    "block min-w-0 rounded-lg border border-kumo-hairline bg-kumo-base p-4",
-    "min-h-[104px] transition-[border-color,box-shadow,transform] duration-300",
-    "ease-[cubic-bezier(0.22,1,0.36,1)]",
-  );
+  const shell =
+    "block min-h-[104px] min-w-0 rounded-lg bg-(--color-gardener-surface) " +
+    "p-4 shadow-xs ring ring-kumo-hairline";
 
   if (!href) return <article className={shell}>{body}</article>;
 
@@ -66,8 +64,12 @@ export function Stat({
       variant="plain"
       className={cn(
         shell,
-        "grid! content-start text-kumo-default no-underline hover:-translate-y-px",
-        "hover:border-kumo-line hover:shadow-sm focus-visible:-translate-y-px",
+        "relative isolate grid! content-start overflow-hidden !text-kumo-default no-underline",
+        "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit]",
+        "before:bg-(--color-gardener-accent-wash) before:opacity-0 before:transition-opacity before:duration-300",
+        "before:ease-[cubic-bezier(0.22,1,0.36,1)] hover:before:opacity-100",
+        "focus-visible:before:opacity-100 motion-reduce:before:transition-none",
+        "hover:!text-kumo-default transition-none!",
       )}
     >
       {body}

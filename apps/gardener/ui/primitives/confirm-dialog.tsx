@@ -30,7 +30,10 @@ export function ConfirmDialog({
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} role="alertdialog">
-      <Dialog size="base" className="p-5">
+      <Dialog
+        size="base"
+        className="p-5 duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      >
         <Dialog.Title className="text-lg font-semibold text-kumo-strong">{title}</Dialog.Title>
         <Dialog.Description className="mt-2 leading-relaxed text-kumo-subtle">
           {description}

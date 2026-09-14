@@ -10,6 +10,24 @@ import { AutomationMenu } from "./automation-menu";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "./command-palette";
 import { SkipLink } from "./skip-link";
 
+const SIDEBAR_STORAGE_KEY = "gardener.sidebar.open";
+
+function storedSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "collapsed";
+  } catch {
+    return true;
+  }
+}
+
+function persistSidebarOpen(open: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, open ? "expanded" : "collapsed");
+  } catch {
+    /* Sidebar state still applies for this session. */
+  }
+}
+
 /** Collapse the mobile drawer whenever the route changes. */
 function SidebarRouteSync() {
   const { pathname } = useLocation();
@@ -30,12 +48,13 @@ function GardenerBrand() {
       <span
         className={cn(
           "relative grid size-7 flex-none place-items-center rounded-md",
-          "border border-kumo-hairline bg-kumo-brand/12 text-kumo-brand",
+          "border border-kumo-hairline bg-(--color-gardener-accent-wash)",
+          "text-(--color-gardener-accent-display)",
         )}
       >
         <PlantIcon size={19} weight="bold" aria-hidden="true" />
       </span>
-      <span className="grid min-w-0 leading-tight">
+      <span className="grid min-w-0 leading-tight group-data-[state=collapsed]/sidebar:hidden">
         <strong className="text-sm font-semibold">Gardener</strong>
         <span className="mt-0.5 text-[11px] text-kumo-subtle">Repository stewardship</span>
       </span>
@@ -111,9 +130,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <CommandPaletteProvider>
       <Sidebar.Provider
-        defaultOpen
+        defaultOpen={storedSidebarOpen()}
+        onOpenChange={persistSidebarOpen}
         mobileBreakpoint={900}
-        collapsible="offcanvas"
+        collapsible="icon"
         className="min-h-svh bg-kumo-canvas"
       >
       <SkipLink />
@@ -137,10 +157,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           <AppNavigation setupComplete={setupComplete} />
         </Sidebar.Content>
         <Sidebar.Footer className="grid! h-auto! overflow-visible gap-1 py-2">
+          <Sidebar.Trigger
+            className={
+              "h-8.5 w-full justify-start gap-3 px-3 text-sm font-medium " +
+              "after:whitespace-nowrap after:content-['Collapse_sidebar'] max-[900px]:hidden " +
+              "group-data-[state=collapsed]/sidebar:size-8.5 " +
+              "group-data-[state=collapsed]/sidebar:justify-center " +
+              "group-data-[state=collapsed]/sidebar:gap-0 " +
+              "group-data-[state=collapsed]/sidebar:px-0 " +
+              "group-data-[state=collapsed]/sidebar:after:hidden"
+            }
+          />
           {authenticated ? <AccountMenu /> : null}
-          <p className="px-2 pt-2 pb-1 text-center text-[10px] tracking-wide text-kumo-subtle">
-            Cloudflare Workers
-          </p>
         </Sidebar.Footer>
       </Sidebar>
 
@@ -176,7 +204,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           id="main-content"
           className="mx-auto w-full max-w-[1280px] px-8 pt-7 pb-16 max-sm:px-4"
         >
-          {children}
+          <div
+            key={pathname}
+            className={
+              "animate-[route-enter_360ms_cubic-bezier(0.22,1,0.36,1)_both] " +
+              "motion-reduce:animate-none"
+            }
+          >
+            {children}
+          </div>
         </main>
       </div>
       </Sidebar.Provider>

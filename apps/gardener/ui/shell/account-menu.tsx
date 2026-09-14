@@ -10,7 +10,8 @@ import { defaultRoute } from "../routes";
 
 const avatarClasses = cn(
   "grid size-7.5 flex-none place-items-center rounded-full",
-  "bg-kumo-brand/10 text-xs font-semibold text-kumo-brand",
+  "bg-(--color-gardener-accent-wash) text-xs font-semibold",
+  "text-(--color-gardener-accent-display)",
 );
 
 const identityLabelClasses = cn(
@@ -45,9 +46,9 @@ export function AccountMenu() {
         type="button"
         aria-label={`Open account menu for ${login}`}
         className={cn(
-          "flex h-10 min-h-10 w-full min-w-0 items-center gap-2 rounded-md p-1 max-[900px]:h-11",
-          "border border-transparent text-kumo-default transition-[border-color,box-shadow] duration-300",
-          "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base hover:shadow-sm",
+          "group flex h-10 min-h-10 w-full min-w-0 items-center gap-2 rounded-md p-1",
+          "group-data-[state=collapsed]/sidebar:justify-center group-data-[state=collapsed]/sidebar:gap-0",
+          "border border-transparent text-kumo-default hover:!bg-kumo-base max-[900px]:h-11",
           "aria-expanded:bg-kumo-tint aria-expanded:hover:!bg-kumo-tint",
           "aria-expanded:ring-1 aria-expanded:ring-kumo-line",
         )}
@@ -55,11 +56,24 @@ export function AccountMenu() {
         <span className={avatarClasses} aria-hidden="true">
           {initial}
         </span>
-        <span className="grid min-w-0 flex-1 justify-items-start leading-tight">
+        <span
+          className={
+            "grid min-w-0 flex-1 justify-items-start leading-tight " +
+            "group-data-[state=collapsed]/sidebar:hidden"
+          }
+        >
           <strong className="max-w-32 truncate text-xs font-semibold">{login}</strong>
           <span className="mt-0.5 text-[11px] text-kumo-subtle">GitHub connected</span>
         </span>
-        <CaretDownIcon className="ml-auto flex-none text-kumo-subtle" size={13} aria-hidden="true" />
+        <CaretDownIcon
+          className={
+            "ml-auto flex-none text-kumo-subtle transition-transform duration-300 " +
+            "ease-[cubic-bezier(0.22,1,0.36,1)] group-aria-expanded:rotate-180 " +
+            "group-data-[state=collapsed]/sidebar:hidden"
+          }
+          size={13}
+          aria-hidden="true"
+        />
       </DropdownMenu.Trigger>
       <DropdownMenu.Content
         side="top"

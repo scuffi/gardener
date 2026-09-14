@@ -86,18 +86,18 @@ Use these names directly. Tailwind utility form is shown; the CSS custom propert
 ### Brand and status
 
 Kumo's own `--color-kumo-brand` is **blue**. Gardener redefines it in `ui/accents.css`, which is
-the only file in the UI allowed to hold a colour value. The accent is selectable: a restrained
-Gardener green (default) or ember orange, chosen in Settings and stored as `data-accent`
-on `<html>`.
+the only file in the UI allowed to hold a colour value. Gardener uses one luminous system green;
+there is no selectable alternate accent.
 
-`bg-kumo-brand` and `text-kumo-brand` resolve to **different** colours on purpose. Fill values carry
-Kumo's white primary-button labels; text values sit directly on the canvas. Both accents clear WCAG AA for text and UI
-boundaries in both schemes. Use `bg-kumo-brand` when a label sits on top of the colour, and
-`text-kumo-brand` when the colour sits on the canvas. Measurements live in `ui/accents.test.ts`.
+Action fill, canvas text, and decorative display values are intentionally separate. Kumo controls
+with white labels use a deeper accessible green. Brand marks use vibrant system green in both
+schemes, and interaction washes derive from it. Product panels mix Kumo's base and tint tokens for
+clearer material elevation. Text and action roles clear WCAG AA for
+their intended boundaries. Measurements live in `ui/accents.test.ts`.
 
 | Utility | Meaning in Gardener |
 | --- | --- |
-| `kumo-brand` | **Primary.** Primary buttons, active nav, focus, live indicators. Accent-dependent. |
+| `kumo-brand` | **Primary.** Primary buttons, active nav, focus, and live indicators. |
 | `kumo-info` | Informational only. Links, neutral notes, "observing". Never a primary action. |
 | `kumo-success` | Executed, healthy, enabled, connected. Never use it as generic brand chrome. |
 | | Under the green accent, brand and success are both green. Pair either with text or an icon so status is never colour-only. |
@@ -118,6 +118,14 @@ One vocabulary across every surface. `primitives/status-badge.tsx` is the single
 | `failed`, `completed_with_errors`, `blocked`, `rejected`, `access_removed` | `danger` |
 | `observing`, `simulated`, `draft` | `info` |
 | `disabled`, `dismissed`, `none` | `neutral` |
+
+The policy editor is a deliberate decision-surface exception, not a second status vocabulary. Its
+selected radio card uses Kumo's muted semantic tint: `disabled` uses danger for denied authority,
+`approval` uses warning for a human gate, and `automatic` uses success for allowed execution. Keep
+unselected choices neutral, use only a low-alpha semantic border and radio mark, and preserve the
+native checked state so colour is never the sole signal. Light mode uses Kumo's native tints; dark
+mode further mixes each surface, edge, and mark toward transparency in `ui/accents.css` to avoid
+heavy colour blocks. Elsewhere, `disabled` remains neutral.
 
 ## 5. Typography
 
@@ -153,12 +161,21 @@ Chosen per surface, not globally.
 
 Decision surfaces get exactly one unmistakable primary action.
 
+The desktop sidebar uses Kumo's 57px icon-collapse mode with automatic tooltips. One stable footer
+control shows Kumo's animated glyph plus “Collapse sidebar” while expanded, then centers the glyph
+when collapsed. Do not add an invisible clickable edge rail; collapse must use the explicit control.
+Its state persists locally as
+`gardener.sidebar.open`; mobile remains an off-canvas sheet and never reads or writes that desktop
+preference. Keep persistent vendor attribution out of the shell.
+
 ## 7. Motion
 
 Purposeful only: live-run pulse, status transitions, streaming step appends, gate unlocks, and calm
-navigation affordances. Clickable cards and rows use a restrained tint or one-pixel lift over 300ms
-with an ease-out curve; avoid high-contrast flashes. Everything must be disabled under
-`prefers-reduced-motion: reduce`, which `styles.css` enforces globally.
+navigation affordances. Follow Kumo's rule that hover colours are immediate rather than animated.
+Gardener's collection links keep their content colours fixed while a low-opacity semantic accent
+wash fades in over 300ms. Cards and rows never shift geometry or change border treatment. Route
+content enters with a 360ms opacity, blur, and sub-pixel scale transition. Everything is disabled
+under `prefers-reduced-motion: reduce`, which `styles.css` enforces globally.
 
 ## 8. Product primitives
 

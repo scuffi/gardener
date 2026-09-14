@@ -52,7 +52,8 @@ export function AgentsPage() {
               <div className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)] gap-3">
                 <span
                   className={
-                    "grid size-10 place-items-center rounded-md bg-kumo-brand/10 text-kumo-brand"
+                    "grid size-10 place-items-center rounded-md " +
+                    "bg-(--color-gardener-accent-wash) text-(--color-gardener-accent-display)"
                   }
                 >
                   <RobotIcon size={20} aria-hidden="true" />

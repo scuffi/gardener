@@ -68,6 +68,7 @@ export function StatusBadge({
     <Badge
       variant={tone === "danger" ? "error" : tone}
       appearance={tone === "neutral" ? "filled" : "dot"}
+      className="[a:hover_&]:!ring-kumo-hairline"
     >
       {children}
     </Badge>

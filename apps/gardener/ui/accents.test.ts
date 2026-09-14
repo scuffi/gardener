@@ -89,28 +89,29 @@ function token(selector: string, property: string): { light: Rgb; dark: Rgb } {
 const canvases = { light: hexToRgb(CANVAS_LIGHT), dark: hexToRgb(CANVAS_DARK) };
 const WHITE: Rgb = [1, 1, 1];
 
-describe("brand accents", () => {
-  for (const accent of ["orange", "green"] as const) {
-    const selector = `[data-accent="${accent}"]`;
+describe("signature green", () => {
+  it("keeps text readable on the canvas in both schemes", () => {
+    const text = token(":root", "--text-color-kumo-brand");
+    expect(contrast(text.light, canvases.light)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+    expect(contrast(text.dark, canvases.dark)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+  });
 
-    it(`${accent}: text token is readable on the canvas in both schemes`, () => {
-      const text = token(selector, "--text-color-kumo-brand");
-      expect(contrast(text.light, canvases.light)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
-      expect(contrast(text.dark, canvases.dark)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
-    });
+  it("uses a lighter display green than its white-label action fill", () => {
+    const fill = token(":root", "--color-kumo-brand");
+    const display = token(":root", "--color-gardener-accent-display");
+    expect(relativeLuminance(display.light)).toBeGreaterThan(relativeLuminance(fill.light));
+    expect(relativeLuminance(display.dark)).toBeGreaterThan(relativeLuminance(fill.dark));
+  });
 
-    it(`${accent}: fill token carries Kumo's white button label in both schemes`, () => {
-      const fill = token(selector, "--color-kumo-brand");
-      expect(contrast(fill.light, WHITE)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
-      expect(contrast(fill.dark, WHITE)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
-    });
-  }
+  it("carries Kumo's white button label in both schemes", () => {
+    const fill = token(":root", "--color-kumo-brand");
+    expect(contrast(fill.light, WHITE)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+    expect(contrast(fill.dark, WHITE)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+  });
 
-  for (const accent of ["orange", "green"] as const) {
-    it(`${accent}: fill clears the UI boundary threshold in both schemes`, () => {
-      const fill = token(`[data-accent="${accent}"]`, "--color-kumo-brand");
-      expect(contrast(fill.light, canvases.light)).toBeGreaterThanOrEqual(UI_MINIMUM);
-      expect(contrast(fill.dark, canvases.dark)).toBeGreaterThanOrEqual(UI_MINIMUM);
-    });
-  }
+  it("clears the UI boundary threshold in both schemes", () => {
+    const fill = token(":root", "--color-kumo-brand");
+    expect(contrast(fill.light, canvases.light)).toBeGreaterThanOrEqual(UI_MINIMUM);
+    expect(contrast(fill.dark, canvases.dark)).toBeGreaterThanOrEqual(UI_MINIMUM);
+  });
 });

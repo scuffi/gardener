@@ -54,7 +54,7 @@ export function TaskGraph({ tasks }: { tasks: RunTask[] }) {
           className="mb-2 min-w-0 rounded-md border border-dashed border-kumo-line bg-kumo-recessed p-2"
         >
           <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-kumo-default">
-            <span className="font-semibold uppercase tracking-wide">Parallel</span>
+            <span className="font-semibold">Parallel</span>
             <Mono>{parallelGroup}</Mono>
             <span>{groupTasks.length} concurrent tasks</span>
           </div>

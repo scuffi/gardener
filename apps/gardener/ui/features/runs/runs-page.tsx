@@ -94,7 +94,7 @@ export function RunsPage() {
                 aria-hidden="true"
                 className={
                   "grid grid-cols-[130px_minmax(160px,1.2fr)_minmax(120px,1fr)_100px_110px_130px] " +
-                  "border-b border-kumo-hairline bg-kumo-elevated px-4 py-2.5 " +
+                  "border-b border-kumo-hairline bg-(--color-gardener-surface-strong) px-4 py-2.5 " +
                   "text-xs font-semibold text-kumo-strong"
                 }
               >
@@ -121,12 +121,15 @@ export function RunsPage() {
                         variant="plain"
                         aria-label={summary}
                         className={
-                          "grid! min-h-12 grid-cols-[130px_minmax(160px,1.2fr)_minmax(120px,1fr)_100px_110px_130px] " +
-                          "items-center px-4 py-2.5 !text-kumo-default no-underline " +
-                          "transition-[box-shadow,transform] duration-300 " +
-                          "ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-px " +
-                          "hover:shadow-[inset_3px_0_0_var(--color-kumo-brand)] " +
-                          "focus-visible:shadow-[inset_3px_0_0_var(--color-kumo-brand)]"
+                          "relative isolate grid! min-h-12 overflow-hidden " +
+                          "grid-cols-[130px_minmax(160px,1.2fr)_minmax(120px,1fr)_100px_110px_130px] " +
+                          "items-center px-4 py-2.5 !text-kumo-default no-underline transition-none " +
+                          "before:pointer-events-none before:absolute before:inset-0 " +
+                          "before:bg-(--color-gardener-accent-wash) " +
+                          "before:opacity-0 before:transition-opacity before:duration-300 " +
+                          "before:ease-[cubic-bezier(0.22,1,0.36,1)] hover:before:opacity-100 " +
+                          "focus-visible:before:opacity-100 motion-reduce:before:transition-none " +
+                          "hover:!text-kumo-default"
                         }
                       >
                         <span className="whitespace-nowrap">

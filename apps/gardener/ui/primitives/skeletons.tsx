@@ -22,7 +22,11 @@ export function PageHeaderSkeleton() {
 export function TableSkeleton({ rows = 6, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div role="status" aria-live="polite" aria-label="Loading">
-      <div className="border-b border-kumo-hairline bg-kumo-elevated px-4 py-2.5">
+      <div
+        className={
+          "border-b border-kumo-hairline bg-(--color-gardener-surface-strong) px-4 py-2.5"
+        }
+      >
         <SkeletonLine className="h-3 w-24" />
       </div>
       {Array.from({ length: rows }, (_, row) => (

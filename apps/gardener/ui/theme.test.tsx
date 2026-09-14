@@ -20,12 +20,11 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  delete document.documentElement.dataset.accent;
 });
 
-describe("brand accent", () => {
-  it("starts new and migrated sessions with Gardener green", async () => {
-    localStorage.setItem("gardener.accent", "orange");
+describe("signature green", () => {
+  it("ignores retired accent preferences", async () => {
+    localStorage.setItem("gardener.accent.v2", "orange");
     render(
       <ThemeProvider>
         <p>Dashboard</p>
@@ -33,7 +32,7 @@ describe("brand accent", () => {
     );
 
     expect(screen.getByText("Dashboard")).toBeTruthy();
-    await waitFor(() => expect(document.documentElement.dataset.accent).toBe("green"));
-    expect(localStorage.getItem("gardener.accent.v2")).toBe("green");
+    await waitFor(() => expect(document.documentElement.dataset.mode).toBe("light"));
+    expect(document.documentElement.dataset.accent).toBeUndefined();
   });
 });

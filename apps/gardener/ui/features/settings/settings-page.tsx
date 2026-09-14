@@ -21,7 +21,7 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "../../primitives";
-import { AccentPicker, ThemePicker } from "../../theme";
+import { ThemePicker } from "../../theme";
 
 export function SettingsPage() {
   const { state, health, error, refresh } = useGardener();
@@ -149,13 +149,6 @@ export function SettingsPage() {
             description="Choose how this Gardener workspace looks on this device."
           />
           <ThemePicker />
-          <div className="border-t border-kumo-hairline">
-            <PanelHeader
-              title="Accent"
-              description="Calm Gardener green by default, with a muted ember orange alternative."
-            />
-            <AccentPicker />
-          </div>
         </Panel>
 
         <Grid variant="2up" gap="base">

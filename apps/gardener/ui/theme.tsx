@@ -13,26 +13,14 @@ import { Button, Radio } from "./primitives";
 export type ThemePreference = "system" | "light" | "dark";
 type ResolvedTheme = Exclude<ThemePreference, "system">;
 
-/** Brand accent. Colour values live in `accents.css`; this only selects between them. */
-export type Accent = "orange" | "green";
-
 interface ThemeContextValue {
   preference: ThemePreference;
   resolvedTheme: ResolvedTheme;
   setPreference: (preference: ThemePreference) => void;
-  accent: Accent;
-  setAccent: (accent: Accent) => void;
 }
 
 const STORAGE_KEY = "gardener.theme";
-const ACCENT_STORAGE_KEY = "gardener.accent.v2";
-const DEFAULT_ACCENT: Accent = "green";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-const accentOptions: Array<{ value: Accent; label: string; description: string }> = [
-  { value: "green", label: "Gardener green", description: "The calm botanical default" },
-  { value: "orange", label: "Ember orange", description: "A warm, muted alternative" },
-];
 
 const options: Array<{
   value: ThemePreference;
@@ -96,18 +84,8 @@ function applyTheme(preference: ThemePreference, resolvedTheme: ResolvedTheme) {
     ?.setAttribute("content", resolvedTheme === "dark" ? "#0f0f0f" : "#fcfcfc");
 }
 
-function storedAccent(): Accent {
-  try {
-    const stored = localStorage.getItem(ACCENT_STORAGE_KEY);
-    return stored === "green" || stored === "orange" ? stored : DEFAULT_ACCENT;
-  } catch {
-    return DEFAULT_ACCENT;
-  }
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(storedPreference);
-  const [accent, setAccentState] = useState<Accent>(storedAccent);
   const [system, setSystem] = useState<ResolvedTheme>(systemTheme);
   const resolvedTheme = preference === "system" ? system : preference;
 
@@ -127,24 +105,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(preference, resolvedTheme);
   }, [preference, resolvedTheme]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(ACCENT_STORAGE_KEY, accent);
-    } catch {
-      /* Accent still applies for this session. */
-    }
-    document.documentElement.dataset.accent = accent;
-  }, [accent]);
-
   const value = useMemo<ThemeContextValue>(
     () => ({
       preference,
       resolvedTheme,
       setPreference: setPreferenceState,
-      accent,
-      setAccent: setAccentState,
     }),
-    [preference, resolvedTheme, accent],
+    [preference, resolvedTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -175,58 +142,6 @@ export function ThemeToggle() {
   );
 }
 
-/**
- * Brand accent chooser. Each swatch pins its own subtree with `data-accent`, so the preview is
- * rendered by the same token the app uses rather than a duplicated colour value. Change a colour
- * in `accents.css` and these previews follow automatically.
- */
-export function AccentPicker() {
-  const { accent, setAccent } = useTheme();
-
-  return (
-    <Radio.Group<Accent>
-      appearance="card"
-      orientation="horizontal"
-      value={accent}
-      onValueChange={setAccent}
-      className="p-[18px_20px_20px] [&>div]:grid-cols-2 max-md:[&>div]:grid-cols-1 max-sm:p-4"
-    >
-      <Radio.Legend className="sr-only">Brand accent</Radio.Legend>
-      {accentOptions.map((option) => (
-        <Radio.Item<Accent>
-          key={option.value}
-          value={option.value}
-          className={
-            "min-w-0 transition-[border-color,box-shadow] duration-300 " +
-            "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base " +
-            "hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
-          }
-          label={
-            <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-              <span
-                data-accent={option.value}
-                aria-hidden="true"
-                className={
-                  "grid h-12 w-[52px] place-items-center rounded-md border border-kumo-line "
-                  + "bg-kumo-brand"
-                }
-              >
-                <span className="h-[5px] w-6 rounded-full bg-kumo-canvas/70" />
-              </span>
-              <span className="grid min-w-0 gap-0.5">
-                <strong className="text-xs text-kumo-strong">{option.label}</strong>
-                <small className="text-xs font-normal text-kumo-default">
-                  {option.description}
-                </small>
-              </span>
-            </span>
-          }
-        />
-      ))}
-    </Radio.Group>
-  );
-}
-
 export function ThemePicker() {
   const { preference, setPreference } = useTheme();
 
@@ -250,9 +165,7 @@ export function ThemePicker() {
             key={option.value}
             value={option.value}
             className={
-              "min-w-0 transition-[border-color,box-shadow] duration-300 " +
-              "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base " +
-              "hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
+              "min-w-0 hover:!bg-kumo-base has-[[data-checked]]:hover:!bg-kumo-tint"
             }
             label={
               <span className="grid min-w-0 grid-cols-[78px_minmax(0,1fr)] items-center gap-3">

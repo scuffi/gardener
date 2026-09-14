@@ -22,7 +22,11 @@ export function Panel({
   return (
     <LayerCard
       render={<Element />}
-      className={cn("min-w-0 overflow-hidden rounded-lg", padded && "p-4", className)}
+      className={cn(
+        "min-w-0 overflow-hidden rounded-lg bg-(--color-gardener-surface)",
+        padded && "p-4",
+        className,
+      )}
     >
       {children}
     </LayerCard>
@@ -43,7 +47,7 @@ export function PanelHeader({
     <div
       className={cn(
         "flex items-center justify-between gap-5 border-b border-kumo-hairline",
-        "bg-kumo-elevated px-4 py-3.5",
+        "bg-(--color-gardener-surface-strong) px-4 py-3.5",
       )}
     >
       <div className="min-w-0">

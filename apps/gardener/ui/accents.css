@@ -1,38 +1,77 @@
 /*
- * Gardener's two selectable brand accents. This is the only product stylesheet allowed to define
- * colour values; every component consumes these through Kumo's semantic brand tokens.
+ * Gardener has one luminous system green. This is the only product stylesheet allowed to define
+ * brand colour values; every component consumes these through semantic theme tokens.
  *
- * The default is a low-chroma botanical green. Its darker light-scheme value and restrained
- * dark-scheme value keep primary controls distinct without glowing against the canvas. The
- * alternate orange is an ember tint rather than Cloudflare's much brighter marketing orange.
- *
- * Fill and text tokens remain separate. Every text value clears 4.5:1 against its canvas, every
- * fill clears 3:1 against its canvas, and each fill clears 4.5:1 against Kumo's white button label.
- * `accents.test.ts` measures these guarantees directly from this file.
+ * The display values follow the energetic green hierarchy used by modern native interfaces.
+ * Controls carrying Kumo's white labels use a deeper saturated green for WCAG AA. Elevated product
+ * surfaces derive from Kumo neutrals, gaining material depth without introducing another hue.
+ * `accents.test.ts` measures the contrast guarantees directly from this file.
  */
 
-:root,
-:root[data-accent="green"],
-[data-accent="green"] {
-  --color-kumo-brand: light-dark(oklch(0.52 0.11 145), oklch(0.52 0.1 145));
-  --color-kumo-brand-hover: light-dark(oklch(0.485 0.105 145), oklch(0.485 0.095 145));
-  --text-color-kumo-brand: light-dark(oklch(0.49 0.105 145), oklch(0.72 0.095 145));
-}
-
-:root[data-accent="orange"],
-[data-accent="orange"] {
-  --color-kumo-brand: light-dark(oklch(0.555 0.125 50), oklch(0.555 0.115 50));
-  --color-kumo-brand-hover: light-dark(oklch(0.515 0.115 50), oklch(0.515 0.105 50));
-  --text-color-kumo-brand: light-dark(oklch(0.49 0.115 50), oklch(0.73 0.1 50));
+:root {
+  --color-kumo-brand: light-dark(oklch(0.5411 0.1403 147.64), oklch(0.5411 0.1403 147.64));
+  --color-kumo-brand-hover: light-dark(oklch(0.4963 0.1282 147.78), oklch(0.4963 0.1282 147.78));
+  --text-color-kumo-brand: light-dark(oklch(0.5411 0.1403 147.64), oklch(0.7556 0.2082 146.98));
+  --color-gardener-accent-display: light-dark(oklch(0.7303 0.1944 147.44), oklch(0.7556 0.2082 146.98));
+  --color-gardener-accent-wash: color-mix(in srgb, var(--color-gardener-accent-display) 10%, transparent);
+  --color-gardener-surface: color-mix(in oklch, var(--color-kumo-base) 76%, var(--color-kumo-tint));
+  --color-gardener-surface-strong: color-mix(in oklch, var(--color-kumo-base) 58%, var(--color-kumo-tint));
+  --color-gardener-policy-disabled-surface: light-dark(
+    var(--color-kumo-danger-tint),
+    color-mix(in srgb, var(--color-kumo-danger-tint) 55%, transparent)
+  );
+  --color-gardener-policy-disabled-edge: light-dark(
+    color-mix(in srgb, var(--color-kumo-danger) 20%, transparent),
+    color-mix(in srgb, var(--color-kumo-danger) 14%, transparent)
+  );
+  --color-gardener-policy-disabled-mark: light-dark(
+    color-mix(in srgb, var(--color-kumo-danger) 55%, transparent),
+    color-mix(in srgb, var(--color-kumo-danger) 42%, transparent)
+  );
+  --color-gardener-policy-approval-surface: light-dark(
+    var(--color-kumo-warning-tint),
+    color-mix(in srgb, var(--color-kumo-warning-tint) 50%, transparent)
+  );
+  --color-gardener-policy-approval-edge: light-dark(
+    color-mix(in srgb, var(--color-kumo-warning) 20%, transparent),
+    color-mix(in srgb, var(--color-kumo-warning) 14%, transparent)
+  );
+  --color-gardener-policy-approval-mark: light-dark(
+    color-mix(in srgb, var(--color-kumo-warning) 55%, transparent),
+    color-mix(in srgb, var(--color-kumo-warning) 42%, transparent)
+  );
+  --color-gardener-policy-automatic-surface: light-dark(
+    var(--color-kumo-success-tint),
+    color-mix(in srgb, var(--color-kumo-success-tint) 65%, transparent)
+  );
+  --color-gardener-policy-automatic-edge: light-dark(
+    color-mix(in srgb, var(--color-kumo-success) 20%, transparent),
+    color-mix(in srgb, var(--color-kumo-success) 14%, transparent)
+  );
+  --color-gardener-policy-automatic-mark: light-dark(
+    color-mix(in srgb, var(--color-kumo-success) 60%, transparent),
+    color-mix(in srgb, var(--color-kumo-success) 48%, transparent)
+  );
 }
 
 /* Defer to the system palette rather than partially overriding Windows High Contrast mode. */
 @media (forced-colors: active) {
-  :root,
-  :root[data-accent="orange"],
-  :root[data-accent="green"] {
+  :root {
     --color-kumo-brand: Highlight;
     --color-kumo-brand-hover: Highlight;
     --text-color-kumo-brand: LinkText;
+    --color-gardener-accent-display: Highlight;
+    --color-gardener-accent-wash: Canvas;
+    --color-gardener-surface: Canvas;
+    --color-gardener-surface-strong: Canvas;
+    --color-gardener-policy-disabled-surface: Canvas;
+    --color-gardener-policy-disabled-edge: CanvasText;
+    --color-gardener-policy-disabled-mark: CanvasText;
+    --color-gardener-policy-approval-surface: Canvas;
+    --color-gardener-policy-approval-edge: CanvasText;
+    --color-gardener-policy-approval-mark: CanvasText;
+    --color-gardener-policy-automatic-surface: Canvas;
+    --color-gardener-policy-automatic-edge: CanvasText;
+    --color-gardener-policy-automatic-mark: CanvasText;
   }
 }
