@@ -1,11 +1,12 @@
 import { CaretDownIcon, PauseIcon, PlayIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGardener } from "../app-context";
 import { gardenerApi } from "../lib/api";
 import { isEnabled } from "../lib/format";
 import { queryPrefixes } from "../lib/query-keys";
-import { Button, cn, DropdownMenu } from "../primitives";
+import { Button, cn, ConfirmDialog, DropdownMenu } from "../primitives";
 import { useNotifications } from "../providers/notifications";
 
 export function AutomationMenu() {
@@ -13,6 +14,9 @@ export function AutomationMenu() {
   const { notify } = useNotifications();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [pendingResume, setPendingResume] = useState<
+    { kind: "global" } | { kind: "repository"; id: string; name: string } | null
+  >(null);
   const repositories = state?.repositories.filter((repository) => isEnabled(repository.active)) ?? [];
   const unpaused = repositories.filter((repository) => !repository.paused).length;
   const globallyPaused = Boolean(state?.globalPaused);
@@ -41,6 +45,7 @@ export function AutomationMenu() {
     mutationFn: gardenerApi.setPaused,
     onSuccess: async ({ globalPaused }) => {
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.state });
+      setPendingResume(null);
       notify({
         tone: "success",
         title: globalPaused ? "Gardener paused" : "Gardener resumed",
@@ -58,6 +63,7 @@ export function AutomationMenu() {
       gardenerApi.setRepositoryPaused(id, paused),
     onSuccess: async ({ id, paused }) => {
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.state });
+      setPendingResume(null);
       const repository = repositories.find((candidate) => candidate.id === id);
       notify({
         tone: "success",
@@ -74,14 +80,18 @@ export function AutomationMenu() {
   if (!state?.setup.completed) return null;
 
   return (
-    <DropdownMenu>
+    <>
+      <DropdownMenu>
       <DropdownMenu.Trigger>
         <Button
           id="automation-menu-trigger"
           type="button"
           variant="secondary"
           aria-label={`${status}. Open automation controls`}
-          className="min-w-0 gap-2 text-xs font-semibold max-[480px]:max-w-40 max-[480px]:px-2.5"
+          className={
+            "min-w-0 gap-2 text-xs font-semibold max-[900px]:min-h-11 " +
+            "max-[480px]:max-w-40 max-[480px]:px-2.5"
+          }
         >
           <span
             aria-hidden="true"
@@ -120,7 +130,13 @@ export function AutomationMenu() {
         <DropdownMenu.Item
           icon={globallyPaused ? PlayIcon : PauseIcon}
           disabled={globalMutation.isPending}
-          onClick={() => globalMutation.mutate(!globallyPaused)}
+          onClick={() => {
+            if (globallyPaused) {
+              setPendingResume({ kind: "global" });
+            } else {
+              globalMutation.mutate(true);
+            }
+          }}
         >
           {globallyPaused ? "Resume Gardener globally" : "Pause Gardener globally"}
         </DropdownMenu.Item>
@@ -134,11 +150,19 @@ export function AutomationMenu() {
               key={repository.id}
               data-repository-id={repository.id}
               checked={!repository.paused}
-              closeOnClick={false}
+              closeOnClick={repository.paused}
               disabled={repositoryMutation.isPending}
-              onCheckedChange={(checked) =>
-                repositoryMutation.mutate({ id: repository.id, paused: !checked })
-              }
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setPendingResume({
+                    kind: "repository",
+                    id: repository.id,
+                    name: `${repository.owner}/${repository.name}`,
+                  });
+                } else {
+                  repositoryMutation.mutate({ id: repository.id, paused: true });
+                }
+              }}
             >
               <span className="grid min-w-0 leading-snug">
                 <strong className="truncate text-xs font-medium">
@@ -158,7 +182,35 @@ export function AutomationMenu() {
             <div className="p-2 text-[11px] text-kumo-subtle">No connected repositories</div>
           ) : null}
         </DropdownMenu.Group>
-      </DropdownMenu.Content>
-    </DropdownMenu>
+        </DropdownMenu.Content>
+      </DropdownMenu>
+      <ConfirmDialog
+        open={Boolean(pendingResume)}
+        onOpenChange={(open) => {
+          if (!open) setPendingResume(null);
+        }}
+        title={
+          pendingResume?.kind === "repository"
+            ? `Resume ${pendingResume.name}?`
+            : "Resume Gardener globally?"
+        }
+        description={
+          pendingResume?.kind === "repository"
+            ? "New matching events in this repository may start Agent runs when Gardener is globally active."
+            : "New work may start in every unpaused repository. Repository pauses and policies still apply."
+        }
+        confirmLabel={
+          pendingResume?.kind === "repository"
+            ? `Resume ${pendingResume.name}`
+            : "Resume Gardener globally"
+        }
+        loading={globalMutation.isPending || repositoryMutation.isPending}
+        onConfirm={() =>
+          pendingResume?.kind === "repository"
+            ? repositoryMutation.mutateAsync({ id: pendingResume.id, paused: false })
+            : globalMutation.mutateAsync(false)
+        }
+      />
+    </>
   );
 }

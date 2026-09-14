@@ -9,6 +9,7 @@ import { useGardener } from "../../app-context";
 import { sentenceCase } from "../../lib/format";
 import {
   Banner,
+  EmptyState,
   ErrorState,
   Grid,
   GridItem,
@@ -28,10 +29,16 @@ export function SettingsPage() {
   // A failed load must not sit on a skeleton forever; offer the same recovery as Overview.
   if (error && (!state || !health)) {
     return (
-      <ErrorState
-        message={error.message || "Gardener could not load this deployment."}
-        onRetry={() => void refresh()}
-      />
+      <>
+        <PageHeader
+          title="Settings"
+          description="Inspect this instance's deployment health and runtime boundaries."
+        />
+        <ErrorState
+          message={error.message || "Gardener could not load this deployment."}
+          onRetry={() => void refresh()}
+        />
+      </>
     );
   }
 
@@ -93,8 +100,8 @@ export function SettingsPage() {
             icon={<WarningCircleIcon size={20} weight="fill" />}
             title="Agent execution is fail closed"
             description={
-              "Authoring and review are available, but this foundation cannot run Agents or " +
-              "execute effects until the trusted runtime is integrated and staged."
+              "One or more required services are unavailable. New runs and persistent effects " +
+              "remain fail closed until the deployment recovers."
             }
           />
         ) : null}
@@ -210,22 +217,30 @@ export function SettingsPage() {
             title="Capabilities"
             description="Availability of the broader repository-maintenance roadmap."
           />
-          <div className="grid">
-            {Object.entries(state.capabilities ?? {}).map(([name, status]) => (
-              <div
-                key={name}
-                className={
-                  "flex min-h-12 items-center justify-between gap-4 border-b border-kumo-hairline " +
-                  "px-[18px] py-2 last:border-b-0"
-                }
-              >
-                <Mono tone="strong">{sentenceCase(name)}</Mono>
-                <StatusBadge tone={status === "available" ? "success" : "neutral"}>
-                  {sentenceCase(status)}
-                </StatusBadge>
-              </div>
-            ))}
-          </div>
+          {Object.keys(state.capabilities ?? {}).length ? (
+            <div className="grid">
+              {Object.entries(state.capabilities ?? {}).map(([name, status]) => (
+                <div
+                  key={name}
+                  className={
+                    "flex min-h-12 items-center justify-between gap-4 " +
+                    "border-b border-kumo-hairline px-[18px] py-2 last:border-b-0"
+                  }
+                >
+                  <Mono tone="strong">{sentenceCase(name)}</Mono>
+                  <StatusBadge tone={status === "available" ? "success" : "neutral"}>
+                    {sentenceCase(status)}
+                  </StatusBadge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              compact
+              title="No optional capabilities reported"
+              description="Optional workspace and authoring capabilities will appear here when configured."
+            />
+          )}
         </Panel>
       </div>
     </>

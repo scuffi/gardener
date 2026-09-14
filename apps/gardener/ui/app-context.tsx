@@ -1,5 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useNavigate } from "react-router-dom";
 import { ApiError, gardenerApi } from "./lib/api";
 import { queryKeys, queryPrefixes } from "./lib/query-keys";
 import type { AppState, HealthState } from "./lib/types";
@@ -21,6 +31,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { notify } = useNotifications();
   const [sessionRevision, setSessionRevision] = useState(0);
   const installationHandled = useRef(false);
@@ -58,7 +69,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     void gardenerApi
       .syncRepositories()
       .then(async () => {
-        history.replaceState(null, "", defaultRoute);
+        navigate(defaultRoute, { replace: true });
         await queryClient.invalidateQueries({ queryKey: queryPrefixes.state });
         notify({
           tone: "success",
@@ -74,7 +85,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             error instanceof Error ? error.message : "Try again from Repositories.",
         });
       });
-  }, [authenticated, notify, queryClient]);
+  }, [authenticated, navigate, notify, queryClient]);
 
   const refresh = useCallback(async () => {
     await Promise.all([

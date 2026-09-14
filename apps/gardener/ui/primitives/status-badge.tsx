@@ -29,6 +29,7 @@ const toneByState: Record<string, StatusTone> = {
   paused: "warning",
   waiting: "warning",
   degraded: "warning",
+  high: "warning",
   // Failed or withdrawn.
   failed: "danger",
   completed_with_errors: "danger",
@@ -37,6 +38,7 @@ const toneByState: Record<string, StatusTone> = {
   access_removed: "danger",
   unavailable: "danger",
   cancelled: "danger",
+  urgent: "danger",
   // Observed but not acted on.
   observing: "info",
   simulated: "info",
@@ -46,6 +48,8 @@ const toneByState: Record<string, StatusTone> = {
   dismissed: "neutral",
   resolved: "neutral",
   none: "neutral",
+  normal: "neutral",
+  low: "neutral",
 };
 
 /** Resolve a raw domain status string to its tone, defaulting to neutral. */

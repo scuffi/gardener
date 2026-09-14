@@ -165,7 +165,7 @@ export function ThemeToggle() {
       type="button"
       variant="secondary"
       shape="square"
-      className="text-kumo-subtle"
+      className="text-kumo-default max-[900px]:size-11"
       aria-label={`Switch to ${dark ? "light" : "dark"} theme`}
       title={`${dark ? "Dark" : "Light"} theme`}
       icon={CurrentIcon}
@@ -210,7 +210,7 @@ export function AccentPicker() {
               </span>
               <span className="grid min-w-0 gap-0.5">
                 <strong className="text-xs text-kumo-strong">{option.label}</strong>
-                <small className="text-xs font-normal text-kumo-subtle">
+                <small className="text-xs font-normal text-kumo-default">
                   {option.description}
                 </small>
               </span>
@@ -268,7 +268,7 @@ export function ThemePicker() {
                 </span>
                 <span className="grid min-w-0 gap-0.5">
                   <strong className="text-xs text-kumo-strong">{option.label}</strong>
-                  <small className="text-xs font-normal text-kumo-subtle">
+                  <small className="text-xs font-normal text-kumo-default">
                     {option.description}
                   </small>
                 </span>

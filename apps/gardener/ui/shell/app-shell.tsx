@@ -71,7 +71,11 @@ function AppNavigation({ setupComplete }: { setupComplete: boolean }) {
                   disabled={locked}
                   aria-disabled={locked || undefined}
                   tooltip={route.label}
-                  className={locked ? "cursor-not-allowed opacity-50" : ""}
+                  className={
+                    locked
+                      ? "cursor-not-allowed opacity-50 max-[900px]:min-h-11"
+                      : "text-kumo-default max-[900px]:min-h-11 [&_.truncate]:text-kumo-default"
+                  }
                   onClick={() => setOpenMobile(false)}
                   {...(locked
                     ? {}
@@ -100,6 +104,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const ContextIcon = setupComplete ? (current?.icon ?? PlantIcon) : PlantIcon;
   const contextLabel = setupComplete ? (current?.label ?? "Gardener") : "Setup";
 
+  useEffect(() => {
+    document.title = `${contextLabel} · Gardener`;
+  }, [contextLabel]);
+
   return (
     <CommandPaletteProvider>
       <Sidebar.Provider
@@ -120,15 +128,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <Sidebar.Header className="h-13 min-h-13 px-3.5">
           <GardenerBrand />
-          <Sidebar.Close className="ml-auto max-[900px]:flex min-[901px]:hidden" aria-label="Close navigation" />
+          <Sidebar.Close
+            className="ml-auto max-[900px]:flex max-[900px]:size-11 min-[901px]:hidden"
+            aria-label="Close navigation"
+          />
         </Sidebar.Header>
         <Sidebar.Content>
           <AppNavigation setupComplete={setupComplete} />
         </Sidebar.Content>
-        <Sidebar.Footer className="overflow-visible">
+        <Sidebar.Footer className="grid! h-auto! overflow-visible gap-1 py-2">
           {authenticated ? <AccountMenu /> : null}
           <div className="flex justify-center px-2 pt-2 pb-1 opacity-70">
-            <PoweredByCloudflare />
+            <PoweredByCloudflare className="[&>span]:text-kumo-strong" />
           </div>
         </Sidebar.Footer>
       </Sidebar>
@@ -140,10 +151,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             "border-b border-kumo-line bg-kumo-base px-6 max-sm:px-4",
           )}
         >
-          <Sidebar.Trigger className="min-[901px]:hidden" aria-label="Open navigation">
+          <Sidebar.Trigger
+            className="max-[900px]:size-11 min-[901px]:hidden"
+            aria-label="Open navigation"
+          >
             <ListIcon size={19} />
           </Sidebar.Trigger>
-          <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-kumo-strong">
+          <div
+            className={
+              "flex min-w-0 items-center gap-2 text-[13px] font-semibold text-kumo-strong " +
+              "max-[480px]:hidden"
+            }
+          >
             <ContextIcon size={17} aria-hidden="true" className="flex-none text-kumo-subtle" />
             <span className="max-[360px]:hidden">{contextLabel}</span>
           </div>

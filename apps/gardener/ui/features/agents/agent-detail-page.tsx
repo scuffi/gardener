@@ -1,5 +1,6 @@
 import { PencilSimpleIcon, PlayIcon, PowerIcon, RobotIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/format";
@@ -9,6 +10,7 @@ import {
   Banner,
   Button,
   CodeBlock,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   LinkButton,
@@ -30,6 +32,9 @@ export function AgentDetailPage() {
   const revisionNumber = revisionParam ? Number(revisionParam) : null;
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
+  const [pendingAction, setPendingAction] = useState<
+    { kind: "activate"; revision: number } | { kind: "enable" } | null
+  >(null);
   const detail = useQuery({
     queryKey: queryKeys.agent(id),
     queryFn: () => gardenerApi.agent(id!),
@@ -44,10 +49,13 @@ export function AgentDetailPage() {
     mutationFn: (number: number) => gardenerApi.activateAgentRevision(id!, number),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.agent });
+      setPendingAction(null);
       notify({
         tone: "success",
         title: "Revision activated",
-        description: "The Agent remains disabled until enabled separately.",
+        description: detail.data?.agent.enabled
+          ? "The enabled Agent will use this revision for newly admitted runs."
+          : "The Agent remains disabled until enabled separately.",
       });
     },
     onError: (error: Error) =>
@@ -62,6 +70,7 @@ export function AgentDetailPage() {
     onSuccess: async ({ enabled }) => {
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.agent });
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.agents });
+      setPendingAction(null);
       notify({ tone: "success", title: enabled ? "Agent enabled" : "Agent disabled" });
     },
     onError: (error: Error) =>
@@ -84,10 +93,16 @@ export function AgentDetailPage() {
   }
   if (detail.error || !detail.data) {
     return (
-      <ErrorState
-        message={(detail.error as Error)?.message ?? "Agent was not found."}
-        onRetry={() => void detail.refetch()}
-      />
+      <>
+        <PageHeader
+          title="Agent unavailable"
+          description="Gardener could not load this Agent's current state and revision history."
+        />
+        <ErrorState
+          message={(detail.error as Error)?.message ?? "Agent was not found."}
+          onRetry={() => void detail.refetch()}
+        />
+      </>
     );
   }
 
@@ -119,7 +134,13 @@ export function AgentDetailPage() {
                 icon={PowerIcon}
                 loading={enable.isPending}
                 disabled={!agent.activeRevision}
-                onClick={() => enable.mutate(!agent.enabled)}
+                onClick={() => {
+                  if (agent.enabled) {
+                    enable.mutate(false);
+                  } else {
+                    setPendingAction({ kind: "enable" });
+                  }
+                }}
               >
                 {agent.enabled ? "Disable Agent" : "Enable Agent"}
               </Button>
@@ -181,7 +202,7 @@ export function AgentDetailPage() {
                   variant="primary"
                   icon={PlayIcon}
                   loading={activate.isPending}
-                  onClick={() => activate.mutate(revisionNumber)}
+                  onClick={() => setPendingAction({ kind: "activate", revision: revisionNumber })}
                 >
                   Activate revision
                 </Button>
@@ -284,6 +305,35 @@ export function AgentDetailPage() {
           )}
         </Panel>
       )}
+      <ConfirmDialog
+        open={Boolean(pendingAction)}
+        onOpenChange={(open) => {
+          if (!open) setPendingAction(null);
+        }}
+        title={
+          pendingAction?.kind === "activate"
+            ? `Activate revision ${pendingAction.revision}?`
+            : "Enable this Agent?"
+        }
+        description={
+          pendingAction?.kind === "activate"
+            ? agent.enabled
+              ? "This changes the behavior used for newly admitted runs immediately because the Agent is enabled."
+              : "This selects the immutable behavior that the Agent will use after it is separately enabled."
+            : "New matching repository events may start runs using the active immutable revision."
+        }
+        confirmLabel={
+          pendingAction?.kind === "activate"
+            ? `Activate revision ${pendingAction.revision}`
+            : "Enable Agent"
+        }
+        loading={activate.isPending || enable.isPending}
+        onConfirm={() =>
+          pendingAction?.kind === "activate"
+            ? activate.mutateAsync(pendingAction.revision)
+            : enable.mutateAsync(true)
+        }
+      />
     </>
   );
 }

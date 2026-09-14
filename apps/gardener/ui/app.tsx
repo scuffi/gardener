@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppDataProvider, useGardener } from "./app-context";
 import { SignInPage } from "./features/auth/sign-in-page";
 import { SetupWizard } from "./features/setup/setup-wizard";
-import { PageHeaderSkeleton } from "./primitives";
+import { ErrorState, PageHeader, PageHeaderSkeleton } from "./primitives";
 import { defaultRoute, routes } from "./routes";
 import { AppShell } from "./shell/app-shell";
 
@@ -17,9 +17,20 @@ const pages = new Map<string, ComponentType>(
 );
 
 function AppRoutes() {
-  const { health, loading, error, state, authenticated } = useGardener();
+  const { health, loading, error, state, authenticated, refresh } = useGardener();
 
   if (loading || (error && !health) || !authenticated) return <SignInPage />;
+  if (error && !state) {
+    return (
+      <AppShell>
+        <PageHeader
+          title="Unable to load Gardener"
+          description="The dashboard could not read this instance's current state."
+        />
+        <ErrorState message={error.message} onRetry={() => void refresh()} />
+      </AppShell>
+    );
+  }
   if (!state?.setup.completed) {
     return (
       <AppShell>

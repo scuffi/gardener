@@ -18,9 +18,15 @@ export interface Action {
   icon?: Icon;
   /** Extra words matched by search that are not shown in the label. */
   keywords?: string;
+  /** Guard copy for an action that widens authority or destroys data. */
+  confirmation?: {
+    title: string;
+    description: string;
+    confirmLabel: string;
+  };
   /** Exactly one of these is set. */
   href?: string;
-  run?: () => void;
+  run?: () => unknown | Promise<unknown>;
 }
 
 export interface ActionGroup {
@@ -35,7 +41,7 @@ interface CommandContext {
   setPreference: (preference: "light" | "dark") => void;
   accent: "orange" | "green";
   setAccent: (accent: "orange" | "green") => void;
-  setPaused: (paused: boolean) => void;
+  setPaused: (paused: boolean) => unknown | Promise<unknown>;
 }
 
 /** Navigable surfaces, excluding detail routes that need an id. */
@@ -65,6 +71,17 @@ function commandActions(context: CommandContext): Action[] {
         : "Stop new work; in-flight operations may finish",
       icon: paused ? PlayIcon : PauseIcon,
       keywords: "kill switch stop start automation",
+      ...(paused
+        ? {
+            confirmation: {
+              title: "Resume Gardener globally?",
+              description:
+                "New work may start in every unpaused repository. Agent capabilities and " +
+                "operation policies still apply.",
+              confirmLabel: "Resume Gardener globally",
+            },
+          }
+        : {}),
       run: () => context.setPaused(!paused),
     },
     {

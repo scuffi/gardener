@@ -56,6 +56,24 @@ describe("command palette actions", () => {
     expect(setPaused).toHaveBeenCalledWith(true);
   });
 
+  it("guards the global resume command with exact confirmation copy", () => {
+    const groups = actionGroups({
+      ...context(),
+      state: { globalPaused: true } as never,
+    });
+    const resume = groups
+      .find((group) => group.id === "commands")
+      ?.items.find((item) => item.id === "cmd:pause");
+
+    expect(resume?.confirmation).toEqual({
+      title: "Resume Gardener globally?",
+      description:
+        "New work may start in every unpaused repository. Agent capabilities and " +
+        "operation policies still apply.",
+      confirmLabel: "Resume Gardener globally",
+    });
+  });
+
   it("matches on keywords that are not visible in the label", () => {
     const filtered = filterActionGroups(actionGroups(context()), "kill switch");
     const ids = filtered.flatMap((group) => group.items.map((item) => item.id));

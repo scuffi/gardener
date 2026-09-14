@@ -48,7 +48,7 @@ export function PanelHeader({
     >
       <div className="min-w-0">
         <h2 className="text-[15px] font-semibold text-kumo-strong">{title}</h2>
-        {description ? <p className="mt-0.5 text-sm text-kumo-subtle">{description}</p> : null}
+        {description ? <p className="mt-0.5 text-sm text-kumo-default">{description}</p> : null}
       </div>
       {actions ? <div className="flex-none">{actions}</div> : null}
     </div>

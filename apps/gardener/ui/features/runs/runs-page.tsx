@@ -40,10 +40,16 @@ export function RunsPage() {
 
   if (query.error || !query.data) {
     return (
-      <ErrorState
-        message={(query.error as Error)?.message ?? "Run history is unavailable."}
-        onRetry={() => void query.refetch()}
-      />
+      <>
+        <PageHeader
+          title="Runs"
+          description="Inspect the exact work Gardener attempted, including timing and outcomes."
+        />
+        <ErrorState
+          message={(query.error as Error)?.message ?? "Run history is unavailable."}
+          onRetry={() => void query.refetch()}
+        />
+      </>
     );
   }
 

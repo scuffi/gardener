@@ -21,6 +21,8 @@ import {
 } from "../../primitives";
 import { PolicyRow } from "./components/policy-row";
 
+const modeRank: Record<PolicyMode, number> = { disabled: 0, approval: 1, automatic: 2 };
+
 const modeCopy: Record<PolicyMode, { label: string; description: string }> = {
   disabled: { label: "Disabled", description: "Gardener cannot execute this operation." },
   approval: { label: "Require approval", description: "A person must approve every proposal." },
@@ -120,7 +122,7 @@ export function PoliciesPage() {
     [draft, state],
   );
   const increasesAuthority = changed.some(
-    (policy) => draft[policy.operation_kind] === "automatic",
+    (policy) => modeRank[draft[policy.operation_kind]!] > modeRank[policy.mode],
   );
   const mutation = useMutation({
     mutationFn: () =>
@@ -289,22 +291,24 @@ export function PoliciesPage() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Allow automatic GitHub actions?"
+        title="Widen GitHub action authority?"
         description={
-          "At least one change allows Gardener to execute a valid proposal without human approval. " +
-          "Access and current GitHub state will still be checked before every write."
+          "At least one change allows an operation that was previously more restricted. " +
+          "Capabilities, repository access, and current GitHub state will still be checked."
         }
         detail={
           <div className="grid gap-1.5">
             {changed
-              .filter((policy) => draft[policy.operation_kind] === "automatic")
+              .filter(
+                (policy) => modeRank[draft[policy.operation_kind]!] > modeRank[policy.mode],
+              )
               .map((policy) => (
                 <span
                   key={policy.operation_kind}
                   className="flex items-center gap-2 text-xs text-kumo-warning"
                 >
                   <WarningCircleIcon size={16} aria-hidden="true" />
-                  {metadataFor(policy.operation_kind).name}
+                  {metadataFor(policy.operation_kind).name}: {modeCopy[draft[policy.operation_kind]!].label}
                 </span>
               ))}
           </div>

@@ -45,7 +45,7 @@ export function AccountMenu() {
         type="button"
         aria-label={`Open account menu for ${login}`}
         className={cn(
-          "flex h-10 min-h-10 w-full min-w-0 items-center gap-2 rounded-md p-1",
+          "flex h-10 min-h-10 w-full min-w-0 items-center gap-2 rounded-md p-1 max-[900px]:h-11",
           "border border-transparent text-kumo-default hover:bg-kumo-tint",
           "aria-expanded:bg-kumo-tint aria-expanded:ring-1 aria-expanded:ring-kumo-line",
         )}

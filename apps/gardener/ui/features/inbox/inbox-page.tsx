@@ -1,5 +1,6 @@
 import { CheckIcon, RobotIcon, TrayIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime, sentenceCase } from "../../lib/format";
 import { queryKeys, queryPrefixes } from "../../lib/query-keys";
@@ -7,6 +8,7 @@ import { useNotifications } from "../../providers/notifications";
 import {
   Button,
   CardSkeleton,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   LinkButton,
@@ -20,12 +22,18 @@ import {
 export function InboxPage() {
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
+  const [pendingApproval, setPendingApproval] = useState<{
+    id: string;
+    title: string;
+    summary: string;
+  } | null>(null);
   const query = useQuery({ queryKey: queryKeys.inbox, queryFn: gardenerApi.inbox });
   const mutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" | "dismiss" }) =>
       gardenerApi.respondToInbox(id, action),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.inbox });
+      setPendingApproval(null);
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.state });
       notify({ tone: "success", title: "Inbox updated" });
     },
@@ -93,7 +101,7 @@ export function InboxPage() {
                       disabled={mutation.isPending}
                       onClick={() => mutation.mutate({ id: item.id, action: "reject" })}
                     >
-                      Reject
+                      Reject exact request
                     </Button>
                   ) : null}
                   {(item.actions ?? []).includes("approve") ? (
@@ -101,7 +109,13 @@ export function InboxPage() {
                       variant="primary"
                       icon={CheckIcon}
                       disabled={mutation.isPending}
-                      onClick={() => mutation.mutate({ id: item.id, action: "approve" })}
+                      onClick={() =>
+                        setPendingApproval({
+                          id: item.id,
+                          title: item.title,
+                          summary: item.summary,
+                        })
+                      }
                     >
                       Approve exact request
                     </Button>
@@ -132,6 +146,25 @@ export function InboxPage() {
           }
         />
       )}
+      <ConfirmDialog
+        open={Boolean(pendingApproval)}
+        onOpenChange={(open) => {
+          if (!open) setPendingApproval(null);
+        }}
+        title="Approve this exact request?"
+        description={
+          pendingApproval
+            ? `${pendingApproval.title}. ${pendingApproval.summary}`
+            : "Review the bounded request before approving it."
+        }
+        confirmLabel="Approve exact request"
+        loading={mutation.isPending}
+        onConfirm={() =>
+          pendingApproval
+            ? mutation.mutateAsync({ id: pendingApproval.id, action: "approve" })
+            : undefined
+        }
+      />
     </>
   );
 }

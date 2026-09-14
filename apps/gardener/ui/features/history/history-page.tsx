@@ -59,7 +59,7 @@ export function HistoryPage() {
                   <header className="flex items-start justify-between gap-3">
                     <div className="grid min-w-0">
                       <strong className="text-sm text-kumo-strong">{item.title}</strong>
-                      <span className="flex flex-wrap items-center gap-1 text-xs text-kumo-subtle">
+                      <span className="flex flex-wrap items-center gap-1 text-xs text-kumo-default">
                         <Mono>{item.kind}</Mono>
                         <span aria-hidden="true">·</span>
                         <span>{formatRelativeTime(item.createdAt)}</span>
@@ -71,7 +71,7 @@ export function HistoryPage() {
                     <p className="mt-2 text-sm text-kumo-default">{item.summary}</p>
                   ) : null}
                   {item.actor ? (
-                    <small className="mt-2 flex items-center gap-1 text-xs text-kumo-subtle">
+                    <small className="mt-2 flex items-center gap-1 text-xs text-kumo-default">
                       Actor: <Mono>{item.actor}</Mono>
                     </small>
                   ) : null}

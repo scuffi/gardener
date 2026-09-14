@@ -186,7 +186,9 @@ export function SignInPage() {
             </Panel>
           </div>
           <footer className="mt-6 flex justify-center">
-            <PoweredByCloudflare />
+            <PoweredByCloudflare
+              className="bg-kumo-contrast [&>span]:text-kumo-inverse"
+            />
           </footer>
         </div>
       </main>

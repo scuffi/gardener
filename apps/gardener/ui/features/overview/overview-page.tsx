@@ -29,10 +29,16 @@ export function OverviewPage() {
 
   if (error && !state) {
     return (
-      <ErrorState
-        message={error.message || "Gardener could not load this deployment."}
-        onRetry={() => void refresh()}
-      />
+      <>
+        <PageHeader
+          title="Overview"
+          description="Fleet health, work in flight, and anything waiting on a decision."
+        />
+        <ErrorState
+          message={error.message || "Gardener could not load this deployment."}
+          onRetry={() => void refresh()}
+        />
+      </>
     );
   }
 

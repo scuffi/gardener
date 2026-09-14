@@ -179,10 +179,16 @@ export function AgentEditorPage() {
   }
   if (detail.error) {
     return (
-      <ErrorState
-        message={(detail.error as Error).message}
-        onRetry={() => void detail.refetch()}
-      />
+      <>
+        <PageHeader
+          title="Agent editor unavailable"
+          description="Gardener could not load the mutable draft for this Agent."
+        />
+        <ErrorState
+          message={(detail.error as Error).message}
+          onRetry={() => void detail.refetch()}
+        />
+      </>
     );
   }
 
@@ -223,6 +229,7 @@ export function AgentEditorPage() {
                 </>
               }
               hideLabel={false}
+              aria-label="Repository context"
               value={thisRepositoryId}
               onValueChange={(value) => {
                 setThisRepositoryId(value ?? "");
@@ -253,6 +260,7 @@ export function AgentEditorPage() {
                   setSource(event.target.value);
                   resetReview();
                 }}
+                aria-label="Agent package source"
                 aria-describedby="agent-source-help"
                 className={
                   "min-h-[480px] w-full max-w-full resize-y bg-kumo-recessed p-3.5 font-mono " +

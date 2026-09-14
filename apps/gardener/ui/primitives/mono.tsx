@@ -11,7 +11,7 @@ export function Mono({
   children,
   title,
   truncate = false,
-  tone = "subtle",
+  tone = "default",
   className,
 }: {
   children: string;

@@ -43,12 +43,12 @@ export function Stat({
             <IconComponent size={16} aria-hidden="true" />
           </span>
         ) : null}
-        <p className="text-xs font-medium text-kumo-subtle">{label}</p>
+        <p className="text-xs font-medium text-kumo-default">{label}</p>
       </div>
       <strong className={cn("mt-3 block text-2xl leading-none font-semibold", colors.value)}>
         {value}
       </strong>
-      {detail ? <span className="mt-1.5 block text-xs text-kumo-subtle">{detail}</span> : null}
+      {detail ? <span className="mt-1.5 block text-xs text-kumo-default">{detail}</span> : null}
     </>
   );
 
@@ -65,7 +65,7 @@ export function Stat({
       variant="plain"
       className={cn(
         shell,
-        "text-kumo-default no-underline hover:border-kumo-line hover:bg-kumo-tint",
+        "grid! content-start text-kumo-default no-underline hover:border-kumo-line hover:bg-kumo-tint",
       )}
     >
       {body}

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { sentenceCase } from "../../../lib/format";
 import type { RunTask } from "../../../lib/types";
-import { Mono, Panel, PanelHeader, RunStatus } from "../../../primitives";
+import { EmptyState, Mono, Panel, PanelHeader, RunStatus } from "../../../primitives";
 import { formatDuration } from "../format-run";
 
 export function TaskGraph({ tasks }: { tasks: RunTask[] }) {
@@ -53,7 +53,7 @@ export function TaskGraph({ tasks }: { tasks: RunTask[] }) {
           key={groupKey}
           className="mb-2 min-w-0 rounded-md border border-dashed border-kumo-line bg-kumo-recessed p-2"
         >
-          <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-kumo-subtle">
+          <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-kumo-default">
             <span className="font-semibold uppercase tracking-wide">Parallel</span>
             <Mono>{parallelGroup}</Mono>
             <span>{groupTasks.length} concurrent tasks</span>
@@ -74,7 +74,15 @@ export function TaskGraph({ tasks }: { tasks: RunTask[] }) {
         title="Task graph"
         description="Indented branches show parentage; outlined groups identify concurrent work."
       />
-      <div className="min-w-0 p-3">{renderLevel(children.get(null) ?? [])}</div>
+      {orderedTasks.length ? (
+        <div className="min-w-0 p-3">{renderLevel(children.get(null) ?? [])}</div>
+      ) : (
+        <EmptyState
+          compact
+          title="No tasks were recorded"
+          description="Task branches will appear here when a run records orchestrated work."
+        />
+      )}
     </Panel>
   );
 }

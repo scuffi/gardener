@@ -11,7 +11,15 @@ import { useState } from "react";
 import { useGardener } from "../../app-context";
 import { gardenerApi } from "../../lib/api";
 import type { SetupProfile } from "../../lib/types";
-import { Badge, Banner, Button, PageHeader, Panel, Radio } from "../../primitives";
+import {
+  Badge,
+  Banner,
+  Button,
+  ConfirmDialog,
+  PageHeader,
+  Panel,
+  Radio,
+} from "../../primitives";
 import { useNotifications } from "../../providers/notifications";
 
 const profiles: Array<{
@@ -51,6 +59,7 @@ export function SetupWizard() {
   const { notify } = useNotifications();
   const repositories = state?.setup.activeRepositories ?? 0;
   const [profile, setProfile] = useState<SetupProfile>(state?.setup.profile ?? "safe");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const step = repositories === 0 ? 1 : 2;
   const connectReady = Boolean(health?.connectConfigured || health?.localDevelopment);
 
@@ -70,6 +79,7 @@ export function SetupWizard() {
     mutationFn: () => gardenerApi.activate(profile),
     onSuccess: async () => {
       await refresh();
+      setConfirmOpen(false);
       notify({
         tone: "success",
         title: "Setup complete",
@@ -142,10 +152,10 @@ export function SetupWizard() {
                   ) : number}
                 </span>
                 <div className="grid min-w-0 max-sm:hidden">
-                  <strong className={active ? "text-sm font-semibold text-kumo-strong" : "text-sm font-semibold"}>
+                  <strong className="text-sm font-semibold text-kumo-strong">
                     {label}
                   </strong>
-                  <small className="text-xs text-kumo-subtle">
+                  <small className="text-xs text-kumo-default">
                     {complete ? "Complete" : active ? "Current step" : "Not started"}
                   </small>
                 </div>
@@ -219,7 +229,7 @@ export function SetupWizard() {
                     }
                     description={
                       <span className="mt-1 grid gap-3">
-                        <span className="text-sm leading-relaxed text-kumo-subtle">{option.summary}</span>
+                        <span className="text-sm leading-relaxed text-kumo-default">{option.summary}</span>
                         <span className="flex flex-wrap gap-1.5">
                           {option.policies.map((policy) => (
                             <Badge key={policy} variant="neutral">
@@ -239,14 +249,27 @@ export function SetupWizard() {
                 size="lg"
                 icon={ArrowRightIcon}
                 loading={activateMutation.isPending}
-                onClick={() => activateMutation.mutate()}
+                onClick={() => setConfirmOpen(true)}
               >
-                Finish setup
+                Review and finish setup
               </Button>
             </section>
           ) : null}
         </div>
       </Panel>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Apply the ${profiles.find((option) => option.id === profile)?.name ?? profile} profile?`}
+        description={
+          "Finishing setup applies this policy ceiling and resumes Gardener globally. Agents " +
+          "remain disabled until an immutable revision is separately activated and enabled."
+        }
+        confirmLabel="Apply profile and finish setup"
+        loading={activateMutation.isPending}
+        onConfirm={() => activateMutation.mutateAsync()}
+      />
 
       <div className="flex items-start gap-3 px-4 py-3 text-kumo-success">
         <ShieldCheckIcon

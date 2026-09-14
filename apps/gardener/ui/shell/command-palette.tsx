@@ -6,7 +6,7 @@ import { actionGroups, filterActionGroups, type Action, type ActionGroup } from 
 import { useGardener } from "../app-context";
 import { gardenerApi } from "../lib/api";
 import { queryPrefixes } from "../lib/query-keys";
-import { cn, CommandPalette } from "../primitives";
+import { cn, CommandPalette, ConfirmDialog } from "../primitives";
 import { useNotifications } from "../providers/notifications";
 import { useTheme } from "../theme";
 
@@ -27,10 +27,11 @@ export function CommandPaletteTrigger() {
     <button
       type="button"
       onClick={open}
+      aria-label="Open command palette"
       aria-keyshortcuts="Meta+K Control+K"
       className={cn(
         "flex h-8 items-center gap-2 rounded-md border border-kumo-hairline bg-kumo-recessed",
-        "px-2.5 text-xs text-kumo-subtle transition-colors",
+        "px-2.5 text-xs text-kumo-default transition-colors max-[900px]:h-11 max-[900px]:min-w-11",
         "hover:border-kumo-line hover:text-kumo-default",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kumo-focus",
       )}
@@ -59,6 +60,7 @@ export function CommandPaletteTrigger() {
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [pendingAction, setPendingAction] = useState<Action | null>(null);
   const navigate = useNavigate();
   const { state } = useGardener();
   const { resolvedTheme, setPreference, accent, setAccent } = useTheme();
@@ -100,7 +102,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
           setPreference,
           accent,
           setAccent,
-          setPaused: (paused) => pauseMutation.mutate(paused),
+          setPaused: (paused) => pauseMutation.mutateAsync(paused),
         }),
         search,
       ),
@@ -113,8 +115,13 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   };
 
   const select = (action: Action) => {
+    if (action.confirmation) {
+      setPendingAction(action);
+      dismiss();
+      return;
+    }
     if (action.href) navigate(action.href);
-    action.run?.();
+    void action.run?.();
     dismiss();
   };
 
@@ -170,6 +177,22 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
           <CommandPalette.Empty>No matching surface or command</CommandPalette.Empty>
         </CommandPalette.List>
       </CommandPalette.Root>
+      {pendingAction?.confirmation ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setPendingAction(null);
+          }}
+          title={pendingAction.confirmation.title}
+          description={pendingAction.confirmation.description}
+          confirmLabel={pendingAction.confirmation.confirmLabel}
+          loading={pauseMutation.isPending}
+          onConfirm={async () => {
+            await pendingAction.run?.();
+            setPendingAction(null);
+          }}
+        />
+      ) : null}
     </PaletteContext.Provider>
   );
 }

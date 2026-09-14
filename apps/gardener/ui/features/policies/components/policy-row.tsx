@@ -1,5 +1,5 @@
 import type { Policy, PolicyMode } from "../../../lib/types";
-import { Grid, Mono, Radio } from "../../../primitives";
+import { Mono, Radio } from "../../../primitives";
 
 type ModeCopy = Record<PolicyMode, { label: string; description: string }>;
 
@@ -17,10 +17,12 @@ export function PolicyRow({
   onChange: (mode: PolicyMode) => void;
 }) {
   return (
-    <Grid
-      variant="2-1"
-      gap="base"
-      className="items-center border-b border-kumo-hairline px-4 py-4 last:border-b-0 hover:bg-kumo-tint"
+    <div
+      className={
+        "grid grid-cols-[minmax(240px,1fr)_minmax(480px,1.25fr)] items-center gap-4 " +
+        "border-b border-kumo-hairline px-4 py-4 last:border-b-0 hover:bg-kumo-tint " +
+        "max-xl:grid-cols-1"
+      }
     >
       <div className="min-w-0">
         <h3 className="text-sm font-semibold text-kumo-strong">{metadata.name}</h3>
@@ -33,10 +35,11 @@ export function PolicyRow({
         <Radio.Group<PolicyMode>
           appearance="card"
           orientation="horizontal"
+          controlPosition="start"
           name={`policy-${policy.operation_kind}`}
           value={value}
           onValueChange={onChange}
-          className="grid grid-cols-3 gap-1"
+          className="[&>div]:grid-cols-3 [&>div]:gap-2 max-sm:[&>div]:grid-cols-1"
         >
           <Radio.Legend className="sr-only">Policy for {metadata.name}</Radio.Legend>
           {(Object.keys(modeCopy) as PolicyMode[]).map((mode) => (
@@ -52,6 +55,6 @@ export function PolicyRow({
           {modeCopy[value].description}
         </small>
       </div>
-    </Grid>
+    </div>
   );
 }

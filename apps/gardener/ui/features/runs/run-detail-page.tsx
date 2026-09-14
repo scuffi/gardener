@@ -59,8 +59,12 @@ export function RunDetailPage() {
         <div className="mb-4">
           <BackToRuns />
         </div>
-        <ErrorState
+        <PageHeader
           title="Run unavailable"
+          description="Gardener could not load this run's task graph and effect receipts."
+        />
+        <ErrorState
+          title="Unable to load run details"
           message={message}
           onRetry={() => void query.refetch()}
         />

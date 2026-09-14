@@ -41,6 +41,7 @@ export function NeedsAttentionPanel({
             href: "/settings",
             icon: PauseCircleIcon,
             tone: "warning" as const,
+            status: "Paused",
           },
         ]
       : []),
@@ -54,6 +55,7 @@ export function NeedsAttentionPanel({
             href: "/settings",
             icon: DatabaseIcon,
             tone: "danger" as const,
+            status: "Review",
           },
         ]
       : []),
@@ -67,6 +69,7 @@ export function NeedsAttentionPanel({
             href: "/repositories",
             icon: GitBranchIcon,
             tone: "warning" as const,
+            status: "Paused",
           },
         ]
       : []),
@@ -80,6 +83,7 @@ export function NeedsAttentionPanel({
             href: "/policies",
             icon: ShieldSlashIcon,
             tone: "warning" as const,
+            status: "Off",
           },
         ]
       : []),
@@ -93,6 +97,7 @@ export function NeedsAttentionPanel({
             href: "/runs",
             icon: PulseIcon,
             tone: "danger" as const,
+            status: "Review",
           },
         ]
       : []),
@@ -130,7 +135,7 @@ export function NeedsAttentionPanel({
                 <p className="text-sm font-medium text-kumo-strong">{alert.title}</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-kumo-subtle">{alert.description}</p>
               </div>
-              <StatusBadge tone={alert.tone}>{alert.tone === "danger" ? "Review" : "Paused"}</StatusBadge>
+              <StatusBadge tone={alert.tone}>{alert.status}</StatusBadge>
             </Link>
           ))}
         </div>

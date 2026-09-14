@@ -166,7 +166,7 @@ export function RepositoriesPage() {
                       <Table.Cell>
                         <Mono tone="default">{repository.default_branch ?? "—"}</Mono>
                       </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap text-kumo-subtle">
+                      <Table.Cell className="whitespace-nowrap text-kumo-default">
                         {formatRelativeTime(repository.updated_at)}
                       </Table.Cell>
                     </Table.Row>

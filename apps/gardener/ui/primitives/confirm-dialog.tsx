@@ -46,7 +46,11 @@ export function ConfirmDialog({
             variant={confirmTone}
             loading={loading}
             disabled={loading}
-            onClick={() => void onConfirm()}
+            onClick={() => {
+              // Mutations report failures through their own notification callbacks. Catch the
+              // rejected promise here so a handled API failure does not become an unhandled one.
+              void Promise.resolve().then(onConfirm).catch(() => undefined);
+            }}
           >
             {confirmLabel}
           </Button>
