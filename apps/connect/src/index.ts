@@ -4,12 +4,12 @@ import { Hono, type Context, type Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { decodeJwt } from "jose";
 import { z } from "zod";
-import { bearer, constantTimeEqual, decryptAccessCredentials, encryptAccessCredentials, jwks, randomToken, sha256, signToken, verifyToken, verifyWebhookSignature } from "./crypto";
+import { bearer, constantTimeEqual, decryptAccessCredentials, encryptAccessCredentials, jwks, randomToken, sha256, signGitHubAppJwt, signIdentityAssertion, signToken, verifyToken, verifyWebhookSignature } from "./crypto";
 import type { Env, GrantClaims, Variables } from "./env";
 import { ConnectOperationError, discoverRepositories, exchangeOAuthCode, executeGitHubOperation, fetchPullRequestForWebhook, getInstallation } from "./github";
 import { normalizeGitHubWebhook } from "./webhook";
 import { landingPage } from "./landing";
-import { callbackUrlSchema, grantRequestSchema, instanceClaimSchema, operationSchema, type Operation } from "./schema";
+import { callbackUrlSchema, githubLoginSchema, githubNumericIdSchema, githubUsernameResolutionSchema, grantRequestSchema, instanceClaimSchema, installationSetupSchema, instanceInstallationSetupSchema, operationSchema, signedIdentityAssertionSchema, type Operation } from "./schema";
 
 type AppBindings = { Bindings: Env; Variables: Variables };
 type Row = Record<string, unknown>;
@@ -106,7 +106,7 @@ app.post("/v1/bootstrap", async (c) => {
 app.post("/v1/admin/bootstrap", async (c) => {
   const supplied = bearer(c.req.header("authorization"));
   if (!supplied || !constantTimeEqual(supplied, c.env.ADMIN_BOOTSTRAP_SECRET)) return c.json({ error: "Unauthorized" }, 401);
-  const input = z.object({ instanceId: z.string().min(3).max(100).regex(/^[a-zA-Z0-9_-]+$/), callbackUrl: callbackUrlSchema.optional(), ownerGithubUserId: z.string().regex(/^\d+$/).optional() }).strict().parse(await c.req.json());
+  const input = z.object({ instanceId: z.string().min(3).max(100).regex(/^[a-zA-Z0-9_-]+$/), callbackUrl: callbackUrlSchema.optional(), ownerGithubUserId: githubNumericIdSchema }).strict().parse(await c.req.json());
   try {
     return c.json(await createInstance(c.env, input.instanceId, input.callbackUrl, input.ownerGithubUserId), 201, { "cache-control": "no-store" });
   } catch {
@@ -164,12 +164,17 @@ app.get("/v1/auth/github/callback", async (c) => {
   const { code, state } = z.object({ code: z.string().min(1), state: z.string().min(1) }).parse(c.req.query());
   const row = await consumeState(c.env, state, "login"); if (!row) return c.json({ error: "Invalid or expired OAuth state" }, 400);
   const user = await exchangeOAuthCode(c.env, code);
-  const owner = await c.env.DB.prepare("UPDATE instances SET owner_github_user_id = COALESCE(owner_github_user_id, ?) WHERE id = ? AND (owner_github_user_id IS NULL OR owner_github_user_id = ?)")
-    .bind(user.id, row.instance_id, user.id).run();
-  if ((owner.meta.changes ?? 0) !== 1) return c.json({ error: "This Gardener instance belongs to another GitHub user" }, 403);
+  const instance = await c.env.DB.prepare("SELECT owner_github_user_id FROM instances WHERE id = ? AND revoked_at IS NULL")
+    .bind(row.instance_id).first<{ owner_github_user_id: string | null }>();
+  if (!instance) return c.json({ error: "Gardener instance is unavailable" }, 403);
+  if (instance.owner_github_user_id === null) return c.json({ error: "Gardener instance has no configured owner" }, 409);
+  const instanceOwner = instance.owner_github_user_id === user.id;
+  // Stage 2's reviewed seam is this rejection only: owner loading and assertion
+  // construction must remain unchanged when invited non-owner login is enabled.
+  if (!instanceOwner) return c.json({ error: "This Gardener instance belongs to another GitHub user" }, 403);
   await c.env.DB.prepare("INSERT INTO identities (instance_id, github_user_id, github_login) VALUES (?, ?, ?) ON CONFLICT(instance_id, github_user_id) DO UPDATE SET github_login = excluded.github_login, last_login_at = CURRENT_TIMESTAMP")
     .bind(row.instance_id, user.id, user.login).run();
-  const token = await signToken(c.env, { typ: "gardener-identity", sub: user.id, instanceId: row.instance_id, githubLogin: user.login }, row.instance_id, 28_800);
+  const token = await signIdentityAssertion(c.env, { sub: user.id, instanceId: row.instance_id, githubLogin: user.login, instanceOwner });
   const destination = typeof row.redirect_uri === "string" ? row.redirect_uri : await instanceCallback(c.env, row.instance_id);
   if (!destination) return c.json({ token }, 200, { "cache-control": "no-store" });
   const redirect = new URL(destination); redirect.hash = new URLSearchParams({ identity_token: token }).toString();
@@ -194,20 +199,157 @@ async function authenticateIdentity(c: Context<AppBindings>, next: Next): Promis
     const unverified = decodeJwt(token);
     if (typeof unverified.aud !== "string") throw new Error("Missing identity audience");
     const payload = await verifyToken(c.env, token, unverified.aud);
-    if (payload.typ !== "gardener-identity" || typeof payload.aud !== "string" || typeof payload.sub !== "string" || typeof payload.githubLogin !== "string") return c.json({ error: "Invalid identity" }, 401);
-    c.set("identity", { instanceId: payload.aud, githubUserId: payload.sub, githubLogin: payload.githubLogin }); await next();
+    const claims = signedIdentityAssertionSchema.parse(payload);
+    if (payload.aud !== claims.instanceId) throw new Error("Identity instance mismatch");
+    c.set("identity", { instanceId: claims.instanceId, githubUserId: claims.sub, githubLogin: claims.githubLogin }); await next();
   } catch { return c.json({ error: "Invalid or expired identity" }, 401); }
 }
 
+async function ownerMatches(env: Env, instanceId: string, githubUserId: string): Promise<boolean> {
+  const owner = await env.DB.prepare("SELECT owner_github_user_id FROM instances WHERE id = ? AND revoked_at IS NULL")
+    .bind(instanceId).first<{ owner_github_user_id: string | null }>();
+  return owner?.owner_github_user_id === githubUserId;
+}
+
+async function installationSetupResponse(env: Env, instanceId: string, redirectUri?: string): Promise<{ installationUrl: string }> {
+  const state = await createState(env, instanceId, "installation", redirectUri);
+  const url = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`); url.searchParams.set("state", state);
+  return { installationUrl: url.toString() };
+}
+
 app.post("/v1/installations/setup", authenticateIdentity, async (c) => {
-  const input = z.object({ redirectUri: callbackUrlSchema.optional() }).strict().parse(await c.req.json().catch(() => ({})));
+  const input = installationSetupSchema.parse(await c.req.json().catch(() => ({})));
   const identity = c.get("identity");
-  const exists = await c.env.DB.prepare("SELECT 1 FROM identities JOIN instances ON instances.id = identities.instance_id WHERE identities.instance_id = ? AND identities.github_user_id = ? AND instances.revoked_at IS NULL")
-    .bind(identity.instanceId, identity.githubUserId).first();
-  if (!exists) return c.json({ error: "Identity is not registered" }, 403);
-  const state = await createState(c.env, identity.instanceId, "installation", input.redirectUri);
-  const url = new URL(`https://github.com/apps/${c.env.GITHUB_APP_SLUG}/installations/new`); url.searchParams.set("state", state);
-  return c.json({ installationUrl: url.toString() }, 200, { "cache-control": "no-store" });
+  if (!(await ownerMatches(c.env, identity.instanceId, identity.githubUserId))) return c.json({ error: "Only the instance owner can manage the GitHub installation" }, 403);
+  return c.json(await installationSetupResponse(c.env, identity.instanceId, input.redirectUri), 200, { "cache-control": "no-store" });
+});
+
+// Upgraded Gardener contract: POST with
+// { "githubUserId": "<immutable numeric subject>", "redirectUri"?: "..." }.
+// Authentication is the instance token; no GitHub credential crosses this boundary.
+app.post("/v1/instances/installations/setup", async (c) => {
+  const input = instanceInstallationSetupSchema.parse(await c.req.json());
+  const instanceId = c.get("instanceId");
+  if (!(await ownerMatches(c.env, instanceId, input.githubUserId))) return c.json({ error: "Acting GitHub user does not match the instance owner" }, 403);
+  return c.json(await installationSetupResponse(c.env, instanceId, input.redirectUri), 200, { "cache-control": "no-store" });
+});
+
+const USERNAME_LOOKUP_WINDOW_SECONDS = 60 * 60;
+const USERNAME_LOOKUP_LIMIT = 30;
+
+async function consumeUsernameLookupAttempt(env: Env, instanceId: string): Promise<boolean> {
+  const windowStartedAt = Math.floor(Date.now() / 1000 / USERNAME_LOOKUP_WINDOW_SECONDS) * USERNAME_LOOKUP_WINDOW_SECONDS;
+  await env.DB.prepare("DELETE FROM github_username_resolution_limits WHERE window_started_at < ?")
+    .bind(windowStartedAt).run();
+  const result = await env.DB.prepare("INSERT INTO github_username_resolution_limits (instance_id, window_started_at, attempts) VALUES (?, ?, 1) ON CONFLICT(instance_id) DO UPDATE SET window_started_at = excluded.window_started_at, attempts = CASE WHEN github_username_resolution_limits.window_started_at = excluded.window_started_at THEN MIN(github_username_resolution_limits.attempts + 1, 31) ELSE 1 END RETURNING attempts")
+    .bind(instanceId, windowStartedAt).first<{ attempts: number }>();
+  if (!result) throw new Error("Username lookup limiter failed");
+  return result.attempts <= USERNAME_LOOKUP_LIMIT;
+}
+
+type UsernameLookupFailure =
+  | "installation_token_network"
+  | "installation_token_http"
+  | "installation_token_response"
+  | "user_lookup_network"
+  | "user_lookup_http"
+  | "user_lookup_response";
+
+class UsernameLookupError extends Error {
+  constructor(readonly classification: UsernameLookupFailure, readonly upstreamStatus?: number) {
+    super(classification);
+    this.name = "UsernameLookupError";
+  }
+}
+
+async function activeInstallationId(env: Env, instanceId: string): Promise<string | null> {
+  const installation = await env.DB.prepare("SELECT id FROM installations WHERE instance_id = ? AND revoked_at IS NULL AND suspended_at IS NULL ORDER BY updated_at DESC LIMIT 1")
+    .bind(instanceId).first<{ id: string }>();
+  return installation?.id ?? null;
+}
+
+async function installationAccessToken(env: Env, installationId: string): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(`https://api.github.com/app/installations/${encodeURIComponent(installationId)}/access_tokens`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${await signGitHubAppJwt(env)}`,
+        accept: "application/vnd.github+json",
+        "content-type": "application/json",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": "gardener-connect",
+      },
+      body: JSON.stringify({ permissions: { metadata: "read" } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new UsernameLookupError("installation_token_network");
+  }
+  if (!response.ok) {
+    const status = response.status;
+    await response.body?.cancel();
+    throw new UsernameLookupError("installation_token_http", status);
+  }
+  let value: unknown;
+  try { value = await response.json(); }
+  catch { throw new UsernameLookupError("installation_token_response"); }
+  if (!value || typeof value !== "object" || typeof (value as Row).token !== "string" || !(value as Row).token) {
+    throw new UsernameLookupError("installation_token_response");
+  }
+  return (value as Row).token as string;
+}
+
+async function resolveGitHubUsername(env: Env, installationId: string, login: string): Promise<{ githubUserId: string; githubLogin: string } | null> {
+  const token = await installationAccessToken(env, installationId);
+  let response: Response;
+  try {
+    response = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": "gardener-connect",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new UsernameLookupError("user_lookup_network");
+  }
+  if (response.status === 404) { await response.body?.cancel(); return null; }
+  if (!response.ok) {
+    const status = response.status;
+    await response.body?.cancel();
+    throw new UsernameLookupError("user_lookup_http", status);
+  }
+  let value: unknown;
+  try { value = await response.json(); }
+  catch { throw new UsernameLookupError("user_lookup_response"); }
+  if (!value || typeof value !== "object") throw new UsernameLookupError("user_lookup_response");
+  const id = (value as Row).id;
+  const currentLogin = (value as Row).login;
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0 || !githubLoginSchema.safeParse(currentLogin).success) throw new UsernameLookupError("user_lookup_response");
+  return { githubUserId: String(id), githubLogin: currentLogin as string };
+}
+
+// Upgraded Gardener contract: POST { "login": "octocat" } and receive only
+// { "githubUserId": "immutable numeric id", "githubLogin": "current login" }.
+app.post("/v1/instances/github/users/resolve", async (c) => {
+  const input = githubUsernameResolutionSchema.parse(await c.req.json());
+  const instanceId = c.get("instanceId");
+  const installationId = await activeInstallationId(c.env, instanceId);
+  if (!installationId) return c.json({ error: "An active GitHub installation is required for username lookup" }, 409);
+  if (!(await consumeUsernameLookupAttempt(c.env, instanceId))) return c.json({ error: "GitHub username lookup rate limit exceeded" }, 429);
+  let user: { githubUserId: string; githubLogin: string } | null;
+  try { user = await resolveGitHubUsername(c.env, installationId, input.login); }
+  catch (error) {
+    const failure = error instanceof UsernameLookupError ? error : new UsernameLookupError("user_lookup_response");
+    console.warn("github username lookup upstream failure", { classification: failure.classification, ...(failure.upstreamStatus === undefined ? {} : { status: failure.upstreamStatus }) });
+    if (failure.classification.startsWith("installation_token_")) return c.json({ error: "GitHub installation is unavailable" }, 503);
+    return c.json({ error: "GitHub username lookup failed" }, 502);
+  }
+  if (!user) return c.json({ error: "GitHub user not found" }, 404);
+  return c.json(user, 200, { "cache-control": "no-store" });
 });
 
 app.get("/v1/installations/callback", async (c) => {

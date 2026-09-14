@@ -1,5 +1,7 @@
 import { exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT, type JWTPayload } from "jose";
 import type { Env } from "./env";
+import { normalizeGitHubAppPrivateKey } from "./github";
+import { identityAssertionSchema } from "./schema";
 
 const encoder = new TextEncoder();
 const signingKeys = new Map<string, Promise<CryptoKey>>();
@@ -108,6 +110,25 @@ export async function signToken(env: Env, payload: JWTPayload, audience: string,
 export async function verifyToken(env: Env, token: string, audience: string): Promise<JWTPayload> {
   const result = await jwtVerify(token, await publicKey(env), { issuer: env.CONNECT_ISSUER, audience, algorithms: ["RS256"] });
   return result.payload;
+}
+
+export async function signIdentityAssertion(
+  env: Env,
+  payload: { sub: string; instanceId: string; githubLogin: string; instanceOwner: boolean },
+): Promise<string> {
+  const claims = identityAssertionSchema.parse({
+    typ: "gardener-identity",
+    ...payload,
+    jti: randomToken("identity_"),
+  });
+  return signToken(env, claims, claims.instanceId, 28_800);
+}
+
+export async function signGitHubAppJwt(env: Env): Promise<string> {
+  const key = await importPKCS8(normalizeGitHubAppPrivateKey(env.GITHUB_APP_PRIVATE_KEY), "RS256");
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({}).setProtectedHeader({ alg: "RS256", typ: "JWT" }).setIssuer(env.GITHUB_APP_ID)
+    .setIssuedAt(now - 60).setExpirationTime(now + 540).sign(key);
 }
 
 export async function jwks(env: Env): Promise<{ keys: Array<Record<string, unknown>> }> {
