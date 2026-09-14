@@ -1,3 +1,5 @@
+import { canonicalJson } from "@gardener/core";
+import type { PolicyAuditActor } from "../authorization";
 import { agentDto, decodeJson, encodeJson, type AgentDto, type AgentRow } from "./shared";
 
 export interface CreateAgentInput {
@@ -313,6 +315,48 @@ export async function activateAgentRevision(
   const agent = await getAgent(db, input.agentId);
   if (!agent || agent.activeRevisionId !== input.revisionId) throw new Error("Agent revision activation failed");
   return agent;
+}
+
+/** Guard-first optimistic activation sharing the assignment epoch used by overlap confirmation. */
+export async function activateAgentRevisionGuarded(
+  db: D1Database,
+  input: { historyId: string; agentId: string; revisionId: string; expectedRevisionId: string | null; expectedEpoch: number; actorId: string; reason: string | null; actor: PolicyAuditActor; overlapFingerprint?: string },
+): Promise<AgentDto | null> {
+  const pointerGuard = input.expectedRevisionId === null
+    ? "NOT EXISTS(SELECT 1 FROM agent_activations WHERE agent_id=?)"
+    : "EXISTS(SELECT 1 FROM agent_activations WHERE agent_id=? AND revision_id=?)";
+  const pointerBindings = input.expectedRevisionId === null ? [input.agentId] : [input.agentId,input.expectedRevisionId];
+  const guard = db.prepare(`UPDATE settings SET value=CASE WHEN value=? AND ${pointerGuard}
+      AND EXISTS(SELECT 1 FROM agent_revisions WHERE id=? AND agent_id=? AND published_paused=1)
+      AND NOT EXISTS(
+        SELECT 1 FROM agent_repository_assignments ar LEFT JOIN repositories r ON r.id=ar.repository_id
+        WHERE ar.agent_id=? AND ar.enabled=1 AND ar.removed_at IS NULL AND COALESCE(r.active,0)<>1
+      ) THEN value ELSE NULL END WHERE key='assignment_epoch'`)
+    .bind(String(input.expectedEpoch),...pointerBindings,input.revisionId,input.agentId,input.agentId);
+  const activation = input.expectedRevisionId === null
+    ? db.prepare("INSERT INTO agent_activations(agent_id,revision_id,activated_by) SELECT agent_id,id,? FROM agent_revisions WHERE id=? AND agent_id=? AND published_paused=1").bind(input.actorId,input.revisionId,input.agentId)
+    : db.prepare(`UPDATE agent_activations SET revision_id=?,activated_by=?,activated_at=CURRENT_TIMESTAMP
+        WHERE agent_id=? AND revision_id=? AND EXISTS(SELECT 1 FROM agent_revisions WHERE id=? AND agent_id=? AND published_paused=1)`).bind(input.revisionId,input.actorId,input.agentId,input.expectedRevisionId,input.revisionId,input.agentId);
+  const detail=canonicalJson({previousRevisionId:input.expectedRevisionId,revisionId:input.revisionId,...(input.overlapFingerprint?{overlapFingerprint:input.overlapFingerprint}:{})});
+  try {
+    const results=await db.batch([
+      guard,
+      db.prepare("UPDATE settings SET value=CAST(value AS INTEGER)+1,updated_at=CURRENT_TIMESTAMP WHERE key='assignment_epoch'"),
+      activation,
+      db.prepare("UPDATE settings SET value=CASE WHEN changes()=1 THEN value ELSE NULL END WHERE key='assignment_epoch'"),
+      db.prepare(`INSERT INTO agent_activation_history(id,agent_id,previous_revision_id,revision_id,action,actor_id,reason)
+        VALUES(?,?,?,?,'activate',?,?)`).bind(input.historyId,input.agentId,input.expectedRevisionId,input.revisionId,input.actorId,input.reason??(input.overlapFingerprint?`overlap-confirmed:${input.overlapFingerprint}`:null)),
+      db.prepare(`INSERT INTO audit_records(actor,actor_user_id,actor_identity_json,action,resource_type,resource_id,detail_json)
+        VALUES(?,?,?,'agent.revision.activated','agent_revision',?,?)`).bind(input.actor.actor,input.actor.actorUserId,input.actor.actorIdentityJson,input.revisionId,detail),
+    ]);
+    if ((results[0]?.meta.changes??0)!==1||(results[1]?.meta.changes??0)!==1||(results[2]?.meta.changes??0)!==1) throw new Error("activation guard invariant failed");
+  } catch (error) {
+    const [agent,epochRow,inactive,candidate]=await Promise.all([getAgent(db,input.agentId),db.prepare("SELECT value FROM settings WHERE key='assignment_epoch'").first<{value:string}>(),db.prepare(`SELECT 1 present FROM agent_repository_assignments ar LEFT JOIN repositories r ON r.id=ar.repository_id
+      WHERE ar.agent_id=? AND ar.enabled=1 AND ar.removed_at IS NULL AND COALESCE(r.active,0)<>1 LIMIT 1`).bind(input.agentId).first<{present:number}>(),db.prepare("SELECT 1 present FROM agent_revisions WHERE id=? AND agent_id=? AND published_paused=1").bind(input.revisionId,input.agentId).first<{present:number}>()]);
+    if (Number(epochRow?.value)!==input.expectedEpoch||agent?.activeRevisionId!==input.expectedRevisionId||inactive||!candidate) return null;
+    throw error;
+  }
+  const agent=await getAgent(db,input.agentId); return agent?.activeRevisionId===input.revisionId?agent:null;
 }
 
 export async function deactivateAgent(
