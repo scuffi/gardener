@@ -16,7 +16,6 @@ export function diffAgentRevisions(fromInput: CompiledAgentRevisionV1 | null | u
     fromRevisionId: from?.revisionId ?? null,
     toRevisionId: to.revisionId,
     triggers: { added: difference(after.triggers, before?.triggers ?? []), removed: difference(before?.triggers ?? [], after.triggers) },
-    repositories: { added: difference(to.repositories.map((item) => item.id), from?.repositories.map((item) => item.id) ?? []), removed: difference(from?.repositories.map((item) => item.id) ?? [], to.repositories.map((item) => item.id)) },
     capabilities: {
       observationAdded: difference(after.requestedCapabilities.observation, before?.requestedCapabilities.observation ?? []),
       observationRemoved: difference(before?.requestedCapabilities.observation ?? [], after.requestedCapabilities.observation),

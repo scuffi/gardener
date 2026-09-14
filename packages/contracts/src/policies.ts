@@ -9,6 +9,7 @@ export const instancePolicyV1Schema = z.object({
   schemaVersion: z.literal("v1"),
   id: z.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
   version: z.number().int().positive(),
+  policyHash: z.string().regex(/^[a-f0-9]{64}$/),
   operationModes: z.record(operationKindSchema, policyModeSchema),
   allowedObservations: z.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
   workspaceModes: z.partialRecord(workspaceCapabilitySchema, policyModeSchema),

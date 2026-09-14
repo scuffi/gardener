@@ -7,3 +7,4 @@ export * from "./policy";
 export * from "./operation-binding";
 export * from "./budget";
 export * from "./snapshot";
+export * from "./overlap";

@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   agentRunV1Schema,
   agentSourceV1Schema,
+  agentSpecV1Schema,
+  compiledAgentSpecV1Schema,
+  externalIdentityV1Schema,
+  workspaceInvitationV1Schema,
+  workspacePermissionValues,
+  workspaceRoleHasPermission,
+  workspaceRolePermissions,
   capabilityCatalog,
   inboxItemSchema,
   interruptionSchema,
@@ -109,9 +116,56 @@ describe("Agent-native contracts", () => {
     expect(capabilityCatalog.length).toBeGreaterThan(operationKindValues.length);
   });
 
+  it("uses one strict repository-independent Agent V1 shape", () => {
+    const spec = {
+      schemaVersion: "gardener.agent/v1", name: "Issue gardener", description: "Maintains issues", triggers: ["github.issue.opened"],
+      requestedCapabilities: {}, behavior: "Read the event and propose a concise response.",
+    };
+    expect(agentSpecV1Schema.parse(spec).name).toBe("Issue gardener");
+    expect(compiledAgentSpecV1Schema.parse(spec).name).toBe("Issue gardener");
+    expect(() => agentSpecV1Schema.parse({ ...spec, repositories: ["123"] })).toThrow();
+    expect(() => compiledAgentSpecV1Schema.parse({ ...spec, repositories: ["123"] })).toThrow();
+    expect(() => agentSpecV1Schema.parse({ ...spec, repositoryId: "123" })).toThrow();
+    expect(agentSpecV1Schema.parse({ ...spec, name: "Runtime helper", description: "The harness is responsible for isolation.", behavior: "If the runtime is unavailable, stop. Never post a token. Read docs/CONTRIBUTING.md and summarize input/output behavior." }).name).toBe("Runtime helper");
+    for (const behavior of [
+      "acme/widgets",
+      "repository-id: 12345",
+      "repository-path: acme/widgets",
+      "https://github.com/acme/widgets",
+      "github.com/acme/widgets",
+      "sha: abc1234",
+      "deadbee",
+      `commit-sha: ${"a".repeat(40)}`,
+      "token=ghp_actualSecretValue",
+      "runtime-version: node-24",
+    ]) expect(() => agentSpecV1Schema.parse({ ...spec, behavior })).toThrow();
+    expect(() => agentSpecV1Schema.parse({ ...spec, name: "acme/widgets" })).toThrow(/name/i);
+    expect(() => agentSpecV1Schema.parse({ ...spec, description: "repository-name: widgets" })).toThrow(/description/i);
+  });
+
+  it("defines exact propose-and-narrow workspace permissions", () => {
+    expect(workspaceRolePermissions.member).toEqual([
+      "workspace.view", "agent.draft.save", "agent.validate", "agent.simulate", "agent.revision.publish_paused", "inbox.dismiss", "run.cancel",
+      "assignment.pause", "assignment.disable", "assignment.remove", "policy.narrow",
+    ]);
+    expect(new Set(workspaceRolePermissions.owner)).toEqual(new Set(workspacePermissionValues));
+    for (const permission of workspaceRolePermissions.member) expect(workspaceRoleHasPermission("member", permission)).toBe(true);
+    for (const permission of ["agent.revision.activate", "assignment.add", "assignment.expand", "assignment.enable", "run.approve", "assignment.resume", "policy.widen", "member.manage", "repository.sync", "installation.manage"] as const) {
+      expect(workspaceRoleHasPermission("member", permission)).toBe(false);
+      expect(workspaceRoleHasPermission("owner", permission)).toBe(true);
+    }
+  });
+
+  it("keeps provider subjects authoritative and logins display-only", () => {
+    const identity = externalIdentityV1Schema.parse({ schemaVersion: "v1", id: "identity:1", userId: "user:1", provider: "github", providerSubject: "100", login: "changeable", createdAt: now });
+    expect(identity.providerSubject).toBe("100");
+    expect(workspaceInvitationV1Schema.parse({ schemaVersion: "v1", id: "invite:1", provider: "github", providerSubject: "100", login: "invitee", role: "member", invitedByUserId: "user:1", createdAt: now, expiresAt: "2026-09-10T10:00:00.000Z", acceptedAt: null, revokedAt: null }).role).toBe("member");
+  });
+
   it("bounds exact source packages and rejects duplicate paths", () => {
     const source = { schemaVersion: "v1", agentMd: { path: "AGENT.md", mediaType: "text/markdown", bytesBase64: "LS0t" }, files: [] };
     expect(agentSourceV1Schema.parse(source)).toEqual(source);
+    expect(() => agentSourceV1Schema.parse({ ...source, repositories: ["123"] })).toThrow();
     expect(() => agentSourceV1Schema.parse({ ...source, files: [{ path: "AGENT.md", mediaType: "text/plain", bytesBase64: "" }] })).toThrow();
     expect(() => agentSourceV1Schema.parse({ ...source, files: [{ path: "skills//review/SKILL.md", mediaType: "text/markdown", bytesBase64: "" }] })).toThrow();
     expect(() => agentSourceV1Schema.parse({ ...source, agentMd: { ...source.agentMd, bytesBase64: "AB==" } })).toThrow(/canonical base64/i);

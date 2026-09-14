@@ -5,6 +5,8 @@ export * from "./operations";
 export * from "./capabilities";
 export * from "./eligibility";
 export * from "./policies";
+export * from "./workspace";
+export * from "./assignments";
 export * from "./grants";
 export * from "./agent";
 export * from "./runs";

@@ -5,6 +5,7 @@ import {
   repositoryEventV2Schema,
   type CompiledAgentRevisionV1,
   type EventEligibilityDecision,
+  githubNumericIdSchema,
   type RepositoryEventV2,
 } from "@gardener/contracts";
 
@@ -22,13 +23,15 @@ function pullFacts(event: RepositoryEventV2): { base?: string; draft?: boolean }
 export function evaluateEventEligibility(
   revisionInput: CompiledAgentRevisionV1 | unknown,
   eventInput: RepositoryEventV2 | unknown,
+  assignedRepositoryIdInput: string,
 ): EventEligibilityDecision {
   const revision = compiledAgentRevisionV1Schema.parse(revisionInput);
   const event = repositoryEventV2Schema.parse(eventInput);
+  const assignedRepositoryId = githubNumericIdSchema.parse(assignedRepositoryIdInput);
   const reasons: string[] = [];
   const trigger = repositoryEventTrigger(event);
   if (!revision.spec.triggers.includes(trigger)) reasons.push("event trigger is not selected by the agent revision");
-  if (!revision.repositories.some((repository) => repository.id === event.repository.id)) reasons.push("repository is outside the immutable agent revision scope");
+  if (event.repository.id !== assignedRepositoryId) reasons.push("event repository does not exactly match the assignment");
   const rules = revision.spec.eligibility;
   if (rules.actorIds.length) {
     if (event.kind === "gardener.manual" || event.kind === "gardener.scheduled") reasons.push("event actor is not a GitHub identity");

@@ -14,9 +14,6 @@ export const repositoryRefSchema = z.object({
 }).strict();
 export type RepositoryRef = z.infer<typeof repositoryRefSchema>;
 
-export const repositorySelectorSchema = z.union([githubNumericIdSchema, z.literal("this")]);
-export type RepositorySelector = z.infer<typeof repositorySelectorSchema>;
-
 export const issueRefSchema = z.object({ id: githubNumericIdSchema, number: z.number().int().positive() }).strict();
 export const pullRequestRefSchema = z.object({ id: githubNumericIdSchema, number: z.number().int().positive() }).strict();
 export const discussionRefSchema = z.object({ id: githubNumericIdSchema, number: z.number().int().positive() }).strict();

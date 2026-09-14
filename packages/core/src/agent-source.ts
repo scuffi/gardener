@@ -19,7 +19,6 @@ import {
   type AgentSourceV1,
   type AgentSpecV1,
   type CompiledAgentRevisionV1,
-  type RepositoryRef,
 } from "@gardener/contracts";
 import { canonicalSha256, deepFreeze } from "./stable";
 
@@ -28,7 +27,6 @@ const githubIdInputSchema = z.union([
   z.string().regex(/^[1-9][0-9]{0,31}$/),
   z.number().int().positive().max(Number.MAX_SAFE_INTEGER).transform(String),
 ]);
-const repositoryInputSchema = z.union([githubIdInputSchema, z.literal("this")]);
 const frontmatterLimitsSchema = z.object({
   "runtime-seconds": z.number().int().positive().max(86_400).optional(),
   "max-turns": z.number().int().positive().max(128).optional(),
@@ -55,7 +53,6 @@ const agentFrontmatterSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(1_000),
   triggers: z.array(repositoryEventTriggerSchema).min(1).max(100),
-  repositories: z.array(repositoryInputSchema).min(1).max(1_000),
   capabilities: requestedCapabilitySetSchema.optional(),
   "authority-ceiling": policyModeSchema.optional(),
   limits: frontmatterLimitsSchema,
@@ -116,7 +113,6 @@ function semanticSpec(frontmatter: AgentFrontmatter, behavior: string): AgentSpe
     name: frontmatter.name,
     description: frontmatter.description,
     triggers: frontmatter.triggers,
-    repositories: frontmatter.repositories,
     requestedCapabilities: frontmatter.capabilities ?? {},
     behavior,
     authorityCeiling: frontmatter["authority-ceiling"] ?? "approval",
@@ -161,8 +157,8 @@ export function validateAgentSource(sourceInput: unknown): AgentSourceValidation
 }
 
 export interface CompileAgentRevisionOptions {
-  agentId: string; revision: number; revisionId: string; provenance: AgentProvenanceV1; repositories: readonly RepositoryRef[];
-  thisRepositoryId?: string; compilerVersion: string; capabilityCatalogVersion: string; runtimeVersion: string; now?: () => Date;
+  agentId: string; revision: number; revisionId: string; provenance: AgentProvenanceV1;
+  compilerVersion: string; capabilityCatalogVersion: string; runtimeVersion: string; now?: () => Date;
 }
 export interface CompiledAgentRevisionResult { revision: Readonly<AgentRevisionV1>; compiled: Readonly<CompiledAgentRevisionV1> }
 
@@ -177,26 +173,16 @@ export async function compileAgentRevision(sourceInput: AgentSourceV1 | unknown,
     ...spec.evals.map(async (path) => ({ path, hash: await canonicalSha256(fileByPath.get(path)!.bytesBase64), kind: "eval" as const })),
   ]);
   referencedFiles.sort((left, right) => left.path.localeCompare(right.path));
-  const available = new Map(options.repositories.map((repository) => [repository.id, repository]));
-  const resolvedIds = spec.repositories.map((selector) => selector === "this" ? options.thisRepositoryId : selector);
-  if (resolvedIds.some((value) => value === undefined)) throw new Error("Repository shorthand 'this' requires compile-time immutable resolution");
-  if (new Set(resolvedIds).size !== resolvedIds.length) throw new Error("repository selectors must resolve to unique immutable IDs");
-  const repositories = (resolvedIds as string[]).map((repositoryId) => {
-    const repository = available.get(repositoryId);
-    if (!repository) throw new Error(`Repository is not installed or available: ${repositoryId}`);
-    return repository;
-  });
-  const immutableRepositoryIds = repositories.map((repository) => repository.id).sort();
-  const compiledSpec = { ...spec, repositories: immutableRepositoryIds };
+  const compiledSpec = spec;
   const semanticHash = await canonicalSha256({ spec: compiledSpec, referencedFiles });
   const now = (options.now?.() ?? new Date()).toISOString();
   const provenance = agentProvenanceV1Schema.parse(options.provenance);
   const revision = agentRevisionV1Schema.parse({ schemaVersion: "v1", agentId: options.agentId, revision: options.revision, revisionId: options.revisionId, source, spec, sourceHash, semanticHash, provenance, createdAt: now });
-  const compiledIdentity = { agentId: options.agentId, revision: options.revision, revisionId: options.revisionId, sourceHash, semanticHash, repositoryIds: repositories.map((repository) => repository.id), compilerVersion: options.compilerVersion, capabilityCatalogVersion: options.capabilityCatalogVersion, runtimeVersion: options.runtimeVersion };
+  const compiledIdentity = { agentId: options.agentId, revision: options.revision, revisionId: options.revisionId, sourceHash, semanticHash, compilerVersion: options.compilerVersion, capabilityCatalogVersion: options.capabilityCatalogVersion, runtimeVersion: options.runtimeVersion };
   const compiledRevisionId = `agent_${await canonicalSha256(compiledIdentity)}`;
   const compiled = compiledAgentRevisionV1Schema.parse({
     schemaVersion: "v1", compiledRevisionId, agentId: options.agentId, revision: options.revision, revisionId: options.revisionId,
-    sourceHash, semanticHash, spec: compiledSpec, repositories, referencedFiles, compiler: { id: "gardener-agent-compiler", version: options.compilerVersion },
+    sourceHash, semanticHash, spec: compiledSpec, referencedFiles, compiler: { id: "gardener-agent-compiler", version: options.compilerVersion },
     capabilityCatalogVersion: options.capabilityCatalogVersion, runtimeVersion: options.runtimeVersion, compiledAt: now,
   });
   return { revision: deepFreeze(revision), compiled: deepFreeze(compiled) };

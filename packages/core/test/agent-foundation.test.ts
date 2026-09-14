@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { operationKindValues, type AgentProvenanceV1, type EffectiveCapabilitySet, type InstancePolicyV1, type OperationKind, type RepositoryEventV2, type RepositoryRef } from "@gardener/contracts";
+import { agentRunSnapshotV1Schema, operationKindValues, type AgentProvenanceV1, type AgentRepositoryAssignmentV1, type EffectiveCapabilitySet, type InstancePolicyV1, type OperationKind, type RepositoryEventV2, type RepositoryPolicyV1 } from "@gardener/contracts";
 import {
+  analyzeAssignmentOverlap,
+  calculateAssignmentConfigHash,
+  calculateRepositoryPolicyHash,
+  calculateWorkspacePolicyHash,
   canonicalOperationHash,
   classifyRuntimeCapabilityRequest,
   compileAgentRevision,
@@ -17,6 +21,7 @@ import {
   releaseParallelTasks,
   reserveParallelTasks,
   resolveEffectiveCapabilities,
+  resolveEffectiveMode,
   validateAgentSource,
   validateEffectProposalBinding,
   validateOperationGrantBinding,
@@ -34,15 +39,13 @@ const provenance: AgentProvenanceV1 = {
   publishedAt: now,
 };
 
-function markdown(overrides: { repositories?: string; capabilities?: string; authority?: string; eligibility?: string; behavior?: string; name?: string } = {}): string {
+function markdown(overrides: { capabilities?: string; authority?: string; eligibility?: string; behavior?: string; name?: string } = {}): string {
   return `---
 schema: gardener.agent/v1
 name: ${overrides.name ?? "Issue gardener"}
 description: Maintains incoming issues
 triggers:
   - github.issue.opened
-repositories:
-  - ${overrides.repositories ?? "this"}
 ${overrides.capabilities ?? "capabilities:\n  observation:\n    - github.issue.read\n  workspace: []\n  effects:\n    - issue.comment.create"}
 authority-ceiling: ${overrides.authority ?? "approval"}
 limits:
@@ -56,7 +59,7 @@ ${overrides.behavior ?? "Read the issue carefully and propose a concise response
 
 function policy(mode: "disabled" | "approval" | "automatic" = "automatic"): InstancePolicyV1 {
   return {
-    schemaVersion: "v1", id: "policy:1", version: 1,
+    schemaVersion: "v1", id: "policy:1", version: 1, policyHash: "e".repeat(64),
     operationModes: Object.fromEntries(operationKindValues.map((kind) => [kind, mode])) as Record<OperationKind, typeof mode>,
     allowedObservations: ["github.issue.read"],
     workspaceModes: { "workspace.fs.read": "automatic", "workspace.exec.container": "approval", "workspace.network.connect": "approval" },
@@ -65,14 +68,27 @@ function policy(mode: "disabled" | "approval" | "automatic" = "automatic"): Inst
   };
 }
 
-function compileSource(source: ReturnType<typeof createAgentSource>, revision = 1, selectedRepository: RepositoryRef = repository) {
+function repositoryPolicy(overrides: Partial<RepositoryPolicyV1> = {}): RepositoryPolicyV1 {
+  return {
+    schemaVersion: "v1", repositoryId: repository.id, version: 3, policyHash: "c".repeat(64),
+    operationModes: Object.fromEntries(operationKindValues.map((kind) => [kind, "automatic"])) as Record<OperationKind, "automatic">,
+    allowedObservations: ["github.issue.read"], workspaceModes: { "workspace.fs.read": "automatic" }, ...overrides,
+  };
+}
+function assignment(overrides: Partial<AgentRepositoryAssignmentV1> = {}): AgentRepositoryAssignmentV1 {
+  return {
+    schemaVersion: "v1", id: "assignment:1", version: 2, configHash: "d".repeat(64), agentId: "agent-1", repositoryId: repository.id,
+    enabled: true, authorityCeiling: "automatic", createdAt: now, updatedAt: now, removedAt: null, ...overrides,
+  };
+}
+function compileSource(source: ReturnType<typeof createAgentSource>, revision = 1) {
   return compileAgentRevision(source, {
-    agentId: "agent-1", revision, revisionId: `agent-1-r${revision}`, provenance, repositories: [selectedRepository], thisRepositoryId: selectedRepository.id,
+    agentId: "agent-1", revision, revisionId: `agent-1-r${revision}`, provenance,
     compilerVersion: "1.0.0", capabilityCatalogVersion: "2026-09-09.1", runtimeVersion: "1.0.0", now: () => new Date(now),
   });
 }
-async function compile(sourceText = markdown(), revision = 1, selectedRepository: RepositoryRef = repository) {
-  return compileSource(createAgentSource(sourceText), revision, selectedRepository);
+async function compile(sourceText = markdown(), revision = 1) {
+  return compileSource(createAgentSource(sourceText), revision);
 }
 function packageFile(path: string, text: string, mediaType = "text/markdown") {
   return { path, mediaType, bytesBase64: createAgentSource(text).agentMd.bytesBase64 };
@@ -96,7 +112,7 @@ describe("AGENT.md parser and compiler", () => {
     const source = createAgentSource(text);
     expect(parseAgentSource(source).name).toBe("Issue gardener");
     expect(source.agentMd.bytesBase64).toBe(createAgentSource(new TextEncoder().encode(text)).agentMd.bytesBase64);
-    const result = await compileAgentRevision(source, { agentId: "agent-1", revision: 1, revisionId: "agent-1-r1", provenance, repositories: [repository], thisRepositoryId: repository.id, compilerVersion: "1.0.0", capabilityCatalogVersion: "2026-09-09.1", runtimeVersion: "1.0.0", now: () => new Date(now) });
+    const result = await compileAgentRevision(source, { agentId: "agent-1", revision: 1, revisionId: "agent-1-r1", provenance, compilerVersion: "1.0.0", capabilityCatalogVersion: "2026-09-09.1", runtimeVersion: "1.0.0", now: () => new Date(now) });
     expect(result.revision.source.agentMd.bytesBase64).toBe(source.agentMd.bytesBase64);
     expect(Object.isFrozen(result.compiled)).toBe(true);
   });
@@ -108,13 +124,11 @@ describe("AGENT.md parser and compiler", () => {
     expect(validateAgentSource(createAgentSource(markdown({ capabilities: "capabilities:\n  observation: [github.unknown]\n  workspace: []\n  effects: []" }))).valid).toBe(false);
   });
 
-  it("resolves this only at compilation and requires immutable installed repository IDs", async () => {
-    await expect(compileAgentRevision(createAgentSource(markdown()), { agentId: "agent-1", revision: 1, revisionId: "agent-1-r1", provenance, repositories: [repository], compilerVersion: "1", capabilityCatalogVersion: "1", runtimeVersion: "1" })).rejects.toThrow(/requires compile-time/);
-    await expect(compileAgentRevision(createAgentSource(markdown({ repositories: "999" })), { agentId: "agent-1", revision: 1, revisionId: "agent-1-r1", provenance, repositories: [repository], compilerVersion: "1", capabilityCatalogVersion: "1", runtimeVersion: "1" })).rejects.toThrow(/not installed/);
-    const resolved = await compile();
-    expect(resolved.revision.spec.repositories).toEqual(["this"]);
-    expect(resolved.compiled.spec.repositories).toEqual([repository.id]);
-    expect(resolved.compiled.repositories[0]?.id).toBe(repository.id);
+  it("rejects repository frontmatter and compiles without repository context", async () => {
+    expect(validateAgentSource(createAgentSource(markdown().replace("capabilities:", "repositories: [this]\ncapabilities:"))).valid).toBe(false);
+    const portable = await compile();
+    expect("repositories" in portable.revision.spec).toBe(false);
+    expect("repositories" in portable.compiled).toBe(false);
   });
 
   it("keeps source hashes byte-sensitive and semantic hashes formatting-stable", async () => {
@@ -123,9 +137,6 @@ describe("AGENT.md parser and compiler", () => {
     const second = await compile(reformatted);
     expect(first.revision.sourceHash).not.toBe(second.revision.sourceHash);
     expect(first.revision.semanticHash).toBe(second.revision.semanticHash);
-    const otherRepository = { ...repository, id: "1318443352", name: "other" } as const;
-    const other = await compile(markdown(), 1, otherRepository);
-    expect(first.revision.semanticHash).not.toBe(other.revision.semanticHash);
     const fileA = packageFile("notes/a.md", "a");
     const fileB = packageFile("notes/b.md", "b");
     const ordered = await compileSource(createAgentSource(markdown(), [fileA, fileB]));
@@ -138,14 +149,14 @@ describe("AGENT.md parser and compiler", () => {
     const parsed = parseAgentSource(createAgentSource(noCapabilities));
     expect(parsed.requestedCapabilities).toEqual({ observation: [], workspace: [], effects: [] });
     const compiled = await compile(noCapabilities);
-    expect(resolveEffectiveCapabilities(compiled.compiled, policy())).toEqual({ observation: [], workspace: [], effects: [] });
+    expect(resolveEffectiveCapabilities(compiled.compiled, policy(), repositoryPolicy(), assignment())).toEqual({ observation: [], workspace: [], effects: [] });
   });
 });
 
 describe("capability, eligibility, diff, snapshot, and budget semantics", () => {
   it("narrows Automatic instance policy to the Agent Approval ceiling", async () => {
     const result = await compile();
-    const effective = resolveEffectiveCapabilities(result.compiled, policy("automatic"));
+    const effective = resolveEffectiveCapabilities(result.compiled, policy("automatic"), repositoryPolicy(), assignment());
     expect(effective.observation).toEqual(["github.issue.read"]);
     expect(effective.effects).toEqual([{ capability: "issue.comment.create", mode: "approval" }]);
   });
@@ -157,7 +168,6 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
     expect(() => classifyRuntimeCapabilityRequest(request("network", { capability: "workspace.network.connect", hosts: ["169.254.169.254"] }))).toThrow();
     expect(networkResolutionIsPublic(["104.16.1.1"])).toBe(true);
     expect(networkResolutionIsPublic(["127.0.0.1"])).toBe(false);
-    expect(classifyRuntimeCapabilityRequest(request("repository_expansion", { repositoryIds: ["999"] }))).toBe("revision_required");
     expect(classifyRuntimeCapabilityRequest(request("persistent_effect", { capabilities: ["release.publish"] }))).toBe("revision_required");
     expect(classifyRuntimeCapabilityRequest(request("actor_broadening", { actorIds: ["999"] }))).toBe("revision_required");
     expect(classifyRuntimeCapabilityRequest(request("authority_increase", { requestedMode: "automatic" }))).toBe("revision_required");
@@ -168,13 +178,14 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
   it("evaluates event actor and resource author independently", async () => {
     const source = markdown({ eligibility: "eligibility:\n  actor-ids: [\"100\"]\n  resource-author-ids: [\"200\"]\n" });
     const result = await compile(source);
-    expect(evaluateEventEligibility(result.compiled, issueEvent).eligible).toBe(true);
-    expect(evaluateEventEligibility(result.compiled, { ...issueEvent, actor: issueEvent.resourceAuthor!, resourceAuthor: issueEvent.actor }).eligible).toBe(false);
+    expect(evaluateEventEligibility(result.compiled, issueEvent, repository.id).eligible).toBe(true);
+    expect(evaluateEventEligibility(result.compiled, { ...issueEvent, actor: issueEvent.resourceAuthor!, resourceAuthor: issueEvent.actor }, repository.id).eligible).toBe(false);
+    expect(evaluateEventEligibility(result.compiled, issueEvent, "999").eligible).toBe(false);
   });
 
   it("produces semantic source, scope, capability, authority, and behavior diffs", async () => {
     const before = await compile();
-    const after = await compile(markdown({ repositories: repository.id, capabilities: "capabilities:\n  observation: [github.issue.read]\n  workspace: [workspace.fs.read]\n  effects: [issue.comment.create, issue.close]", authority: "automatic", behavior: "Act carefully, then explain the result." }), 2);
+    const after = await compile(markdown({ capabilities: "capabilities:\n  observation: [github.issue.read]\n  workspace: [workspace.fs.read]\n  effects: [issue.comment.create, issue.close]", authority: "automatic", behavior: "Act carefully, then explain the result." }), 2);
     const diff = diffAgentRevisions(before.compiled, after.compiled);
     expect(diff.capabilities.workspaceAdded).toEqual(["workspace.fs.read"]);
     expect(diff.capabilities.effectsAdded).toEqual(["issue.close"]);
@@ -188,13 +199,61 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
     expect(diffAgentRevisions(skillBefore.compiled, skillAfter.compiled).skillsChanged).toBe(true);
   });
 
-  it("pins revision, policy, capabilities, harness, and versions into a hash", async () => {
+  it("pins revision, canonical layer hashes, constraints, capabilities, harness, and versions into a hash", async () => {
     const result = await compile();
-    const snapshot = await createAgentRunSnapshot(result.compiled, policy(), { runId: "run-1", harness: { id: "historical-harness", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date(now) });
+    const workspace = policy(); workspace.policyHash = await calculateWorkspacePolicyHash(workspace);
+    const repoPolicy = repositoryPolicy(); repoPolicy.policyHash = await calculateRepositoryPolicyHash(repoPolicy);
+    const assigned = assignment(); assigned.configHash = await calculateAssignmentConfigHash(assigned);
+    const snapshot = await createAgentRunSnapshot(result.compiled, workspace, repoPolicy, assigned, { runId: "run-1", harness: { id: "historical-harness", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date(now) });
     expect(snapshot.revision.revisionId).toBe("agent-1-r1");
-    expect(snapshot.instancePolicy.id).toBe("policy:1");
+    expect(snapshot.assignment).toMatchObject({ id: "assignment:1", version: 2 });
+    expect(snapshot.repository).toMatchObject({ id: repository.id, policyVersion: 3 });
+    expect(snapshot.workspace).toMatchObject({ policyHash: workspace.policyHash, policyVersion: 1 });
+    expect(snapshot.effectiveConstraints).toMatchObject({ maxCommentLength: 10_000, maxChangedFiles: 20, deniedPathPrefixes: [".env", ".github/workflows/"] });
     expect(snapshot.snapshotHash).toMatch(/^[a-f0-9]{64}$/);
     expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(() => agentRunSnapshotV1Schema.parse({ ...snapshot, instancePolicy: policy() })).toThrow();
+    const same = await createAgentRunSnapshot(result.compiled, workspace, repoPolicy, assigned, { runId: "run-1", harness: { id: "historical-harness", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date("2026-09-10T10:00:00.000Z") });
+    expect(same.snapshotHash).toBe(snapshot.snapshotHash);
+    const changedAssignment = { ...assigned, version: 3 };
+    const changed = await createAgentRunSnapshot(result.compiled, workspace, repoPolicy, changedAssignment, { runId: "run-1", harness: { id: "historical-harness", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date(now) });
+    expect(changed.snapshotHash).not.toBe(snapshot.snapshotHash);
+    expect(await calculateWorkspacePolicyHash({ ...workspace, maxCommentLength: 9_999 })).not.toBe(workspace.policyHash);
+    expect(await calculateRepositoryPolicyHash({ ...repoPolicy, operationModes: {} })).not.toBe(repoPolicy.policyHash);
+    expect(await calculateAssignmentConfigHash({ ...assigned, authorityCeiling: "disabled" })).not.toBe(assigned.configHash);
+    await expect(createAgentRunSnapshot(result.compiled, { ...workspace, maxCommentLength: 9_999 }, repoPolicy, assigned, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/workspace policy hash/i);
+    await expect(createAgentRunSnapshot(result.compiled, workspace, { ...repoPolicy, operationModes: {} }, assigned, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/repository policy hash/i);
+    await expect(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, authorityCeiling: "disabled" }, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/assignment config hash/i);
+    await expect(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, enabled: false, configHash: await calculateAssignmentConfigHash({ ...assigned, enabled: false }) }, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/enabled/i);
+    await expect(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, removedAt: now, configHash: await calculateAssignmentConfigHash({ ...assigned, removedAt: now }) }, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/non-removed/i);
+  });
+
+  it("resolves all authority layers most-restrictively and fails closed on missing repository modes", async () => {
+    expect(resolveEffectiveMode("automatic", "approval", "automatic", "automatic")).toBe("approval");
+    expect(resolveEffectiveMode("automatic", undefined, "automatic", "automatic")).toBe("disabled");
+    expect(resolveEffectiveMode("automatic", "automatic", "approval", "automatic")).toBe("approval");
+    expect(resolveEffectiveMode("automatic", "automatic", "automatic", "disabled")).toBe("disabled");
+    const result = await compile();
+    expect(resolveEffectiveCapabilities(result.compiled, policy(), repositoryPolicy({ operationModes: {} }), assignment()).effects).toEqual([]);
+    const workspaceAgent = await compile(markdown({ capabilities: "capabilities:\n  observation: []\n  workspace: [workspace.fs.read]\n  effects: []", authority: "disabled" }));
+    expect(resolveEffectiveCapabilities(workspaceAgent.compiled, policy(), repositoryPolicy(), assignment({ authorityCeiling: "disabled" })).workspace).toEqual([{ capability: "workspace.fs.read", mode: "automatic" }]);
+  });
+
+  it("detects advisory overlap deterministically using only shared triggers and persistent effects", async () => {
+    const candidate = { assignmentId: "assignment:new", assignmentVersion: 1, agentId: "agent-new", revisionId: "revision:new", revisionCompiledHash: "1".repeat(64), triggers: ["github.issue.opened", "github.issue.closed"] as const, effects: ["issue.close", "issue.comment.create"] as const };
+    const conflict = { repositoryId: repository.id, assignmentId: "assignment:old", assignmentVersion: 4, agentId: "agent-old", revisionId: "revision:old", revisionCompiledHash: "2".repeat(64), enabled: true, triggers: ["github.issue.closed", "github.issue.opened"] as const, effects: ["issue.comment.create", "issue.close"] as const };
+    const first = await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate, existing: [conflict] });
+    const sorted = await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate: { ...candidate, triggers: [...candidate.triggers].reverse(), effects: [...candidate.effects].reverse() }, existing: [conflict] });
+    expect(first?.fingerprint).toBe(sorted?.fingerprint);
+    expect(first?.conflicts[0]).toMatchObject({ assignmentId: "assignment:old", assignmentVersion: 4, activeRevisionCompiledHash: "2".repeat(64) });
+    expect(await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate, existing: [{ ...conflict, triggers: ["github.pull_request.opened"] }] })).toBeNull();
+    expect(await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate, existing: [{ ...conflict, effects: ["release.publish"] }] })).toBeNull();
+    expect(await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate, existing: [{ ...conflict, repositoryId: "999" }] })).toBeNull();
+    await expect(analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate: { ...candidate, revisionCompiledHash: `agent_${"4".repeat(64)}` }, existing: [conflict] })).rejects.toThrow();
+    const changedEpoch = await analyzeAssignmentOverlap({ assignmentEpoch: 8, repositoryId: repository.id, candidate, existing: [conflict] });
+    const changedVersion = await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate: { ...candidate, assignmentVersion: 2 }, existing: [conflict] });
+    const changedHash = await analyzeAssignmentOverlap({ assignmentEpoch: 7, repositoryId: repository.id, candidate, existing: [{ ...conflict, revisionCompiledHash: "3".repeat(64) }] });
+    expect(new Set([first?.fingerprint, changedEpoch?.fingerprint, changedVersion?.fingerprint, changedHash?.fingerprint]).size).toBe(4);
   });
 
   it("updates budgets deterministically and rejects exhausted dimensions", async () => {
@@ -212,7 +271,7 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
 describe("operation policy", () => {
   it("requires approval after capability narrowing and ignores prompt injection", async () => {
     const result = await compile();
-    const effective = resolveEffectiveCapabilities(result.compiled, policy());
+    const effective = resolveEffectiveCapabilities(result.compiled, policy(), repositoryPolicy(), assignment());
     const operation = { schemaVersion: "v2", id: "op:1", kind: "issue.comment.create", repository, issueNumber: 2, expectedIssueState: "open", expectedIssueUpdatedAt: now, body: issueEvent.issue.body! } as const;
     expect(evaluateOperationPolicy(operation, policy(), { effectiveCapabilities: effective, current: { repositoryId: repository.id, issueState: "open", issueUpdatedAt: now } }).outcome).toBe("approval_required");
   });

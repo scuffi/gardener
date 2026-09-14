@@ -117,7 +117,6 @@ export const runtimeCapabilityRequestSchema = z.discriminatedUnion("kind", [
   }).strict().superRefine((request, context) => {
     if (new Set(request.hosts).size !== request.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
   }),
-  capabilityRequestBaseSchema.extend({ kind: z.literal("repository_expansion"), repositoryIds: z.array(githubNumericIdSchema).min(1).max(100) }).strict(),
   capabilityRequestBaseSchema.extend({ kind: z.literal("persistent_effect"), capabilities: z.array(effectCapabilitySchema).min(1).max(operationKindSchema.options.length) }).strict(),
   capabilityRequestBaseSchema.extend({ kind: z.literal("actor_broadening"), actorIds: z.array(githubNumericIdSchema).min(1).max(100) }).strict(),
   capabilityRequestBaseSchema.extend({ kind: z.literal("authority_increase"), requestedMode: z.enum(["approval", "automatic"]) }).strict(),

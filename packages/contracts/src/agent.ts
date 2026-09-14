@@ -3,11 +3,12 @@ import { effectCapabilitySchema, observationCapabilitySchema, requestedCapabilit
 import { agentEligibilitySchema } from "./eligibility";
 import { repositoryEventTriggerSchema } from "./events";
 import { authoringPrincipalSchema, githubNumericIdSchema } from "./identity";
-import { policyModeSchema, instancePolicyV1Schema } from "./policies";
-import { repositoryRefSchema, repositorySelectorSchema } from "./repository";
+import { policyModeSchema } from "./policies";
+import { effectiveEffectAuthorityV1Schema } from "./assignments";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const identifier = z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
+const entityId = z.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
 const relativePath = z.string().min(1).max(1_024).refine((path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "package paths must be normalized POSIX-relative paths");
 // Padding alone is not enough for canonical base64: unused low bits in the
 // final quantum must also be zero, otherwise multiple strings encode the same bytes.
@@ -53,13 +54,11 @@ export const agentLimitsV1Schema = z.object({
 }).strict();
 export type AgentLimitsV1 = z.infer<typeof agentLimitsV1Schema>;
 
-/** Strict semantic representation produced from YAML frontmatter plus the Markdown body. */
-export const agentSpecV1Schema = z.object({
+const agentSpecShape = {
   schemaVersion: z.literal("gardener.agent/v1"),
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(1_000),
   triggers: z.array(repositoryEventTriggerSchema).min(1).max(100),
-  repositories: z.array(repositorySelectorSchema).min(1).max(1_000),
   requestedCapabilities: requestedCapabilitySetSchema.default({ observation: [], workspace: [], effects: [] }),
   behavior: z.string().trim().min(1).max(100_000),
   authorityCeiling: policyModeSchema.default("approval"),
@@ -67,17 +66,39 @@ export const agentSpecV1Schema = z.object({
   skills: z.array(relativePath).max(50).default([]),
   evals: z.array(relativePath).max(100).default([]),
   eligibility: agentEligibilitySchema.default({ actorIds: [], resourceAuthorIds: [], labelsAny: [], labelsAll: [], baseBranches: [], includeDraftPullRequests: true }),
-}).strict().superRefine((spec, context) => {
-  for (const key of ["triggers", "repositories", "skills", "evals"] as const) {
+};
+type AgentSpecShape = z.infer<z.ZodObject<typeof agentSpecShape>>;
+
+function validatePortableAgentProse(value: string): string | undefined {
+  const lines = value.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trim());
+  if (/\b(?:(?:https?:\/\/)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\b/i.test(value)) return "must not bind a GitHub repository URL";
+  if (lines.some((line) => {
+    const match = /^(?:[-*]\s*)?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(line);
+    return match !== null && !/\.[A-Za-z0-9]{1,10}$/.test(match[2]!);
+  })) return "must not contain a bare owner/repository binding";
+  if (/\b(?:repository|repo)[-_ ]?(?:id|name|path)?\s*[:=]\s*\S+/i.test(value)) return "must not contain a labelled repository binding";
+  if (lines.some((line) => /^(?:[-*]\s*)?(?:(?:commit[-_ ]?)?sha\s*[:=]\s*)?[0-9a-f]{7,40}$/i.test(line))) return "must not bind a commit SHA";
+  if (/\b(?:token|password|secret|credential)\s*[:=]\s*\S+/i.test(value)) return "must not contain a credential assignment";
+  if (/\b(?:runtime|compiler|harness)[-_ ]version\s*[:=]\s*\S+/i.test(value)) return "must not contain a runtime-version binding";
+  return undefined;
+}
+
+function refineAgentSpec(spec: AgentSpecShape, context: z.RefinementCtx): void {
+  for (const key of ["triggers", "skills", "evals"] as const) {
     if (new Set(spec[key]).size !== spec[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
   }
-});
+  for (const key of ["name", "description", "behavior"] as const) {
+    const message = validatePortableAgentProse(spec[key]);
+    if (message) context.addIssue({ code: "custom", path: [key], message: `Agent ${key} ${message}` });
+  }
+}
+
+/** Strict semantic representation produced from YAML frontmatter plus the Markdown body. */
+export const agentSpecV1Schema = z.object(agentSpecShape).strict().superRefine(refineAgentSpec);
 export type AgentSpecV1 = z.infer<typeof agentSpecV1Schema>;
 
-/** Executable semantics: authored repository shorthand has been replaced by immutable IDs. */
-export const compiledAgentSpecV1Schema = agentSpecV1Schema.safeExtend({
-  repositories: z.array(githubNumericIdSchema).min(1).max(1_000),
-});
+/** Independently strict repository-independent executable Agent semantics. */
+export const compiledAgentSpecV1Schema = z.object(agentSpecShape).strict().superRefine(refineAgentSpec);
 export type CompiledAgentSpecV1 = z.infer<typeof compiledAgentSpecV1Schema>;
 
 export const agentProvenanceV1Schema = z.object({
@@ -86,8 +107,7 @@ export const agentProvenanceV1Schema = z.object({
   publishedBy: authoringPrincipalSchema,
   authoredAt: z.iso.datetime(),
   publishedAt: z.iso.datetime(),
-  repositoryContext: z.object({ repositoryId: githubNumericIdSchema }).strict().optional(),
-  git: z.object({ repositoryId: z.string().regex(/^[1-9][0-9]{0,31}$/), commitSha: z.string().regex(/^[a-fA-F0-9]{40}$/), path: relativePath }).strict().optional(),
+  git: z.object({ repositoryId: githubNumericIdSchema, commitSha: z.string().regex(/^[a-fA-F0-9]{40}$/), path: relativePath }).strict().optional(),
 }).strict().superRefine((provenance, context) => {
   if (Date.parse(provenance.publishedAt) < Date.parse(provenance.authoredAt)) context.addIssue({ code: "custom", path: ["publishedAt"], message: "publication cannot precede authorship" });
   if (provenance.source === "git" && !provenance.git) context.addIssue({ code: "custom", path: ["git"], message: "Git provenance requires a commit binding" });
@@ -112,20 +132,28 @@ export type AgentRevisionV1 = z.infer<typeof agentRevisionV1Schema>;
 export const compiledAgentRevisionV1Schema = z.object({
   schemaVersion: z.literal("v1"), compiledRevisionId: z.string().regex(/^agent_[a-f0-9]{64}$/),
   agentId: identifier, revision: z.number().int().positive(), revisionId: identifier, sourceHash: hash, semanticHash: hash,
-  spec: compiledAgentSpecV1Schema, repositories: z.array(repositoryRefSchema).min(1).max(1_000),
+  spec: compiledAgentSpecV1Schema,
   referencedFiles: z.array(z.object({ path: relativePath, hash, kind: z.enum(["skill", "eval"]) }).strict()).max(150),
   compiler: z.object({ id: z.literal("gardener-agent-compiler"), version: z.string().min(1).max(100) }).strict(),
   capabilityCatalogVersion: z.string().min(1).max(100), runtimeVersion: z.string().min(1).max(100), compiledAt: z.iso.datetime(),
-}).strict().superRefine((revision, context) => {
-  const semanticIds = [...revision.spec.repositories].sort();
-  const resolvedIds = [...revision.repositories.map((repository) => repository.id)].sort();
-  if (semanticIds.length !== resolvedIds.length || semanticIds.some((id, index) => id !== resolvedIds[index])) context.addIssue({ code: "custom", path: ["repositories"], message: "compiled repository references must match immutable semantic repository IDs" });
-});
+}).strict();
 export type CompiledAgentRevisionV1 = z.infer<typeof compiledAgentRevisionV1Schema>;
 
 export const agentRunSnapshotV1Schema = z.object({
   schemaVersion: z.literal("v1"), runId: identifier, createdAt: z.iso.datetime(),
-  revision: compiledAgentRevisionV1Schema, instancePolicy: instancePolicyV1Schema, effectiveCapabilities: effectiveCapabilitySetSchema,
+  revision: compiledAgentRevisionV1Schema,
+  assignment: z.object({ id: entityId, version: z.number().int().positive(), configHash: hash }).strict(),
+  repository: z.object({ id: githubNumericIdSchema, policyHash: hash, policyVersion: z.number().int().positive() }).strict(),
+  workspace: z.object({ policyHash: hash, policyVersion: z.number().int().positive() }).strict(),
+  effectiveConstraints: z.object({
+    allowedMergeMethods: z.array(z.enum(["merge", "squash", "rebase"])).min(1).max(3),
+    requiredChecks: z.array(z.string().trim().min(1).max(255)).max(100),
+    maxCommentLength: z.number().int().positive().max(65_536),
+    maxChangedFiles: z.number().int().positive().max(100),
+    deniedPathPrefixes: z.array(z.string().min(1).max(1_024)).max(100),
+  }).strict(),
+  effectiveAuthority: z.array(effectiveEffectAuthorityV1Schema).max(effectCapabilitySchema.options.length),
+  effectiveCapabilities: effectiveCapabilitySetSchema,
   harness: z.object({ id: z.string().min(1).max(255), version: z.string().min(1).max(100) }).strict(),
   versions: z.object({ runtime: z.string().min(1).max(100), capabilityCatalog: z.string().min(1).max(100), compiler: z.string().min(1).max(100) }).strict(),
   snapshotHash: hash,
@@ -135,7 +163,6 @@ export type AgentRunSnapshotV1 = z.infer<typeof agentRunSnapshotV1Schema>;
 export const agentSemanticDiffV1Schema = z.object({
   fromRevisionId: identifier.nullable(), toRevisionId: identifier,
   triggers: z.object({ added: z.array(repositoryEventTriggerSchema).max(100), removed: z.array(repositoryEventTriggerSchema).max(100) }).strict(),
-  repositories: z.object({ added: z.array(githubNumericIdSchema).max(1_000), removed: z.array(githubNumericIdSchema).max(1_000) }).strict(),
   capabilities: z.object({
     observationAdded: z.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length), observationRemoved: z.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
     workspaceAdded: z.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length), workspaceRemoved: z.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
