@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -274,6 +274,45 @@ describe("authority-widening action guards", () => {
       expect(harness.api.setAgentEnabled).toHaveBeenCalledWith("agent_1", false),
     );
     expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("cannot execute a broader fallback after a guard dialog is dismissed", async () => {
+    const user = userEvent.setup();
+    harness.context = {
+      ...harness.context,
+      state: { ...state, globalPaused: false },
+    };
+    renderAt(<AutomationMenu />);
+    await user.click(screen.getByRole("button", { name: /automation controls/ }));
+    await user.click(
+      await screen.findByRole("menuitemcheckbox", { name: /cloudflare\/workers-sdk/ }),
+    );
+    const repositoryDialog = await screen.findByRole("alertdialog");
+    const staleRepositoryConfirm = within(repositoryDialog).getByRole("button", {
+      name: "Resume cloudflare/workers-sdk",
+    });
+    await user.click(within(repositoryDialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(staleRepositoryConfirm);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(harness.api.setRepositoryPaused).not.toHaveBeenCalled();
+    expect(harness.api.setPaused).not.toHaveBeenCalled();
+
+    cleanup();
+    renderAt(
+      <AgentDetailPage />,
+      "/agents/agent_1/revisions/2",
+      "/agents/:id/revisions/:revision",
+    );
+    await user.click(await screen.findByRole("button", { name: "Activate revision" }));
+    const revisionDialog = await screen.findByRole("alertdialog");
+    const staleRevisionConfirm = within(revisionDialog).getByRole("button", {
+      name: "Activate revision 2",
+    });
+    await user.click(within(revisionDialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(staleRevisionConfirm);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(harness.api.activateAgentRevision).not.toHaveBeenCalled();
+    expect(harness.api.setAgentEnabled).not.toHaveBeenCalled();
   });
 
   it("guards setup activation before applying policies and resuming globally", async () => {

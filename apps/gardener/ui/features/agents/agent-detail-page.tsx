@@ -331,11 +331,12 @@ export function AgentDetailPage() {
             : "Enable Agent"
         }
         loading={activate.isPending || enable.isPending}
-        onConfirm={() =>
-          pendingAction?.kind === "activate"
+        onConfirm={() => {
+          if (!pendingAction) return;
+          return pendingAction.kind === "activate"
             ? activate.mutateAsync(pendingAction.revision)
-            : enable.mutateAsync(true)
-        }
+            : enable.mutateAsync(true);
+        }}
       />
     </>
   );

@@ -209,11 +209,12 @@ export function AutomationMenu() {
             : "Resume Gardener globally"
         }
         loading={globalMutation.isPending || repositoryMutation.isPending}
-        onConfirm={() =>
-          pendingResume?.kind === "repository"
+        onConfirm={() => {
+          if (!pendingResume) return;
+          return pendingResume.kind === "repository"
             ? repositoryMutation.mutateAsync({ id: pendingResume.id, paused: false })
-            : globalMutation.mutateAsync(false)
-        }
+            : globalMutation.mutateAsync(false);
+        }}
       />
     </>
   );
