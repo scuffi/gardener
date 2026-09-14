@@ -1,0 +1,19 @@
+apps/connect/test/team-foundation-stage1.test.ts
+  s_40b5cd15d274f3::t_0da7af4c809a0f 1-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "77682bbee0ad7085912c606acd99b062a1e676cc",
+  "prompts": {},
+  "sessions": {
+    "s_40b5cd15d274f3": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a063-9b89-76d7-b846-ce4ba10e1fe3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
