@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { actionGroups, filterActionGroups } from "./actions";
+import { actionGroups, filterActionGroups, globalResumeDescription } from "./actions";
 import { routes } from "./routes";
 
 /**
@@ -67,9 +67,7 @@ describe("command palette actions", () => {
 
     expect(resume?.confirmation).toEqual({
       title: "Resume Gardener globally?",
-      description:
-        "New work may start in every unpaused repository. Agent capabilities and " +
-        "operation policies still apply.",
+      description: globalResumeDescription,
       confirmLabel: "Resume Gardener globally",
     });
   });

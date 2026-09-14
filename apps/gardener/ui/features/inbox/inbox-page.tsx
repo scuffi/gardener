@@ -1,6 +1,6 @@
 import { CheckIcon, RobotIcon, TrayIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime, sentenceCase } from "../../lib/format";
 import { queryKeys, queryPrefixes } from "../../lib/query-keys";
@@ -27,6 +27,9 @@ export function InboxPage() {
     title: string;
     summary: string;
   } | null>(null);
+  const lastPendingApproval = useRef<typeof pendingApproval>(null);
+  if (pendingApproval) lastPendingApproval.current = pendingApproval;
+  const renderedPendingApproval = pendingApproval ?? lastPendingApproval.current;
   const query = useQuery({ queryKey: queryKeys.inbox, queryFn: gardenerApi.inbox });
   const mutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" | "dismiss" }) =>
@@ -153,8 +156,8 @@ export function InboxPage() {
         }}
         title="Approve this exact request?"
         description={
-          pendingApproval
-            ? `${pendingApproval.title}. ${pendingApproval.summary}`
+          renderedPendingApproval
+            ? `${renderedPendingApproval.title}. ${renderedPendingApproval.summary}`
             : "Review the bounded request before approving it."
         }
         confirmLabel="Approve exact request"

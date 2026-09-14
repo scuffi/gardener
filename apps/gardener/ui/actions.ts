@@ -35,6 +35,10 @@ export interface ActionGroup {
   items: Action[];
 }
 
+export const globalResumeDescription =
+  "New work may start in every unpaused repository. Repository pauses, Agent capabilities, " +
+  "and operation policies still apply.";
+
 interface CommandContext {
   state: AppState | null;
   resolvedTheme: "light" | "dark";
@@ -75,9 +79,7 @@ function commandActions(context: CommandContext): Action[] {
         ? {
             confirmation: {
               title: "Resume Gardener globally?",
-              description:
-                "New work may start in every unpaused repository. Agent capabilities and " +
-                "operation policies still apply.",
+              description: globalResumeDescription,
               confirmLabel: "Resume Gardener globally",
             },
           }

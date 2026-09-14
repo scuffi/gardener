@@ -1,6 +1,6 @@
 import { PencilSimpleIcon, PlayIcon, PowerIcon, RobotIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/format";
@@ -35,6 +35,9 @@ export function AgentDetailPage() {
   const [pendingAction, setPendingAction] = useState<
     { kind: "activate"; revision: number } | { kind: "enable" } | null
   >(null);
+  const lastPendingAction = useRef<typeof pendingAction>(null);
+  if (pendingAction) lastPendingAction.current = pendingAction;
+  const renderedPendingAction = pendingAction ?? lastPendingAction.current;
   const detail = useQuery({
     queryKey: queryKeys.agent(id),
     queryFn: () => gardenerApi.agent(id!),
@@ -311,20 +314,20 @@ export function AgentDetailPage() {
           if (!open) setPendingAction(null);
         }}
         title={
-          pendingAction?.kind === "activate"
-            ? `Activate revision ${pendingAction.revision}?`
+          renderedPendingAction?.kind === "activate"
+            ? `Activate revision ${renderedPendingAction.revision}?`
             : "Enable this Agent?"
         }
         description={
-          pendingAction?.kind === "activate"
+          renderedPendingAction?.kind === "activate"
             ? agent.enabled
               ? "This changes the behavior used for newly admitted runs immediately because the Agent is enabled."
               : "This selects the immutable behavior that the Agent will use after it is separately enabled."
             : "New matching repository events may start runs using the active immutable revision."
         }
         confirmLabel={
-          pendingAction?.kind === "activate"
-            ? `Activate revision ${pendingAction.revision}`
+          renderedPendingAction?.kind === "activate"
+            ? `Activate revision ${renderedPendingAction.revision}`
             : "Enable Agent"
         }
         loading={activate.isPending || enable.isPending}

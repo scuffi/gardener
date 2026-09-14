@@ -1,7 +1,8 @@
 import { CaretDownIcon, PauseIcon, PlayIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { globalResumeDescription } from "../actions";
 import { useGardener } from "../app-context";
 import { gardenerApi } from "../lib/api";
 import { isEnabled } from "../lib/format";
@@ -17,6 +18,9 @@ export function AutomationMenu() {
   const [pendingResume, setPendingResume] = useState<
     { kind: "global" } | { kind: "repository"; id: string; name: string } | null
   >(null);
+  const lastPendingResume = useRef<typeof pendingResume>(null);
+  if (pendingResume) lastPendingResume.current = pendingResume;
+  const renderedPendingResume = pendingResume ?? lastPendingResume.current;
   const repositories = state?.repositories.filter((repository) => isEnabled(repository.active)) ?? [];
   const unpaused = repositories.filter((repository) => !repository.paused).length;
   const globallyPaused = Boolean(state?.globalPaused);
@@ -190,18 +194,18 @@ export function AutomationMenu() {
           if (!open) setPendingResume(null);
         }}
         title={
-          pendingResume?.kind === "repository"
-            ? `Resume ${pendingResume.name}?`
+          renderedPendingResume?.kind === "repository"
+            ? `Resume ${renderedPendingResume.name}?`
             : "Resume Gardener globally?"
         }
         description={
-          pendingResume?.kind === "repository"
+          renderedPendingResume?.kind === "repository"
             ? "New matching events in this repository may start Agent runs when Gardener is globally active."
-            : "New work may start in every unpaused repository. Repository pauses and policies still apply."
+            : globalResumeDescription
         }
         confirmLabel={
-          pendingResume?.kind === "repository"
-            ? `Resume ${pendingResume.name}`
+          renderedPendingResume?.kind === "repository"
+            ? `Resume ${renderedPendingResume.name}`
             : "Resume Gardener globally"
         }
         loading={globalMutation.isPending || repositoryMutation.isPending}

@@ -49,7 +49,9 @@ export function ConfirmDialog({
             onClick={() => {
               // Mutations report failures through their own notification callbacks. Catch the
               // rejected promise here so a handled API failure does not become an unhandled one.
-              void Promise.resolve().then(onConfirm).catch(() => undefined);
+              void Promise.resolve()
+                .then(onConfirm)
+                .catch((error: unknown) => console.error("Confirm action failed", error));
             }}
           >
             {confirmLabel}
