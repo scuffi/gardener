@@ -54,10 +54,11 @@ export function Stat({
 
   const shell = cn(
     "block min-w-0 rounded-lg border border-kumo-hairline bg-kumo-base p-4",
-    "min-h-[104px] transition-colors",
+    "min-h-[104px] transition-[border-color,box-shadow,transform] duration-300",
+    "ease-[cubic-bezier(0.22,1,0.36,1)]",
   );
 
-  if (!href) return <article className={cn(shell, "hover:border-kumo-line")}>{body}</article>;
+  if (!href) return <article className={shell}>{body}</article>;
 
   return (
     <Link
@@ -65,7 +66,8 @@ export function Stat({
       variant="plain"
       className={cn(
         shell,
-        "grid! content-start text-kumo-default no-underline hover:border-kumo-line hover:bg-kumo-tint",
+        "grid! content-start text-kumo-default no-underline hover:-translate-y-px",
+        "hover:border-kumo-line hover:shadow-sm focus-visible:-translate-y-px",
       )}
     >
       {body}

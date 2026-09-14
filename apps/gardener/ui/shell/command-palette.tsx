@@ -31,7 +31,8 @@ export function CommandPaletteTrigger() {
       aria-keyshortcuts="Meta+K Control+K"
       className={cn(
         "flex h-8 items-center gap-2 rounded-md border border-kumo-hairline bg-kumo-recessed",
-        "px-2.5 text-xs text-kumo-default transition-colors max-[900px]:h-11 max-[900px]:min-w-11",
+        "px-2.5 text-xs text-kumo-default transition-[border-color] duration-300 " +
+        "ease-[cubic-bezier(0.22,1,0.36,1)] max-[900px]:h-11 max-[900px]:min-w-11",
         "hover:border-kumo-line hover:text-kumo-default",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kumo-focus",
       )}

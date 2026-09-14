@@ -86,20 +86,21 @@ Use these names directly. Tailwind utility form is shown; the CSS custom propert
 ### Brand and status
 
 Kumo's own `--color-kumo-brand` is **blue**. Gardener redefines it in `ui/accents.css`, which is
-the only file in the UI allowed to hold a colour value. The accent is selectable: Cloudflare
-orange (default) or Gardener green, chosen in Settings and stored as `data-accent` on `<html>`.
+the only file in the UI allowed to hold a colour value. The accent is selectable: a restrained
+Gardener green (default) or ember orange, chosen in Settings and stored as `data-accent`
+on `<html>`.
 
-`bg-kumo-brand` and `text-kumo-brand` resolve to **different** colours on purpose. Cloudflare
-orange is 2.52:1 on the light canvas, so it is a fill only; the text token is a darker orange at
-4.59:1. Use `bg-kumo-brand` when a label sits on top of the colour, and `text-kumo-brand` when the
-colour sits on the canvas. Full table and measurements: `docs/dashboard-redesign.md` §6.1.
+`bg-kumo-brand` and `text-kumo-brand` resolve to **different** colours on purpose. Fill values carry
+Kumo's white primary-button labels; text values sit directly on the canvas. Both accents clear WCAG AA for text and UI
+boundaries in both schemes. Use `bg-kumo-brand` when a label sits on top of the colour, and
+`text-kumo-brand` when the colour sits on the canvas. Measurements live in `ui/accents.test.ts`.
 
 | Utility | Meaning in Gardener |
 | --- | --- |
 | `kumo-brand` | **Primary.** Primary buttons, active nav, focus, live indicators. Accent-dependent. |
 | `kumo-info` | Informational only. Links, neutral notes, "observing". Never a primary action. |
-| `kumo-success` | Executed, healthy, enabled, connected. Gardener's secondary identity colour. |
-| | ⚠️ Under the green accent, brand and success are both green (hue 147 vs 163). Never put a brand-filled control and a success badge in the same row without another differentiator. |
+| `kumo-success` | Executed, healthy, enabled, connected. Never use it as generic brand chrome. |
+| | Under the green accent, brand and success are both green. Pair either with text or an icon so status is never colour-only. |
 | `kumo-warning` | Awaiting a human decision, paused, degraded. |
 | `kumo-danger` | Failed, blocked, access removed, destructive actions. |
 
@@ -154,9 +155,10 @@ Decision surfaces get exactly one unmistakable primary action.
 
 ## 7. Motion
 
-Purposeful only: live-run pulse, status transitions, streaming step appends, gate unlocks. No
-decorative ambient animation. Everything must be disabled under `prefers-reduced-motion: reduce`,
-which `styles.css` enforces globally.
+Purposeful only: live-run pulse, status transitions, streaming step appends, gate unlocks, and calm
+navigation affordances. Clickable cards and rows use a restrained tint or one-pixel lift over 300ms
+with an ease-out curve; avoid high-contrast flashes. Everything must be disabled under
+`prefers-reduced-motion: reduce`, which `styles.css` enforces globally.
 
 ## 8. Product primitives
 
@@ -166,6 +168,7 @@ composition. Add here only when a pattern appears on three or more surfaces.
 | Primitive | Purpose |
 | --- | --- |
 | `PageHeader` | Title, description, actions; manages initial focus for accessibility |
+| `CardLink` | A full-card navigation target with restrained hover, focus, and motion |
 | `SectionHeader` | Header row inside a `Surface` |
 | `StatusBadge` / `RunStatus` | The §4 status vocabulary |
 | `Stat` | A single metric cell for Overview and summary strips |
@@ -188,3 +191,5 @@ tree-shaken (core plus only the used chart and renderer modules) from `ui/lib/ec
 - Status is never colour-only — always pair with text or an icon.
 - One `h1` per surface, headings in order, landmarks correct.
 - Interactive targets at least 24×24px, 44×44px on touch.
+- A collection card or single-destination row is one complete keyboard-accessible link target; do
+  not make only its title or status badge clickable.

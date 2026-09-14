@@ -20,7 +20,7 @@ export function PolicyRow({
     <div
       className={
         "grid grid-cols-[minmax(240px,1fr)_minmax(480px,1.25fr)] items-center gap-4 " +
-        "border-b border-kumo-hairline px-4 py-4 last:border-b-0 hover:bg-kumo-tint " +
+        "border-b border-kumo-hairline px-4 py-4 last:border-b-0 " +
         "max-xl:grid-cols-1"
       }
     >
@@ -47,7 +47,11 @@ export function PolicyRow({
               key={mode}
               label={modeCopy[mode].label}
               value={mode}
-              className="min-w-0"
+              className={
+                "min-w-0 transition-[border-color,box-shadow] duration-300 " +
+                "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base " +
+                "hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
+              }
             />
           ))}
         </Radio.Group>

@@ -9,6 +9,7 @@
 export * from "./kumo";
 
 // Gardener primitives.
+export { CardLink } from "./card-link";
 export { ConfirmDialog } from "./confirm-dialog";
 export { Mono, shortHash } from "./mono";
 export { PageHeader } from "./page-header";

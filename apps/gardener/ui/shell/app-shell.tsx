@@ -2,7 +2,7 @@ import { ListIcon, LockSimpleIcon, PlantIcon } from "@phosphor-icons/react";
 import { useEffect, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useGardener } from "../app-context";
-import { cn, PoweredByCloudflare, Sidebar, useSidebar } from "../primitives";
+import { cn, Sidebar, useSidebar } from "../primitives";
 import { defaultRoute, isRouteActive, navigationGroups, resolveRoute } from "../routes";
 import { ThemeToggle } from "../theme";
 import { AccountMenu } from "./account-menu";
@@ -138,9 +138,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Sidebar.Content>
         <Sidebar.Footer className="grid! h-auto! overflow-visible gap-1 py-2">
           {authenticated ? <AccountMenu /> : null}
-          <div className="flex justify-center px-2 pt-2 pb-1 opacity-70">
-            <PoweredByCloudflare className="[&>span]:text-kumo-strong" />
-          </div>
+          <p className="px-2 pt-2 pb-1 text-center text-[10px] tracking-wide text-kumo-subtle">
+            Cloudflare Workers
+          </p>
         </Sidebar.Footer>
       </Sidebar>
 

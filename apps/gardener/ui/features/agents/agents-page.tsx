@@ -4,14 +4,13 @@ import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/format";
 import { queryKeys } from "../../lib/query-keys";
 import {
+  CardLink,
   CardSkeleton,
   EmptyState,
   ErrorState,
-  Link,
   LinkButton,
   Mono,
   PageHeader,
-  Panel,
   StatusBadge,
   statusTone,
 } from "../../primitives";
@@ -45,24 +44,22 @@ export function AgentsPage() {
       ) : agents.length ? (
         <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
           {agents.map((agent) => (
-            <Panel
+            <CardLink
               key={agent.id}
-              as="article"
-              className="transition-colors hover:border-kumo-line focus-within:ring-2 focus-within:ring-kumo-focus"
+              href={`/agents/${encodeURIComponent(agent.id)}`}
+              label={`Open Agent ${agent.name}`}
             >
               <div className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)] gap-3">
                 <span
                   className={
-                    "grid size-10 place-items-center rounded-md bg-kumo-info/10 text-kumo-info"
+                    "grid size-10 place-items-center rounded-md bg-kumo-brand/10 text-kumo-brand"
                   }
                 >
                   <RobotIcon size={20} aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-3 max-sm:flex-col">
-                    <h2 className="text-base font-semibold text-kumo-strong">
-                      <Link href={`/agents/${encodeURIComponent(agent.id)}`}>{agent.name}</Link>
-                    </h2>
+                    <h2 className="text-base font-semibold text-kumo-strong">{agent.name}</h2>
                     <span className="flex flex-wrap justify-end gap-1 max-sm:justify-start">
                       <StatusBadge tone={statusTone(agent.lifecycle)}>
                         {agent.lifecycle === "active" ? "Active revision" : agent.lifecycle}
@@ -94,7 +91,7 @@ export function AgentsPage() {
                   </footer>
                 </div>
               </div>
-            </Panel>
+            </CardLink>
           ))}
         </div>
       ) : (

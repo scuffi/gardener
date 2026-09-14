@@ -13,7 +13,7 @@ export { Banner } from "@cloudflare/kumo/components/banner";
 export { Breadcrumbs } from "@cloudflare/kumo/components/breadcrumbs";
 export { Button, LinkButton, RefreshButton } from "@cloudflare/kumo/components/button";
 export { ClipboardText } from "@cloudflare/kumo/components/clipboard-text";
-export { CloudflareLogo, PoweredByCloudflare } from "@cloudflare/kumo/components/cloudflare-logo";
+export { CloudflareLogo } from "@cloudflare/kumo/components/cloudflare-logo";
 export { Code, CodeBlock } from "@cloudflare/kumo/components/code";
 export { Collapsible } from "@cloudflare/kumo/components/collapsible";
 export { CommandPalette } from "@cloudflare/kumo/components/command-palette";

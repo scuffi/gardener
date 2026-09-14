@@ -25,13 +25,13 @@ interface ThemeContextValue {
 }
 
 const STORAGE_KEY = "gardener.theme";
-const ACCENT_STORAGE_KEY = "gardener.accent";
-const DEFAULT_ACCENT: Accent = "orange";
+const ACCENT_STORAGE_KEY = "gardener.accent.v2";
+const DEFAULT_ACCENT: Accent = "green";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const accentOptions: Array<{ value: Accent; label: string; description: string }> = [
-  { value: "orange", label: "Cloudflare orange", description: "The default Cloudflare accent" },
-  { value: "green", label: "Gardener green", description: "Leans into the gardening metaphor" },
+  { value: "green", label: "Gardener green", description: "The calm botanical default" },
+  { value: "orange", label: "Ember orange", description: "A warm, muted alternative" },
 ];
 
 const options: Array<{
@@ -98,7 +98,8 @@ function applyTheme(preference: ThemePreference, resolvedTheme: ResolvedTheme) {
 
 function storedAccent(): Accent {
   try {
-    return localStorage.getItem(ACCENT_STORAGE_KEY) === "green" ? "green" : DEFAULT_ACCENT;
+    const stored = localStorage.getItem(ACCENT_STORAGE_KEY);
+    return stored === "green" || stored === "orange" ? stored : DEFAULT_ACCENT;
   } catch {
     return DEFAULT_ACCENT;
   }
@@ -195,7 +196,11 @@ export function AccentPicker() {
         <Radio.Item<Accent>
           key={option.value}
           value={option.value}
-          className="min-w-0"
+          className={
+            "min-w-0 transition-[border-color,box-shadow] duration-300 " +
+            "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base " +
+            "hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
+          }
           label={
             <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
               <span
@@ -244,7 +249,11 @@ export function ThemePicker() {
           <Radio.Item<ThemePreference>
             key={option.value}
             value={option.value}
-            className="min-w-0"
+            className={
+              "min-w-0 transition-[border-color,box-shadow] duration-300 " +
+              "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line hover:!bg-kumo-base " +
+              "hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
+            }
             label={
               <span className="grid min-w-0 grid-cols-[78px_minmax(0,1fr)] items-center gap-3">
                 <span

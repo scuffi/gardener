@@ -69,6 +69,8 @@ describe("Gardener sign-in", () => {
     expect(button.hasAttribute("disabled")).toBe(false);
     expect(button.getAttribute("aria-describedby")).toContain("signin-owner-note");
     expect(screen.getByText(/Repository access is managed separately through Gardener Connect/)).toBeTruthy();
+    expect(screen.getByText("Customer-deployed on Cloudflare Workers")).toBeTruthy();
+    expect(screen.queryByText(/Powered by Cloudflare/i)).toBeNull();
     expect(container.querySelector(".gardener-sidebar")).toBeNull();
   });
 

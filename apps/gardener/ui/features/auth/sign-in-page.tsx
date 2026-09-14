@@ -1,7 +1,7 @@
 import { GithubLogoIcon, PlantIcon, ShieldCheckIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import type { CSSProperties } from "react";
 import { useGardener } from "../../app-context";
-import { Banner, Button, LoadingState, Panel, PoweredByCloudflare } from "../../primitives";
+import { Banner, Button, LoadingState, Panel } from "../../primitives";
 import { SkipLink } from "../../shell/skip-link";
 import { ThemeToggle } from "../../theme";
 import { AsciiGarden } from "./ascii-garden";
@@ -26,7 +26,7 @@ const brandRingStyle: CSSProperties = {
     "conic-gradient(from var(--brand-ring-angle), var(--color-kumo-line) 0 34%,",
     "var(--color-kumo-brand) 47%, var(--color-kumo-line) 60% 100%) border-box",
   ].join(" "),
-  animation: "brand-ring-orbit 7s linear infinite",
+  animation: "brand-ring-orbit 12s linear infinite",
 };
 
 export function SignInPage() {
@@ -42,7 +42,7 @@ export function SignInPage() {
       <SkipLink href="#main-content">Skip to sign in</SkipLink>
       <header className="flex w-full items-center justify-between px-5 py-5 sm:px-10 lg:px-14">
         <div className="inline-flex items-center gap-3" aria-label="Gardener repository stewardship">
-          <span className="grid size-9 place-items-center rounded-lg bg-kumo-success/10 text-kumo-success">
+          <span className="grid size-9 place-items-center rounded-lg bg-kumo-brand/10 text-kumo-brand">
             <PlantIcon
               size={20}
               weight="bold"
@@ -185,10 +185,8 @@ export function SignInPage() {
               </section>
             </Panel>
           </div>
-          <footer className="mt-6 flex justify-center">
-            <PoweredByCloudflare
-              className="bg-kumo-contrast [&>span]:text-kumo-inverse"
-            />
+          <footer className="mt-6 text-center text-[10px] tracking-wide text-kumo-subtle">
+            Customer-deployed on Cloudflare Workers
           </footer>
         </div>
       </main>

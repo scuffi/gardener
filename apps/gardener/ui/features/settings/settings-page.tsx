@@ -117,7 +117,7 @@ export function SettingsPage() {
                 key={service.name}
                 className={
                   "grid min-h-[62px] grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 " +
-                  "border-b border-kumo-hairline px-[18px] py-2.5 last:border-b-0 hover:bg-kumo-tint " +
+                  "border-b border-kumo-hairline px-[18px] py-2.5 last:border-b-0 " +
                   "max-[480px]:grid-cols-[32px_minmax(0,1fr)]"
                 }
               >
@@ -152,7 +152,7 @@ export function SettingsPage() {
           <div className="border-t border-kumo-hairline">
             <PanelHeader
               title="Accent"
-              description="Cloudflare orange, or green to match the gardening metaphor."
+              description="Calm Gardener green by default, with a muted ember orange alternative."
             />
             <AccentPicker />
           </div>

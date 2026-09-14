@@ -119,7 +119,9 @@ export function NeedsAttentionPanel({
               variant="plain"
               className={
                 "grid min-h-[66px] grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 "
-                + "px-4 py-3 hover:bg-kumo-tint"
+                + "px-4 py-3 transition-[box-shadow,transform] duration-300 "
+                + "ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-px "
+                + "hover:shadow-[inset_2px_0_0_var(--color-kumo-brand)]"
               }
             >
               <span

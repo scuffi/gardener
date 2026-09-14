@@ -88,7 +88,6 @@ function token(selector: string, property: string): { light: Rgb; dark: Rgb } {
 
 const canvases = { light: hexToRgb(CANVAS_LIGHT), dark: hexToRgb(CANVAS_DARK) };
 const WHITE: Rgb = [1, 1, 1];
-const BLACK: Rgb = [0, 0, 0];
 
 describe("brand accents", () => {
   for (const accent of ["orange", "green"] as const) {
@@ -100,35 +99,18 @@ describe("brand accents", () => {
       expect(contrast(text.dark, canvases.dark)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
     });
 
-    it(`${accent}: fill token carries a readable label in both schemes`, () => {
+    it(`${accent}: fill token carries Kumo's white button label in both schemes`, () => {
       const fill = token(selector, "--color-kumo-brand");
-      for (const scheme of ["light", "dark"] as const) {
-        const best = Math.max(contrast(fill[scheme], WHITE), contrast(fill[scheme], BLACK));
-        expect(best).toBeGreaterThanOrEqual(TEXT_MINIMUM);
-      }
+      expect(contrast(fill.light, WHITE)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+      expect(contrast(fill.dark, WHITE)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
     });
   }
 
-  it("green fill clears the UI boundary threshold in both schemes", () => {
-    const fill = token('[data-accent="green"]', "--color-kumo-brand");
-    expect(contrast(fill.light, canvases.light)).toBeGreaterThanOrEqual(UI_MINIMUM);
-    expect(contrast(fill.dark, canvases.dark)).toBeGreaterThanOrEqual(UI_MINIMUM);
-  });
-
-  /**
-   * Documented deviation. Cloudflare orange is 2.52:1 on the light canvas, under the 3.0 that
-   * SC 1.4.11 wants for a component boundary. It is pinned here so the number cannot drift
-   * unnoticed: if someone edits the orange value, this test tells them exactly what changed and
-   * forces a deliberate decision rather than a silent regression.
-   */
-  it("orange fill light is the one known boundary deviation, and has not drifted", () => {
-    const fill = token('[data-accent="orange"]', "--color-kumo-brand");
-    const measured = contrast(fill.light, canvases.light);
-    expect(measured).toBeLessThan(UI_MINIMUM);
-    expect(measured).toBeCloseTo(2.52, 1);
-    // Still identifiable: the label inside the fill is comfortably readable.
-    expect(contrast(fill.light, BLACK)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
-    // Dark scheme has no such problem.
-    expect(contrast(fill.dark, canvases.dark)).toBeGreaterThanOrEqual(UI_MINIMUM);
-  });
+  for (const accent of ["orange", "green"] as const) {
+    it(`${accent}: fill clears the UI boundary threshold in both schemes`, () => {
+      const fill = token(`[data-accent="${accent}"]`, "--color-kumo-brand");
+      expect(contrast(fill.light, canvases.light)).toBeGreaterThanOrEqual(UI_MINIMUM);
+      expect(contrast(fill.dark, canvases.dark)).toBeGreaterThanOrEqual(UI_MINIMUM);
+    });
+  }
 });

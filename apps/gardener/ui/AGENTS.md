@@ -95,6 +95,8 @@ ECharts modules for the Overview charts, phase 6).
   successes auto-dismiss.
 - **Formatting helpers**: `lib/format.ts`. Do not inline date or cost formatting.
 - **Accessibility**: see `docs/design-system.md` §10. Serious/critical Axe issues block release.
+- **Navigation targets**: if a collection card or row has one destination, make the whole surface
+  keyboard-accessible. Use `CardLink` for cards; do not bury navigation in a linked title.
 
 ## Verify before finishing
 

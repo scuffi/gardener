@@ -34,7 +34,9 @@ export function RecentRunsPanel({ runs }: { runs: RunSummary[] }) {
               variant="plain"
               className={
                 "grid min-h-[66px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 " +
-                "gap-y-1 px-4 py-3 text-kumo-default hover:bg-kumo-tint max-[520px]:items-start"
+                "gap-y-1 px-4 py-3 text-kumo-default transition-[box-shadow,transform] duration-300 " +
+                "ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-px " +
+                "hover:shadow-[inset_2px_0_0_var(--color-kumo-brand)] max-[520px]:items-start"
               }
             >
               <div className="min-w-0">

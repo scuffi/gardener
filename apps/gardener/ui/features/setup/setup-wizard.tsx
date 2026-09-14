@@ -221,6 +221,11 @@ export function SetupWizard() {
                     key={option.id}
                     data-profile={option.id}
                     value={option.id}
+                    className={
+                      "transition-[border-color,box-shadow] duration-300 " +
+                      "ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-kumo-line " +
+                      "hover:!bg-kumo-base hover:shadow-sm has-[[data-checked]]:hover:!bg-kumo-tint"
+                    }
                     label={
                       <span className="flex items-center justify-between gap-3">
                         <strong className="text-base font-semibold text-kumo-strong">{option.name}</strong>

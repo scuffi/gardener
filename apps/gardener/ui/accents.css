@@ -1,73 +1,32 @@
-/**
- * Brand accent layer.
+/*
+ * Gardener's two selectable brand accents. This is the only product stylesheet allowed to define
+ * colour values; every component consumes these through Kumo's semantic brand tokens.
  *
- * This is the ONLY file allowed to define brand colour values. Everything else in the UI must
- * reference Kumo semantic tokens, which this file re-points.
+ * The default is a low-chroma botanical green. Its darker light-scheme value and restrained
+ * dark-scheme value keep primary controls distinct without glowing against the canvas. The
+ * alternate orange is an ember tint rather than Cloudflare's much brighter marketing orange.
  *
- * Why this file exists at all: Kumo ships `--color-kumo-brand` as BLUE (oklch 260). Gardener is
- * not a blue product, so the brand token is redefined here — once — for both accents.
- *
- * Two tokens matter and they are NOT interchangeable:
- *   --color-kumo-brand       fill colour (bg-kumo-brand). Sits behind a label.
- *   --text-color-kumo-brand  text/icon/border colour (text-kumo-brand). Sits ON the canvas.
- *
- * Cloudflare orange (#f6821f) scores only 2.52:1 against the light canvas, so it FAILS WCAG AA
- * as text. It is therefore used as a fill only, and the text token drops to a darker orange that
- * measures 4.57:1. This asymmetry is deliberate; do not "simplify" the two tokens into one.
- *
- * Measured contrast of the values actually compiled into the bundle
- * (WCAG 2.1: text needs 4.5, UI component boundary needs 3.0):
- *   orange fill  light #f6821f  2.52 vs canvas, 8.13 with black label   SEE NOTE
- *   orange fill  dark  #f6821f  7.42 vs canvas, 8.13 with black label   PASS
- *   orange text  light #b55b04  4.59 vs canvas                          PASS
- *   orange text  dark  #fc9d5b  9.23 vs canvas                          PASS
- *   green  fill  light #1b8636  4.54 vs canvas, 4.66 with white label   PASS
- *   green  fill  dark  #62c471  8.81 vs canvas, 9.65 with black label   PASS
- *   green  text  light #1b8636  4.54 vs canvas                          PASS
- *   green  text  dark  #7cd687 10.79 vs canvas                          PASS
- *
- * NOTE — the one known deviation. Cloudflare orange on a near-white canvas is 2.52:1, below the
- * 3.0 that SC 1.4.11 asks of a component boundary. The colour is not ours to change: #f6821f is
- * the Cloudflare brand value, and darkening it to clear 3.0 makes it visibly brown. The label
- * inside an orange fill is 8.13:1, so the control is never unidentifiable, but a large orange
- * button on white does have a soft edge. Mitigations, in order of preference:
- *   1. give brand-filled controls a 1px --color-kumo-brand-hover border in light mode (3.27:1),
- *   2. or select the green accent, which passes everywhere.
- * Do not "fix" this by editing the orange value without an explicit brand decision.
- *
- * Brand green sits at hue 147 while Kumo's success token sits at hue 163. That 16 degree gap is
- * intentional: "brand green" and "healthy green" must not read as the same colour. Never place a
- * brand-green control and a success badge in the same row without other differentiation.
- *
- * light-dark() resolves against color-scheme, which Kumo sets from [data-mode]. One block
- * therefore covers both schemes. Specificity is :root[data-accent=...] (0,2,0), which ties with
- * Kumo's :root[data-mode="dark"]; this file is imported after Kumo, so it wins on source order.
- *
- * Each accent is also selectable WITHOUT the :root prefix so any subtree can be pinned to an
- * accent. Specificity only arbitrates between rules on the same element, and a declaration on
- * the element always beats an inherited value, so the bare selector is safe. The settings
- * swatches use this to preview an accent with the real token rather than a hardcoded copy.
+ * Fill and text tokens remain separate. Every text value clears 4.5:1 against its canvas, every
+ * fill clears 3:1 against its canvas, and each fill clears 4.5:1 against Kumo's white button label.
+ * `accents.test.ts` measures these guarantees directly from this file.
  */
 
 :root,
-:root[data-accent="orange"],
-[data-accent="orange"] {
-  --color-kumo-brand: light-dark(oklch(0.7235 0.1724 53.8), oklch(0.7235 0.1724 53.8));
-  --color-kumo-brand-hover: light-dark(oklch(0.655 0.163 53.8), oklch(0.782 0.158 53.8));
-  --text-color-kumo-brand: light-dark(oklch(0.57 0.142 53.8), oklch(0.78 0.14 53.8));
-}
-
 :root[data-accent="green"],
 [data-accent="green"] {
-  --color-kumo-brand: light-dark(oklch(0.545 0.15 147), oklch(0.74 0.15 147));
-  --color-kumo-brand-hover: light-dark(oklch(0.487 0.138 147), oklch(0.8 0.14 147));
-  --text-color-kumo-brand: light-dark(oklch(0.545 0.15 147), oklch(0.8 0.14 147));
+  --color-kumo-brand: light-dark(oklch(0.52 0.11 145), oklch(0.52 0.1 145));
+  --color-kumo-brand-hover: light-dark(oklch(0.485 0.105 145), oklch(0.485 0.095 145));
+  --text-color-kumo-brand: light-dark(oklch(0.49 0.105 145), oklch(0.72 0.095 145));
 }
 
-/*
- * Windows High Contrast mode replaces author colours wholesale. Defer to the system palette
- * rather than shipping a brand colour it will partially override.
- */
+:root[data-accent="orange"],
+[data-accent="orange"] {
+  --color-kumo-brand: light-dark(oklch(0.555 0.125 50), oklch(0.555 0.115 50));
+  --color-kumo-brand-hover: light-dark(oklch(0.515 0.115 50), oklch(0.515 0.105 50));
+  --text-color-kumo-brand: light-dark(oklch(0.49 0.115 50), oklch(0.73 0.1 50));
+}
+
+/* Defer to the system palette rather than partially overriding Windows High Contrast mode. */
 @media (forced-colors: active) {
   :root,
   :root[data-accent="orange"],

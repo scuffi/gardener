@@ -93,15 +93,15 @@ Three principles, in priority order when they conflict.
 
 | Element | Decision |
 | --- | --- |
-| Primary accent | **Cloudflare orange `#f6821f`** via `kumo-brand` — primary buttons, active nav, focus, live indicators. Not a decorative dot. |
+| Primary accent | **Restrained botanical green** via `kumo-brand` — primary buttons, active nav, focus, live indicators. |
 | Informational accent | Blue via `kumo-info` — links and neutral information only. Never a primary action. |
-| Secondary identity | Green via `kumo-success` — "healthy / growing", the Gardener signature. Status, not chrome. |
+| Status green | `kumo-success` means healthy or executed. It is status, not generic Gardener chrome. |
 | Status semantics | `kumo-success` executed · `kumo-warning` awaiting decision · `kumo-danger` failed/blocked · `kumo-info` observing · `kumo-subtle` paused |
 | Typeface | Inter Variable for prose and UI. **JetBrains Mono for the machine layer** — run IDs, source hashes, operation kinds, receipts, revision numbers, policy keys. Applied deliberately and consistently, this single change does more for "software factory" than any illustration. |
-| Cloudflare presence | Real `CloudflareLogo` in the sidebar footer; `PoweredByCloudflare` on sign-in. |
-| Motion | Purposeful only: live-run pulse, status transitions, streaming step appends, gate unlocks. All behind `prefers-reduced-motion`. |
+| Cloudflare presence | Minimal muted text only. Never use the large `PoweredByCloudflare` banners in product chrome. |
+| Motion | Purposeful and calm: subtle tints and one-pixel lifts over 300ms. All behind `prefers-reduced-motion`. |
 | Decoration | Earned, not sprinkled. The sign-in ASCII garden stays exactly as built — it is the product's signature. Decoration is not added elsewhere without the same level of craft. |
-| Accent | Selectable. Cloudflare orange by default, Gardener green as an opt-in. Defined once in `ui/accents.css`; see §6.1. |
+| Accent | Selectable. Gardener green by default, muted orange as an alternative. Defined once in `ui/accents.css`; see §6.1. |
 
 ---
 
@@ -169,9 +169,9 @@ Kill the card stack. This is a queue an operator works down, so build it like on
 
 ### 5.3 Runs — the flagship, built from scratch
 
-**`/runs`** — `Table` with sticky header: status, agent + revision, repository, trigger, duration,
-step count, effect count, cost. Filters for status/agent/repository/date (`DateRangePicker`),
-`Pagination`, live-updating rows.
+**`/runs`** — compact full-row native links with aligned columns for status, agent + revision,
+repository, trigger, duration, step count, effect count, and cost. Filters cover status, agent,
+repository, and date; native links preserve new-tab and context-menu behavior.
 
 **`/runs/:id`** — the surface that makes the product feel real. Four regions:
 
@@ -249,9 +249,9 @@ on this page, and currently it visually dominates.
 ### 5.8 Sign-in and setup
 
 Sign-in: **keep the animated ASCII garden**. It is hand-built, seeded, parallaxed, pointer-reactive
-and reduced-motion aware, and it is the single strongest piece of personality the project has. An
-OSS project is allowed a signature; this is Gardener's. Keep the single focused card, the security
-note and the conic-gradient orbiting border, and add `PoweredByCloudflare`.
+and reduced-motion aware, and it is the single strongest piece of personality the product has. Keep
+the single focused card, security note, and slower conic-gradient border. Cloudflare attribution is
+one quiet text line; do not add a logo banner.
 
 The garden owns its styling in `features/auth/ascii-garden.css`, colocated with the component, so it
 loads only on this route and stays deletable in one move. Its foliage derives from the Kumo success
@@ -299,23 +299,18 @@ Two brand tokens exist and they are **not** interchangeable:
 | `--color-kumo-brand` | `bg-kumo-brand` | Fill. A label sits on top of it. |
 | `--text-color-kumo-brand` | `text-kumo-brand` | Text, icon and border. Sits on the canvas. |
 
-They differ because Cloudflare orange measures **2.52:1** against the light canvas — it fails AA as
-text. Orange is therefore a fill only, and the text token drops to a darker orange at 4.59:1.
+Both accents deliberately reduce lightness and chroma from the earlier marketing colours. Green is
+a botanical hue rather than a neon success green; orange is a muted ember rather than the bright
+Cloudflare logo value.
 
 | Accent | Light fill | Dark fill | Light text | Dark text |
 | --- | --- | --- | --- | --- |
-| Orange (default) | `#f6821f` | `#f6821f` | `#b55b04` | `#fc9d5b` |
-| Green | `#1b8636` | `#62c471` | `#1b8636` | `#7cd687` |
+| Green (default) | `oklch(0.52 0.11 145)` | `oklch(0.52 0.10 145)` | `oklch(0.49 0.105 145)` | `oklch(0.72 0.095 145)` |
+| Orange | `oklch(0.555 0.125 50)` | `oklch(0.555 0.115 50)` | `oklch(0.49 0.115 50)` | `oklch(0.73 0.10 50)` |
 
-Brand green sits at hue 147; Kumo's success green sits at hue 163. That 16° gap is deliberate so
-"brand green" and "healthy green" do not read as the same colour. Even so, **never place a
-brand-filled control and a success badge in the same row** without another differentiator.
-
-One known deviation: orange fill on the light canvas is 2.52:1, under the 3.0 that SC 1.4.11 asks of
-a component boundary. The value is Cloudflare's brand colour and is not ours to change; the label
-inside the fill is 8.13:1, so the control is never unidentifiable. `ui/accents.test.ts` parses the
-stylesheet and pins every number above, so a colour edit that breaks contrast fails the test suite
-rather than shipping.
+Every text value clears 4.5:1 against its canvas. Every fill clears 3:1 against its canvas and 4.5:1
+against Kumo's white primary-button label. `ui/accents.test.ts` parses the actual stylesheet and
+measures these guarantees, so a colour edit that breaks contrast cannot ship.
 
 ### Mapping: hand-rolled → Kumo
 
@@ -339,7 +334,7 @@ rather than shipping.
 Kumo components currently unused that this plan adopts: `Table`, `Tabs`, `Grid`/`GridItem`,
 `CommandPalette`, `Flow`, `Meter`, `Collapsible`, `Code`/`CodeBlock`, `ClipboardText`, `Breadcrumbs`,
 `Toolbar`, `Pagination`, `SkeletonLine`, `RefreshButton`, `DeleteResource`, `Text`, `Field`, `Switch`,
-`Combobox`, `DateRangePicker`, `CloudflareLogo`, `PoweredByCloudflare`, `TimeseriesChart`.
+`Combobox`, `DateRangePicker`, and `TimeseriesChart`.
 
 ### Density and scale
 
@@ -447,8 +442,9 @@ so later phases cannot silently regress them. A line may opt out of the colour r
 tag, which browser chrome cannot read from a CSS custom property).
 
 **Phase 1 — Shell and identity. DONE.**
-Brand accent is selectable (§6.1) and the sidebar mark follows it. `PoweredByCloudflare` in the
-sidebar footer. The app-bar status pill and global kill switch live in `AutomationMenu`. `⌘K`
+Brand accent is selectable (§6.1), defaults to Gardener green, and the sidebar mark follows it.
+Cloudflare attribution is a small muted text line rather than a logo banner. The app-bar status pill
+and global kill switch live in `AutomationMenu`. `⌘K`
 palette wired to `ui/actions.ts`, with a visible trigger in the app bar so the shortcut is
 discoverable. Mono is applied as the machine layer across every surface.
 
@@ -458,7 +454,7 @@ collapsing Repositories + Policies into a single `/authority` surface, and renam
 Audit, remain open.
 
 **Phase 2 — Runs (flagship). DONE.**
-`gardenerApi.runs` / `gardenerApi.run`, `/runs` with status filtering in one responsive table, and
+`gardenerApi.runs` / `gardenerApi.run`, `/runs` with status filtering in compact linked rows, and
 `/runs/:id` with the task graph, step timeline (retries surfaced explicitly) and the effects table
 carrying each effect's admitting policy mode plus a copyable receipt.
 

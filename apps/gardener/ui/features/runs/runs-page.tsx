@@ -15,7 +15,6 @@ import {
   shortHash,
   StatusBadge,
   statusTone,
-  Table,
   TableSkeleton,
 } from "../../primitives";
 import { formatDuration } from "./format-run";
@@ -90,51 +89,72 @@ export function RunsPage() {
           />
         ) : (
           <div className="min-w-0 overflow-x-auto">
-            <Table className="min-w-[760px] text-sm">
-              <Table.Header variant="compact">
-                <Table.Row>
-                  <Table.Head sticky="left">Status</Table.Head>
-                  <Table.Head>Kind</Table.Head>
-                  <Table.Head>Agent</Table.Head>
-                  <Table.Head>Duration</Table.Head>
-                  <Table.Head>Created</Table.Head>
-                  <Table.Head>Run ID</Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
+            <div className="min-w-[760px] text-sm">
+              <div
+                aria-hidden="true"
+                className={
+                  "grid grid-cols-[130px_minmax(160px,1.2fr)_minmax(120px,1fr)_100px_110px_130px] " +
+                  "border-b border-kumo-hairline bg-kumo-elevated px-4 py-2.5 " +
+                  "text-xs font-semibold text-kumo-strong"
+                }
+              >
+                <span>Status</span>
+                <span>Kind</span>
+                <span>Agent</span>
+                <span>Duration</span>
+                <span>Created</span>
+                <span>Run ID</span>
+              </div>
+              <ul className="m-0 list-none divide-y divide-kumo-hairline p-0">
                 {visibleRuns.map((run) => {
                   const href = `/runs/${encodeURIComponent(run.id)}`;
+                  const duration = formatDuration(run.started_at, run.completed_at);
+                  const created = formatRelativeTime(run.created_at);
+                  const agent = run.agent_id ?? "unassigned";
+                  const summary =
+                    `Open run ${run.id}. Status: ${sentenceCase(run.status)}. ` +
+                    `Kind: ${run.kind}. Agent: ${agent}. Duration: ${duration}. Created: ${created}.`;
                   return (
-                    <Table.Row key={run.id}>
-                      <Table.Cell sticky="left" className="whitespace-nowrap">
-                        <Link href={href} variant="plain" aria-label={`Open run ${run.id}`}>
+                    <li key={run.id}>
+                      <Link
+                        href={href}
+                        variant="plain"
+                        aria-label={summary}
+                        className={
+                          "grid! min-h-12 grid-cols-[130px_minmax(160px,1.2fr)_minmax(120px,1fr)_100px_110px_130px] " +
+                          "items-center px-4 py-2.5 !text-kumo-default no-underline " +
+                          "transition-[box-shadow,transform] duration-300 " +
+                          "ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-px " +
+                          "hover:shadow-[inset_3px_0_0_var(--color-kumo-brand)] " +
+                          "focus-visible:shadow-[inset_3px_0_0_var(--color-kumo-brand)]"
+                        }
+                      >
+                        <span className="whitespace-nowrap">
                           <StatusBadge tone={statusTone(run.status)}>
                             {sentenceCase(run.status)}
                           </StatusBadge>
-                        </Link>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                        </span>
                         <Mono tone="default">{run.kind}</Mono>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        {run.agent_id ? <Mono title={run.agent_id}>{shortHash(run.agent_id)}</Mono> : "—"}
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        {formatDuration(run.started_at, run.completed_at)}
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        {formatRelativeTime(run.created_at)}
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <Link href={href} variant="plain">
-                          <Mono title={run.id} tone="default">{shortHash(run.id)}</Mono>
-                        </Link>
-                      </Table.Cell>
-                    </Table.Row>
+                        <span className="whitespace-nowrap">
+                          {run.agent_id ? (
+                            <Mono title={run.agent_id}>{shortHash(run.agent_id)}</Mono>
+                          ) : (
+                            "—"
+                          )}
+                        </span>
+                        <span className="whitespace-nowrap">
+                          {duration}
+                        </span>
+                        <span className="whitespace-nowrap">
+                          {created}
+                        </span>
+                        <Mono title={run.id} tone="default">{shortHash(run.id)}</Mono>
+                      </Link>
+                    </li>
                   );
                 })}
-              </Table.Body>
-            </Table>
+              </ul>
+            </div>
           </div>
         )}
       </Panel>

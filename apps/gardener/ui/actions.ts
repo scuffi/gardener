@@ -95,7 +95,7 @@ function commandActions(context: CommandContext): Action[] {
     },
     {
       id: "cmd:accent",
-      title: `Use ${green ? "Cloudflare orange" : "Gardener green"} accent`,
+      title: `Use ${green ? "ember orange" : "Gardener green"} accent`,
       icon: PaletteIcon,
       keywords: "brand colour color accent",
       run: () => context.setAccent(green ? "orange" : "green"),
