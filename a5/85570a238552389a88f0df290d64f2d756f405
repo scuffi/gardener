@@ -1,0 +1,73 @@
+apps/gardener/ui/clickable-surfaces.test.tsx
+  s_42da1762456142::t_53f67202e12f5a 12,63
+apps/gardener/ui/features/agents/agent-detail-page.test.tsx
+  s_8a4a06366b8007::t_a3eeb0a75d485c 1-145
+apps/gardener/ui/features/agents/agent-editor-page.test.tsx
+  s_d7117c5b9a3d11::t_97ab2f05dacb38 1-91
+apps/gardener/ui/features/agents/components/agent-deployments.tsx
+  s_aace700a036ea4::t_5cb0cef189d809 1-801
+apps/gardener/ui/features/repositories/constants.ts
+  s_42da1762456142::t_a16ccca5aedbb5 1-63
+apps/gardener/ui/features/repositories/repositories-page.test.tsx
+  s_b834ae27454fe3::t_87659840b53f8a 1-297
+apps/gardener/ui/features/settings/components/team-panel.test.tsx
+  s_b834ae27454fe3::t_12fe93f378ecd9 4,194-217
+apps/gardener/ui/guarded-actions.test.tsx
+  s_42da1762456142::t_5f326d953586d6 20-21,125-138,149-153,258,265-266,268-276,280-296,298-299,332,337
+apps/gardener/ui/primitives/confirm-dialog.test.tsx
+  s_b834ae27454fe3::t_30cf644b55a1fc 1-60
+apps/gardener/ui/primitives/confirm-dialog.tsx
+  s_b834ae27454fe3::t_811448f99b7493 35-38,49-59,64-67
+apps/gardener/ui/primitives/status-badge.test.tsx
+  s_8a4a06366b8007::t_0bbba47186178f 1-62
+apps/gardener/ui/shell/account-menu.test.tsx
+  s_b834ae27454fe3::t_6d4c37b0f76967 68-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a585570a238552389a88f0df290d64f2d756f405",
+  "prompts": {},
+  "sessions": {
+    "s_42da1762456142": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "053a5673-f90f-4106-8f86-a7ea6561dd87",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_8a4a06366b8007": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a4be-a5f4-7bb3-91c9-812ecb107349",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_aace700a036ea4": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a062bb-004f-7dad-9810-57254ba63b56",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_b834ae27454fe3": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a4be-a5d7-7dbc-a86c-4984cc7128b0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_d7117c5b9a3d11": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a48f-416d-7e02-94ea-4d11a10eef03",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
