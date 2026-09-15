@@ -2,7 +2,7 @@
 
 ## Current status
 
-The strict package format, parser/compiler, Agent-native dashboard, paused drafts, immutable publication, activation/enablement endpoints, and draft-only OAuth MCP boundary exist in the foundation. Git publication automation, CLI packaging, meaningful runtime simulation, and end-to-end Agent execution are not complete. Current simulation is validation-only and cannot execute persistent effects.
+The strict package format, parser/compiler, Agent-native dashboard, paused drafts, immutable publication, workspace-global revision activation, structural assignment APIs, repository policy APIs, and draft-only OAuth MCP boundary exist in the local foundation. Gardener v7 is not deployed yet. Git publication automation, CLI packaging, meaningful runtime simulation, and general end-to-end Agent execution are not complete. Current simulation is validation-only and cannot execute persistent effects; production remains limited to the bounded issue-opened-to-comment path.
 
 ## Portable package
 
@@ -28,8 +28,6 @@ description: Reviews opened pull requests and prepares bounded feedback.
 triggers:
   - github.pull_request.opened
   - github.pull_request.synchronize
-repositories:
-  - this
 capabilities:
   observation:
     - github.pull_request.read
@@ -78,7 +76,6 @@ Required:
 - `schema`: exactly `gardener.agent/v1`.
 - `name` and `description`.
 - `triggers`: one or more exact `RepositoryEventV2` trigger selectors.
-- `repositories`: immutable numeric GitHub repository IDs or `this`.
 
 Optional:
 
@@ -88,7 +85,7 @@ Optional:
 - `skills` and `evals`: paths to files included in the same package.
 - `eligibility`: numeric event actor IDs, numeric resource-author IDs, label requirements, base branches, and draft-PR inclusion.
 
-`this` is convenience syntax only. Dashboard authoring requires an explicit active repository context (and shows its immutable numeric ID); that context is preserved in provenance. Publication must compile `this` to that one immutable repository ID and fails if it is absent or inactive. It never means every current or future repository.
+`gardener.agent/v1` is portable and repository-independent. `repositories`, `this`, repository selectors, repository expansion, and repository provenance are not part of the source or compiled behavior. Repository access is assigned structurally after publication; putting any of those fields in frontmatter fails strict validation.
 
 ### Observation capabilities
 
@@ -157,25 +154,27 @@ Catalog presence is not proof of deployed execution. Connect currently executes 
 mutable paused draft
   → validate and simulate
   → publish immutable paused revision
-  → owner activates revision
-  → owner separately enables Agent
+  → owner activates revision workspace-wide
+  → owner separately creates/enables repository assignments
 ```
 
-Publication never activates or enables. Activation never changes operation policy. Enablement cannot supply missing capabilities. Agents start disabled, and global/repository pause remains an independent admission control.
+Publication never activates or deploys. Activation changes only the workspace-global active revision pointer. Repository deployment is a separate, versioned assignment, disabled by default. A run is enabled only when an active revision and an enabled, non-removed assignment for that exact repository both exist; assignment is the sole enable gate. Global and repository pauses remain independent admission controls.
 
-A revision records exact source, parsed semantics, compiled repository IDs, supporting-file hashes, provenance, source/semantic/compiled hashes, and compiler/runtime/catalog versions. Every run additionally pins the instance policy/effective capability snapshot and harness adapter version.
+“All current repositories” is an assignment-creation convenience, not an Agent selector. It atomically materializes exactly the active repository IDs confirmed at that moment and never follows repositories added later.
+
+A revision records exact source, parsed semantics, supporting-file hashes, source/semantic/compiled hashes, and compiler/runtime/catalog versions. Every run additionally pins its exact assignment, repository policy, workspace policy/effective capability snapshot, and harness adapter version.
 
 ## Authoring channels
 
 ### Dashboard
 
-The target Agents area supports prompt-to-`AGENT.md`, direct Markdown editing, capability review, safe simulation, publication, revision diffs, activation, and enablement. Inbox is the default operational surface. This new dashboard is not yet integrated.
+The Agents area supports prompt-to-`AGENT.md`, direct Markdown editing, capability review, safe simulation, publication, revision diffs, workspace-global activation, and separate repository assignment management. Inbox is the default operational surface. Assignment add/enable/re-enable/expand and revision activation are owner-only; members may disable/remove assignments and narrow authority.
 
 A prompt may draft behavior and suggest capabilities, but it cannot approve those capabilities. The owner reviews structured capabilities separately.
 
 ### Git-native
 
-A package may live in a repository and carry provenance bound to immutable repository ID, commit SHA, and path. Trusted host code must fetch exact bytes through Connect and call the canonical authoring service. A normal Git push does not itself publish, activate, or enable an Agent. Automated Git ingestion remains a blocker.
+A package may live in any repository, but repository location does not become Agent semantics or deployment authority. Trusted host code must fetch exact bytes through Connect and call the canonical authoring service. A normal Git push does not itself publish, activate, or create/enable an assignment. Automated Git ingestion remains a blocker.
 
 ### CLI
 
@@ -183,7 +182,7 @@ A future CLI may validate, explain, diff, simulate, and save paused drafts throu
 
 ### OAuth MCP
 
-Gardener is the OAuth authorization server, with consent backed by the existing GitHub-authenticated owner session. It uses a stateless `createMcpHandler` surface, not deprecated `McpAgent` state.
+Gardener is the OAuth authorization server, with consent backed by an authorized opaque Gardener workspace session. It uses a stateless `createMcpHandler` surface, not deprecated `McpAgent` state.
 
 Scopes:
 
@@ -193,10 +192,16 @@ Scopes:
 - `gardener:agents:drafts:write`
 - `gardener:runs:read`
 
-Tools can list/get/catalog/validate/explain/diff/simulate Agents, save a mutable paused draft, and read a bounded redacted trace. They cannot publish an immutable revision, activate, enable, approve, alter policy or repositories, answer authority-bearing interruptions, or execute GitHub effects. MCP simulation is non-mutating. The deployment must provision OAuth storage and finish staging/security validation before advertising this endpoint.
+Tools can list/get/catalog/validate/explain/diff/simulate Agents, save a mutable paused draft, and read a bounded redacted trace. They cannot publish an immutable revision, activate, create or change assignments, approve, alter policy or repositories, answer authority-bearing interruptions, or execute GitHub effects. MCP simulation is non-mutating. MCP authorization revalidates active membership on every request, and dashboard-only mutations reject the MCP principal kind. The deployment must provision OAuth storage and finish staging/security validation before advertising this endpoint.
+
+## Effective authority and overlap
+
+For persistent effects, effective authority is the most restrictive of the workspace policy ceiling, repository policy, revision effect ceiling, and assignment authority ceiling. Snapshot authority is intersected with live state, so narrowing applies immediately and later widening never upgrades an in-flight run. Missing, partial, or invalid repository policy fails closed and admits no run. Workspace-local capabilities are evaluated against the revision plus workspace/repository capability policy; the assignment's persistent-effect authority ceiling does not gate them.
+
+Overlapping assignments are allowed. Gardener warns when enabled Agents on the same repository share both a trigger and a requested persistent-effect capability. Assignment and activation confirmation requires a fresh fingerprint; stale workspace state requires a new warning and confirmation. The warning does not choose a winner: there is no hidden arbitration, and every matching eligible Agent runs independently.
 
 ## Runtime capability requests
 
-Safe observation/workspace needs may be requested as typed, expiring one-run interruptions when the catalog and instance policy classify them as grantable. Repository expansion, a new persistent effect, broader actors, or an authority increase requires a new revision. Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
+Safe observation/workspace needs may be requested as typed, expiring one-run interruptions when the catalog and policy classify them as grantable. A new persistent effect, broader actors, or an authority increase requires a new revision. Repository access changes require an assignment change. Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
 
 A human response must be authenticated, eligible-responder-bound, nonce-bound, schema-valid, unexpired, and replay-protected. Freeform comments, email, Slack, or model-readable text do not count.

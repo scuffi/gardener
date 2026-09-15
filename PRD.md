@@ -2,7 +2,7 @@
 
 ## Product goal
 
-Gardener is a repository-stewardship product that customers deploy into their own Cloudflare account. A customer authors portable Gardener Agents in `AGENT.md`, reviews their structural capabilities, tests them without persistent effects, publishes immutable paused revisions, and explicitly activates and enables them. Gardener plans flexibly but can act only through policy-controlled, exact, typed GitHub operations executed by a credential-isolated Connect service.
+Gardener is a repository-stewardship product that customers deploy into their own Cloudflare account. A customer authors portable, repository-independent Gardener Agents in `AGENT.md`, reviews their structural capabilities, tests them without persistent effects, publishes immutable paused revisions, activates one revision workspace-wide, and separately assigns it to repositories. Gardener plans flexibly but can act only through policy-controlled, exact, typed GitHub operations executed by a credential-isolated Connect service.
 
 This is a hard Agent-native cutover. The old form-defined automation product and its previous execution transport are not compatibility requirements.
 
@@ -18,7 +18,7 @@ An instance owner should be able to:
 2. Land in Inbox and see decisions, failures, drafts, regressions, and cleanup problems.
 3. Describe an Agent, review/edit its exact `AGENT.md`, and inspect every requested capability.
 4. Validate and simulate it without persistent effects.
-5. Publish an immutable paused revision, activate it explicitly, and enable it separately.
+5. Publish an immutable paused revision, activate it explicitly, and separately create/enable exact-repository assignments.
 6. Run multiple Agents and multiple tasks concurrently with isolated workspaces.
 7. Answer typed, durable interruptions after disconnect/reconnect.
 8. Understand what was observed, planned, approved, executed, retried, or rejected and why.
@@ -31,9 +31,9 @@ An instance owner should be able to:
 
 Gardener owns:
 
-- dashboard, Inbox, owner session, and management API;
-- Agent packages, drafts, immutable revisions, activation, and enablement;
-- repository selection, capability policy, operation policy, and pauses;
+- dashboard, Inbox, provider-neutral users, owner/member memberships, invitations, revocable opaque sessions, and management API;
+- Agent packages, drafts, immutable revisions, global activation, and structural repository assignments;
+- repository inventory, workspace/repository capability and operation policy, and pauses;
 - D1 event/run/task/step/interruption/grant/effect/receipt/audit records;
 - one generic `AgentRunWorkflow`;
 - AI binding and the Flue runtime adapter;
@@ -56,31 +56,30 @@ Connect is managed by default. Advanced customers may self-host the same indepen
 
 ## Agent package and authoring
 
-`AGENT.md` is the canonical portable source. Strict YAML frontmatter declares exact triggers, immutable repository selectors, explicit observation/workspace/effect capabilities, eligibility, authority ceiling, limits, skills, and evals. Markdown describes behavior only.
+`AGENT.md` is the canonical portable, repository-independent source. Strict YAML frontmatter declares exact triggers, explicit observation/workspace/effect capabilities, eligibility, an effect authority ceiling, limits, skills, and evals. Markdown describes behavior only. `repositories`, `this`, repository selectors/expansion, and repository provenance are not part of `gardener.agent/v1`.
 
 Requirements:
 
-- preserve exact source bytes, parsed semantics, compiled revision, provenance, hashes, and compiler/runtime/catalog versions;
+- preserve exact source bytes, parsed semantics, compiled revision, supporting-file hashes, and compiler/runtime/catalog versions;
 - reject unknown fields/capabilities/actions, duplicate keys/paths, aliases, traversal, malformed UTF-8, oversized content, and missing package references;
 - omitted capabilities mean none;
-- compile `this` to an immutable repository ID;
 - never interpolate repository/model/channel content as authority;
 - use the same parser, compiler, semantic diff, simulation, and persistence API for every authoring channel;
-- prompt generation may propose a package but cannot approve capabilities;
-- Git provenance binds repository ID, commit SHA, and package path.
+- prompt generation may propose a package but cannot approve capabilities.
 
-MCP is OAuth-protected and stateless. Its scopes permit read, validate, explain/diff, non-mutating simulation, paused-draft writes, and redacted traces only. It cannot publish revisions, activate, enable, change policy/repositories, approve, answer authority-bearing waits, or execute effects.
+MCP is OAuth-protected and stateless. Its scopes permit read, validate, explain/diff, non-mutating simulation, paused-draft writes, and redacted traces only. It cannot publish revisions, activate, create/change assignments, change policy/repositories, approve, answer authority-bearing waits, or execute effects.
 
 ## Lifecycle and administration
 
-- New Agents are disabled.
 - Drafts are mutable and paused.
 - Publication creates an immutable paused revision.
-- Activation is an explicit owner action that changes the active revision.
-- Enablement is a separate owner action.
-- Activation/enablement cannot raise operation policy.
-- Revisions show semantic differences in triggers, repositories, capabilities, behavior, limits, eligibility, skills, and evals.
-- Global and repository pauses remain independent of Agent state.
+- Activation is an explicit owner action that changes the workspace-global active revision.
+- Repository assignment is separate, versioned, structural, and disabled by default.
+- Global activation plus an enabled, non-removed assignment for the exact repository is the sole enable gate.
+- “All current” atomically materializes the exact current active repository IDs; it is not a selector and never follows future repositories.
+- Activation/assignment cannot raise policy.
+- Revisions show semantic differences in triggers, capabilities, behavior, limits, eligibility, skills, and evals.
+- Global and repository pauses remain independent admission controls.
 
 ## Events and eligibility
 
@@ -90,20 +89,15 @@ Trusted eligibility runs outside the model against typed, bounded, versioned fac
 
 Multiple matching Agents may be admitted for one event. One Agent may have simultaneous runs. There is no global Agent lock.
 
-## Capabilities and policy
+## Capabilities, assignments, and policy
 
-Authority is the intersection of:
+Persistent-effect authority is the most restrictive of event/repository eligibility, workspace policy ceiling, repository policy, compiled revision effect ceiling, assignment authority ceiling, authoring authorization, any typed one-run grant, authenticated interruption decision, exact-effect approval, and Connect live-state checks. Admission snapshots this authority; live restrictions apply immediately, while later widening never upgrades an in-flight run. Missing, partial, or invalid repository policy fails closed.
 
-- event/repository eligibility;
-- compiled revision capability ceiling;
-- instance policy;
-- authoring authorization;
-- any typed one-run grant;
-- authenticated interruption decision;
-- exact-effect approval;
-- Connect live-state execution checks.
+Observation and workspace capabilities are intersected separately with the revision and workspace/repository capability policy. Workspace-local capabilities are not gated by the assignment's persistent-effect authority ceiling.
 
-Safe observations and bounded workspace needs may be requested for one run. Repository expansion, new persistent effect kinds, broader actors, or higher authority require a new revision. Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
+Overlapping Agents are allowed. Assignment and activation changes warn when enabled Agents on the same repository intersect on both triggers and requested persistent effects; confirmation requires a fresh state-bound fingerprint. This warning performs no hidden arbitration: all matching eligible Agents are independent.
+
+Safe observations and bounded workspace needs may be requested for one run. New persistent effect kinds, broader actors, or higher authority require a new revision; repository access requires an assignment change. Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
 
 Every effect kind has an independent `disabled`, `approval`, or `automatic` mode. Initially disable unrestricted networking, dependency installation, direct pushes, automatic code changes, and auto-merge. High-impact operations remain especially restrictive.
 
@@ -184,30 +178,30 @@ Adapters must pass the same conformance suite for identity binding, structured o
 
 ## Inbox and observability
 
-Inbox is the canonical owner decision surface. It includes typed interruptions, exact-effect approvals, blocked/failed runs, drafts awaiting activation, eval regressions, and workspace cleanup failures.
+Inbox is the canonical workspace decision surface. It includes typed interruptions, exact-effect approvals, blocked/failed runs, drafts awaiting activation, eval regressions, and workspace cleanup failures.
 
 Run pages show nested parallel tasks/steps, model/workspace usage, redacted evidence/artifacts, waits, effects, receipts, retries, and cancellation. Traces explain; audit records and receipts prove. Redacted real runs may become versioned eval fixtures, but model/eval scores may block or request review and never authorize an effect.
 
-Notification channels are adapters only. Freeform Slack, email, issue comments, GitHub comments, or model-readable text cannot confer authority.
+Future channels are adapters over durable Inbox/run/output events only. Credentials and destinations are structural and model-invisible; authenticated, nonce-bound responses terminate in the existing interruption decision service, with Inbox and D1 authoritative. No channels schema, API, runtime, or UI is implemented, and Slack/Teams have neither runtime credentials nor blanket approval. Freeform channel text cannot confer authority.
 
 ## Authentication and optional Access
 
-Dashboard sign-in, GitHub App installation, instance authentication, OAuth MCP credentials, and runtime grants are distinct.
+Dashboard sign-in, GitHub App installation, instance authentication, OAuth MCP credentials, and runtime grants are distinct. One deployment/D1 is one workspace. Connect signs a one-time owner/member identity assertion; Gardener exchanges it for a hashed, opaque, revocable local session and owns provider-neutral users, immutable external-subject links, memberships, and invitations. The Connect owner membership is permanent. Members may propose and narrow; only owners activate, add/enable/expand assignments, approve, widen policy, manage members, synchronize repositories, or manage installation. MCP revalidates active membership per request and cannot use its principal kind to reach dashboard-only authority.
 
-Cloudflare Access is optional defense in depth. When used, one full-host Access application has a human Allow policy and a Connect-specific Service Auth policy. There is no `/hooks/connect` bypass. Access admission never replaces the Gardener owner session or signed Connect event verification.
+Cloudflare Access is optional defense in depth. When used, one full-host Access application has a human Allow policy and a Connect-specific Service Auth policy. There is no `/hooks/connect` bypass. Access admission never replaces Gardener's opaque workspace session, active-membership/role checks, or signed Connect event verification. The Connect assertion is consumed only during session exchange and is not the persistent browser cookie.
 
 ## Destructive cutover
 
-The production cutover deletes old automation definitions/revisions/events/runs/proposals/results/audit data without export. It retains repositories, instance settings/owner authentication state where applicable, and operation-policy modes. No compatibility runtime or legacy fallback survives. New Agents are created as disabled/paused objects after cutover.
+The clean pre-V1 v7 cutover intentionally deletes old test Agents and run/runtime evidence without export so Agent V1 has one repository-independent meaning. It retains repositories, settings, owner state, and policy modes. No compatibility runtime or legacy fallback survives; new deployments start from paused drafts and disabled assignments.
 
-The reset occurs only after exhaustive validation and owner acknowledgement.
+The reset occurs only after exhaustive validation and owner acknowledgement, with execution paused, zero non-terminal runs, reviewed count/hash/key manifests, guarded v6 migration statements, external Workflow/DO/R2/workspace cleanup, and post-cutover retained-state verification. Gardener v7 is implemented locally but not yet deployed. Release order is the already-deployed Connect stage 1 owner-only hardening, Gardener v7 plus verification gate, then Connect stage 2 member login; see [ADR 0001](docs/adr/0001-team-workspace-and-agent-deployments.md).
 
 ## Acceptance criteria
 
 - One-secret managed deployment and multi-repository owner onboarding work from a public source.
 - No GitHub/provider credential reaches Gardener, source control, browser APIs, prompts, MCP clients, tools, logs, URLs, or Computer.
 - All authoring channels compile identical bytes/semantics into immutable paused revisions.
-- Activation and enablement require separate owner actions.
+- Revision activation and repository assignment/enablement require separate owner actions.
 - Events can admit multiple parallel Agents without shared writable workspaces.
 - Interruptions survive disconnects and reject expiry, wrong responder, wrong nonce, changed payload, and replay.
 - Every effect is exact-hash-bound, persisted, policy-checked, live-revalidated, and receipted.

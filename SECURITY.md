@@ -12,25 +12,27 @@ The current runtime is operational only for one experimental bounded path: an el
 - Connect never returns installation tokens or exposes a raw GitHub proxy.
 - Credentials never enter source control, URLs, logs, API payloads, Agent packages, prompts, model context, MCP clients, Computer files, artifacts, or local tools.
 - The customer instance token is a high-entropy Worker secret. Connect stores its SHA-256 hash; the token itself is not arbitrary GitHub write authority.
-- Dashboard sessions, GitHub App installation, Gardener instance authentication, OAuth MCP tokens, one-run grants, and exact-effect grants are separate credentials and cannot substitute for one another.
+- The Connect identity assertion is single-use and exchange-only. Gardener records its identifier hash for replay prevention and issues a high-entropy opaque dashboard session whose token is stored only as a hash, can expire, and can be revoked.
+- Opaque dashboard sessions, GitHub App installation, Gardener instance authentication, OAuth MCP tokens, one-run grants, and exact-effect grants are separate credentials and cannot substitute for one another.
 - Optional Cloudflare Access credentials are encrypted by Connect with an independent AES-256-GCM key, bound to the instance, and used only for outbound relay. Access never replaces inner authentication.
 - Agent workspaces receive exact-SHA snapshots with no credentialed Git remote.
 
 ## Agent and authoring invariants
 
+- One Gardener deployment/D1 database is one workspace. Gardener owns provider-neutral users, external identity links, invitations, and owner/member memberships. Exactly one permanent owner is bootstrapped from the pre-existing Connect owner; there is no Gardener promotion or ownership-transfer UI.
 - `AGENT.md` prose describes behavior only. It cannot grant repositories, capabilities, effect kinds, network, credentials, policy modes, or bypasses.
 - Unknown fields, actions, capabilities, operations, package paths, or unavailable trusted facts fail closed. Omitted capabilities mean none.
-- Exact authored bytes, strict parsed semantics, compiled immutable repository IDs, provenance, hashes, and component versions are preserved.
-- Drafts are mutable and paused. Publication creates an immutable paused revision. Activation and enablement are separate owner actions.
+- Exact authored bytes, strict parsed semantics, supporting-file identities, hashes, and component versions are preserved. Agent V1 source and compiled behavior are repository-independent.
+- Drafts are mutable and paused. Publication creates an immutable paused revision; owner activation changes the workspace-global active revision. Repository deployment is a separate, versioned structural assignment disabled by default. Global activation plus an enabled exact-repository assignment is the sole run enable gate.
 - Dashboard prompts, repository content, comments, channel text, model output, tools, and eval graders are untrusted for authorization.
-- OAuth MCP requires the existing GitHub-authenticated owner consent, exact audience/client/owner agreement, explicit scopes, CSRF/replay protection, and redaction. It may save paused drafts but cannot publish, activate, enable, approve, alter policy/repositories, or execute effects.
+- OAuth MCP requires an authorized opaque workspace session for consent, exact audience/client/principal agreement, explicit scopes, CSRF/replay protection, redaction, and per-request active-membership revalidation. It may save paused drafts but cannot publish, activate, change assignments, approve, alter policy/repositories, or execute effects.
 
 ## Runtime authority invariants
 
-Authority is the intersection of admission/pause, trusted event eligibility, the compiled revision capability ceiling, instance policy, authoring authorization, any temporary one-run grant, authenticated interruption decisions, exact-effect approval, and Connect execution checks.
+Authority is the most restrictive intersection of admission/pause, trusted event eligibility, the repository-independent compiled revision capability ceiling, workspace policy, complete repository policy, the structural assignment ceiling, authoring authorization, any temporary one-run grant, authenticated interruption decisions, exact-effect approval, and Connect execution checks. Missing or partial repository policy fails closed. Workspace-local capabilities are not gated by the assignment's persistent-effect ceiling.
 
 - Planning cannot persistently mutate GitHub. Harness tools can expose observations and isolated workspace actions only.
-- Runtime repository expansion, new effect kinds, broader actors, or higher authority requires a new revision.
+- Repository access changes require a structural assignment change. New effect kinds, broader actors, or higher revision authority require a new revision.
 - Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
 - Every interruption is typed, expiry-bound, eligible-responder-bound, nonce-bound, payload-bound, and replay-protected.
 - Every effect has a stable operation ID, canonical input hash, persisted intent, policy snapshot, explicit retry class, and persisted receipt.
@@ -71,7 +73,7 @@ Computer is preview-only and Flue is experimental. Flue is the only configured A
 
 D1 is authoritative for decisions and receipts. Large content belongs in host-controlled R2 with bounded retention. Product traces are redacted observability projections and are not security audit proof. Secrets and upstream authorization headers must be removed from logs/errors; MCP applies an additional output redaction pass.
 
-The Agent-native production cutover intentionally deletes old automation data without export. Repository selections, instance settings/owner state where applicable, and existing operation-policy modes are retained. Operators must acknowledge and test the destructive reset before production.
+The clean pre-V1 Gardener v7 cutover intentionally deletes old test Agents and run/runtime evidence without export. Repositories, settings, the Connect owner state, and existing policy modes are retained. Provider-neutral users, owner/member membership, invitations, hashed opaque sessions, structural assignments, and repository policy are implemented locally in v7. Connect stage 1 is deployed owner-only; Gardener v7 and Connect stage 2 member login are not deployed yet. Operators must acknowledge, test, and gate the destructive reset before deployment.
 
 ## Required production controls
 

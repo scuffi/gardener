@@ -1,6 +1,6 @@
 # Optional Cloudflare Access protection
 
-Cloudflare Access is optional defense in depth, not Gardener's primary authentication. The recommended managed deployment requires only `GARDENER_INSTANCE_TOKEN`; Gardener owner sessions, OAuth MCP tokens, and Connect-signed events remain the inner security boundaries.
+Cloudflare Access is optional defense in depth, not Gardener's primary authentication. The recommended managed deployment requires only `GARDENER_INSTANCE_TOKEN`; Gardener-owned opaque workspace sessions, OAuth MCP tokens, and Connect-signed events remain the inner security boundaries. A Connect identity assertion is consumed once to create the opaque session; it is never the persistent browser cookie.
 
 ## One full-host application
 
@@ -12,12 +12,12 @@ When Access protects Gardener, configure one self-hosted application for the com
 Do not create a public or Bypass rule for `/hooks/connect`. Do not use **Any Access Service Token**.
 
 ```text
-Browser → Access human policy → Gardener owner session → dashboard/consent
+Browser → Access human policy → Gardener opaque workspace session → dashboard/consent
 Connect → Access Service Auth → Connect-signed event → Gardener event verifier
 MCP client → Access policy if applicable → OAuth bearer token → MCP scope/audience checks
 ```
 
-Access admission alone authorizes none of: dashboard APIs, OAuth consent, Agent publication/activation/enablement, interruptions, policies, or GitHub effects.
+Access admission alone authorizes none of: dashboard APIs, OAuth consent, Agent publication/activation, repository assignments, interruptions, policies, membership administration, or GitHub effects. Gardener still revalidates the opaque session, active membership, role, and principal kind.
 
 ## Configure machine access
 

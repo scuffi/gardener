@@ -4,8 +4,6 @@ name: Issue triage greeter
 description: Posts one concise, issue-specific triage response on explicitly labeled test issues.
 triggers:
   - github.issue.opened
-repositories:
-  - this
 capabilities:
   observation:
     - github.issue.read

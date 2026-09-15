@@ -21,7 +21,7 @@ Advanced customers may operate the same boundary themselves. Self-hosting change
 
 ### Customer Gardener
 
-`apps/gardener` owns owner sessions, repository selection, Agent packages, mutable drafts, immutable revisions, activation and enablement state, policy, Inbox decisions, events, runs, tasks, steps, interruptions, temporary grants, effect intents, receipts, leases, artifacts, and audit history.
+`apps/gardener` owns provider-neutral users, owner/member memberships and invitations, opaque dashboard sessions, repository inventory and structural assignments, Agent packages, mutable drafts, immutable revisions, the workspace-global active revision pointer, policy, Inbox decisions, events, runs, tasks, steps, interruptions, temporary grants, effect intents, receipts, leases, artifacts, and audit history.
 
 Gardener has an AI binding but no GitHub credential. Standard deployment needs no model-provider secret. Host code always selects Gardener's Flue adapter; the immutable run snapshot pins the Flue harness ID and adapter version.
 
@@ -29,11 +29,11 @@ Gardener has an AI binding but no GitHub credential. Standard deployment needs n
 
 These layers remain separate and fail closed:
 
-1. **Admission:** global/repository pause and an enabled Agent with an active immutable revision.
+1. **Admission:** global/repository pause, one workspace-global active immutable revision, an enabled non-removed structural assignment for the event's exact repository, and a complete valid repository policy. Assignment is the sole enable gate; Agent-level enabled state is not authoritative.
 2. **Event eligibility:** a `RepositoryEventV2` trigger, immutable repository ID, and trusted actor/resource facts.
-3. **Revision capability ceiling:** capabilities explicitly requested by the compiled Agent revision.
-4. **Instance policy:** observations and workspace/effect modes (`disabled`, `approval`, `automatic`).
-5. **Authoring authorization:** owner session or OAuth MCP scopes; authoring never implies runtime authority.
+3. **Revision capability ceiling:** capabilities explicitly requested by the compiled, repository-independent Agent revision.
+4. **Workspace and repository policy:** observations and workspace/effect modes (`disabled`, `approval`, `automatic`); missing, partial, malformed, or unhashable repository policy fails closed.
+5. **Authoring authorization:** an authorized opaque dashboard session or OAuth MCP scopes; authoring never implies runtime authority.
 6. **One-run grants:** narrowly scoped, expiring approvals for grantable observation/workspace needs.
 7. **Typed interruption:** authenticated, responder-bound, nonce-bound human input or decision.
 8. **Exact-effect decision:** one canonical operation payload and hash, never a blanket plan approval.
@@ -43,9 +43,9 @@ Repository content, comments, model output, Agent prose, channel messages, and e
 
 ## Authoring and immutable data
 
-`AgentSourceV1` preserves the exact bytes of `AGENT.md` and supporting files as canonical base64. The parser separately produces strict semantics. Compilation resolves `this` and explicit selectors to immutable GitHub repository IDs and records source, semantic, referenced-file, compiler, catalog, and runtime identities.
+`AgentSourceV1` preserves the exact bytes of `AGENT.md` and supporting files as canonical base64. The parser separately produces strict semantics. `gardener.agent/v1` source and compiled behavior are repository-independent: there is no `repositories` field, `this` shorthand, repository selector, expansion, or repository provenance. Compilation records source, semantic, referenced-file, compiler, catalog, and runtime identities only.
 
-Drafts remain mutable and paused. Publication creates an immutable paused revision. Activation changes the active revision pointer. Enablement is a separate owner action. A run binds `CompiledAgentRevisionV1`, effective capabilities, policy, harness, budgets, and all component versions in `AgentRunSnapshotV1`.
+Drafts remain mutable and paused. Publication creates an immutable paused revision. Owner activation changes the one workspace-global active revision pointer. Repository deployment is a separate, versioned structural assignment that is disabled by default. Only an active revision plus an enabled, non-removed assignment for the event's exact repository can admit a run. A run binds `CompiledAgentRevisionV1`, its exact assignment and repository policy, effective capabilities, workspace policy, harness, budgets, and all component versions in `AgentRunSnapshotV1`.
 
 Dashboard, direct Markdown, Git-native publication, CLI clients, and OAuth MCP are intended to call the same canonical services. MCP currently exposes only read, validate, explain, diff, simulation, paused-draft, and redacted-trace tools.
 
@@ -55,7 +55,7 @@ The target runtime has one deployed generic `AgentRunWorkflow`; user Agent creat
 
 D1 is authoritative for:
 
-- Agents, drafts, revisions, activation, and enablement;
+- Agents, drafts, revisions, global activation, structural repository assignments, and assignment history;
 - normalized events and admission decisions;
 - runs, parallel tasks, durable steps, usage, and errors;
 - interruptions and one-run capability grants;
@@ -97,14 +97,19 @@ Planning may read and alter only isolated workspace state. It cannot persistentl
 
 Every external effect requires a stable idempotency key, canonical input hash, persisted intent, explicit retry classification, and persisted receipt. Shared resources use expected SHAs, timestamps/state, operation hashes, and optimistic preconditions. Narrow resource-level coordination is allowed only when an operation is intrinsically exclusive; there is no global Agent mutex.
 
-## Inbox and channels
+## Inbox and future channel seam
 
-Inbox is the canonical decision surface for interruptions, exact effects, blocked/failed runs, draft activation, regressions, and cleanup failures. Slack, email, GitHub, and other channels may notify or carry authenticated nonce-bound responses later. Freeform channel text never confers authority. Product traces explain behavior; immutable audit records, hashes, grants, and receipts prove decisions.
+Inbox and D1 remain authoritative for interruptions, exact effects, blocked/failed runs, draft activation, regressions, cleanup failures, and their decisions. A future channel adapter may observe durable Inbox, run, and output events; credentials and destinations remain structural host configuration and are never visible to the model. A response may affect authority only after authentication and nonce binding, and it must terminate in the existing interruption decision service. Freeform channel text never confers authority.
 
-## Authentication boundaries
+No channels schema, API, runtime, or UI is implemented. Slack and Teams have no runtime credentials and no blanket-approval path. This is a prose-only integration seam, not a shipped feature. Product traces explain behavior; immutable audit records, hashes, grants, and receipts prove decisions.
 
-- The Gardener owner session is established from a Connect-issued, instance-audienced GitHub identity token and stored in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie.
+## Workspace and authentication boundaries
+
+One Gardener deployment and its D1 database are one workspace; there is no workspace selector. Gardener owns provider-neutral users, external identity links, owner/member memberships, invitations, and session revocation. Exactly one permanent owner is bootstrapped from the pre-existing Connect owner; Gardener has no promotion or ownership-transfer UI.
+
+- Connect issues an instance-audienced, single-use identity assertion. Gardener validates it, records its identifier hash to prevent replay, and exchanges it once for a high-entropy opaque dashboard session. Only the session hash is stored; the assertion is not a persistent browser credential.
+- The opaque session is carried in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie on HTTPS and can expire or be revoked.
 - The instance authenticates to Connect with a high-entropy Worker secret; Connect stores its hash.
-- Connect signs events and identities; Gardener validates issuer, audience, signature, and expiry.
-- OAuth MCP tokens are separate authoring credentials with explicit scopes and owner consent.
-- Optional Cloudflare Access is an outer transport gate, never a replacement for any inner control.
+- Connect signs events and identity assertions; Gardener validates issuer, audience, signature, expiry, and active membership. MCP revalidates membership per request and cannot use its principal kind for dashboard-only authority.
+- OAuth MCP tokens are separate authoring credentials with explicit scopes and authorized workspace consent.
+- Optional Cloudflare Access is an outer transport gate, never a replacement for the opaque Gardener session or any other inner control.
