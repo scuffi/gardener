@@ -19,8 +19,23 @@ const policyInputSchema = z.object({
 
 type Bindings = { Bindings: Env; Variables: AuthorizationVariables };
 interface RepoRow { id: string; owner: string; name: string; active: number }
-interface OperationRow { operation_kind: string; mode: PolicyMode; policy_version: number }
-interface CapabilityRow { capability_kind: string; mode: PolicyMode; constraints_json: string; policy_version: number }
+interface OperationRow { operation_kind: string; mode: string; policy_version: number }
+interface CapabilityRow { capability_kind: string; mode: string; constraints_json: string; policy_version: number }
+
+export type RepositoryPolicyReadErrorCode =
+  | "repository_operation_policy_invalid"
+  | "repository_capability_policy_invalid"
+  | "repository_policy_version_invalid";
+
+export class RepositoryPolicyReadError extends Error {
+  readonly code: RepositoryPolicyReadErrorCode;
+
+  constructor(code: RepositoryPolicyReadErrorCode) {
+    super(code);
+    this.name = "RepositoryPolicyReadError";
+    this.code = code;
+  }
+}
 
 async function version(db: D1Database): Promise<number> {
   const row=await db.prepare("SELECT value FROM settings WHERE key='policy_version'").first<{value:string}>();
@@ -47,24 +62,49 @@ export async function getRepositoryPolicy(db:D1Database,repositoryId:string):Pro
     db.prepare("SELECT operation_kind,mode FROM operation_policies").all<{operation_kind:string;mode:PolicyMode}>(),
     db.prepare("SELECT capability_kind,mode,constraints_json FROM instance_capability_policies").all<{capability_kind:string;mode:PolicyMode;constraints_json:string}>(),
   ]);
-  const configured=operations.results.length===operationKindSchema.options.length &&
-    capabilities.results.length===observationCapabilityValues.length+workspaceCapabilityValues.length;
+  const operationRows=new Map<string,{mode:PolicyMode;policyVersion:number}>();
+  const capabilityRows=new Map<string,{mode:PolicyMode;constraints:unknown;policyVersion:number}>();
+  const rowVersions:number[]=[];
+  for(const row of operations.results){
+    const kind=operationKindSchema.safeParse(row.operation_kind); const mode=policyModeSchema.safeParse(row.mode);
+    if (!kind.success || !mode.success || !Number.isSafeInteger(row.policy_version) || row.policy_version < 1) {
+      throw new RepositoryPolicyReadError("repository_operation_policy_invalid");
+    }
+    operationRows.set(kind.data,{mode:mode.data,policyVersion:row.policy_version}); rowVersions.push(row.policy_version);
+  }
+  for(const row of capabilities.results){
+    const known=(observationCapabilityValues as readonly string[]).includes(row.capability_kind)||(workspaceCapabilityValues as readonly string[]).includes(row.capability_kind);
+    const mode=policyModeSchema.safeParse(row.mode); let constraints:unknown;
+    try {
+      constraints = JSON.parse(row.constraints_json);
+    } catch {
+      throw new RepositoryPolicyReadError("repository_capability_policy_invalid");
+    }
+    if (!known || !mode.success || !Number.isSafeInteger(row.policy_version) || row.policy_version < 1) {
+      throw new RepositoryPolicyReadError("repository_capability_policy_invalid");
+    }
+    capabilityRows.set(row.capability_kind,{mode:mode.data,constraints,policyVersion:row.policy_version}); rowVersions.push(row.policy_version);
+  }
+  const localVersion=rowVersions[0]??1;
+  if (rowVersions.some((rowVersion) => rowVersion !== localVersion)) {
+    throw new RepositoryPolicyReadError("repository_policy_version_invalid");
+  }
+  const configured=operationKindSchema.options.every(key=>operationRows.has(key)) &&
+    [...observationCapabilityValues,...workspaceCapabilityValues].every(key=>capabilityRows.has(key));
   const operationModes:Record<string,PolicyMode>={}; for(const key of operationKindSchema.options)operationModes[key]="disabled";
   const workspaceModes:Record<string,PolicyMode>={}; const allowedObservations:string[]=[];
   if(configured){
-    for(const row of operations.results) if(operationKindSchema.safeParse(row.operation_kind).success)operationModes[row.operation_kind]=row.mode;
-    for(const row of capabilities.results){
-      if((observationCapabilityValues as readonly string[]).includes(row.capability_kind)&&row.mode!=="disabled")allowedObservations.push(row.capability_kind);
-      if((workspaceCapabilityValues as readonly string[]).includes(row.capability_kind))workspaceModes[row.capability_kind]=row.mode;
-    }
+    for(const key of operationKindSchema.options)operationModes[key]=operationRows.get(key)!.mode;
+    for(const key of observationCapabilityValues)if(capabilityRows.get(key)!.mode!=="disabled")allowedObservations.push(key);
+    for(const key of workspaceCapabilityValues)workspaceModes[key]=capabilityRows.get(key)!.mode;
   }
-  const draft={schemaVersion:"v1" as const,repositoryId,repositoryDisplayName:`${repo.owner}/${repo.name}`,version:policyVersion,
+  const draft={schemaVersion:"v1" as const,repositoryId,repositoryDisplayName:`${repo.owner}/${repo.name}`,version:localVersion,
     policyHash:"0".repeat(64),operationModes,allowedObservations:allowedObservations.sort(),workspaceModes};
   const parsedDraft=repositoryPolicyV1Schema.parse(draft); const hash=await calculateRepositoryPolicyHash(parsedDraft); const policy=repositoryPolicyV1Schema.parse({...parsedDraft,policyHash:hash});
   const workspaceOp=Object.fromEntries(workspaceOperations.results.map(row=>[row.operation_kind,row.mode])) as Record<string,PolicyMode>;
   const workspaceCap=Object.fromEntries(workspaceCapabilities.results.map(row=>[row.capability_kind,row.mode])) as Record<string,PolicyMode>;
   const constraints=Object.fromEntries(workspaceCapabilities.results.map(row=>[row.capability_kind,JSON.parse(row.constraints_json)]));
-  const repositoryConstraints=Object.fromEntries(capabilities.results.map(row=>[row.capability_kind,JSON.parse(row.constraints_json)]));
+  const repositoryConstraints=Object.fromEntries(Array.from(capabilityRows,([key,row])=>[key,row.constraints]));
   const effectiveOps=Object.fromEntries(operationKindSchema.options.map(key=>[key,rank[operationModes[key]!]<=rank[workspaceOp[key]??"disabled"]?operationModes[key]:workspaceOp[key]??"disabled"])) as Record<string,PolicyMode>;
   const effectiveWorkspace=Object.fromEntries(workspaceCapabilityValues.map(key=>[key,rank[workspaceModes[key]??"disabled"]<=rank[workspaceCap[key]??"disabled"]?(workspaceModes[key]??"disabled"):(workspaceCap[key]??"disabled")])) as Record<string,PolicyMode>;
   return {configured,...(!configured?{message:"Policy not configured — nothing will run"}:{}),repository:{id:repo.id,name:`${repo.owner}/${repo.name}`,active:repo.active===1},policy,policyVersion,policyHash:hash,repositoryConstraints,

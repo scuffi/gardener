@@ -1,4 +1,9 @@
+/// <reference types="node" />
+import { DatabaseSync } from "node:sqlite";
+import { calculateWorkspacePolicyHash } from "@gardener/core";
 import { describe, expect, it, vi } from "vitest";
+import { instancePolicySnapshot, WorkspacePolicyReadError } from "../src/instance-state";
+import { d1Database, migration } from "./persistence-test-db";
 import { ComputerExecutionWorkspace } from "../src/workspace/adapter";
 import { executionWorkspaceId } from "../src/workspace/ids";
 import { selectExecutionBackend } from "../src/workspace/policy";
@@ -24,6 +29,76 @@ const shellAuthorization: ExecutionAuthorization = {
   maxOutputBytes: 4096,
   maxRuntimeMs: 5000,
 };
+
+function policyDatabase(): { sqlite: DatabaseSync; db: D1Database } {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec(migration());
+  sqlite.exec(migration("0005_agent_runtime_admission.sql"));
+  sqlite.exec(migration("0006_flue_harness_requests.sql"));
+  sqlite.exec(migration("0007_team_workspace_foundation.sql"));
+  return { sqlite, db: d1Database(sqlite) };
+}
+
+async function expectPolicyCode(db: D1Database, code: string): Promise<void> {
+  try {
+    await instancePolicySnapshot(db);
+    throw new Error("expected policy read to fail");
+  } catch (error) {
+    expect(error).toBeInstanceOf(WorkspacePolicyReadError);
+    expect((error as WorkspacePolicyReadError).code).toBe(code);
+  }
+}
+
+describe("v7 workspace policy snapshots", () => {
+  it("reads the positive real version and canonically hashes the complete constraints", async () => {
+    const { sqlite, db } = policyDatabase();
+    try {
+      sqlite.prepare("UPDATE operation_policies SET mode='automatic' WHERE operation_kind='issue.comment.create'").run();
+      const policy = await instancePolicySnapshot(db);
+      expect(policy.version).toBe(Number((sqlite.prepare("SELECT value FROM settings WHERE key='policy_version'").get() as { value: string }).value));
+      expect(policy.policyHash).toBe(await calculateWorkspacePolicyHash(policy));
+      expect(policy).toMatchObject({
+        allowedMergeMethods: ["squash"], maxCommentLength: 10_000, maxChangedFiles: 25,
+        deniedPathPrefixes: [".github/workflows", ".github/dependabot.yml"],
+      });
+    } finally { sqlite.close(); }
+  });
+
+  it.each([null, "0", "not-a-number"])("fails closed with a stable code for policy_version %s", async (value) => {
+    const { sqlite, db } = policyDatabase();
+    try {
+      sqlite.prepare("DELETE FROM settings WHERE key='policy_version'").run();
+      if (value !== null) sqlite.prepare("INSERT INTO settings(key,value) VALUES('policy_version',?)").run(value);
+      await expectPolicyCode(db, "policy_version_invalid");
+    } finally { sqlite.close(); }
+  });
+
+  it("fails closed on unknown operation and capability rows", async () => {
+    for (const statement of [
+      "INSERT INTO operation_policies(operation_kind,mode) VALUES('future.effect','automatic')",
+      "INSERT INTO instance_capability_policies(capability_kind,mode) VALUES('future.capability','automatic')",
+    ]) {
+      const { sqlite, db } = policyDatabase();
+      try {
+        sqlite.prepare(statement).run();
+        await expectPolicyCode(db, statement.includes("operation_policies")
+          ? "workspace_operation_policy_invalid"
+          : "workspace_capability_policy_invalid");
+      } finally { sqlite.close(); }
+    }
+  });
+
+  it("changes transport version but not canonical hash for an identical content bump", async () => {
+    const { sqlite, db } = policyDatabase();
+    try {
+      const before = await instancePolicySnapshot(db);
+      sqlite.prepare("UPDATE settings SET value=CAST(value AS INTEGER)+1 WHERE key='policy_version'").run();
+      const after = await instancePolicySnapshot(db);
+      expect(after.version).toBe(before.version + 1);
+      expect(after.policyHash).toBe(before.policyHash);
+    } finally { sqlite.close(); }
+  });
+});
 
 describe("execution workspace IDs", () => {
   it("isolates parallel principals and tasks", () => {

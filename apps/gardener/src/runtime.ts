@@ -1,5 +1,6 @@
 import {
   agentRunSnapshotV1Schema,
+  instancePolicyV1Schema,
   operationSchema,
   repositoryEventV2Schema,
   runBudgetUsageV1Schema,
@@ -8,6 +9,8 @@ import {
   type RepositoryEventV2,
 } from "@gardener/contracts";
 import {
+  agentRunSnapshotHashContent,
+  calculateWorkspacePolicyHash,
   canonicalOperationHash,
   canonicalSha256,
   emptyRunBudgetUsage,
@@ -23,7 +26,8 @@ import {
   type HarnessOutcome,
   type HarnessRequest,
 } from "./harness";
-import { getSetting, repositoryPauseSetting } from "./instance-state";
+import { assertLiveAutomaticAuthority, LiveAuthorityReadError } from "./instance-state";
+export { assertLiveAutomaticAuthority, LiveAuthorityReadError } from "./instance-state";
 import {
   D1HarnessRequestStore,
   claimEffectExecution,
@@ -72,20 +76,22 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
           throw new Error("Agent run identity or immutable snapshot binding is invalid");
         }
         const snapshot = agentRunSnapshotV1Schema.parse(run.runSnapshot);
-        const snapshotContent = {
-          runId: snapshot.runId,
-          revision: snapshot.revision,
-          instancePolicy: snapshot.instancePolicy,
-          effectiveCapabilities: snapshot.effectiveCapabilities,
-          harness: snapshot.harness,
-          versions: snapshot.versions,
-        };
+        const workspacePolicy = instancePolicyV1Schema.parse(run.policySnapshot);
         if (
           snapshot.runId !== run.id
           || snapshot.snapshotHash !== run.runSnapshotHash
-          || await canonicalSha256(snapshotContent) !== run.runSnapshotHash
-          || await canonicalSha256(snapshot.instancePolicy) !== run.policySnapshotHash
+          || await canonicalSha256(agentRunSnapshotHashContent(snapshot)) !== run.runSnapshotHash
+          || await calculateWorkspacePolicyHash(workspacePolicy) !== workspacePolicy.policyHash
+          || workspacePolicy.policyHash !== run.policySnapshotHash
+          || snapshot.workspace.policyHash !== workspacePolicy.policyHash
+          || snapshot.workspace.policyVersion !== workspacePolicy.version
           || await canonicalSha256(snapshot.effectiveCapabilities) !== run.capabilitySnapshotHash
+          || snapshot.repository.id !== run.repositoryId
+          || snapshot.assignment.id !== run.assignmentId
+          || snapshot.assignment.version !== run.assignmentVersion
+          || snapshot.assignment.configHash !== run.assignmentConfigHash
+          || snapshot.repository.policyHash !== run.repositoryPolicyHash
+          || snapshot.repository.policyVersion !== run.repositoryPolicyVersion
           || snapshot.harness.id !== "flue"
           || snapshot.harness.version !== HARNESS_ADAPTER_VERSIONS.flue
           || run.harnessId !== snapshot.harness.id
@@ -100,7 +106,8 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
           throw new Error("Repository event integrity validation failed");
         }
         if (
-          repositoryEvent.kind !== "github.issue"
+          repositoryEvent.repository.id !== snapshot.repository.id
+          || repositoryEvent.kind !== "github.issue"
           || repositoryEvent.action !== "opened"
           || !snapshot.effectiveCapabilities.observation.includes("github.issue.read")
           || snapshot.effectiveCapabilities.effects.find((item) => item.capability === "issue.comment.create")?.mode !== "automatic"
@@ -176,7 +183,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
         const run = await getRun(this.env.DB, runId);
         if (!run) return;
         const failure = {
-          code: "agent_runtime_failed",
+          code: error instanceof LiveAuthorityReadError ? error.code : "agent_runtime_failed",
           message: error instanceof Error ? error.message.slice(0, 2_000) : "Unknown runtime failure",
           runtimeVersion,
         };
@@ -259,7 +266,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
         agentRevisionId: snapshot.revision.revisionId,
         agentRevisionHash: await canonicalSha256(snapshot.revision),
         promptReference: modelInputHash,
-        policySnapshotReference: await canonicalSha256(snapshot.instancePolicy),
+        policySnapshotReference: snapshot.workspace.policyHash,
         toolCatalogVersion: snapshot.revision.capabilityCatalogVersion,
         harness: { id: "flue", adapterVersion: HARNESS_ADAPTER_VERSIONS.flue },
       },
@@ -271,7 +278,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
         additionalProperties: false,
         properties: {
           kind: { const: "issue_comment_proposal" },
-          body: { type: "string", minLength: 1, maxLength: Math.min(65_536, snapshot.instancePolicy.maxCommentLength) },
+          body: { type: "string", minLength: 1, maxLength: Math.min(65_536, snapshot.effectiveConstraints.maxCommentLength) },
           rationale: { type: "string", minLength: 1, maxLength: 5_000 },
         },
         required: ["kind", "body", "rationale"],
@@ -334,7 +341,7 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
     if (capability?.mode !== "automatic") {
       throw new Error("issue.comment.create requires an automatic capability in this bounded runtime");
     }
-    if (proposal.body.length > snapshot.instancePolicy.maxCommentLength) throw new Error("Proposed comment exceeds instance policy");
+    if (proposal.body.length > snapshot.effectiveConstraints.maxCommentLength) throw new Error("Proposed comment exceeds frozen policy constraints");
     const operationSeed = await canonicalSha256({ runId, kind: "issue.comment.create", proposal });
     const operation = operationSchema.parse({
       schemaVersion: "v2",
@@ -410,9 +417,12 @@ export class AgentRunWorkflow extends WorkflowEntrypoint<Env, AgentRunWorkflowPa
       await completeRunStep(this.env.DB, { stepId, inputHash, result, resultHash: await canonicalSha256(result), artifactRefs: [] });
       return { status: priorEffect.status, receipt: priorEffect.receipt };
     }
-    if (!await claimEffectExecution(this.env.DB, { effectId, operationHash })) throw new Error("Exact effect could not be claimed");
-    await assertLiveAutomaticAuthority(this.env, runId, operation);
     try {
+      // Read live authority before claiming so a transient read leaves the
+      // effect approved. If the later re-read fails after the claim, the
+      // existing executing-state idempotent claim semantics resume it safely.
+      await assertLiveAutomaticAuthority(this.env, runId, operation);
+      if (!await claimEffectExecution(this.env.DB, { effectId, operationHash })) throw new Error("Exact effect could not be claimed");
       const grant = await createConnectRunGrant(this.env, runId, run.repositoryEventId, operation);
       await assertLiveAutomaticAuthority(this.env, runId, operation);
       const receipt = await executeConnectOperation(this.env, grant, operation);
@@ -502,28 +512,6 @@ function buildPrompt(behavior: string, event: RepositoryEventV2): string {
     JSON.stringify(event),
     "</repository-event>",
   ].join("\n");
-}
-
-async function assertLiveAutomaticAuthority(env: Env, runId: string, operation: Operation): Promise<void> {
-  const run = await getRun(env.DB, runId);
-  if (!run || !run.repositoryEventId || run.status !== "running") throw new Error("Run is not active");
-  const snapshot = agentRunSnapshotV1Schema.parse(run.runSnapshot);
-  const capability = snapshot.effectiveCapabilities.effects.find((item) => item.capability === operation.kind);
-  if (capability?.mode !== "automatic") throw new Error("Run snapshot does not authorize this automatic effect");
-  if (await getSetting(env.DB, "global_paused") !== "false") throw new Error("Gardener is globally paused");
-  if (await getSetting(env.DB, repositoryPauseSetting(operation.repository.id)) === "true") throw new Error("Repository is paused");
-  const row = await env.DB.prepare(`
-    SELECT r.active, a.enabled, aa.revision_id, p.mode
-    FROM repositories r
-    JOIN agents a ON a.id = ?
-    LEFT JOIN agent_activations aa ON aa.agent_id = a.id
-    LEFT JOIN operation_policies p ON p.operation_kind = ?
-    WHERE r.id = ? AND r.installation_id = ?
-  `).bind(run.agentId, operation.kind, operation.repository.id, operation.repository.installationId)
-    .first<{ active: number; enabled: number; revision_id: string | null; mode: string | null }>();
-  if (row?.active !== 1 || row.enabled !== 1 || row.revision_id !== run.agentRevisionId || row.mode !== "automatic") {
-    throw new Error("Live policy, repository, or Agent activation no longer authorizes the effect");
-  }
 }
 
 function parseD1Timestamp(value: string): number {

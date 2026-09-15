@@ -199,6 +199,13 @@ export interface CreateRunInput {
   harnessId: string;
   harnessVersion: string;
   budgets: unknown;
+  /** Migration 0007 live authority binding. Omitted only for pre-v7/history compatibility. */
+  repositoryId?: string | null;
+  assignmentId?: string | null;
+  assignmentVersion?: number | null;
+  assignmentConfigHash?: string | null;
+  repositoryPolicyHash?: string | null;
+  repositoryPolicyVersion?: number | null;
 }
 
 interface RunRow {
@@ -224,6 +231,12 @@ interface RunRow {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  repository_id?: string | null;
+  assignment_id?: string | null;
+  assignment_version?: number | null;
+  assignment_config_hash?: string | null;
+  repository_policy_hash?: string | null;
+  repository_policy_version?: number | null;
 }
 
 export interface RunDto {
@@ -249,6 +262,12 @@ export interface RunDto {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  repositoryId: string | null;
+  assignmentId: string | null;
+  assignmentVersion: number | null;
+  assignmentConfigHash: string | null;
+  repositoryPolicyHash: string | null;
+  repositoryPolicyVersion: number | null;
 }
 
 function runDto(row: RunRow): RunDto {
@@ -275,10 +294,46 @@ function runDto(row: RunRow): RunDto {
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    repositoryId: row.repository_id ?? null,
+    assignmentId: row.assignment_id ?? null,
+    assignmentVersion: row.assignment_version ?? null,
+    assignmentConfigHash: row.assignment_config_hash ?? null,
+    repositoryPolicyHash: row.repository_policy_hash ?? null,
+    repositoryPolicyVersion: row.repository_policy_version ?? null,
   };
 }
 
-function assertRunIdentity(row: RunRow, input: CreateRunInput): void {
+interface RunBinding {
+  repositoryId: string;
+  assignmentId: string;
+  assignmentVersion: number;
+  assignmentConfigHash: string;
+  repositoryPolicyHash: string;
+  repositoryPolicyVersion: number;
+}
+
+function runBinding(input: CreateRunInput): RunBinding | null {
+  const values = [input.repositoryId, input.assignmentId, input.assignmentVersion, input.assignmentConfigHash,
+    input.repositoryPolicyHash, input.repositoryPolicyVersion];
+  const supplied = values.filter((value) => value !== undefined && value !== null).length;
+  if (supplied !== 0 && supplied !== values.length) {
+    throw new Error("Run binding must include all six binding fields");
+  }
+  if (supplied === 0) {
+    if (input.kind === "live") throw new Error("Live runs require a complete binding");
+    return null;
+  }
+  return {
+    repositoryId: input.repositoryId as string,
+    assignmentId: input.assignmentId as string,
+    assignmentVersion: input.assignmentVersion as number,
+    assignmentConfigHash: input.assignmentConfigHash as string,
+    repositoryPolicyHash: input.repositoryPolicyHash as string,
+    repositoryPolicyVersion: input.repositoryPolicyVersion as number,
+  };
+}
+
+function assertRunIdentity(row: RunRow, input: CreateRunInput, binding: RunBinding | null): void {
   if (
     row.kind !== input.kind
     || row.repository_event_id !== input.repositoryEventId
@@ -291,6 +346,12 @@ function assertRunIdentity(row: RunRow, input: CreateRunInput): void {
     || row.capability_snapshot_hash !== input.capabilitySnapshotHash
     || row.harness_id !== input.harnessId
     || row.harness_version !== input.harnessVersion
+    || (row.repository_id ?? null) !== (binding?.repositoryId ?? null)
+    || (row.assignment_id ?? null) !== (binding?.assignmentId ?? null)
+    || (row.assignment_version ?? null) !== (binding?.assignmentVersion ?? null)
+    || (row.assignment_config_hash ?? null) !== (binding?.assignmentConfigHash ?? null)
+    || (row.repository_policy_hash ?? null) !== (binding?.repositoryPolicyHash ?? null)
+    || (row.repository_policy_version ?? null) !== (binding?.repositoryPolicyVersion ?? null)
   ) {
     throw new Error("Run dedupe conflict");
   }
@@ -302,33 +363,25 @@ export async function getRun(db: D1Database, runId: string): Promise<RunDto | nu
 }
 
 export async function createRun(db: D1Database, input: CreateRunInput): Promise<{ run: RunDto; created: boolean }> {
-  const result = await db.prepare(`
-    INSERT OR IGNORE INTO agent_runs (
-      id, kind, repository_event_id, agent_id, agent_revision_id,
-      workflow_instance_id, parent_run_id, status, run_snapshot_json,
-      run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash,
-      capability_snapshot_json, capability_snapshot_hash, harness_id,
-      harness_version, budgets_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    input.id,
-    input.kind,
-    input.repositoryEventId,
-    input.agentId,
-    input.agentRevisionId,
-    input.workflowInstanceId,
-    input.parentRunId,
-    input.status,
-    encodeJson(input.runSnapshot),
-    input.runSnapshotHash,
-    encodeJson(input.policySnapshot),
-    input.policySnapshotHash,
-    encodeJson(input.capabilitySnapshot),
-    input.capabilitySnapshotHash,
-    input.harnessId,
-    input.harnessVersion,
-    encodeJson(input.budgets),
-  ).run();
+  const binding = runBinding(input);
+  const baseValues = [input.id, input.kind, input.repositoryEventId, input.agentId, input.agentRevisionId,
+    input.workflowInstanceId, input.parentRunId, input.status, encodeJson(input.runSnapshot), input.runSnapshotHash,
+    encodeJson(input.policySnapshot), input.policySnapshotHash, encodeJson(input.capabilitySnapshot),
+    input.capabilitySnapshotHash, input.harnessId, input.harnessVersion, encodeJson(input.budgets)] as const;
+  const result = binding
+    ? await db.prepare(`INSERT OR IGNORE INTO agent_runs (
+        id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, parent_run_id, status,
+        run_snapshot_json, run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json,
+        capability_snapshot_hash, harness_id, harness_version, budgets_json, repository_id, assignment_id,
+        assignment_version, assignment_config_hash, repository_policy_hash, repository_policy_version
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(...baseValues, binding.repositoryId, binding.assignmentId, binding.assignmentVersion,
+        binding.assignmentConfigHash, binding.repositoryPolicyHash, binding.repositoryPolicyVersion).run()
+    : await db.prepare(`INSERT OR IGNORE INTO agent_runs (
+        id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, parent_run_id, status,
+        run_snapshot_json, run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json,
+        capability_snapshot_hash, harness_id, harness_version, budgets_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(...baseValues).run();
 
   let row = await db.prepare("SELECT * FROM agent_runs WHERE id = ?").bind(input.id).first<RunRow>();
   if (!row && input.kind === "live" && input.repositoryEventId !== null) {
@@ -338,7 +391,7 @@ export async function createRun(db: D1Database, input: CreateRunInput): Promise<
     `).bind(input.repositoryEventId, input.agentId, input.agentRevisionId).first<RunRow>();
   }
   if (!row) throw new Error("Run creation failed");
-  assertRunIdentity(row, input);
+  assertRunIdentity(row, input, binding);
   return { run: runDto(row), created: changed(result) };
 }
 
@@ -349,57 +402,50 @@ export async function admitEventAgentRun(
   if (input.kind !== "live" || input.repositoryEventId === null) {
     throw new Error("Event admission requires a live run and repository event");
   }
+  const binding = runBinding(input);
+  if (!binding) throw new Error("Live runs require a complete binding");
 
+  const existingAdmission = await db.prepare(`
+    SELECT admission_key FROM event_agent_admissions
+    WHERE event_id = ? AND agent_id = ? AND revision_id = ?
+  `).bind(input.repositoryEventId, input.agentId, input.agentRevisionId)
+    .first<{ admission_key: string }>();
+  if (existingAdmission && existingAdmission.admission_key !== input.admissionKey) {
+    throw new Error("Event Agent admission conflict");
+  }
+  if (existingAdmission) {
+    const existingRun = await db.prepare(`
+      SELECT * FROM agent_runs
+      WHERE kind = 'live' AND repository_event_id = ? AND agent_id = ? AND agent_revision_id = ?
+    `).bind(input.repositoryEventId, input.agentId, input.agentRevisionId).first<RunRow>();
+    if (existingRun) return { run: runDto(existingRun), created: false };
+  }
+
+  const runValues = [input.id, input.kind, input.repositoryEventId, input.agentId, input.agentRevisionId,
+    input.workflowInstanceId, input.parentRunId, input.status, encodeJson(input.runSnapshot), input.runSnapshotHash,
+    encodeJson(input.policySnapshot), input.policySnapshotHash, encodeJson(input.capabilitySnapshot), input.capabilitySnapshotHash,
+    input.harnessId, input.harnessVersion, encodeJson(input.budgets)] as const;
+  const admissionGuardValues = [input.repositoryEventId, input.agentId, input.agentRevisionId, input.admissionKey] as const;
+  const runInsert = db.prepare(`INSERT INTO agent_runs (
+      id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, parent_run_id, status,
+      run_snapshot_json, run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json,
+      capability_snapshot_hash, harness_id, harness_version, budgets_json, repository_id, assignment_id,
+      assignment_version, assignment_config_hash, repository_policy_hash, repository_policy_version)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE EXISTS (SELECT 1 FROM event_agent_admissions WHERE event_id=? AND agent_id=? AND revision_id=? AND admission_key=?)
+      AND NOT EXISTS (
+        SELECT 1 FROM agent_runs
+        WHERE kind='live' AND repository_event_id=? AND agent_id=? AND agent_revision_id=?
+      )
+    ON CONFLICT(repository_event_id, agent_id, agent_revision_id) WHERE kind='live' DO NOTHING`)
+    .bind(...runValues, binding.repositoryId, binding.assignmentId, binding.assignmentVersion,
+      binding.assignmentConfigHash, binding.repositoryPolicyHash, binding.repositoryPolicyVersion,
+      ...admissionGuardValues, input.repositoryEventId, input.agentId, input.agentRevisionId);
   const results = await db.batch([
-    db.prepare(`
-      INSERT INTO event_agent_admissions
-        (id, event_id, agent_id, revision_id, admission_key, status)
-      VALUES (?, ?, ?, ?, ?, 'admitted')
-      ON CONFLICT(event_id, agent_id, revision_id) DO NOTHING
-    `).bind(
-      input.admissionId,
-      input.repositoryEventId,
-      input.agentId,
-      input.agentRevisionId,
-      input.admissionKey,
-    ),
-    db.prepare(`
-      INSERT INTO agent_runs (
-        id, kind, repository_event_id, agent_id, agent_revision_id,
-        workflow_instance_id, parent_run_id, status, run_snapshot_json,
-        run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash,
-        capability_snapshot_json, capability_snapshot_hash, harness_id,
-        harness_version, budgets_json
-      )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      WHERE EXISTS (
-        SELECT 1 FROM event_agent_admissions
-        WHERE event_id = ? AND agent_id = ? AND revision_id = ? AND admission_key = ?
-      )
-      ON CONFLICT(repository_event_id, agent_id, agent_revision_id) WHERE kind = 'live' DO NOTHING
-    `).bind(
-      input.id,
-      input.kind,
-      input.repositoryEventId,
-      input.agentId,
-      input.agentRevisionId,
-      input.workflowInstanceId,
-      input.parentRunId,
-      input.status,
-      encodeJson(input.runSnapshot),
-      input.runSnapshotHash,
-      encodeJson(input.policySnapshot),
-      input.policySnapshotHash,
-      encodeJson(input.capabilitySnapshot),
-      input.capabilitySnapshotHash,
-      input.harnessId,
-      input.harnessVersion,
-      encodeJson(input.budgets),
-      input.repositoryEventId,
-      input.agentId,
-      input.agentRevisionId,
-      input.admissionKey,
-    ),
+    db.prepare(`INSERT INTO event_agent_admissions (id,event_id,agent_id,revision_id,admission_key,status)
+      VALUES (?, ?, ?, ?, ?, 'admitted') ON CONFLICT(event_id,agent_id,revision_id) DO NOTHING`).bind(
+      input.admissionId, input.repositoryEventId, input.agentId, input.agentRevisionId, input.admissionKey),
+    runInsert,
   ]);
 
   const admission = await db.prepare(`
@@ -416,8 +462,14 @@ export async function admitEventAgentRun(
     WHERE kind = 'live' AND repository_event_id = ? AND agent_id = ? AND agent_revision_id = ?
   `).bind(input.repositoryEventId, input.agentId, input.agentRevisionId).first<RunRow>();
   if (!row) throw new Error("Event Agent run creation failed");
-  assertRunIdentity(row, input);
-  return { run: runDto(row), created: changed(results[1]) };
+  const created = changed(results[1]);
+  // A concurrent redelivery may have frozen an older assignment/policy snapshot.
+  // The live uniqueness key wins; never rebind or reject that original run.
+  if (created) assertRunIdentity(row, input, binding);
+  else if (row.repository_event_id !== input.repositoryEventId || row.agent_id !== input.agentId || row.agent_revision_id !== input.agentRevisionId) {
+    throw new Error("Event Agent run identity conflict");
+  }
+  return { run: runDto(row), created };
 }
 
 const allowedRunTransitions: Readonly<Record<RunStatus, readonly RunStatus[]>> = {

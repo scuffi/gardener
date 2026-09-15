@@ -35,7 +35,7 @@ import {
   updateRunState,
   type CreateRunInput,
 } from "../src/persistence";
-import { hash, newAgentDatabase } from "./persistence-test-db";
+import { hash, migration, newAgentDatabase } from "./persistence-test-db";
 
 async function createPublishedAgent(db: D1Database, suffix = "1"): Promise<{ agentId: string; revisionId: string }> {
   const agentId = `agent-${suffix}`;
@@ -220,11 +220,27 @@ describe("Agent persistence", () => {
   it("deduplicates event/Agent live admission without imposing a global run lock", async () => {
     const { sqlite, db } = newAgentDatabase();
     try {
+      sqlite.exec(migration("0007_team_workspace_foundation.sql"));
+      sqlite.prepare("INSERT INTO users (id, display_name) VALUES ('owner-1', 'Owner')").run();
       sqlite.prepare(`
         INSERT INTO repositories (id, installation_id, owner, name, default_branch)
         VALUES ('repo-1', 'install-1', 'acme', 'garden', 'main')
       `).run();
       const { agentId, revisionId } = await createPublishedAgent(db);
+      const assignmentConfigHash = hash("assignment-config-v1");
+      sqlite.prepare(`
+        INSERT INTO agent_repository_assignments
+          (id, agent_id, repository_id, enabled, authority_ceiling, version, config_hash, created_by_user_id, updated_by_user_id)
+        VALUES ('assignment-1', ?, 'repo-1', 1, 'automatic', 1, ?, 'owner-1', 'owner-1')
+      `).run(agentId, assignmentConfigHash);
+      const binding = {
+        repositoryId: "repo-1",
+        assignmentId: "assignment-1",
+        assignmentVersion: 1,
+        assignmentConfigHash,
+        repositoryPolicyHash: hash("repository-policy-v1"),
+        repositoryPolicyVersion: 1,
+      };
       const eventInput = {
         id: "event-1",
         provider: "github",
@@ -266,11 +282,13 @@ describe("Agent persistence", () => {
 
       const first = await admitEventAgentRun(db, {
         ...runInput("run-live-1", agentId, revisionId, "live", "event-1"),
+        ...binding,
         admissionId: "admission-1",
         admissionKey: hash("admission-1"),
       });
       const duplicate = await admitEventAgentRun(db, {
         ...runInput("run-live-1", agentId, revisionId, "live", "event-1"),
+        ...binding,
         admissionId: "admission-duplicate",
         admissionKey: hash("admission-1"),
       });
@@ -279,6 +297,7 @@ describe("Agent persistence", () => {
       expect(duplicate.run.id).toBe("run-live-1");
       await expect(admitEventAgentRun(db, {
         ...runInput("run-live-1", agentId, revisionId, "live", "event-1"),
+        ...binding,
         admissionId: "admission-conflict",
         admissionKey: hash("different-admission"),
       })).rejects.toThrow("Event Agent admission conflict");

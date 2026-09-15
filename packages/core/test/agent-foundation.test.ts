@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { agentRunSnapshotV1Schema, operationKindValues, type AgentProvenanceV1, type AgentRepositoryAssignmentV1, type EffectiveCapabilitySet, type InstancePolicyV1, type OperationKind, type RepositoryEventV2, type RepositoryPolicyV1 } from "@gardener/contracts";
 import {
+  AgentRunSnapshotValidationError,
+  agentRunSnapshotHashContent,
   analyzeAssignmentOverlap,
   calculateAssignmentConfigHash,
   calculateRepositoryPolicyHash,
   calculateWorkspacePolicyHash,
   canonicalOperationHash,
+  canonicalSha256,
   classifyRuntimeCapabilityRequest,
   compileAgentRevision,
   consumeRunBudget,
@@ -26,6 +29,7 @@ import {
   validateEffectProposalBinding,
   validateOperationGrantBinding,
   validateOperationReceiptBinding,
+  type AgentRunSnapshotValidationErrorCode,
 } from "../src";
 
 const now = "2026-09-09T10:00:00.000Z";
@@ -92,6 +96,17 @@ async function compile(sourceText = markdown(), revision = 1) {
 }
 function packageFile(path: string, text: string, mediaType = "text/markdown") {
   return { path, mediaType, bytesBase64: createAgentSource(text).agentMd.bytesBase64 };
+}
+
+async function expectSnapshotValidationError(promise: Promise<unknown>, code: AgentRunSnapshotValidationErrorCode): Promise<void> {
+  let caught: unknown;
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(AgentRunSnapshotValidationError);
+  expect((caught as AgentRunSnapshotValidationError).code).toBe(code);
 }
 
 const issueEvent: RepositoryEventV2 = {
@@ -211,6 +226,9 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
     expect(snapshot.workspace).toMatchObject({ policyHash: workspace.policyHash, policyVersion: 1 });
     expect(snapshot.effectiveConstraints).toMatchObject({ maxCommentLength: 10_000, maxChangedFiles: 20, deniedPathPrefixes: [".env", ".github/workflows/"] });
     expect(snapshot.snapshotHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(await canonicalSha256(agentRunSnapshotHashContent(snapshot))).toBe(snapshot.snapshotHash);
+    const tampered = { ...snapshot, harness: { ...snapshot.harness, version: "tampered" } };
+    expect(await canonicalSha256(agentRunSnapshotHashContent(tampered))).not.toBe(snapshot.snapshotHash);
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(() => agentRunSnapshotV1Schema.parse({ ...snapshot, instancePolicy: policy() })).toThrow();
     const same = await createAgentRunSnapshot(result.compiled, workspace, repoPolicy, assigned, { runId: "run-1", harness: { id: "historical-harness", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" }, now: () => new Date("2026-09-10T10:00:00.000Z") });
@@ -221,11 +239,16 @@ describe("capability, eligibility, diff, snapshot, and budget semantics", () => 
     expect(await calculateWorkspacePolicyHash({ ...workspace, maxCommentLength: 9_999 })).not.toBe(workspace.policyHash);
     expect(await calculateRepositoryPolicyHash({ ...repoPolicy, operationModes: {} })).not.toBe(repoPolicy.policyHash);
     expect(await calculateAssignmentConfigHash({ ...assigned, authorityCeiling: "disabled" })).not.toBe(assigned.configHash);
-    await expect(createAgentRunSnapshot(result.compiled, { ...workspace, maxCommentLength: 9_999 }, repoPolicy, assigned, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/workspace policy hash/i);
-    await expect(createAgentRunSnapshot(result.compiled, workspace, { ...repoPolicy, operationModes: {} }, assigned, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/repository policy hash/i);
-    await expect(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, authorityCeiling: "disabled" }, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/assignment config hash/i);
-    await expect(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, enabled: false, configHash: await calculateAssignmentConfigHash({ ...assigned, enabled: false }) }, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/enabled/i);
-    await expect(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, removedAt: now, configHash: await calculateAssignmentConfigHash({ ...assigned, removedAt: now }) }, { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } })).rejects.toThrow(/non-removed/i);
+    const options = { runId: "run-1", harness: { id: "h", version: "1" }, versions: { runtime: "1.0.0", capabilityCatalog: "2026-09-09.1", compiler: "1.0.0" } };
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, { ...workspace, maxCommentLength: 9_999 }, repoPolicy, assigned, options), "workspace_policy_hash_mismatch");
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, workspace, { ...repoPolicy, operationModes: {} }, assigned, options), "repository_policy_hash_mismatch");
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, authorityCeiling: "disabled" }, options), "assignment_hash_mismatch");
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, enabled: false, configHash: await calculateAssignmentConfigHash({ ...assigned, enabled: false }) }, options), "assignment_not_active");
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, { ...assigned, removedAt: now, configHash: await calculateAssignmentConfigHash({ ...assigned, removedAt: now }) }, options), "assignment_not_active");
+    const mismatchedAgent = { ...assigned, agentId: "agent-other" };
+    mismatchedAgent.configHash = await calculateAssignmentConfigHash(mismatchedAgent);
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, mismatchedAgent, options), "assignment_agent_mismatch");
+    await expectSnapshotValidationError(createAgentRunSnapshot(result.compiled, workspace, repoPolicy, assigned, { ...options, versions: { ...options.versions, runtime: "other" } }), "revision_version_mismatch");
   });
 
   it("resolves all authority layers most-restrictively and fails closed on missing repository modes", async () => {
