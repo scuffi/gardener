@@ -1,0 +1,19 @@
+apps/gardener/src/persistence/runs.ts
+  s_5e59fe43b4a55e::t_4f37748794f777 202-208,234-239,265-270,297-302,306-336,349-354,366-384,394,405-406,408-438,440-448,465-472
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0e1fbb9f9f50255379cfb689b30293171808f615",
+  "prompts": {},
+  "sessions": {
+    "s_5e59fe43b4a55e": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a43c-1860-700b-8c64-14a0f7c5b5ed",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
