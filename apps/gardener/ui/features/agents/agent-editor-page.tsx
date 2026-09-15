@@ -8,7 +8,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useGardener } from "../../app-context";
 import { gardenerApi } from "../../lib/api";
 import { queryKeys, queryPrefixes } from "../../lib/query-keys";
 import type { AgentValidation } from "../../lib/types";
@@ -25,7 +24,6 @@ import {
   PageHeaderSkeleton,
   Panel,
   PanelHeader,
-  Select,
   TableSkeleton,
   Textarea,
 } from "../../primitives";
@@ -37,8 +35,6 @@ name: Issue gardener
 description: Reviews newly opened issues
 triggers:
   - github.issue.opened
-repositories:
-  - this
 capabilities:
   observation:
     - github.issue.read
@@ -59,7 +55,6 @@ export function AgentEditorPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
-  const { state } = useGardener();
   const detail = useQuery({
     queryKey: queryKeys.agent(id),
     queryFn: () => gardenerApi.agent(id!),
@@ -68,28 +63,13 @@ export function AgentEditorPage() {
   const [source, setSource] = useState(starter);
   const [validation, setValidation] = useState<AgentValidation | null>(null);
   const [simulation, setSimulation] = useState<string | null>(null);
-  const repositories = (state?.repositories ?? []).filter((repository) =>
-    Boolean(repository.active),
-  );
-  const [thisRepositoryId, setThisRepositoryId] = useState("");
-
   useEffect(() => {
     const stored = detail.data?.draft?.sourceMd ?? detail.data?.sourceMd;
     if (stored) setSource(stored);
-    const context = detail.data?.draft?.thisRepositoryId ?? detail.data?.thisRepositoryId;
-    if (context) setThisRepositoryId(context);
   }, [detail.data]);
 
-  useEffect(() => {
-    if (!thisRepositoryId && repositories[0]) setThisRepositoryId(repositories[0].id);
-  }, [repositories, thisRepositoryId]);
-
   const storedSource = detail.data?.draft?.sourceMd ?? detail.data?.sourceMd;
-  const storedRepositoryId =
-    detail.data?.draft?.thisRepositoryId ?? detail.data?.thisRepositoryId;
-  const initialRepositoryId = storedRepositoryId ?? repositories[0]?.id ?? "";
-  const dirty =
-    !editing || source !== (storedSource ?? "") || thisRepositoryId !== initialRepositoryId;
+  const dirty = !editing || source !== (storedSource ?? "");
   const validationErrors = useMemo(
     () => validation?.diagnostics.filter((item) => item.severity !== "warning") ?? [],
     [validation],
@@ -100,13 +80,13 @@ export function AgentEditorPage() {
     setSimulation(null);
   };
   const validate = useMutation({
-    mutationFn: () => gardenerApi.validateAgent(source, id, thisRepositoryId || undefined),
+    mutationFn: () => gardenerApi.validateAgent(source, id),
     onSuccess: setValidation,
     onError: (error: Error) =>
       notify({ tone: "error", title: "Validation failed", description: error.message }),
   });
   const simulate = useMutation({
-    mutationFn: () => gardenerApi.simulateAgent(source, id, thisRepositoryId || undefined),
+    mutationFn: () => gardenerApi.simulateAgent(source, id),
     onSuccess: (result) => setSimulation(result.summary || result.status),
     onError: (error: Error) =>
       notify({ tone: "error", title: "Simulation failed", description: error.message }),
@@ -114,12 +94,8 @@ export function AgentEditorPage() {
   const save = useMutation({
     mutationFn: async () =>
       editing
-        ? gardenerApi
-            .saveAgentDraft(id!, source, thisRepositoryId || undefined)
-            .then(() => id!)
-        : gardenerApi
-            .createAgent(source, thisRepositoryId || undefined)
-            .then(({ agent }) => agent.id),
+        ? gardenerApi.saveAgentDraft(id!, source).then(() => id!)
+        : gardenerApi.createAgent(source).then(({ agent }) => agent.id),
     onSuccess: async (agentId) => {
       await queryClient.invalidateQueries({ queryKey: queryPrefixes.agents });
       notify({
@@ -136,13 +112,9 @@ export function AgentEditorPage() {
     mutationFn: async () => {
       let agentId = id;
       if (!agentId) {
-        agentId = (await gardenerApi.createAgent(source, thisRepositoryId || undefined)).agent.id;
+        agentId = (await gardenerApi.createAgent(source)).agent.id;
       }
-      const result = await gardenerApi.publishAgent(
-        agentId,
-        source,
-        thisRepositoryId || undefined,
-      );
+      const result = await gardenerApi.publishAgent(agentId, source);
       return { agentId, revision: result.revision };
     },
     onSuccess: async ({ agentId, revision }) => {
@@ -150,7 +122,7 @@ export function AgentEditorPage() {
       notify({
         tone: "success",
         title: `Revision ${revision} published paused`,
-        description: "Activate it separately, then enable the Agent when you are ready.",
+        description: "Activate it separately, then deploy it to repositories when ready.",
       });
       navigate(`/agents/${encodeURIComponent(agentId)}`);
     },
@@ -202,6 +174,7 @@ export function AgentEditorPage() {
         }
         actions={
           <Button
+            className="max-md:min-h-11 max-md:min-w-11"
             variant="secondary"
             onClick={() =>
               navigate(editing ? `/agents/${encodeURIComponent(id!)}` : "/agents")
@@ -221,36 +194,6 @@ export function AgentEditorPage() {
             }
           />
           <div className="grid gap-4 p-4">
-            <Select
-              id="agent-this-repository"
-              label={
-                <>
-                  Repository context for <Code code="this" />
-                </>
-              }
-              hideLabel={false}
-              aria-label="Repository context"
-              value={thisRepositoryId}
-              onValueChange={(value) => {
-                setThisRepositoryId(value ?? "");
-                resetReview();
-              }}
-              disabled={!repositories.length}
-            >
-              {!repositories.length ? (
-                <Select.Option value="">No active repositories</Select.Option>
-              ) : (
-                repositories.map((repository) => (
-                  <Select.Option key={repository.id} value={repository.id}>
-                    <span className="flex min-w-0 flex-wrap items-center gap-1">
-                      <span className="break-words">{repository.owner}/{repository.name}</span>
-                      <span aria-hidden="true">·</span>
-                      <Mono className="break-all">{repository.id}</Mono>
-                    </span>
-                  </Select.Option>
-                ))
-              )}
-            </Select>
             <Field label="Agent package source">
               <Textarea
                 id="agent-source"
@@ -269,8 +212,8 @@ export function AgentEditorPage() {
               />
             </Field>
             <p id="agent-source-help" className="text-xs text-kumo-subtle">
-              Unknown fields and capabilities fail closed. Repository <Code code="this" /> is
-              resolved to an immutable repository ID when compiled.
+              Unknown fields and capabilities fail closed. Repository deployments are configured
+              separately after publication.
             </p>
           </div>
         </Panel>
@@ -287,7 +230,7 @@ export function AgentEditorPage() {
           <Panel>
             <div className="flex gap-2 max-sm:flex-col">
               <Button
-                className="flex-1"
+                className="flex-1 max-md:min-h-11"
                 variant="secondary"
                 icon={ShieldCheckIcon}
                 loading={validate.isPending}
@@ -296,7 +239,7 @@ export function AgentEditorPage() {
                 Validate
               </Button>
               <Button
-                className="flex-1"
+                className="flex-1 max-md:min-h-11"
                 variant="secondary"
                 icon={FlaskIcon}
                 loading={simulate.isPending}
@@ -344,11 +287,11 @@ export function AgentEditorPage() {
             <h2 className="text-base font-semibold text-kumo-strong">Publication boundary</h2>
             <p className="mt-2 text-sm leading-relaxed text-kumo-subtle">
               Publishing creates an immutable paused revision. It does not activate the revision or
-              enable the Agent.
+              deploy the Agent to any repository.
             </p>
             <div className="mt-4 flex gap-2 max-sm:flex-col">
               <Button
-                className="flex-1"
+                className="flex-1 max-md:min-h-11"
                 variant="secondary"
                 icon={FloppyDiskIcon}
                 loading={save.isPending}
@@ -358,7 +301,7 @@ export function AgentEditorPage() {
                 Save draft
               </Button>
               <Button
-                className="flex-1"
+                className="flex-1 max-md:min-h-11"
                 variant="primary"
                 icon={UploadSimpleIcon}
                 loading={publish.isPending}

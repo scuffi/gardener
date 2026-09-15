@@ -65,7 +65,8 @@ describe("Account menu", () => {
   it("shows the human identity and Owner role without raw IDs", async () => {
     const { container } = renderMenu();
     const trigger = screen.getByRole("button", { name: "Open account menu for human-login" });
-    expect(trigger.className).toContain("max-[900px]:h-11");
+    expect(trigger.className).toContain("max-[900px]:min-h-11");
+    expect(trigger.className).toContain("max-[900px]:min-w-11");
     expect(screen.getByText("Human Name")).toBeTruthy();
     expect(screen.getByText("Owner")).toBeTruthy();
 

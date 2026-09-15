@@ -43,7 +43,10 @@ function GardenerBrand() {
       to={defaultRoute}
       aria-label="Gardener home"
       onClick={() => setOpenMobile(false)}
-      className="flex min-w-0 items-center gap-2.5 text-kumo-strong no-underline"
+      className={
+        "flex min-w-0 items-center gap-2.5 text-kumo-strong no-underline " +
+        "max-[900px]:min-h-11 max-[900px]:min-w-11"
+      }
     >
       <span
         className={cn(

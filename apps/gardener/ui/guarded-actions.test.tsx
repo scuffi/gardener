@@ -17,8 +17,8 @@ const harness = vi.hoisted(() => ({
     respondToInbox: vi.fn(),
     agent: vi.fn(),
     agentRevision: vi.fn(),
-    activateAgentRevision: vi.fn(),
-    setAgentEnabled: vi.fn(),
+    agentAssignments: vi.fn(),
+    activateAgentRevisionWithPreconditions: vi.fn(),
     activate: vi.fn(),
     setPolicies: vi.fn(),
   },
@@ -122,6 +122,20 @@ beforeEach(() => {
     stateLoading: false,
     error: null,
     refresh: vi.fn(async () => undefined),
+    session: {
+      authenticated: true,
+      githubLogin: "owner",
+      user: {
+        id: "owner",
+        displayName: "Owner",
+        role: "owner",
+        identity: {
+          provider: "github",
+          providerSubject: "1",
+          login: "owner",
+        },
+      },
+    },
   };
   harness.api.setPaused.mockResolvedValue({ globalPaused: false });
   harness.api.setRepositoryPaused.mockResolvedValue({ id: "repository_1", paused: false });
@@ -132,8 +146,11 @@ beforeEach(() => {
     sourceMd: "---\nname: Issue gardener\n---",
     sourceHash: "b".repeat(64),
   });
-  harness.api.activateAgentRevision.mockResolvedValue({ activated: true });
-  harness.api.setAgentEnabled.mockResolvedValue({ enabled: true });
+  harness.api.agentAssignments.mockResolvedValue({
+    assignmentEpoch: 7,
+    assignments: [],
+  });
+  harness.api.activateAgentRevisionWithPreconditions.mockResolvedValue({ activated: true });
   harness.api.activate.mockResolvedValue({ activated: true, profile: "safe" });
   harness.api.setPolicies.mockResolvedValue({
     policies: [{ operation: "issue.comment.create", mode: "approval" }],
@@ -238,42 +255,48 @@ describe("authority-widening action guards", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  it("guards revision activation and Agent enable while disable stays immediate", async () => {
+  it("guards revision activation with exact assignment and revision preconditions", async () => {
     renderAt(
       <AgentDetailPage />,
       "/agents/agent_1/revisions/2",
       "/agents/:id/revisions/:revision",
     );
     await userEvent.click(await screen.findByRole("button", { name: "Activate revision" }));
-    expect(harness.api.activateAgentRevision).not.toHaveBeenCalled();
-    await confirmExact("Activate revision 2");
+    expect(harness.api.activateAgentRevisionWithPreconditions).not.toHaveBeenCalled();
+    await confirmExact("Activate Issue gardener revision 2");
     await waitFor(() =>
-      expect(harness.api.activateAgentRevision).toHaveBeenCalledWith("agent_1", 2),
-    );
-    expect(screen.queryByText("Enable this Agent?")).toBeNull();
-
-    cleanup();
-    harness.api.agent.mockResolvedValue(agentDetail);
-    renderAt(<AgentDetailPage />, "/agents/agent_1", "/agents/:id");
-    await userEvent.click(await screen.findByRole("button", { name: "Enable Agent" }));
-    expect(harness.api.setAgentEnabled).not.toHaveBeenCalled();
-    await confirmExact("Enable Agent");
-    await waitFor(() =>
-      expect(harness.api.setAgentEnabled).toHaveBeenCalledWith("agent_1", true),
+      expect(harness.api.activateAgentRevisionWithPreconditions).toHaveBeenCalledWith(
+        "agent_1",
+        "revision_2",
+        {
+          expectedAssignmentEpoch: 7,
+          expectedCurrentRevisionId: "revision_1",
+          reason: null,
+        },
+      ),
     );
 
     cleanup();
-    harness.api.setAgentEnabled.mockClear();
-    harness.api.agent.mockResolvedValue({
-      ...agentDetail,
-      agent: { ...agent, enabled: true },
-    });
-    renderAt(<AgentDetailPage />, "/agents/agent_1", "/agents/:id");
-    await userEvent.click(await screen.findByRole("button", { name: "Disable Agent" }));
-    await waitFor(() =>
-      expect(harness.api.setAgentEnabled).toHaveBeenCalledWith("agent_1", false),
+    harness.context = {
+      ...harness.context,
+      session: {
+        ...(harness.context.session as object),
+        authenticated: true,
+        user: {
+          id: "member",
+          displayName: "Member",
+          role: "member",
+          identity: { provider: "github", providerSubject: "2", login: "member" },
+        },
+      },
+    };
+    renderAt(
+      <AgentDetailPage />,
+      "/agents/agent_1/revisions/2",
+      "/agents/:id/revisions/:revision",
     );
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(await screen.findByText("Immutable revision 2")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Activate revision" })).toBeNull();
   });
 
   it("cannot execute a broader fallback after a guard dialog is dismissed", async () => {
@@ -306,13 +329,12 @@ describe("authority-widening action guards", () => {
     await user.click(await screen.findByRole("button", { name: "Activate revision" }));
     const revisionDialog = await screen.findByRole("alertdialog");
     const staleRevisionConfirm = within(revisionDialog).getByRole("button", {
-      name: "Activate revision 2",
+      name: "Activate Issue gardener revision 2",
     });
     await user.click(within(revisionDialog).getByRole("button", { name: "Cancel" }));
     fireEvent.click(staleRevisionConfirm);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(harness.api.activateAgentRevision).not.toHaveBeenCalled();
-    expect(harness.api.setAgentEnabled).not.toHaveBeenCalled();
+    expect(harness.api.activateAgentRevisionWithPreconditions).not.toHaveBeenCalled();
   });
 
   it("guards setup activation before applying policies and resuming globally", async () => {

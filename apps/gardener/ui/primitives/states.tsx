@@ -67,7 +67,12 @@ export function ErrorState({
       description={message}
       action={
         onRetry ? (
-          <Banner.Action variant="secondary" icon={ArrowClockwiseIcon} onClick={onRetry}>
+          <Banner.Action
+            variant="secondary"
+            icon={ArrowClockwiseIcon}
+            className="max-[900px]:min-h-11 max-[900px]:min-w-11"
+            onClick={onRetry}
+          >
             Try again
           </Banner.Action>
         ) : undefined

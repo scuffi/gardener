@@ -32,7 +32,10 @@ export function ConfirmDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange} role="alertdialog">
       <Dialog
         size="base"
-        className="p-5 duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className={
+          "max-w-[calc(100vw-2rem)] p-5 duration-200 " +
+          "ease-[cubic-bezier(0.22,1,0.36,1)]"
+        }
       >
         <Dialog.Title className="text-lg font-semibold text-kumo-strong">{title}</Dialog.Title>
         <Dialog.Description className="mt-2 leading-relaxed text-kumo-subtle">
@@ -43,12 +46,25 @@ export function ConfirmDialog({
             {detail}
           </div>
         ) : null}
-        <div className="mt-5 flex justify-end gap-2 max-sm:flex-col-reverse">
-          <Dialog.Close render={<Button variant="secondary">Cancel</Button>} />
+        <div className="mt-5 flex flex-wrap items-stretch justify-end gap-2 max-sm:flex-col-reverse">
+          <Dialog.Close
+            render={
+              <Button
+                variant="secondary"
+                className="max-sm:min-h-11 max-sm:w-full"
+              >
+                Cancel
+              </Button>
+            }
+          />
           <Button
             variant={confirmTone}
             loading={loading}
             disabled={loading}
+            className={
+              "h-auto min-w-0 max-w-full whitespace-normal break-words text-center " +
+              "max-sm:min-h-11 max-sm:w-full"
+            }
             onClick={() => {
               // Mutations report failures through their own notification callbacks. Catch the
               // rejected promise here so a handled API failure does not become an unhandled one.

@@ -49,8 +49,9 @@ export function AccountMenu() {
         aria-label={`Open account menu for ${login}`}
         className={cn(
           "group flex h-10 min-h-10 w-full min-w-0 items-center gap-2 rounded-md p-1",
+          "max-[900px]:min-h-11 max-[900px]:min-w-11",
           "group-data-[state=collapsed]/sidebar:justify-center group-data-[state=collapsed]/sidebar:gap-0",
-          "border border-transparent text-kumo-default hover:!bg-kumo-base max-[900px]:h-11",
+          "border border-transparent text-kumo-default hover:!bg-kumo-base",
           "aria-expanded:bg-kumo-tint aria-expanded:hover:!bg-kumo-tint",
           "aria-expanded:ring-1 aria-expanded:ring-kumo-line",
         )}

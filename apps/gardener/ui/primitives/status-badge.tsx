@@ -64,12 +64,14 @@ export function StatusBadge({
   children: ReactNode;
   tone?: StatusTone;
 }) {
+  const variant = tone === "danger" ? "error" : tone === "info" ? "neutral" : tone;
   return (
     <Badge
-      variant={tone === "danger" ? "error" : tone}
+      variant={variant}
       appearance={tone === "neutral" ? "filled" : "dot"}
       className="[a:hover_&]:!ring-kumo-hairline"
     >
+      {tone === "info" ? <span className="sr-only">Informational status: </span> : null}
       {children}
     </Badge>
   );

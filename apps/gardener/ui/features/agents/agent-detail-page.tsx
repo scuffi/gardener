@@ -1,10 +1,15 @@
-import { PencilSimpleIcon, PlayIcon, PowerIcon, RobotIcon } from "@phosphor-icons/react";
+import { PencilSimpleIcon, PlayIcon, RobotIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { gardenerApi } from "../../lib/api";
+import { useGardener } from "../../app-context";
+import {
+  gardenerApi,
+  isOverlapConfirmationError,
+} from "../../lib/api";
 import { formatRelativeTime } from "../../lib/format";
-import { queryKeys, queryPrefixes } from "../../lib/query-keys";
+import { queryKeys } from "../../lib/query-keys";
+import type { AggregateOverlapWarning, AssignmentOverlapWarning } from "../../lib/types";
 import { useNotifications } from "../../providers/notifications";
 import {
   Banner,
@@ -25,6 +30,9 @@ import {
   Table,
   TableSkeleton,
 } from "../../primitives";
+import { AgentDeployments } from "./components/agent-deployments";
+
+type ActivationWarning = AssignmentOverlapWarning | AggregateOverlapWarning;
 
 export function AgentDetailPage() {
   const { id, revision: revisionParam } = useParams();
@@ -32,12 +40,20 @@ export function AgentDetailPage() {
   const revisionNumber = revisionParam ? Number(revisionParam) : null;
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
-  const [pendingAction, setPendingAction] = useState<
-    { kind: "activate"; revision: number } | { kind: "enable" } | null
-  >(null);
-  const lastPendingAction = useRef<typeof pendingAction>(null);
-  if (pendingAction) lastPendingAction.current = pendingAction;
-  const renderedPendingAction = pendingAction ?? lastPendingAction.current;
+  const { session } = useGardener();
+  const owner = session.authenticated && session.user.role === "owner";
+  const [pendingRevision, setPendingRevision] = useState<number | null>(null);
+  const pendingRevisionRef = useRef<number | null>(null);
+  pendingRevisionRef.current = pendingRevision;
+  const lastPendingRevision = useRef<number | null>(null);
+  if (pendingRevision) lastPendingRevision.current = pendingRevision;
+  const renderedPendingRevision = pendingRevision ?? lastPendingRevision.current;
+  const [overlap, setOverlap] = useState<ActivationWarning | null>(null);
+  const overlapRef = useRef<ActivationWarning | null>(null);
+  overlapRef.current = overlap;
+  const lastOverlap = useRef<ActivationWarning | null>(null);
+  if (overlap) lastOverlap.current = overlap;
+  const renderedOverlap = overlap ?? lastOverlap.current;
   const detail = useQuery({
     queryKey: queryKeys.agent(id),
     queryFn: () => gardenerApi.agent(id!),
@@ -49,39 +65,73 @@ export function AgentDetailPage() {
     enabled: Boolean(id && revisionNumber),
   });
   const activate = useMutation({
-    mutationFn: (number: number) => gardenerApi.activateAgentRevision(id!, number),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryPrefixes.agent });
-      setPendingAction(null);
+    mutationFn: async ({
+      number,
+      warning,
+    }: {
+      number: number;
+      warning?: ActivationWarning;
+    }) => {
+      const data = detail.data!;
+      const currentRevisionId = data.revisions.find((item) => item.active)?.id ?? null;
+      const assignmentSnapshot = await gardenerApi.agentAssignments(id!);
+      try {
+        const result = await gardenerApi.activateAgentRevisionWithPreconditions(
+          id!,
+          data.revisions.find((item) => item.revision === number)!.id,
+          {
+            expectedAssignmentEpoch:
+              warning?.assignmentEpoch ?? assignmentSnapshot.assignmentEpoch,
+            expectedCurrentRevisionId:
+              warning && "currentActiveRevisionId" in warning
+                ? warning.currentActiveRevisionId ?? currentRevisionId
+                : currentRevisionId,
+            reason: null,
+            ...(warning ? { overlapFingerprint: warning.fingerprint } : {}),
+          },
+        );
+        return {
+          result,
+          repositoryIds: assignmentSnapshot.assignments.map((item) => item.repositoryId),
+        };
+      } catch (error) {
+        if (isOverlapConfirmationError(error)) {
+          setPendingRevision(null);
+          setOverlap(error.details!.warning);
+          return null;
+        }
+        throw error;
+      }
+    },
+    onSuccess: async (result) => {
+      if (!result) return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.agent(id), exact: true }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentAssignments(id), exact: true }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.agents, exact: true }),
+        ...result.repositoryIds.map((repositoryId) =>
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.repositoryAssignments(repositoryId),
+            exact: true,
+          }),
+        ),
+      ]);
+      setPendingRevision(null);
+      setOverlap(null);
       notify({
         tone: "success",
         title: "Revision activated",
-        description: detail.data?.agent.enabled
-          ? "The enabled Agent will use this revision for newly admitted runs."
-          : "The Agent remains disabled until enabled separately.",
+        description: "Repository deployments keep their own enabled state and authority ceiling.",
       });
     },
-    onError: (error: Error) =>
+    onError: (error: Error) => {
+      setOverlap(null);
       notify({
         tone: "error",
         title: "Revision was not activated",
         description: error.message,
-      }),
-  });
-  const enable = useMutation({
-    mutationFn: (enabled: boolean) => gardenerApi.setAgentEnabled(id!, enabled),
-    onSuccess: async ({ enabled }) => {
-      await queryClient.invalidateQueries({ queryKey: queryPrefixes.agent });
-      await queryClient.invalidateQueries({ queryKey: queryPrefixes.agents });
-      setPendingAction(null);
-      notify({ tone: "success", title: enabled ? "Agent enabled" : "Agent disabled" });
+      });
     },
-    onError: (error: Error) =>
-      notify({
-        tone: "error",
-        title: "Agent status was not changed",
-        description: error.message,
-      }),
   });
 
   if (detail.isLoading) {
@@ -125,29 +175,14 @@ export function AgentDetailPage() {
         actions={
           <>
             <Button
+              className="max-md:min-h-11 max-md:min-w-11"
               variant="secondary"
               icon={PencilSimpleIcon}
               onClick={() => navigate(`/agents/${encodeURIComponent(agent.id)}/draft`)}
             >
               {draft ? "Edit draft" : "Create draft"}
             </Button>
-            {!revisionNumber ? (
-              <Button
-                variant={agent.enabled ? "secondary" : "primary"}
-                icon={PowerIcon}
-                loading={enable.isPending}
-                disabled={!agent.activeRevision}
-                onClick={() => {
-                  if (agent.enabled) {
-                    enable.mutate(false);
-                  } else {
-                    setPendingAction({ kind: "enable" });
-                  }
-                }}
-              >
-                {agent.enabled ? "Disable Agent" : "Enable Agent"}
-              </Button>
-            ) : null}
+
           </>
         }
       />
@@ -165,11 +200,9 @@ export function AgentDetailPage() {
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="text-xs font-semibold text-kumo-subtle">Runtime</dt>
-                <dd className="mt-1">
-                  <StatusBadge tone={statusTone(agent.enabled ? "enabled" : "disabled")}>
-                    {agent.enabled ? "Enabled" : "Disabled"}
-                  </StatusBadge>
+                <dt className="text-xs font-semibold text-kumo-subtle">Deployments</dt>
+                <dd className="mt-1 text-sm font-semibold text-kumo-strong">
+                  Repository-scoped
                 </dd>
               </div>
               <div className="min-w-0">
@@ -190,6 +223,7 @@ export function AgentDetailPage() {
           }
         />
       </div>
+      {!revisionNumber ? <AgentDeployments agent={agent} revisions={revisions} /> : null}
       {revisionNumber ? (
         <Panel padded={false}>
           <PanelHeader
@@ -200,12 +234,13 @@ export function AgentDetailPage() {
                 : "Published Agent source"
             }
             actions={
-              selected && !selected.active ? (
+              selected && !selected.active && owner ? (
                 <Button
+                  className="max-md:min-h-11 max-md:min-w-11"
                   variant="primary"
                   icon={PlayIcon}
                   loading={activate.isPending}
-                  onClick={() => setPendingAction({ kind: "activate", revision: revisionNumber })}
+                  onClick={() => setPendingRevision(revisionNumber)}
                 >
                   Activate revision
                 </Button>
@@ -234,12 +269,16 @@ export function AgentDetailPage() {
           <PanelHeader
             title="Revisions"
             description={
-              "Publishing creates immutable paused history. Activation and enablement are " +
-              "separate owner actions."
+              "Publishing creates immutable paused history. Activation is an owner action; " +
+              "runtime authority comes from repository deployments."
             }
           />
           {revisions.length ? (
-            <div className="min-w-0 overflow-x-auto">
+            <>
+            <div
+              className="hidden min-w-0 overflow-x-auto md:block"
+              data-testid="revision-desktop-table"
+            >
               <Table className="min-w-[620px] text-sm">
                 <Table.Header variant="compact">
                   <Table.Row>
@@ -290,6 +329,59 @@ export function AgentDetailPage() {
                 </Table.Body>
               </Table>
             </div>
+            <ol
+              className="divide-y divide-kumo-hairline md:hidden"
+              data-testid="revision-mobile-list"
+            >
+              {revisions.map((item) => (
+                <li key={item.id} className="grid gap-4 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-kumo-subtle">Revision</p>
+                      <p className="mt-1">
+                        <Mono tone="strong">{String(item.revision)}</Mono>
+                      </p>
+                    </div>
+                    {item.active ? (
+                      <StatusBadge tone={statusTone("active")}>Active</StatusBadge>
+                    ) : (
+                      <Button
+                        className="min-h-11 min-w-11"
+                        variant="secondary"
+                        onClick={() =>
+                          navigate(
+                            `/agents/${encodeURIComponent(agent.id)}/revisions/${item.revision}`,
+                          )
+                        }
+                      >
+                        Review
+                      </Button>
+                    )}
+                  </div>
+                  <dl className="grid gap-3">
+                    <div>
+                      <dt className="text-xs font-semibold text-kumo-subtle">Published</dt>
+                      <dd className="mt-1 break-words text-sm text-kumo-default">
+                        <span>{formatRelativeTime(item.publishedAt)}</span>
+                        {item.publishedBy ? (
+                          <>
+                            <span aria-hidden="true"> · </span>
+                            <Mono>{item.publishedBy}</Mono>
+                          </>
+                        ) : null}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-kumo-subtle">Source hash</dt>
+                      <dd className="mt-1 text-sm">
+                        <Mono title={item.sourceHash}>{shortHash(item.sourceHash)}</Mono>
+                      </dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ol>
+            </>
           ) : (
             <EmptyState
               compact
@@ -297,6 +389,7 @@ export function AgentDetailPage() {
               description="Publish the current draft to create immutable revision history."
               action={
                 <LinkButton
+                  className="max-md:min-h-11 max-md:min-w-11"
                   href={`/agents/${encodeURIComponent(agent.id)}/draft`}
                   variant="secondary"
                   icon={PencilSimpleIcon}
@@ -309,33 +402,65 @@ export function AgentDetailPage() {
         </Panel>
       )}
       <ConfirmDialog
-        open={Boolean(pendingAction)}
+        open={pendingRevision !== null}
         onOpenChange={(open) => {
-          if (!open) setPendingAction(null);
+          if (!open) {
+            pendingRevisionRef.current = null;
+            setPendingRevision(null);
+          }
         }}
-        title={
-          renderedPendingAction?.kind === "activate"
-            ? `Activate revision ${renderedPendingAction.revision}?`
-            : "Enable this Agent?"
-        }
+        title={`Activate ${agent.name} revision ${renderedPendingRevision ?? ""}?`}
         description={
-          renderedPendingAction?.kind === "activate"
-            ? agent.enabled
-              ? "This changes the behavior used for newly admitted runs immediately because the Agent is enabled."
-              : "This selects the immutable behavior that the Agent will use after it is separately enabled."
-            : "New matching repository events may start runs using the active immutable revision."
+          `This changes the global behavior pointer for ${agent.name}. Enabled repository ` +
+          "deployments will use the new revision for newly admitted runs."
         }
-        confirmLabel={
-          renderedPendingAction?.kind === "activate"
-            ? `Activate revision ${renderedPendingAction.revision}`
-            : "Enable Agent"
-        }
-        loading={activate.isPending || enable.isPending}
+        confirmLabel={`Activate ${agent.name} revision ${renderedPendingRevision ?? ""}`}
+        loading={activate.isPending}
         onConfirm={() => {
-          if (!pendingAction) return;
-          return pendingAction.kind === "activate"
-            ? activate.mutateAsync(pendingAction.revision)
-            : enable.mutateAsync(true);
+          const number = pendingRevisionRef.current;
+          if (number === null) return;
+          return activate.mutateAsync({ number });
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(overlap)}
+        onOpenChange={(open) => {
+          if (!open) {
+            overlapRef.current = null;
+            setOverlap(null);
+          }
+        }}
+        title={`Confirm overlapping activation for ${agent.name}?`}
+        description={
+          "Multiple Agents may run independently for the same event and may each produce effects."
+        }
+        detail={renderedOverlap ? (
+          <div className="grid gap-3 text-sm">
+            {("repositories" in renderedOverlap
+              ? renderedOverlap.repositories
+              : [renderedOverlap]
+            ).map((warning) => (
+              <div key={warning.repositoryId}>
+                <strong className="text-kumo-strong">
+                  {warning.repositoryDisplayName ?? "Named repository"}
+                </strong>
+                {warning.conflicts.map((conflict) => (
+                  <p key={conflict.assignmentId} className="mt-1 text-kumo-subtle">
+                    {agent.name} overlaps {conflict.agentDisplayName ?? "another Agent"}.
+                    {` Shared triggers: ${conflict.sharedTriggers.join(", ") || "none"}.`}
+                    {` Shared effects: ${conflict.sharedEffects.join(", ") || "none"}.`}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        confirmLabel={`Allow overlap and activate ${agent.name}`}
+        loading={activate.isPending}
+        onConfirm={() => {
+          const warning = overlapRef.current;
+          if (!warning || !renderedPendingRevision) return;
+          return activate.mutateAsync({ number: renderedPendingRevision, warning });
         }}
       />
     </>

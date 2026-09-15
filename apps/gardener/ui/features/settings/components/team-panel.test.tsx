@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../../../lib/query-keys";
@@ -189,6 +189,30 @@ describe("Team settings", () => {
     await waitFor(() => expect(harness.removeMember).toHaveBeenCalled());
     expect(harness.removeMember.mock.calls[0]?.[0]).toBe("opaque-member-id");
     expect(screen.queryByRole("button", { name: "Remove @owner-login" })).toBeNull();
+  });
+
+  it("keeps exact destructive copy through Escape closing and rejects a stale click", async () => {
+    const unfinishedAnimation = new Promise<void>(() => undefined);
+    Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+      configurable: true,
+      value: () => [{ finished: unfinishedAnimation }],
+    });
+    harness.team.mockResolvedValue(loadedTeam);
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove @member-login" }));
+    const dialog = screen.getByRole("alertdialog");
+    const staleConfirm = within(dialog).getByRole("button", { name: "Remove @member-login" });
+
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+
+    expect(staleConfirm.isConnected).toBe(true);
+    expect(document.body.textContent).toContain("Remove @member-login from the team?");
+    expect(document.body.textContent).toContain("Remove @member-login");
+    fireEvent.click(staleConfirm);
+    expect(harness.removeMember).not.toHaveBeenCalled();
+    expect(harness.revokeInvitation).not.toHaveBeenCalled();
+    delete (HTMLElement.prototype as { getAnimations?: unknown }).getAnimations;
   });
 
   it("keeps a failed destructive confirmation and persistent error visible", async () => {

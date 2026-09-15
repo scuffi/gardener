@@ -1,5 +1,6 @@
 import { PlusIcon, RobotIcon } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/format";
 import { queryKeys } from "../../lib/query-keys";
@@ -11,15 +12,49 @@ import {
   LinkButton,
   Mono,
   PageHeader,
+  Panel,
+  Select,
   StatusBadge,
   statusTone,
 } from "../../primitives";
 
 export function AgentsPage() {
+  const [repositoryId, setRepositoryId] = useState("all");
   const query = useQuery({ queryKey: queryKeys.agents, queryFn: gardenerApi.agents });
   const agents = query.data?.agents ?? [];
+  const assignmentQueries = useQueries({
+    queries: agents.map((agent) => ({
+      queryKey: queryKeys.agentAssignments(agent.id),
+      queryFn: () => gardenerApi.agentAssignments(agent.id),
+    })),
+  });
+  const assignmentsLoading = assignmentQueries.some((item) => item.isLoading);
+  const assignmentsError = assignmentQueries.find((item) => item.error)?.error as Error | undefined;
+  const repositories = Array.from(
+    new Map(
+      assignmentQueries.flatMap((item) =>
+        (item.data?.assignments ?? [])
+          .filter((assignment) => !assignment.removedAt)
+          .map((assignment) => [
+            assignment.repositoryId,
+            assignment.repositoryDisplayName ?? "Unknown repository",
+          ] as const),
+      ),
+    ),
+  );
+  const visibleAgents = agents.filter((_, index) =>
+    repositoryId === "all"
+      ? true
+      : assignmentQueries[index]?.data?.assignments.some(
+          (assignment) => assignment.repositoryId === repositoryId && !assignment.removedAt,
+        ),
+  );
   const create = (
-    <LinkButton href="/agents/new" icon={PlusIcon}>
+    <LinkButton
+      className="max-md:min-h-11 max-md:min-w-11"
+      href="/agents/new"
+      icon={PlusIcon}
+    >
       New Agent
     </LinkButton>
   );
@@ -34,16 +69,41 @@ export function AgentsPage() {
         }
         actions={create}
       />
-      {query.isLoading ? (
+      {repositories.length ? (
+        <Panel className="mb-4">
+          <Select
+            className="max-md:min-h-11 max-md:min-w-11"
+            label="Filter Agents by repository"
+            hideLabel={false}
+            value={repositoryId}
+            onValueChange={(value) => setRepositoryId(value ?? "all")}
+          >
+            <Select.Option value="all">All repositories</Select.Option>
+            {repositories.map(([id, name]) => (
+              <Select.Option key={id} value={id}>{name}</Select.Option>
+            ))}
+          </Select>
+        </Panel>
+      ) : null}
+      {query.isLoading || assignmentsLoading ? (
         <CardSkeleton />
-      ) : query.error ? (
+      ) : query.error || assignmentsError ? (
         <ErrorState
-          message={(query.error as Error).message}
-          onRetry={() => void query.refetch()}
+          message={(query.error as Error)?.message ?? assignmentsError?.message ?? "Agents unavailable"}
+          onRetry={() => {
+            void query.refetch();
+            assignmentQueries.forEach((item) => void item.refetch());
+          }}
         />
-      ) : agents.length ? (
+      ) : visibleAgents.length ? (
         <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-          {agents.map((agent) => (
+          {visibleAgents.map((agent) => {
+            const index = agents.findIndex((item) => item.id === agent.id);
+            const assigned = assignmentQueries[index]?.data?.assignments.filter(
+              (assignment) => !assignment.removedAt,
+            ) ?? [];
+            const enabled = assigned.filter((assignment) => assignment.enabled).length;
+            return (
             <CardLink
               key={agent.id}
               href={`/agents/${encodeURIComponent(agent.id)}`}
@@ -65,8 +125,10 @@ export function AgentsPage() {
                       <StatusBadge tone={statusTone(agent.lifecycle)}>
                         {agent.lifecycle === "active" ? "Active revision" : agent.lifecycle}
                       </StatusBadge>
-                      <StatusBadge tone={statusTone(agent.enabled ? "enabled" : "disabled")}>
-                        {agent.enabled ? "Enabled" : "Disabled"}
+                      <StatusBadge tone={statusTone(enabled ? "enabled" : "disabled")}>
+                        {assigned.length
+                          ? `${enabled} of ${assigned.length} deployments enabled`
+                          : "No repository deployments"}
                       </StatusBadge>
                     </span>
                   </div>
@@ -93,15 +155,17 @@ export function AgentsPage() {
                 </div>
               </div>
             </CardLink>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyState
           icon={RobotIcon}
           title="No Agents yet"
           description={
-            "Create an Agent by authoring a portable AGENT.md. New Agents remain disabled until " +
-            "you publish, activate, and enable them."
+            repositoryId === "all"
+              ? "Create an Agent by authoring a portable AGENT.md, then deploy it to repositories."
+              : "No Agent is assigned to this repository. Choose another repository or add a deployment."
           }
           action={create}
         />

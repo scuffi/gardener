@@ -1,6 +1,6 @@
 import { TrashIcon, UserPlusIcon, UsersIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useGardener } from "../../../app-context";
 import { gardenerApi } from "../../../lib/api";
 import { formatDate } from "../../../lib/format";
@@ -31,6 +31,9 @@ export function TeamPanel() {
   const queryClient = useQueryClient();
   const [githubUsername, setGithubUsername] = useState("");
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null);
+  const lastConfirmationRef = useRef<PendingConfirmation | null>(null);
+  if (confirmation) lastConfirmationRef.current = confirmation;
+  const visibleConfirmation = confirmation ?? lastConfirmationRef.current;
   const teamQuery = useQuery({
     queryKey: queryKeys.team,
     queryFn: gardenerApi.team,
@@ -286,36 +289,41 @@ export function TeamPanel() {
           </ul>
         </section>
       ) : null}
-      <ConfirmDialog
-        open={confirmation !== null}
-        onOpenChange={(open) => {
-          if (!open && !revokeMutation.isPending && !removeMutation.isPending) setConfirmation(null);
-        }}
-        title={
-          confirmation?.kind === "remove"
-            ? `Remove @${confirmation.member.username} from the team?`
-            : `Revoke the invitation for @${confirmation?.invitation.username ?? ""}?`
-        }
-        description={
-          confirmation?.kind === "remove"
-            ? `@${confirmation.member.username} will immediately lose access to this Gardener workspace.`
-            : `@${confirmation?.invitation.username ?? ""} will no longer be able to join with this invitation.`
-        }
-        confirmLabel={
-          confirmation?.kind === "remove"
-            ? `Remove @${confirmation.member.username}`
-            : `Revoke invitation for @${confirmation?.invitation.username ?? ""}`
-        }
-        confirmTone="destructive"
-        loading={revokeMutation.isPending || removeMutation.isPending}
-        onConfirm={async () => {
-          if (confirmation?.kind === "revoke") {
-            await revokeMutation.mutateAsync(confirmation.invitation.id);
-          } else if (confirmation?.kind === "remove") {
-            await removeMutation.mutateAsync(confirmation.member.id);
+      {visibleConfirmation ? (
+        <ConfirmDialog
+          open={confirmation !== null}
+          onOpenChange={(open) => {
+            if (!open && !revokeMutation.isPending && !removeMutation.isPending) {
+              setConfirmation(null);
+            }
+          }}
+          title={
+            visibleConfirmation.kind === "remove"
+              ? `Remove @${visibleConfirmation.member.username} from the team?`
+              : `Revoke the invitation for @${visibleConfirmation.invitation.username}?`
           }
-        }}
-      />
+          description={
+            visibleConfirmation.kind === "remove"
+              ? `@${visibleConfirmation.member.username} will immediately lose access to this Gardener workspace.`
+              : `@${visibleConfirmation.invitation.username} will no longer be able to join with this invitation.`
+          }
+          confirmLabel={
+            visibleConfirmation.kind === "remove"
+              ? `Remove @${visibleConfirmation.member.username}`
+              : `Revoke invitation for @${visibleConfirmation.invitation.username}`
+          }
+          confirmTone="destructive"
+          loading={revokeMutation.isPending || removeMutation.isPending}
+          onConfirm={async () => {
+            const activeConfirmation = confirmation;
+            if (activeConfirmation?.kind === "revoke") {
+              await revokeMutation.mutateAsync(activeConfirmation.invitation.id);
+            } else if (activeConfirmation?.kind === "remove") {
+              await removeMutation.mutateAsync(activeConfirmation.member.id);
+            }
+          }}
+        />
+      ) : null}
     </Panel>
   );
 }

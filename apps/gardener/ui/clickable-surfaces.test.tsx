@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   agents: vi.fn(),
+  agentAssignments: vi.fn(),
   runs: vi.fn(),
 }));
 
@@ -59,6 +60,7 @@ describe("clickable collection surfaces", () => {
         },
       ],
     });
+    api.agentAssignments.mockResolvedValue({ assignmentEpoch: 1, assignments: [] });
     renderWithData(<AgentsPage />, "/agents");
 
     const card = await screen.findByRole("link", { name: "Open Agent Issue gardener" });
