@@ -12,7 +12,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { ApiError, gardenerApi } from "./lib/api";
 import { queryKeys, queryPrefixes } from "./lib/query-keys";
-import type { AppState, HealthState } from "./lib/types";
+import type { AppState, HealthState, SessionState } from "./lib/types";
 import { useNotifications } from "./providers/notifications";
 import { defaultRoute } from "./routes";
 
@@ -23,11 +23,27 @@ interface AppContextValue {
   stateLoading: boolean;
   error: Error | null;
   authenticated: boolean;
+  session: SessionState;
   refresh: () => Promise<void>;
   signOut: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const unauthenticatedSession: SessionState = { authenticated: false };
+const localDevelopmentSession: SessionState = {
+  authenticated: true,
+  githubLogin: "local-developer",
+  user: {
+    id: "local-development",
+    displayName: "Local developer",
+    role: "owner",
+    identity: {
+      provider: "local",
+      providerSubject: "local-development",
+      login: "local-developer",
+    },
+  },
+};
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -49,6 +65,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const authenticated = Boolean(
     sessionQuery.data?.authenticated || healthQuery.data?.localDevelopment,
   );
+  const session = sessionQuery.data?.authenticated
+    ? sessionQuery.data
+    : healthQuery.data?.localDevelopment
+      ? localDevelopmentSession
+      : unauthenticatedSession;
   const stateQuery = useQuery({
     queryKey: queryKeys.state(sessionRevision),
     queryFn: gardenerApi.state,
@@ -110,6 +131,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       stateLoading: stateQuery.isLoading,
       error: (healthQuery.error ?? stateQuery.error) as Error | null,
       authenticated,
+      session,
       refresh,
       signOut,
     }),
@@ -122,6 +144,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       stateQuery.isLoading,
       stateQuery.error,
       authenticated,
+      session,
       refresh,
       signOut,
     ],

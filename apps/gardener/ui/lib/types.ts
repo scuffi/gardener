@@ -1,6 +1,265 @@
 export type Flag = boolean | 0 | 1;
 export type PolicyMode = "disabled" | "approval" | "automatic";
 export type SetupProfile = "safe" | "review" | "labels";
+export type WorkspaceRole = "owner" | "member";
+
+export interface GitHubIdentity {
+  provider: "github";
+  providerSubject: string;
+  login: string;
+}
+
+export interface LocalIdentity {
+  provider: "local";
+  providerSubject: "local-development";
+  login: "local-developer";
+}
+
+export interface SessionUser {
+  id: string;
+  displayName: string;
+  role: WorkspaceRole;
+  identity: GitHubIdentity | LocalIdentity;
+}
+
+export type SessionState =
+  | { authenticated: false }
+  | { authenticated: true; githubLogin: string; user: SessionUser };
+
+export interface TeamMember {
+  id: string;
+  display_name: string;
+  role: WorkspaceRole;
+  permanent: number;
+  username: string;
+  provider_subject: string;
+}
+
+export interface TeamInvitation {
+  id: string;
+  username: string;
+  provider_subject: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface TeamResponse {
+  members: TeamMember[];
+  invitations: TeamInvitation[];
+}
+
+export interface AgentRepositoryAssignment {
+  schemaVersion: "v1";
+  id: string;
+  version: number;
+  configHash: string;
+  agentId: string;
+  agentDisplayName?: string;
+  repositoryId: string;
+  repositoryDisplayName?: string;
+  enabled: boolean;
+  authorityCeiling: PolicyMode;
+  createdAt: string;
+  updatedAt: string;
+  removedAt: string | null;
+}
+
+export interface AssignmentListResponse {
+  assignmentEpoch: number;
+  assignments: AgentRepositoryAssignment[];
+}
+
+interface AddAgentAssignmentsBase {
+  authorityCeiling: PolicyMode;
+  expectedAssignmentEpoch: number;
+  expectedVersion?: number;
+  expectedConfigHash?: string;
+  expectedActiveRevisionId?: string | null;
+  materializedRepositoryIds?: string[];
+  overlapFingerprint?: string;
+}
+
+export interface AddSingleAgentAssignmentInput extends AddAgentAssignmentsBase {
+  repositoryId: string;
+  allCurrent?: never;
+}
+
+export interface AddAllCurrentAgentAssignmentsRequest extends AddAgentAssignmentsBase {
+  repositoryId?: never;
+  allCurrent: true;
+}
+
+export type AddAgentAssignmentsInput =
+  | AddSingleAgentAssignmentInput
+  | AddAllCurrentAgentAssignmentsRequest;
+
+export type AddAllCurrentAgentAssignmentsInput = Omit<
+  AddAllCurrentAgentAssignmentsRequest,
+  "allCurrent"
+>;
+
+export interface AssignmentMutationInput {
+  expectedVersion: number;
+  expectedConfigHash: string;
+  expectedAssignmentEpoch: number;
+  authorityCeiling?: PolicyMode;
+  reason?: string | null;
+  expectedActiveRevisionId?: string | null;
+  overlapFingerprint?: string;
+}
+
+export interface AssignmentAuthorityInput {
+  authorityCeiling: PolicyMode;
+  expectedVersion: number;
+  expectedConfigHash: string;
+  expectedAssignmentEpoch: number;
+  reason?: string | null;
+}
+
+export interface AssignmentMutationResponse {
+  assignment: AgentRepositoryAssignment;
+  assignmentEpoch: number;
+  result: "updated" | "noop";
+}
+
+export interface AssignmentOverlapConflict {
+  assignmentId: string;
+  assignmentVersion: number;
+  agentId: string;
+  agentDisplayName?: string;
+  activeRevisionId: string;
+  activeRevisionCompiledHash: string;
+  sharedTriggers: string[];
+  sharedEffects: string[];
+}
+
+export interface AssignmentOverlapWarning {
+  schemaVersion: "v1";
+  assignmentEpoch: number;
+  repositoryId: string;
+  repositoryDisplayName?: string;
+  candidate: {
+    agentId: string;
+    revisionId: string;
+    revisionCompiledHash: string;
+    assignmentId: string;
+    assignmentVersion: number;
+  };
+  conflicts: AssignmentOverlapConflict[];
+  fingerprint: string;
+  currentActiveRevisionId?: string | null;
+}
+
+export interface AssignmentPrecondition {
+  repositoryId: string;
+  assignmentId: string;
+  expectedVersion: number | null;
+  expectedConfigHash: string | null;
+}
+
+export interface AggregateOverlapWarning {
+  schemaVersion?: "v1";
+  assignmentEpoch: number;
+  agent?: { id: string; name?: string };
+  repositories: AssignmentOverlapWarning[];
+  preconditions?: AssignmentPrecondition[];
+  materializedRepositoryIds?: string[];
+  fingerprint: string;
+  currentActiveRevisionId?: string | null;
+}
+
+export interface OverlapConfirmationRequired {
+  error: "overlap_confirmation_required";
+  warning: AssignmentOverlapWarning | AggregateOverlapWarning;
+}
+
+export interface ActivationInput {
+  reason?: string | null;
+  expectedAssignmentEpoch: number;
+  expectedCurrentRevisionId: string | null;
+  overlapFingerprint?: string;
+}
+
+export interface ActivatedAgent {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  revisionCounter: number;
+  activeRevisionId: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  enabledAssignments: number;
+  assignmentCount: number;
+}
+
+export type ObservationCapability =
+  | "github.repository.metadata.read"
+  | "github.issue.read"
+  | "github.pull_request.read"
+  | "github.comment.read"
+  | "github.review.read"
+  | "github.discussion.read"
+  | "github.check.read"
+  | "github.contents.read"
+  | "github.commit.read"
+  | "github.release.read";
+
+export type WorkspaceCapability =
+  | "workspace.fs.read"
+  | "workspace.fs.write"
+  | "workspace.git.read"
+  | "workspace.git.write-local"
+  | "workspace.exec.shell"
+  | "workspace.exec.javascript"
+  | "workspace.exec.container"
+  | "workspace.network.connect"
+  | "workspace.dependencies.install"
+  | "workspace.artifacts.publish";
+
+export type OperationKind = keyof typeof operationMetadataValues;
+
+export interface RepositoryPolicy {
+  schemaVersion: "v1";
+  repositoryId: string;
+  repositoryDisplayName?: string;
+  version: number;
+  policyHash: string;
+  operationModes: Partial<Record<OperationKind, PolicyMode>>;
+  allowedObservations: ObservationCapability[];
+  workspaceModes: Partial<Record<WorkspaceCapability, PolicyMode>>;
+}
+
+export interface RepositoryPolicyView {
+  configured: boolean;
+  message?: string;
+  repository: { id: string; name: string; active: boolean };
+  policy: RepositoryPolicy;
+  policyVersion: number;
+  policyHash: string;
+  repositoryConstraints: Record<string, unknown>;
+  workspaceCeilings: {
+    operationModes: Record<string, PolicyMode>;
+    observation: Record<string, PolicyMode>;
+    workspaceModes: Record<string, PolicyMode>;
+    constraints: Record<string, unknown>;
+  };
+  effective: {
+    operationModes: Record<string, PolicyMode>;
+    allowedObservations: string[];
+    workspaceModes: Record<string, PolicyMode>;
+  };
+}
+
+export interface PutRepositoryPolicyInput {
+  expectedPolicyVersion: number;
+  expectedPolicyHash: string | null;
+  operationModes: Record<OperationKind, PolicyMode>;
+  allowedObservations: ObservationCapability[];
+  workspaceModes: Record<WorkspaceCapability, PolicyMode>;
+}
 
 export interface HealthState {
   ok: boolean;
@@ -152,6 +411,7 @@ export interface AgentDetailResponse {
   sourceMd?: string;
   thisRepositoryId?: string;
   revisions: AgentRevisionSummary[];
+  assignments: AgentRepositoryAssignment[];
 }
 export interface AgentValidationDiagnostic {
   code: string;
@@ -208,7 +468,7 @@ export interface HistoryItem {
   createdAt: string;
 }
 
-export const operationMetadata: Record<string, { name: string; description: string }> = {
+const operationMetadataValues = {
   "issue.label.add": { name: "Add issue labels", description: "Add labels to issues." },
   "issue.label.remove": { name: "Remove issue labels", description: "Remove labels from issues." },
   "issue.comment.create": { name: "Post issue comments", description: "Post comments on issues." },
@@ -256,4 +516,7 @@ export const operationMetadata: Record<string, { name: string; description: stri
   "release.update": { name: "Update releases", description: "Update release metadata." },
   "release.publish": { name: "Publish releases", description: "Publish an exact draft release." },
   "release.delete": { name: "Delete releases", description: "Delete a release after live revalidation." },
-};
+} satisfies Record<string, { name: string; description: string }>;
+
+export const operationMetadata: Record<string, { name: string; description: string }> =
+  operationMetadataValues;

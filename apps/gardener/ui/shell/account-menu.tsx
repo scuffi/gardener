@@ -20,10 +20,9 @@ const identityLabelClasses = cn(
 );
 
 export function AccountMenu() {
-  const { state, signOut } = useGardener();
+  const { state, session, signOut } = useGardener();
   const { notify } = useNotifications();
   const navigate = useNavigate();
-  const login = state?.viewer.login;
   const repositories =
     state?.repositories.filter((repository) => isEnabled(repository.active)).length ?? 0;
 
@@ -36,8 +35,11 @@ export function AccountMenu() {
       notify({ tone: "error", title: "Unable to open GitHub", description: error.message }),
   });
 
-  if (!login) return null;
-  const initial = login.slice(0, 1).toUpperCase();
+  if (!session.authenticated) return null;
+  const { displayName, role, identity } = session.user;
+  const login = identity.login;
+  const roleLabel = role === "owner" ? "Owner" : "Member";
+  const initial = displayName.slice(0, 1).toUpperCase();
 
   return (
     <DropdownMenu>
@@ -62,8 +64,8 @@ export function AccountMenu() {
             "group-data-[state=collapsed]/sidebar:hidden"
           }
         >
-          <strong className="max-w-32 truncate text-xs font-semibold">{login}</strong>
-          <span className="mt-0.5 text-[11px] text-kumo-subtle">GitHub connected</span>
+          <strong className="max-w-32 truncate text-xs font-semibold">{displayName}</strong>
+          <span className="mt-0.5 text-[11px] text-kumo-subtle">{roleLabel}</span>
         </span>
         <CaretDownIcon
           className={
@@ -88,24 +90,33 @@ export function AccountMenu() {
               {initial}
             </span>
             <span className="grid min-w-0 leading-snug">
-              <span className="text-[11px] font-medium text-kumo-subtle">Signed in with GitHub</span>
-              <strong className="mt-0.5 truncate text-[13px] font-semibold text-kumo-strong">
-                {login}
-              </strong>
-              <span className="mt-0.5 text-[11px] text-kumo-subtle">
-                {repositories} {repositories === 1 ? "repository" : "repositories"} connected
+              <span className="text-[11px] font-medium text-kumo-subtle">
+                {identity.provider === "local" ? "Local development" : "Signed in with GitHub"}
               </span>
+              <strong className="mt-0.5 truncate text-[13px] font-semibold text-kumo-strong">
+                {displayName}
+              </strong>
+              <span className="mt-0.5 truncate text-[11px] text-kumo-subtle">
+                @{login} · {roleLabel}
+              </span>
+              {role === "owner" ? (
+                <span className="mt-0.5 text-[11px] text-kumo-subtle">
+                  {repositories} {repositories === 1 ? "repository" : "repositories"} connected
+                </span>
+              ) : null}
             </span>
           </DropdownMenu.Label>
         </DropdownMenu.Group>
         <DropdownMenu.Separator />
-        <DropdownMenu.Item
-          icon={GithubLogoIcon}
-          disabled={installMutation.isPending}
-          onClick={() => installMutation.mutate()}
-        >
-          {installMutation.isPending ? "Opening GitHub…" : "Manage GitHub access"}
-        </DropdownMenu.Item>
+        {role === "owner" ? (
+          <DropdownMenu.Item
+            icon={GithubLogoIcon}
+            disabled={installMutation.isPending}
+            onClick={() => installMutation.mutate()}
+          >
+            {installMutation.isPending ? "Opening GitHub…" : "Manage GitHub access"}
+          </DropdownMenu.Item>
+        ) : null}
         <DropdownMenu.Item icon={GearIcon} onClick={() => navigate("/settings")}>
           Dashboard settings
         </DropdownMenu.Item>

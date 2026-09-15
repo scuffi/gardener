@@ -11,10 +11,15 @@ export const queryKeys = {
     (revision === undefined ? ["state"] : ["state", revision]) as readonly unknown[],
   inbox: ["inbox"] as const,
   history: ["history"] as const,
+  team: ["team"] as const,
   agents: ["agents"] as const,
   agent: (id: string | undefined) => ["agent", id] as const,
   agentRevision: (id: string | undefined, revision: number | null) =>
     ["agent", id, "revision", revision] as const,
+  agentAssignments: (id: string | undefined) => ["agent", id, "assignments"] as const,
+  repositoryAssignments: (id: string | undefined) =>
+    ["repository", id, "assignments"] as const,
+  repositoryPolicy: (id: string | undefined) => ["repository", id, "policy"] as const,
   runs: ["runs"] as const,
   run: (id: string | undefined) => ["run", id] as const,
 } as const;
@@ -25,5 +30,6 @@ export const queryPrefixes = {
   agents: ["agents"] as const,
   agent: ["agent"] as const,
   inbox: ["inbox"] as const,
+  repositories: ["repository"] as const,
   runs: ["runs"] as const,
 } as const;

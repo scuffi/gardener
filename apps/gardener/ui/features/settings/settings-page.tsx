@@ -22,6 +22,7 @@ import {
   TableSkeleton,
 } from "../../primitives";
 import { ThemePicker } from "../../theme";
+import { TeamPanel } from "./components/team-panel";
 
 export function SettingsPage() {
   const { state, health, error, refresh } = useGardener();
@@ -142,6 +143,8 @@ export function SettingsPage() {
             ))}
           </div>
         </Panel>
+
+        <TeamPanel />
 
         <Panel padded={false}>
           <PanelHeader
