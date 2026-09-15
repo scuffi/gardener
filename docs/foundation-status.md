@@ -49,11 +49,31 @@ Before production cutover:
 
 1. Complete and review the migration concurrency/immutability tests.
 2. Confirm that the owner accepts no export of old automation history.
-3. Pause the instance and stop old execution.
+3. Pause the instance, stop old execution, and require zero non-terminal runs.
 4. Confirm deployed Connect stage 1 remains owner-login-only; do not open member login.
-5. Deploy Gardener v7 and apply the Agent-native reset exactly once.
-6. Verify retained repositories/settings/policies, owner bootstrap, opaque session exchange, invitations, assignments, and fail-closed defaults.
-7. Only after that gate may Connect stage 2 member login deploy. Create new Agents as paused drafts and disabled assignments; do not synthesize deployments from old data.
+5. Capture a sealed mode-0600 manifest while the database is still schema v6:
+
+   ```sh
+   node scripts/team-workspace-v7-preflight.mjs \
+     --output .secrets/v7-preflight.json --database gardener --cwd apps/gardener
+   ```
+
+6. Review cleanup in dry-run mode, then execute it with the manifest's exact hash confirmation:
+
+   ```sh
+   node scripts/team-workspace-v7-cleanup.mjs --manifest .secrets/v7-preflight.json
+   node scripts/team-workspace-v7-cleanup.mjs --manifest .secrets/v7-preflight.json \
+     --execute --confirm DELETE:<manifest-sha256>
+   ```
+
+   Cleanup must complete strictly before Gardener v7 deploys. Migration v7 removes the D1 rows that identify
+   captured external resources. A captured workspace Durable Object key makes cleanup abort before any destructive
+   call; resolve that blocker and repeat preflight rather than proceeding partially.
+7. Deploy Gardener v7 with `--containers-rollout none` and apply the Agent-native reset exactly once.
+8. Verify retained repositories/settings/policies, owner bootstrap, opaque session exchange, invitations, assignments,
+   and fail-closed defaults.
+9. Only after that gate may Connect stage 2 member login deploy. Create new Agents as paused drafts and disabled
+   assignments; do not synthesize deployments from old data.
 
 Do not apply this reset to production merely to test the foundation.
 

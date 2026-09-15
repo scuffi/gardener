@@ -195,24 +195,21 @@ export const gardenerApi = {
     api<{ revision: number; sourceMd: string; sourceHash: string; compiledHash?: string }>(
       `${agentPath(id)}/revisions/${revision}`,
     ),
-  createAgent: (sourceMd: string, thisRepositoryId?: string) =>
-    api<{ agent: AgentSummary; draftId: string }>(
-      "/api/agents",
-      json({ sourceMd, thisRepositoryId }),
-    ),
-  saveAgentDraft: (id: string, sourceMd: string, thisRepositoryId?: string) =>
+  createAgent: (sourceMd: string) =>
+    api<{ agent: AgentSummary; draftId: string }>("/api/agents", json({ sourceMd })),
+  saveAgentDraft: (id: string, sourceMd: string) =>
     api<{ draftId: string; sourceHash: string }>(
       `${agentPath(id)}/draft`,
-      put({ sourceMd, thisRepositoryId }),
+      put({ sourceMd }),
     ),
-  validateAgent: (sourceMd: string, agentId?: string, thisRepositoryId?: string) =>
-    api<AgentValidation>("/api/agents/validate", json({ sourceMd, agentId, thisRepositoryId })),
-  simulateAgent: (sourceMd: string, agentId?: string, thisRepositoryId?: string) =>
-    api<AgentSimulation>("/api/agents/simulate", json({ sourceMd, agentId, thisRepositoryId })),
-  publishAgent: (id: string, sourceMd: string, thisRepositoryId?: string) =>
+  validateAgent: (sourceMd: string, agentId?: string) =>
+    api<AgentValidation>("/api/agents/validate", json({ sourceMd, agentId })),
+  simulateAgent: (sourceMd: string, agentId?: string) =>
+    api<AgentSimulation>("/api/agents/simulate", json({ sourceMd, agentId })),
+  publishAgent: (id: string, sourceMd: string) =>
     api<{ revision: number; paused: true }>(
       `${agentPath(id)}/revisions`,
-      json({ sourceMd, thisRepositoryId }),
+      json({ sourceMd }),
     ),
   activateAgentRevision: (id: string, revision: number) =>
     api<{ activated: true }>(`${agentPath(id)}/revisions/${revision}/activate`, {

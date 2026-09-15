@@ -51,7 +51,10 @@ The warning is not arbitration. Gardener has no hidden priority, winner, or glob
 Release is deliberately staged:
 
 1. **Connect hardening (deployed):** the deployed backward-compatible stage remains owner-login-only, removes empty-owner adoption, signs owner bootstrap from the pre-existing owner, emits single-use assertions, and hardens installation setup and bounded username resolution.
-2. **Gardener v7:** pause execution; run reviewed preflight/manifest checks; require zero non-terminal runs; clean captured Workflow, Durable Object, R2, and workspace remnants; apply the guarded v6-to-v7 migration; deploy Gardener; and verify owner bootstrap, opaque sessions, invitation creation, and rejection of an uninvited identity.
+2. **Gardener v7:** pause execution; run `scripts/team-workspace-v7-preflight.mjs`; require zero non-terminal
+   runs; dry-run and execute `scripts/team-workspace-v7-cleanup.mjs` strictly before deploy; apply the guarded
+   v6-to-v7 migration; deploy Gardener with `--containers-rollout none`; and verify owner bootstrap, opaque sessions,
+   invitation creation, and rejection of an uninvited identity.
 3. **Gate, then Connect member login:** only after Gardener v7 verification may Connect remove the non-owner login rejection. Empty-owner instances remain rejected. Re-run qualification and keep production globally paused unless separately authorized.
 
 Connect stage 1 is deployed and remains owner-only. Gardener v7 is implemented locally but has not been deployed. Connect stage 2 member login is not deployed and remains gated on v7 verification. This ADR performs no migration or deployment.
@@ -60,6 +63,11 @@ This is a clean pre-V1 destructive reset. Existing test Agents and run/runtime e
 
 ## Consequences
 
-Agent packages can move between repositories and authoring channels without carrying deployment authority. Team access is locally revocable, Connect remains the identity attester and credential boundary, and every repository starts dark until both policy and assignment are explicit. The cost is additional assignment/policy administration and explicit overlap confirmation.
+Agent packages can move between repositories and authoring channels without carrying deployment authority. Team access
+is locally revocable, and Connect remains the identity attester and credential boundary. Repositories connected after
+v7 start unconfigured and dark until policy and assignment are explicit. During the destructive v7 migration,
+pre-existing active repositories inherit the workspace policy ceiling but remain dark because test Agents are removed
+and assignments are required. The cost is additional assignment/policy administration and explicit overlap
+confirmation.
 
 The production runtime remains limited to the qualified `github.issue.opened` → model proposal → host-constructed automatic `issue.comment.create` path. Computer-based fix, branch, commit, draft-PR, approval waits, general tool loops, and broader operations remain separate, unqualified work and must not be inferred from this foundation.
