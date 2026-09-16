@@ -51,10 +51,13 @@ An Agent lifecycle is deliberately multi-step:
 4. Explicitly activate that revision.
 5. Separately create and enable exact-repository assignments.
 
-Assignments are the only runtime enablement gate. New assignments are disabled. “All current”
-materializes current repository IDs and never follows future repositories. Missing repository policy
-means nothing runs. Effective authority is the most restrictive intersection of workspace,
-repository, Agent, assignment, provider, and live state.
+Assignments are the only runtime enablement gate. New assignments are disabled. Fresh installations
+include three system-published starter revisions—Issue triage, Bug intake, and Documentation helper—
+with active revision pointers but no repository assignments, so they have no runtime authority until
+an owner explicitly assigns and enables one. “All current” materializes current repository IDs and
+never follows future repositories. Missing repository policy means nothing runs. Effective authority
+is the most restrictive intersection of workspace, repository, Agent, assignment, provider, and live
+state.
 
 Read [Agent authoring](docs/agent-authoring.md), [Architecture](docs/architecture.md),
 [GitHub Gateway operations](docs/github-gateway.md), and [Security](SECURITY.md).
@@ -98,7 +101,7 @@ The checkpointed apply then:
 
 1. provisions two D1 databases and the Gardener R2 bucket;
 2. deploys a credential-free Gateway shell and applies its migration;
-3. deploys Gardener with its outbound named RPC binding and applies its migrations;
+3. deploys Gardener with its outbound named RPC binding and applies its migrations, including safe unassigned starter Agents;
 4. seeds the confirmed permanent owner;
 5. redeploys the Gateway with its reverse named RPC binding;
 6. opens the personal or organization GitHub App Manifest form in the human browser;

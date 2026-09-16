@@ -16,6 +16,7 @@ beforeAll(async () => {
   vi.doMock("../migrations/0006_flue_harness_requests.sql?raw", () => ({ default: migration("0006_flue_harness_requests.sql") }));
   vi.doMock("../migrations/0007_team_workspace_foundation.sql?raw", () => ({ default: migration("0007_team_workspace_foundation.sql") }));
   vi.doMock("../migrations/0008_flue_native_runtime.sql?raw", () => ({ default: migration("0008_flue_native_runtime.sql") }));
+  vi.doMock("../migrations/0009_starter_agents.sql?raw", () => ({ default: migration("0009_starter_agents.sql") }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -124,7 +125,7 @@ function seedCompleteV6Graph(sqlite: DatabaseSync): void {
   `);
 }
 
-describe("schema v8 Flue-native cutover", () => {
+describe("schema v9 starter Agent cutover", () => {
   it("upgrades v6, resets pre-V1 Agent data, and preserves repositories and global policy", async () => {
     const sqlite = v6Database();
     try {
@@ -144,11 +145,11 @@ describe("schema v8 Flue-native cutover", () => {
 
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
       expect(sqlite.prepare("SELECT id FROM repositories ORDER BY id").all()).toEqual([{ id: "repo-active" }, { id: "repo-inactive" }]);
       expect(sqlite.prepare("SELECT mode FROM operation_policies WHERE operation_kind = 'issue.comment.create'").get()).toEqual({ mode: "automatic" });
-      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
-      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_revisions").get()).toEqual({ count: 0 });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 3 });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_revisions").get()).toEqual({ count: 3 });
 
       expect(sqlite.prepare("SELECT mode, policy_version FROM repository_operation_policies WHERE repository_id = 'repo-active' AND operation_kind = 'issue.comment.create'").get()).toEqual({ mode: "automatic", policy_version: 1 });
       expect(sqlite.prepare("SELECT mode, constraints_json FROM repository_capability_policies WHERE repository_id = 'repo-active' AND capability_kind = 'github.issue.read'").get()).toEqual({ mode: "disabled", constraints_json: "{\"reason\":\"legacy\"}" });
@@ -156,7 +157,8 @@ describe("schema v8 Flue-native cutover", () => {
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM repository_capability_policies WHERE repository_id = 'repo-inactive'").get()).toEqual({ count: 0 });
 
       for (const table of resetTables) {
-        expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
+        const starterRows = ["agents", "agent_activations", "agent_activation_history"].includes(table) ? 3 : 0;
+        expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: starterRows });
       }
     } finally {
       sqlite.close();
@@ -224,8 +226,13 @@ describe("schema v8 Flue-native cutover", () => {
           '{}','${digest}','flue','2.0.2','{}');
       `);
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton=1").get()).toEqual({ version: 8 });
-      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v7" }]);
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton=1").get()).toEqual({ version: 9 });
+      expect(sqlite.prepare("SELECT id FROM agents ORDER BY id").all()).toEqual([
+        { id: "agent-v7" },
+        { id: "agent_gardener_starter_bug_intake" },
+        { id: "agent_gardener_starter_documentation_helper" },
+        { id: "agent_gardener_starter_issue_triage" },
+      ]);
       expect(sqlite.prepare("SELECT runtime_driver FROM agent_runs WHERE id='run-v7'").get())
         .toEqual({ runtime_driver: "workflow-v1" });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='flue_dispatch_outbox'").get())
@@ -247,32 +254,37 @@ describe("schema v8 Flue-native cutover", () => {
       expect(() => {
         for (const statement of statements) sqlite.exec(statement);
       }).toThrow(/duplicate column name/);
-      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v7" }]);
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
+      expect(sqlite.prepare("SELECT id FROM agents ORDER BY id").all()).toEqual([
+        { id: "agent-v7" },
+        { id: "agent_gardener_starter_bug_intake" },
+        { id: "agent_gardener_starter_documentation_helper" },
+        { id: "agent_gardener_starter_issue_triage" },
+      ]);
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
     } finally {
       sqlite.close();
     }
   });
 
-  it.each([4, 5])("takes a complete v%i database through the remaining chain to v8", async (version) => {
+  it.each([4, 5])("takes a complete v%i database through the remaining chain to v9", async (version) => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       sqlite.exec(migration("0001_initial.sql"));
       sqlite.exec("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)");
       if (version === 5) sqlite.exec(migration("0005_agent_runtime_admission.sql"));
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_repository_assignments'").get()).toEqual({ name: "agent_repository_assignments" });
     } finally {
       sqlite.close();
     }
   });
 
-  it("takes a fresh database through the complete chain to v8", async () => {
+  it("takes a fresh database through the complete chain to v9", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_repository_assignments'").get()).toEqual({ name: "agent_repository_assignments" });
     } finally {
       sqlite.close();

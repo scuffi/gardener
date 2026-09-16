@@ -160,6 +160,8 @@ mutable paused draft
 
 Publication never activates or deploys. Activation changes only the workspace-global active revision pointer. Repository deployment is a separate, versioned assignment, disabled by default. A run is enabled only when an active revision and an enabled, non-removed assignment for that exact repository both exist; assignment is the sole enable gate. Global and repository pauses remain independent admission controls.
 
+Fresh installations seed three immutable, system-published V1 starters for the bounded runtime: Issue triage (`gardener-test`), Bug intake (`bug`), and Documentation helper (`documentation`). Their revision pointers are active so an owner can use them immediately, but the migration creates no repository assignments and grants no authority. Their exact source packages live under `examples/agents/`; `scripts/generate-starter-agents.ts` deterministically compiles and hash-binds the committed D1 migration.
+
 “All current repositories” is an assignment-creation convenience, not an Agent selector. It atomically materializes exactly the active repository IDs confirmed at that moment and never follows repositories added later.
 
 A revision records exact source, parsed semantics, supporting-file hashes, source/semantic/compiled hashes, and compiler/runtime/catalog versions. Every run additionally pins its exact assignment, repository policy, workspace policy/effective capability snapshot, and harness adapter version.

@@ -41,8 +41,8 @@ function d1(sql) {
 }
 
 const schemaVersion = Number(d1("SELECT version FROM gardener_schema WHERE singleton=1")[0]?.version ?? -1);
-if (schemaVersion !== 7 && schemaVersion !== 8) {
-  throw new Error(`Expected schema 7 or 8 at native cutover, received ${schemaVersion}; no manifest was written`);
+if (![7, 8, 9].includes(schemaVersion)) {
+  throw new Error(`Expected schema 7, 8, or 9 at native cutover, received ${schemaVersion}; no manifest was written`);
 }
 const paused = d1("SELECT value FROM settings WHERE key='global_paused'")[0]?.value;
 const activePredicate = "status IN ('admitted','queued','running','waiting')";

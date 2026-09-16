@@ -1,7 +1,13 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { operationKindValues } from "@gardener/contracts";
+import {
+  agentProvenanceV1Schema,
+  agentSourceV1Schema,
+  compiledAgentRevisionV1Schema,
+  operationKindValues,
+} from "@gardener/contracts";
+import { canonicalSha256 } from "@gardener/core";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { d1Database } from "./persistence-test-db";
 
@@ -27,17 +33,47 @@ beforeAll(async () => {
   vi.doMock("../migrations/0008_flue_native_runtime.sql?raw", () => ({
     default: readFileSync(new URL("../migrations/0008_flue_native_runtime.sql", import.meta.url), "utf8"),
   }));
+  vi.doMock("../migrations/0009_starter_agents.sql?raw", () => ({
+    default: readFileSync(new URL("../migrations/0009_starter_agents.sql", import.meta.url), "utf8"),
+  }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
 describe("Agent-native database initialization", () => {
-  it("creates the clean schema without a seeded Agent or Workflow V1/V2 tables", async () => {
+  it("creates the clean schema with safe unassigned starter Agents and no Workflow V1/V2 tables", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
-      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 3 });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_revisions").get()).toEqual({ count: 3 });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_activations").get()).toEqual({ count: 3 });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_repository_assignments").get()).toEqual({ count: 0 });
+      const starters = sqlite.prepare(`
+        SELECT r.source_md, r.source_hash, r.parsed_json, r.parsed_hash,
+          r.compiled_json, r.compiled_hash, r.provenance_json, r.provenance_hash,
+          a.id agent_id, x.revision_id active_revision_id
+        FROM agents a JOIN agent_revisions r ON r.agent_id=a.id
+        JOIN agent_activations x ON x.agent_id=a.id
+        ORDER BY a.id
+      `).all() as Array<Record<string, string>>;
+      const starterLabels: string[] = [];
+      for (const row of starters) {
+        const source = agentSourceV1Schema.parse(JSON.parse(row.source_md!));
+        const parsed = JSON.parse(row.parsed_json!);
+        const compiled = compiledAgentRevisionV1Schema.parse(JSON.parse(row.compiled_json!));
+        const provenance = agentProvenanceV1Schema.parse(JSON.parse(row.provenance_json!));
+        expect(row.source_hash).toBe(await canonicalSha256(source));
+        expect(row.parsed_hash).toBe(await canonicalSha256(parsed));
+        expect(row.compiled_hash).toBe(await canonicalSha256(compiled));
+        expect(row.provenance_hash).toBe(await canonicalSha256(provenance));
+        expect(row.active_revision_id).toBe(compiled.revisionId);
+        expect(compiled.spec.triggers).toEqual(["github.issue.opened"]);
+        expect(compiled.spec.requestedCapabilities.effects).toEqual(["issue.comment.create"]);
+        starterLabels.push(...compiled.spec.eligibility.labelsAll);
+      }
+      expect(starterLabels.sort()).toEqual(["bug", "documentation", "gardener-test"]);
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       for (const removed of ["workflows", "workflow_revisions", "events", "proposals"]) {
         expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(removed)).toBeUndefined();
@@ -66,8 +102,8 @@ describe("Agent-native database initialization", () => {
       sqlite.prepare("INSERT INTO agents (id, slug, name, created_by) VALUES (?, ?, ?, ?)")
         .run("agent-v4", "agent-v4", "Agent v4", "legacy");
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
-      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([]);
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
+      expect(sqlite.prepare("SELECT id FROM agents ORDER BY id").all()).toHaveLength(3);
       const columns = sqlite.prepare("PRAGMA table_info(repository_events)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("admission_status");
     } finally {
@@ -92,7 +128,7 @@ describe("Agent-native database initialization", () => {
       `).run("historical-run", "historical-agent", "historical-revision", JSON.stringify({ harness: { id: "cloudflare-agents", version: "1.0.0" } }), digest, digest, digest, "2026-09-10T12:00:00.000Z");
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       expect(sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get()).toBeUndefined();
     } finally {
@@ -108,7 +144,12 @@ describe("Agent-native database initialization", () => {
         .run("agent-1", "agent-one", "Agent one", "owner-1");
 
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-1" }]);
+      expect(sqlite.prepare("SELECT id FROM agents ORDER BY id").all()).toEqual([
+        { id: "agent-1" },
+        { id: "agent_gardener_starter_bug_intake" },
+        { id: "agent_gardener_starter_documentation_helper" },
+        { id: "agent_gardener_starter_issue_triage" },
+      ]);
     } finally {
       sqlite.close();
     }

@@ -24,7 +24,7 @@ export function gatewayPlan(workspaceInput: string) {
     deploymentOrder: [
       "create Gateway and Gardener D1 databases plus Gardener R2 bucket",
       "deploy credential-free Gateway shell and apply Gateway migrations",
-      "deploy Gardener with outbound Gateway RPC binding and apply Gardener migrations",
+      "deploy Gardener, apply migrations, and install safe unassigned starter Agents",
       "seed the confirmed immutable permanent owner",
       "redeploy Gateway with reverse Gardener RPC binding",
       "create the customer-owned GitHub App from a manifest",

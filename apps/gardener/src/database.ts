@@ -4,8 +4,9 @@ import agentRuntimeAdmission from "../migrations/0005_agent_runtime_admission.sq
 import flueHarnessRequests from "../migrations/0006_flue_harness_requests.sql?raw";
 import teamWorkspaceFoundation from "../migrations/0007_team_workspace_foundation.sql?raw";
 import flueNativeRuntime from "../migrations/0008_flue_native_runtime.sql?raw";
+import starterAgents from "../migrations/0009_starter_agents.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 8;
+export const AGENT_SCHEMA_VERSION = 9;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -69,22 +70,30 @@ async function apply(db: D1Database, sql: string): Promise<void> {
 async function initialize(db: D1Database): Promise<void> {
   const version = await installedVersion(db);
   if (version === AGENT_SCHEMA_VERSION) return;
+  if (version === 8) {
+    await apply(db, starterAgents);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener starter Agent migration did not complete");
+    return;
+  }
   if (version === 7) {
     await apply(db, flueNativeRuntime);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue-native migration did not complete");
+    await apply(db, starterAgents);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue-native and starter Agent migrations did not complete");
     return;
   }
   if (version === 6) {
     await apply(db, teamWorkspaceFoundation);
     await apply(db, flueNativeRuntime);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener team/workspace and Flue-native migrations did not complete");
+    await apply(db, starterAgents);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener team/workspace, Flue-native, and starter Agent migrations did not complete");
     return;
   }
   if (version === 5) {
     await apply(db, flueHarnessRequests);
     await apply(db, teamWorkspaceFoundation);
     await apply(db, flueNativeRuntime);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue, team/workspace, and Flue-native migrations did not complete");
+    await apply(db, starterAgents);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue, team/workspace, Flue-native, and starter Agent migrations did not complete");
     return;
   }
   if (version === 4) {
@@ -92,7 +101,8 @@ async function initialize(db: D1Database): Promise<void> {
     await apply(db, flueHarnessRequests);
     await apply(db, teamWorkspaceFoundation);
     await apply(db, flueNativeRuntime);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime, team/workspace, and Flue-native migrations did not complete");
+    await apply(db, starterAgents);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime, team/workspace, Flue-native, and starter Agent migrations did not complete");
     return;
   }
   if (version !== null) {
@@ -117,6 +127,7 @@ async function initialize(db: D1Database): Promise<void> {
     await apply(db, flueHarnessRequests);
     await apply(db, teamWorkspaceFoundation);
     await apply(db, flueNativeRuntime);
+    await apply(db, starterAgents);
   } catch (error) {
     // 0004's first write is a plain unique INSERT in the same atomic batch. A
     // losing initializer aborts before any DROP. Fresh initializers race only
@@ -125,7 +136,7 @@ async function initialize(db: D1Database): Promise<void> {
   }
 
   if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) {
-    throw new Error("Gardener Agent Flue-native schema initialization did not complete");
+    throw new Error("Gardener Agent Flue-native and starter Agent schema initialization did not complete");
   }
 }
 

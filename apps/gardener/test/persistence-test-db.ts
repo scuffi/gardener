@@ -58,6 +58,10 @@ export function newAgentDatabase(): { sqlite: DatabaseSync; db: D1Database } {
   sqlite.exec(migration("0006_flue_harness_requests.sql"));
   sqlite.exec(migration("0007_team_workspace_foundation.sql"));
   sqlite.exec(migration("0008_flue_native_runtime.sql"));
+  // Most unit tests construct their own exact Agent fixtures. Mark the seed migration
+  // applied without installing product starters; database migration tests cover the
+  // real 0009 contents and hashes.
+  sqlite.exec("UPDATE gardener_schema SET version=9 WHERE singleton=1 AND version=8");
   return { sqlite, db: d1Database(sqlite) };
 }
 
