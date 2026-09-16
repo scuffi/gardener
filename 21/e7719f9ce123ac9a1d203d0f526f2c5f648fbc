@@ -1,0 +1,181 @@
+.dev.vars.example
+  s_bd330f4e44b317::t_a8cbaa67366521 1-4
+apps/gardener/.dev.vars.example
+  s_bd330f4e44b317::t_da89a3c21471a3 2-3
+apps/gardener/migrations/0007_team_workspace_foundation.sql
+  s_bd330f4e44b317::t_f9267124b729b6 102-106,108-109,112-113,133-151
+apps/gardener/src/flue-reconciler.ts
+  s_d745ce68e407c9::t_56275dc2764ed2 1-6,8-23,25-29,32-39,41,43-56,58-76,80-85,87,89-101,103-139,141-144,146,149-164,167,169-189,193-215,218-259,262-265,268-286,289-299
+apps/gardener/src/identity.ts
+  s_bd330f4e44b317::t_2f28097617b270 2-5,38-40,57-137,139-191,193-194
+apps/gardener/src/persistence/decisions.ts
+  s_d745ce68e407c9::t_fd7021ec2ea313 220-221,309,323-342,363-369,373-378,421-527
+apps/gardener/src/providers/github/client.ts
+  s_bd330f4e44b317::t_77ace8a308ab2a 1-15,17-19,22-30,33-40,43-45,49,51-69,72-76,79,84,86-89
+apps/gardener/src/providers/github/ingress.ts
+  s_bd330f4e44b317::t_cfb0588ad06f33 1-187
+apps/gardener/test/auth.test.ts
+  s_bd330f4e44b317::t_612ac09f8c2dd8 1-12
+apps/gardener/test/connect.test.ts
+  s_bd330f4e44b317::t_3774a430ff2cbf 1,4-9,30-31,34-42,44-46,48-57,60,62-64,67,72-80
+apps/gardener/test/flue-native-driver.test.ts
+  s_d745ce68e407c9::t_3c11e46c4bdd88 1-48,50-62,64-67,70-85,88-95,98-107,110-121
+apps/gardener/test/flue-reconciler.test.ts
+  s_d745ce68e407c9::t_e3cc8ba3232112 1-229
+apps/gardener/ui/app-context.test.tsx
+  s_bd330f4e44b317::t_51cadbb2a3fb7c 4,15,50,59,92-134,140
+apps/gardener/ui/app-context.tsx
+  s_bd330f4e44b317::t_8752c077ad294f 87-90,93,106,108
+apps/gardener/ui/features/agents/agent-detail-page.tsx
+  s_bd330f4e44b317::t_8f00795fb6f967 222
+apps/gardener/ui/features/auth/sign-in-page.test.tsx
+  s_bd330f4e44b317::t_49311750336674 34-35,57-60,74,109-112
+apps/gardener/ui/features/auth/sign-in-page.tsx
+  s_bd330f4e44b317::t_83c70f0f01cbd2 34,145,152,164,185
+apps/gardener/ui/features/overview/components/needs-attention-panel.tsx
+  s_bd330f4e44b317::t_4f94d0ef4613dc 32
+apps/gardener/ui/features/overview/overview-page.test.tsx
+  s_bd330f4e44b317::t_e6129e14acdf40 46
+apps/gardener/ui/features/policies/policies-page.tsx
+  s_bd330f4e44b317::t_217d2c4235003e 213
+apps/gardener/ui/features/settings/settings-page.tsx
+  s_bd330f4e44b317::t_a7e25e31df6cda 81-83
+apps/gardener/ui/features/setup/setup-wizard.tsx
+  s_bd330f4e44b317::t_d8cd2dd37feed6 64,107,114-115,179,284
+apps/gardener/ui/guarded-actions.test.tsx
+  s_bd330f4e44b317::t_d40b2410dfc95e 45
+apps/gardener/ui/lib/api.ts
+  s_bd330f4e44b317::t_dc5932475381c5 169-174
+apps/gardener/ui/lib/types.ts
+  s_bd330f4e44b317::t_98cb91d914bdf5 269
+apps/gardener/wrangler.jsonc
+  s_bd330f4e44b317::t_7cd08b22e6363c 12-18,59,62,65-69
+apps/github-gateway/.dev.vars.example
+  s_bd330f4e44b317::t_8bccb282c92677 1-2,6,10-12,14-16
+apps/github-gateway/README.md
+  s_bd330f4e44b317::t_7637a66539f9ac 1-20
+apps/github-gateway/migrations/0001_initial.sql
+  s_bd330f4e44b317::t_16e4e9b2356ec2 3,6-9,13,15-17,19-23,30,33-37,47-48,50,52-53,58-60,62,64-70,72,74-77,81,83-85,87-95,99-100
+apps/github-gateway/src/database.ts
+  s_bd330f4e44b317::t_af9fb8ef3128f0 1-41
+apps/github-gateway/src/deliveries.ts
+  s_bd330f4e44b317::t_dbd4cf163db933 1-414
+apps/github-gateway/src/entrypoint.ts
+  s_bd330f4e44b317::t_98a6609010afea 1-72
+apps/github-gateway/src/env.ts
+  s_bd330f4e44b317::t_801350aa037b8c 1,5-10,18-19,22-37
+apps/github-gateway/src/github-client.ts
+  s_bd330f4e44b317::t_ef9b50029939e7 2,62,73-77,84-91,100-111,115-130,150-183,185,187-188,195,197,201-205,210,213-218,231-234,237-243,254-260,263-265,267,292-304,312-313,317-323,328-330,343-345,348-350,374-376,378-387,396,435-456,484-497,503,531-540,543,545-546,548-561,563,565-567,569-574,576-579,597-613,630-633,645-650,666-669,699-702
+apps/github-gateway/src/identities.ts
+  s_bd330f4e44b317::t_b7de2694344352 1-51
+apps/github-gateway/src/index.ts
+  s_bd330f4e44b317::t_a3bf2405e2e4c8 1-2,4-14,16-17,19-83,85-92,94-99,101-104,106,108,110-118,121-125,128-129
+apps/github-gateway/src/installations.ts
+  s_bd330f4e44b317::t_bf489126bae3ef 1-9,11-12,14,16-24,27-52,54-63,66-73,75-77,79-82,85,87-96,98-127,130-135,138-143
+apps/github-gateway/src/oauth.ts
+  s_bd330f4e44b317::t_1b97b64d6d7e10 1-94
+apps/github-gateway/src/operations.ts
+  s_bd330f4e44b317::t_90e2c1b12276f5 1-34,37,39-47,50-61,63-75,77-84,86-88,91-93,95-98,100-141,144,146-175,178-179,183-190,193-218,220-242,245-248,251-257,260-281,285-291,294-296,298-300,302,305-325,328-348,352-359,361-365
+apps/github-gateway/src/operator.ts
+  s_bd330f4e44b317::t_7899d0617aa9c6 1-15
+apps/github-gateway/src/repositories.ts
+  s_bd330f4e44b317::t_b916e7715816fe 1-98
+apps/github-gateway/src/schema.ts
+  s_bd330f4e44b317::t_4497487f02d190 1-2,8-10
+apps/github-gateway/test/d1.ts
+  s_bd330f4e44b317::t_c0b215bb53656e 1-45
+apps/github-gateway/test/deliveries.test.ts
+  s_bd330f4e44b317::t_adaab0bff4ff70 1-252
+apps/github-gateway/test/github-client.test.ts
+  s_bd330f4e44b317::t_018d559038a441 5-10,63-68,75,101,104,111-153,160,174,191,193,201,204,218,232,236-364,373
+apps/github-gateway/test/installations.test.ts
+  s_bd330f4e44b317::t_05d887c93a8c59 1-76
+apps/github-gateway/test/oauth.test.ts
+  s_bd330f4e44b317::t_f137021e34af32 1-63
+apps/github-gateway/test/operations.test.ts
+  s_bd330f4e44b317::t_e8cb19e7d61460 1-258
+apps/github-gateway/wrangler.jsonc
+  s_bd330f4e44b317::t_6c811772424d95 3,7-11,13-15,19,21-25
+docs/adr/0001-team-workspace-and-agent-deployments.md
+  s_bd330f4e44b317::t_a7461475944955 8,16,18,20,39,53,58,60,67
+docs/cloudflare-access.md
+  s_bd330f4e44b317::t_1e7bee41a83bb9 1,3-4,6-8,10,12-16,18,20-22,24-26,28-30,32,34-39
+docs/dashboard-redesign.md
+  s_bd330f4e44b317::t_52b541cada2fb0 488
+packages/cli/src/commands.ts
+  s_bd330f4e44b317::t_a9fd5b3b275585 1-71
+packages/cli/src/config.ts
+  s_bd330f4e44b317::t_5991554e1ad6da 1-2,4-10,13-20,24-59,61-69,72-117
+packages/cli/src/destroy.ts
+  s_bd330f4e44b317::t_33101ad87544b3 1-196
+packages/cli/src/operator.ts
+  s_bd330f4e44b317::t_384f92c7f9bb8b 1-67
+packages/cli/src/plan.ts
+  s_bd330f4e44b317::t_66ab393b29af5d 1-87
+packages/cli/src/prompts.ts
+  s_bd330f4e44b317::t_0bb7b8f37308e3 1-30
+packages/cli/src/provision.ts
+  s_bd330f4e44b317::t_8f44dab3aadc76 1-153
+packages/cli/src/qualify.ts
+  s_bd330f4e44b317::t_b8a6b296d33d1f 1-48
+packages/cli/src/smoke.ts
+  s_bd330f4e44b317::t_bd19696a55cba7 1-103
+packages/cli/tsconfig.build.json
+  s_bd330f4e44b317::t_1bdc687d4882d7 1-11
+packages/cli/tsconfig.json
+  s_bd330f4e44b317::t_3d3f02d596b153 1-8
+packages/contracts/src/identity.ts
+  s_bd330f4e44b317::t_1d326ac4a43de5 7
+packages/contracts/src/operations.ts
+  s_bd330f4e44b317::t_66ac5535143eb6 74-76,125-140,157-158
+packages/contracts/src/repository.ts
+  s_bd330f4e44b317::t_14e43fff146b99 6
+packages/provider-github/package.json
+  s_bd330f4e44b317::t_77e652b58be1bc 1-25
+packages/provider-github/src/contracts.ts
+  s_bd330f4e44b317::t_06a7c1354c22a7 1-248
+packages/provider-github/src/index.ts
+  s_bd330f4e44b317::t_45e7aed48947ae 1
+packages/provider-github/test/contracts.test.ts
+  s_bd330f4e44b317::t_f691beaa94c653 1-86
+packages/provider-github/tsconfig.build.json
+  s_bd330f4e44b317::t_80c95d75ebb4ec 1-11
+packages/provider-github/tsconfig.json
+  s_bd330f4e44b317::t_0d175517daf4d9 1-8
+pnpm-lock.yaml
+  s_de0b486c128948::t_cdc8940518d158 12-13,19,22,53-55,63-64,67,84-85,98,100-101,104,107,110,118-119,128,143,146,149-186,189-208,221,240-256,650-651,714-719,726-731,738-743,750-755,762-767,774-779,786-791,798-803,810-815,822-827,834-839,846-851,858-863,870-875,882-887,894-899,906-911,918-923,930-935,942-947,954-959,966-971,978-983,990-995,1002-1007,1014-1019,1669-1670,1672-1673,1742-1746,2379-2383,3332-3333,3339-3340,3645-3647,4470,4473,4475,4477,4501,4577-4579,4583-4585,4589-4591,4595-4597,4601-4603,4607-4609,4613-4615,4619-4621,4625-4627,4631-4633,4637-4639,4643-4645,4649-4651,4655-4657,4661-4663,4667-4669,4673-4675,4679-4681,4685-4687,4691-4693,4697-4699,4703-4705,4709-4711,4715-4717,4721-4723,4727-4729,4749,4752,4759,4818,4822,4826,4853,4857,4861,5065-5066,5091,5101,5217,5224,5226,5233,5400,5405,5407,5409,5411,5482-5486,5573,5576-5585,5587,5589,5596-5605,5624,5631,5633,5636,5647,5655,5662,5664,5667,5678,5686,5693,5695,5707,6047-6075,6963,6966-6979,7099,7101,7180,7247,7251,7253,7399,7430-7463,7693-7694,7770,7778,7784,7792,7798-7826,7834,7836,7839,7850,7854-7900,7948-7966,7972,7977
+pnpm-workspace.yaml
+  s_de0b486c128948::t_efa8fad432ca86 48-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "21e7719f9ce123ac9a1d203d0f526f2c5f648fbc",
+  "prompts": {},
+  "sessions": {
+    "s_bd330f4e44b317": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a062bc-781a-7d1a-96db-6895b3a493a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_d745ce68e407c9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a9f0-7858-7c7d-8d58-7857afb5aa09",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
