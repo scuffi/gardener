@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   beginGitHubLoginResultSchema,
   completeGitHubLoginResultSchema,
@@ -8,6 +9,15 @@ import type { Env } from "./env";
 import { exchangeOAuthCode } from "./github-client";
 
 const FLOW_TTL_SECONDS = 10 * 60;
+
+export const githubOAuthCallbackQuerySchema = z.object({
+  code: z.string().min(1).max(1_000),
+  state: z.string().min(1).max(255),
+  // GitHub includes the RFC 9207 authorization-server issuer in OAuth responses.
+  // Keep the query strict, but bind an issuer when it is present rather than
+  // treating GitHub's security signal as an unknown parameter.
+  iss: z.literal("https://github.com/login/oauth").optional(),
+}).strict();
 
 interface OAuthFlowRow {
   expires_at: number;

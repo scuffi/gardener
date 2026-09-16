@@ -2,7 +2,11 @@
 import { webcrypto } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/env";
-import { beginGitHubLogin, completeGitHubOAuthCallback } from "../src/oauth";
+import {
+  beginGitHubLogin,
+  completeGitHubOAuthCallback,
+  githubOAuthCallbackQuerySchema,
+} from "../src/oauth";
 import { testDatabase } from "./d1";
 
 const github = vi.hoisted(() => ({ exchange: vi.fn() }));
@@ -16,6 +20,28 @@ beforeAll(() => {
 });
 
 describe("Gateway OAuth handoff", () => {
+  it("accepts GitHub's bound RFC 9207 issuer without accepting arbitrary callback parameters", () => {
+    expect(githubOAuthCallbackQuerySchema.parse({
+      code: "temporary-code",
+      state: "login_abcdefghijklmnopqrstuvwxyz",
+      iss: "https://github.com/login/oauth",
+    })).toEqual({
+      code: "temporary-code",
+      state: "login_abcdefghijklmnopqrstuvwxyz",
+      iss: "https://github.com/login/oauth",
+    });
+    expect(() => githubOAuthCallbackQuerySchema.parse({
+      code: "temporary-code",
+      state: "login_abcdefghijklmnopqrstuvwxyz",
+      iss: "https://attacker.example/oauth",
+    })).toThrow();
+    expect(() => githubOAuthCallbackQuerySchema.parse({
+      code: "temporary-code",
+      state: "login_abcdefghijklmnopqrstuvwxyz",
+      unexpected: "value",
+    })).toThrow();
+  });
+
   it("persists only the state hash and completes one immutable identity over RPC", async () => {
     const { sqlite, db } = testDatabase();
     try {

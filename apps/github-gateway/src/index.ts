@@ -10,7 +10,7 @@ import {
 import type { Env } from "./env";
 import { gatewayReady } from "./env";
 import { completeGitHubInstallationCallback } from "./installations";
-import { completeGitHubOAuthCallback } from "./oauth";
+import { completeGitHubOAuthCallback, githubOAuthCallbackQuerySchema } from "./oauth";
 import { authorizeOperator } from "./operator";
 
 interface Bindings { Bindings: Env }
@@ -61,10 +61,7 @@ app.get("/health", async (c) => {
 });
 
 app.get("/oauth/github/callback", async (c) => {
-  const input = z.object({
-    code: z.string().min(1).max(1_000),
-    state: z.string().min(1).max(255),
-  }).strict().parse(c.req.query());
+  const input = githubOAuthCallbackQuerySchema.parse(c.req.query());
   const destination = await completeGitHubOAuthCallback(c.env, input);
   return redirectWithoutReferrer(destination);
 });
