@@ -7,6 +7,36 @@ export async function prompt(question: string): Promise<string> {
   finally { readline.close(); }
 }
 
+export async function confirm(question: string, defaultValue: boolean): Promise<boolean> {
+  const suffix = defaultValue ? "[Y/n]" : "[y/N]";
+  while (true) {
+    const answer = (await prompt(`${question} ${suffix} `)).toLowerCase();
+    if (!answer) return defaultValue;
+    if (answer === "y" || answer === "yes") return true;
+    if (answer === "n" || answer === "no") return false;
+    console.log("Please answer yes or no.");
+  }
+}
+
+export async function select(
+  question: string,
+  options: Array<{ label: string; description: string }>,
+  defaultIndex = 0,
+): Promise<number> {
+  console.log(question);
+  options.forEach((option, index) => {
+    console.log(`  ${index + 1}) ${option.label}`);
+    console.log(`     ${option.description}`);
+  });
+  while (true) {
+    const answer = await prompt(`Choice [${defaultIndex + 1}]: `);
+    if (!answer) return defaultIndex;
+    const selected = Number(answer) - 1;
+    if (Number.isInteger(selected) && selected >= 0 && selected < options.length) return selected;
+    console.log(`Please enter a number from 1 to ${options.length}.`);
+  }
+}
+
 export async function confirmExact(question: string, expected: string): Promise<void> {
   const answer = await prompt(`${question}\nType ${expected} to continue: `);
   if (answer !== expected) throw new Error("Confirmation did not match; no further changes were made");

@@ -28,6 +28,10 @@ export function runCommand(
   if (result.error) throw result.error;
   const status = result.status ?? 1;
   if (status !== 0 && !options.allowFailure) {
+    if (options.quiet) {
+      if (stdout) process.stdout.write(stdout);
+      if (stderr) process.stderr.write(stderr);
+    }
     throw new Error(`Command failed (${result.status ?? "unknown"}): ${command} ${args.join(" ")}`);
   }
   return { stdout, stderr, status };
@@ -47,10 +51,12 @@ export function wrangler(
   workingDirectory: string,
   args: string[],
   input?: string,
+  options?: { quiet?: boolean },
 ): CommandResult {
   return runCommand("pnpm", ["exec", "wrangler", ...args], {
     cwd: `${repositoryRoot}/${workingDirectory}`,
     ...(input === undefined ? {} : { input }),
+    ...(options?.quiet === undefined ? {} : { quiet: options.quiet }),
   });
 }
 
@@ -60,12 +66,14 @@ export function uploadSecret(
   name: string,
   value: string,
   config?: string,
+  quiet = false,
 ): void {
-  console.log(`Uploading ${name} directly to the GitHub Gateway.`);
+  if (!quiet) console.log(`Uploading ${name} directly to the GitHub Gateway.`);
   wrangler(
     repositoryRoot,
     applicationDirectory,
     ["secret", "put", name, ...(config ? ["--config", config] : [])],
     `${value}\n`,
+    { quiet },
   );
 }

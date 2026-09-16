@@ -23,10 +23,11 @@ Plans, confirms, provisions, and verifies one customer-owned Gardener workspace.
 The command is checkpointed and safe to rerun after interruption.
 
 Options:
-  --workspace <name>           Workspace and deterministic Cloudflare resource suffix
-  --owner <github-login>       Immutable permanent workspace owner
+  --workspace <name>           Short installation name, such as acme or dev
+  --owner <github-login>       First person allowed to administer Gardener
   --personal                   Create the App in the signed-in personal GitHub account
   --organization <login>       Create the App under a GitHub organization
+  --verbose                    Show underlying build and Wrangler command output
   --repository-root <path>     Gardener checkout (defaults to current directory)
 `;
 
@@ -79,6 +80,7 @@ async function main(argv: string[]): Promise<void> {
       ...(organization ? { organization } : {}),
       ...(repositoryRoot ? { repositoryRoot } : {}),
       personal: flags.get("personal") === true,
+      verbose: flags.get("verbose") === true,
     });
     return;
   }

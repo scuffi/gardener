@@ -37,14 +37,21 @@ export function gatewayPlan(workspaceInput: string) {
 export async function planGateway(input: {
   workspace: string;
   repositoryRoot?: string;
+  quiet?: boolean;
 }): Promise<void> {
   const repositoryRoot = resolve(input.repositoryRoot ?? process.cwd());
+  const quiet = input.quiet === true;
   const plan = gatewayPlan(input.workspace);
   const names = deploymentNames(plan.workspace);
-  console.log(JSON.stringify(plan, null, 2));
-  console.log("\nBuilding and dry-running the generated qualification topology.");
+  if (!input.quiet) {
+    console.log(JSON.stringify(plan, null, 2));
+    console.log("\nBuilding and dry-running the generated qualification topology.");
+  }
 
-  runCommand("pnpm", ["--filter", "@gardener/app", "build"], { cwd: repositoryRoot });
+  runCommand("pnpm", ["--filter", "@gardener/app", "build"], {
+    cwd: repositoryRoot,
+    quiet,
+  });
   const gatewayOrigin = `https://${names.gatewayWorker}.example.workers.dev`;
   const gardenerOrigin = `https://${names.gardenerWorker}.example.workers.dev`;
   const shellConfig = await writeGatewayConfig({
@@ -71,17 +78,19 @@ export async function planGateway(input: {
   const output = join(repositoryRoot, "dist", "gateway-plan", plan.workspace);
   wrangler(repositoryRoot, "apps/github-gateway", [
     "deploy", "--dry-run", "--config", shellConfig, "--outdir", join(output, "gateway-shell"),
-  ]);
+  ], undefined, { quiet });
   wrangler(repositoryRoot, "apps/gardener", [
     "deploy", "--dry-run", "--config", gardenerConfig,
     "--outdir", join(output, "gardener"), "--containers-rollout", "none",
-  ]);
+  ], undefined, { quiet });
   wrangler(repositoryRoot, "apps/github-gateway", [
     "deploy", "--dry-run", "--config", linkedConfig, "--outdir", join(output, "gateway-linked"),
-  ]);
+  ], undefined, { quiet });
 
   const reportPath = join(statePaths(plan.workspace).reports, "latest-plan.json");
   await writePrivateJson(reportPath, { ...plan, validatedAt: new Date().toISOString() });
-  console.log(`\nDry-run topology validated. Report: ${reportPath}`);
-  console.log("No Cloudflare or GitHub resource was created or changed.");
+  if (!input.quiet) {
+    console.log(`\nDry-run topology validated. Report: ${reportPath}`);
+    console.log("No Cloudflare or GitHub resource was created or changed.");
+  }
 }

@@ -12,6 +12,11 @@ export interface D1DatabaseDescription {
   name: string;
 }
 
+export interface CloudflareAccountDescription {
+  id: string;
+  name: string;
+}
+
 export function assertCloudflareResourceNamesAvailable(
   repositoryRoot: string,
   names: DeploymentNames,
@@ -35,8 +40,10 @@ export async function provisionCloudflareResources(input: {
   repositoryRoot: string;
   names: DeploymentNames;
   expectedAccountId: string;
+  quiet?: boolean;
 }): Promise<CloudflareResources> {
   const accountId = selectedAccountId(input.repositoryRoot);
+  const quiet = input.quiet === true;
   if (accountId !== input.expectedAccountId) {
     throw new Error("Wrangler Cloudflare account changed after setup intent was recorded");
   }
@@ -46,13 +53,13 @@ export async function provisionCloudflareResources(input: {
   const bucketExists = r2BucketExists(input.repositoryRoot, input.names.inputBucket);
 
   if (!existingGardener) {
-    wrangler(input.repositoryRoot, "apps/github-gateway", ["d1", "create", input.names.gardenerDatabase]);
+    wrangler(input.repositoryRoot, "apps/github-gateway", ["d1", "create", input.names.gardenerDatabase], undefined, { quiet });
   }
   if (!existingGateway) {
-    wrangler(input.repositoryRoot, "apps/github-gateway", ["d1", "create", input.names.gatewayDatabase]);
+    wrangler(input.repositoryRoot, "apps/github-gateway", ["d1", "create", input.names.gatewayDatabase], undefined, { quiet });
   }
   if (!bucketExists) {
-    wrangler(input.repositoryRoot, "apps/github-gateway", ["r2", "bucket", "create", input.names.inputBucket]);
+    wrangler(input.repositoryRoot, "apps/github-gateway", ["r2", "bucket", "create", input.names.inputBucket], undefined, { quiet });
   }
 
   databases = listDatabases(input.repositoryRoot);
@@ -69,13 +76,20 @@ export async function provisionCloudflareResources(input: {
 }
 
 export function selectedAccountId(repositoryRoot: string): string {
-  const result = wrangler(repositoryRoot, "apps/github-gateway", ["whoami", "--json"]);
+  return selectedAccount(repositoryRoot).id;
+}
+
+export function selectedAccount(repositoryRoot: string): CloudflareAccountDescription {
+  const result = wrangler(repositoryRoot, "apps/github-gateway", ["whoami", "--json"], undefined, {
+    quiet: true,
+  });
   const value = JSON.parse(result.stdout) as unknown;
   const accounts = collectAccounts(value);
   const requested = process.env.CLOUDFLARE_ACCOUNT_ID;
   if (requested) {
-    if (!accounts.includes(requested)) throw new Error("CLOUDFLARE_ACCOUNT_ID is not available to the current Wrangler identity");
-    return requested;
+    const selected = accounts.find((account) => account.id === requested);
+    if (!selected) throw new Error("CLOUDFLARE_ACCOUNT_ID is not available to the current Wrangler identity");
+    return selected;
   }
   if (accounts.length !== 1) {
     throw new Error("Set CLOUDFLARE_ACCOUNT_ID when the Wrangler identity belongs to multiple accounts");
@@ -83,24 +97,33 @@ export function selectedAccountId(repositoryRoot: string): string {
   return accounts[0]!;
 }
 
-function collectAccounts(value: unknown): string[] {
+function collectAccounts(value: unknown): CloudflareAccountDescription[] {
   if (!value || typeof value !== "object") return [];
   const record = value as Record<string, unknown>;
   const collections = [record.accounts, record.memberships].filter(Array.isArray).flat();
-  const found = new Set<string>();
+  const found = new Map<string, CloudflareAccountDescription>();
   for (const item of collections) {
     if (!item || typeof item !== "object") continue;
     const account = item as Record<string, unknown>;
     const candidate = account.id ?? account.account_id ?? account.accountId;
-    if (typeof candidate === "string" && /^[a-f0-9]{32}$/i.test(candidate)) found.add(candidate);
+    if (typeof candidate === "string" && /^[a-f0-9]{32}$/i.test(candidate)) {
+      found.set(candidate, {
+        id: candidate,
+        name: typeof account.name === "string" ? account.name : candidate,
+      });
+    }
   }
   const direct = record.account_id ?? record.accountId;
-  if (typeof direct === "string" && /^[a-f0-9]{32}$/i.test(direct)) found.add(direct);
-  return [...found];
+  if (typeof direct === "string" && /^[a-f0-9]{32}$/i.test(direct) && !found.has(direct)) {
+    found.set(direct, { id: direct, name: direct });
+  }
+  return [...found.values()];
 }
 
 export function listDatabases(repositoryRoot: string): D1DatabaseDescription[] {
-  const result = wrangler(repositoryRoot, "apps/github-gateway", ["d1", "list", "--json"]);
+  const result = wrangler(repositoryRoot, "apps/github-gateway", ["d1", "list", "--json"], undefined, {
+    quiet: true,
+  });
   const value = JSON.parse(result.stdout) as unknown;
   if (!Array.isArray(value)) throw new Error("Wrangler returned an invalid D1 database list");
   return value.flatMap((item) => {

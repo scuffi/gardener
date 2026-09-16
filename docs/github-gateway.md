@@ -69,9 +69,10 @@ The equivalent coding-agent flow is documented in
 [Set up Gardener with a coding agent](setup-with-coding-agent.md). It runs the same CLI and security
 boundary; the human still confirms the exact plan and authorizes GitHub's Manifest form.
 
-Before mutation, `gardener setup` checks the selected account and resource names, prints the exact
-identity/resource plan, validates all three generated Worker configurations locally, and asks for an
-exact confirmation. It then prints every external command and checkpoints after each completed phase:
+Before mutation, `gardener setup` explains each decision, checks the selected account and resource
+names, shows a plain-English identity/resource summary, validates all three generated Worker
+configurations locally, and asks for a final yes/no confirmation. It then shows concise progress and
+checkpoints after each completed phase:
 
 1. Resolve the requested human GitHub login to its immutable numeric ID and require exact
    confirmation. The lookup uses no GitHub credential.

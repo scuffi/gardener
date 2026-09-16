@@ -3,8 +3,8 @@ import type { DeploymentNames } from "./config.js";
 import { deploymentNames } from "./config.js";
 import { initializeGateway, validateWorkspace } from "./init.js";
 import { planGateway } from "./plan.js";
-import { confirmExact, prompt, resolveGitHubOwner } from "./prompts.js";
-import { assertCloudflareResourceNamesAvailable } from "./provision.js";
+import { confirm, prompt, resolveGitHubOwner, select } from "./prompts.js";
+import { assertCloudflareResourceNamesAvailable, selectedAccount } from "./provision.js";
 import { smokeGateway } from "./smoke.js";
 import { readCheckpoint, statePaths } from "./state.js";
 
@@ -28,6 +28,7 @@ interface SetupOptions {
   workspace?: string;
   owner?: string;
   personal: boolean;
+  verbose: boolean;
   organization?: string;
   repositoryRoot?: string;
 }
@@ -70,44 +71,78 @@ export async function setupGardener(options: SetupOptions): Promise<void> {
     throw new Error("Use either --personal or --organization, not both");
   }
   const repositoryRoot = resolve(options.repositoryRoot ?? process.cwd());
-  const workspace = validateWorkspace(options.workspace ?? await prompt("Workspace name: "));
+  const quietCommands = !options.verbose;
+  printWelcome();
+  printInstallationQuestion();
+
+  const workspace = validateWorkspace(options.workspace ?? await prompt("   Installation name: "));
+  console.log(`\n   Installation: ${workspace}`);
+  console.log(`   Gardener:     gardener-${workspace}`);
+  console.log(`   Gateway:      gardener-${workspace}-github-gateway`);
+
   const checkpoint = await readCheckpoint(statePaths(workspace).checkpoint);
   if (checkpoint) {
-    console.log(`Resuming the checkpointed ${workspace} setup at ${checkpoint.step}.`);
+    console.log(`\nFound an incomplete setup at “${checkpoint.step}”.`);
+    if (!await confirm("Resume this installation?", true)) {
+      console.log("\nSetup cancelled. No resources were changed.");
+      return;
+    }
     await initializeGateway({
       workspace,
       yes: false,
       ...(options.organization ? { organization: options.organization } : {}),
       repositoryRoot,
+      quietCommands,
     });
     await smokeGateway(workspace);
     return;
   }
 
-  const requestedOwner = options.owner ?? await prompt("Permanent owner GitHub login: ");
+  console.log("\n2. Choose the first owner");
+  console.log("   This person can manage members, policies, Agents, and installations.");
+  console.log("   Gardener uses their GitHub account so ownership cannot be claimed by the first visitor.\n");
+  const requestedOwner = options.owner ?? await prompt("   GitHub username: ");
   const owner = await resolveGitHubOwner(requestedOwner);
-  console.log(`Resolved permanent owner: @${owner.login} (GitHub user ID ${owner.id})`);
-  await confirmExact("Confirm this immutable GitHub identity as the permanent owner.", owner.id);
+  console.log("\n   Owner found");
+  console.log(`   GitHub account: @${owner.login}`);
+  console.log(`   Profile:        https://github.com/${owner.login}`);
+  console.log(`   Internal ID:    ${owner.id} (shown for reference only)`);
+  if (!await confirm("\n   Is this the correct permanent owner?", true)) {
+    console.log("\nSetup cancelled. No resources were changed.");
+    return;
+  }
+
+  console.log("\n3. Choose where the GitHub App lives");
+  console.log("   The private App connects GitHub repositories to this Gardener installation.");
+  console.log("   It can be installed on personal or organization repositories after setup.\n");
   const appOwner = await selectAppOwner(options, owner.login);
   const names = deploymentNames(workspace);
 
-  console.log("\nChecking the selected Cloudflare account and deterministic resource names.");
+  console.log("\nChecking your setup");
+  console.log("  ✓ GitHub owner found");
+  const account = selectedAccount(repositoryRoot);
+  console.log(`  ✓ Cloudflare account: ${account.name}`);
   const cloudflareAccountId = assertCloudflareResourceNamesAvailable(repositoryRoot, names);
+  if (cloudflareAccountId !== account.id) {
+    throw new Error("Cloudflare account changed while setup was being checked");
+  }
+  console.log("  ✓ Resource names are available");
+  await planGateway({ workspace, repositoryRoot, quiet: quietCommands });
+  console.log("  ✓ Deployment configuration is valid");
+
   const preview = setupPreview({
     workspace,
     cloudflareAccountId,
     permanentOwner: owner,
     githubAppOwner: appOwner,
   });
-  console.log("\nExact setup plan:");
-  console.log(JSON.stringify(preview, null, 2));
-  console.log("\nValidating all three generated deployment configurations locally.");
-  await planGateway({ workspace, repositoryRoot });
+  printSummary(preview, account.name);
+  if (!await confirm("\nCreate these resources now?", false)) {
+    console.log("\nSetup cancelled. No Cloudflare or GitHub resources were created.");
+    return;
+  }
 
-  console.log("\nThis will now create the listed Cloudflare resources and a GitHub App.");
-  console.log("No old deployment is deleted by setup.");
-  await confirmExact("Confirm the exact setup plan.", `deploy ${workspace}`);
-
+  console.log("\nInstalling Gardener");
   await initializeGateway({
     workspace,
     owner: owner.login,
@@ -115,9 +150,18 @@ export async function setupGardener(options: SetupOptions): Promise<void> {
     yes: true,
     ...(appOwner.kind === "organization" ? { organization: appOwner.login } : {}),
     repositoryRoot,
+    quietCommands,
   });
   await smokeGateway(workspace);
-  console.log("\nSetup and baseline smoke validation passed. Gardener remains globally paused.");
+  console.log("\n✓ Setup and baseline checks passed");
+  console.log("  Gardener remains paused until you deliberately enable an Agent assignment.");
+}
+
+function printInstallationQuestion(): void {
+  console.log("1. Name this installation");
+  console.log("   Choose a short, stable name for this Gardener deployment.");
+  console.log("   It is used only to name your private Cloudflare resources.");
+  console.log("   Examples: acme, platform-team, dev");
 }
 
 async function selectAppOwner(
@@ -125,20 +169,55 @@ async function selectAppOwner(
   permanentOwnerLogin: string,
 ): Promise<SetupAppOwner> {
   if (options.organization) {
-    return { kind: "organization", login: validateGitHubLogin(options.organization, "organization") };
+    const login = validateGitHubLogin(options.organization, "organization");
+    console.log(`   GitHub organization: @${login}`);
+    return { kind: "organization", login };
   }
   if (options.personal) {
+    console.log(`   Personal account: @${permanentOwnerLogin}`);
     return { kind: "personal", expectedLogin: permanentOwnerLogin };
   }
-  const selection = (await prompt("GitHub App owner (personal/organization): ")).toLowerCase();
-  if (selection === "personal") {
-    return { kind: "personal", expectedLogin: permanentOwnerLogin };
-  }
-  if (selection === "organization") {
-    const login = await prompt("GitHub organization login: ");
-    return { kind: "organization", login: validateGitHubLogin(login, "organization") };
-  }
-  throw new Error("GitHub App owner must be personal or organization");
+  const choice = await select("   Where should GitHub manage this App?", [
+    {
+      label: `Personal account @${permanentOwnerLogin}`,
+      description: "Simplest for an individual or development installation.",
+    },
+    {
+      label: "GitHub organization",
+      description: "Best when organization owners should administer the App.",
+    },
+  ]);
+  if (choice === 0) return { kind: "personal", expectedLogin: permanentOwnerLogin };
+  const login = await prompt("\n   GitHub organization name: ");
+  return { kind: "organization", login: validateGitHubLogin(login, "organization") };
+}
+
+function printWelcome(): void {
+  console.log("\nGardener setup");
+  console.log("==============");
+  console.log("This guided installer creates one private Gardener workspace in your Cloudflare account");
+  console.log("and one GitHub App owned by you or your organization.");
+  console.log("\nNothing is created until you review the summary and answer yes.\n");
+}
+
+function printSummary(preview: SetupPreview, accountName: string): void {
+  const appOwner = preview.githubAppOwner.kind === "personal"
+    ? `Personal account @${preview.githubAppOwner.expectedLogin}`
+    : `Organization @${preview.githubAppOwner.login}`;
+  console.log("\nReady to install");
+  console.log("----------------");
+  console.log(`Installation:       ${preview.workspace}`);
+  console.log(`Permanent owner:    @${preview.permanentOwner.login}`);
+  console.log(`GitHub App owner:   ${appOwner}`);
+  console.log(`Cloudflare account: ${accountName}`);
+  console.log("\nCloudflare resources");
+  console.log(`  Gardener Worker:  ${preview.resources.gardenerWorker}`);
+  console.log(`  Gateway Worker:   ${preview.resources.gatewayWorker}`);
+  console.log(`  Databases:        ${preview.resources.gardenerDatabase}, ${preview.resources.gatewayDatabase}`);
+  console.log(`  Storage bucket:   ${preview.resources.inputBucket}`);
+  console.log(`  Workflow:         ${preview.resources.workflow}`);
+  console.log("\nGitHub will open once so you can approve creation of the private App.");
+  console.log("Existing deployments are never deleted or replaced.");
 }
 
 function validateGitHubLogin(value: string, label: string): string {

@@ -86,9 +86,9 @@ pnpm gardener -- setup \
 
 `gardener setup` is the normal V1 entry point. Before remote mutation it identifies the Cloudflare
 account, resolves the permanent owner's immutable numeric GitHub ID, rejects deterministic name
-collisions, prints the exact resources and deployment order, runs all three generated Worker
-configurations through `wrangler deploy --dry-run`, and requires the operator to type an exact
-confirmation.
+collisions, shows a plain-English resource summary, runs all three generated Worker configurations
+through `wrangler deploy --dry-run`, and asks for a final yes/no confirmation. Infrastructure output
+stays quiet unless a command fails; pass `--verbose` to show the underlying build and Wrangler output.
 
 The checkpointed apply then:
 

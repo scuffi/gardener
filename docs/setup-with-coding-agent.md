@@ -10,7 +10,7 @@ are uploaded directly from the CLI to the Gateway and must never enter the agent
 ## Before copying the prompt
 
 Use a trusted, reviewed Gardener checkout. The setup agent will run local commands and, after your
-exact confirmation, create resources in your Cloudflare and GitHub accounts.
+yes/no confirmation of the displayed summary, create resources in your Cloudflare and GitHub accounts.
 
 Requirements:
 
@@ -58,8 +58,8 @@ After I confirm:
    - personal App: `pnpm gardener -- setup --workspace <workspace> --owner <login> --personal`
    - organization App: `pnpm gardener -- setup --workspace <workspace> --owner <login>
      --organization <organization>`
-8. Let the CLI perform its own account/name checks and dry-run. When it asks, show me the exact
-   plan and ask me to type the CLI's confirmation directly in the terminal.
+8. Let the CLI perform its own account/name checks and dry-run. When it shows the final summary,
+   let me answer the yes/no confirmation directly in the terminal.
 9. Let the CLI open GitHub. I will confirm the signed-in App owner and submit the Manifest form.
 10. After setup completes, run:
     - `pnpm gardener -- gateway doctor --workspace <workspace>`
@@ -91,8 +91,7 @@ pnpm gardener -- setup \
 
 The CLI performs a local generated-topology dry run and displays the selected Cloudflare account,
 immutable owner identity, App ownership, deterministic resource names, deployment order, and remote
-mutations. Remote creation starts only after the operator types the exact confirmation shown by the
-CLI.
+mutations. Remote creation starts only after the operator answers yes to the final CLI summary.
 
 ## Browser and recovery behavior
 

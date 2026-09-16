@@ -29,6 +29,7 @@ export interface InitOptions {
   organization?: string;
   repositoryRoot?: string;
   qualification?: boolean;
+  quietCommands?: boolean;
 }
 
 interface SetupRecovery {
@@ -38,6 +39,7 @@ interface SetupRecovery {
 
 export async function initializeGateway(options: InitOptions): Promise<void> {
   const repositoryRoot = resolve(options.repositoryRoot ?? process.cwd());
+  const commandOptions = { quiet: options.quietCommands === true };
   assertRepository(repositoryRoot);
   const workspace = validateWorkspace(options.workspace ?? await prompt("Workspace name: "));
   if (options.qualification && !workspace.startsWith("qual-")) {
@@ -76,25 +78,28 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   }
 
   if (!atOrAfter(checkpoint.step, "resources-provisioning")) {
-    console.log("\n1/7 Checking Cloudflare resource names and recording setup intent.");
+    console.log("\n  Preparing Cloudflare resources…");
     checkpoint.cloudflareAccountId = assertCloudflareResourceNamesAvailable(repositoryRoot, names);
     checkpoint = await advance(paths.checkpoint, checkpoint, "resources-provisioning");
+    console.log("  ✓ Setup intent recorded");
   }
 
   if (!atOrAfter(checkpoint.step, "resources-provisioned")) {
-    console.log("\n2/7 Provisioning the two D1 databases and Gardener R2 bucket.");
+    console.log("  Creating private data stores…");
     const resources = await provisionCloudflareResources({
       repositoryRoot,
       names,
       expectedAccountId: required(checkpoint.cloudflareAccountId, "Cloudflare account ID"),
+      quiet: commandOptions.quiet,
     });
     checkpoint.gardenerDatabaseId = resources.gardenerDatabaseId;
     checkpoint.gatewayDatabaseId = resources.gatewayDatabaseId;
     checkpoint = await advance(paths.checkpoint, checkpoint, "resources-provisioned");
+    console.log("  ✓ Private databases and storage are ready");
   }
 
   if (!atOrAfter(checkpoint.step, "gateway-shell-deployed")) {
-    console.log("\n3/7 Deploying the credential-free GitHub Gateway shell.");
+    console.log("  Deploying the GitHub Gateway…");
     const shellConfig = await writeGatewayConfig({
       repositoryRoot,
       workspace,
@@ -106,18 +111,22 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
     });
     const deployed = wrangler(repositoryRoot, "apps/github-gateway", [
       "deploy", "--config", shellConfig,
-    ]);
+    ], undefined, commandOptions);
     checkpoint.gatewayOrigin = workerOrigin(deployed, names.gatewayWorker);
     wrangler(repositoryRoot, "apps/github-gateway", [
       "d1", "migrations", "apply", names.gatewayDatabase, "--remote",
       "--config", shellConfig,
-    ]);
+    ], undefined, commandOptions);
     checkpoint = await advance(paths.checkpoint, checkpoint, "gateway-shell-deployed");
+    console.log("  ✓ GitHub Gateway deployed");
   }
 
   if (!atOrAfter(checkpoint.step, "gardener-deployed")) {
-    console.log("\n4/7 Deploying Gardener with its outbound Gateway Service Binding.");
-    runCommand("pnpm", ["--filter", "@gardener/app", "build"], { cwd: repositoryRoot });
+    console.log("  Deploying Gardener…");
+    runCommand("pnpm", ["--filter", "@gardener/app", "build"], {
+      cwd: repositoryRoot,
+      quiet: commandOptions.quiet,
+    });
     const gardenerConfig = await writeGardenerConfig({
       repositoryRoot,
       workspace,
@@ -126,23 +135,25 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
     });
     const deployed = wrangler(repositoryRoot, "apps/gardener", [
       "deploy", "--config", gardenerConfig, "--containers-rollout", "none",
-    ]);
+    ], undefined, commandOptions);
     checkpoint.gardenerOrigin = workerOrigin(deployed, names.gardenerWorker);
     wrangler(repositoryRoot, "apps/gardener", [
       "d1", "migrations", "apply", names.gardenerDatabase, "--remote",
       "--config", gardenerConfig,
-    ]);
+    ], undefined, commandOptions);
     await seedPermanentOwner(
       repositoryRoot,
       checkpoint.owner,
       names.gardenerDatabase,
       gardenerConfig,
+      options.quietCommands === true,
     );
     checkpoint = await advance(paths.checkpoint, checkpoint, "gardener-deployed");
+    console.log("  ✓ Gardener deployed, migrated, and paused");
   }
 
   if (!atOrAfter(checkpoint.step, "gateway-linked")) {
-    console.log("\n5/7 Redeploying the Gateway with its private Gardener Service Binding.");
+    console.log("  Connecting Gardener and the Gateway…");
     const gatewayOrigin = required(checkpoint.gatewayOrigin, "Gateway origin");
     const gardenerOrigin = required(checkpoint.gardenerOrigin, "Gardener origin");
     const gatewayConfig = await writeGatewayConfig({
@@ -156,13 +167,14 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
     });
     wrangler(repositoryRoot, "apps/github-gateway", [
       "deploy", "--config", gatewayConfig,
-    ]);
+    ], undefined, commandOptions);
     checkpoint = await advance(paths.checkpoint, checkpoint, "gateway-linked");
+    console.log("  ✓ Private connection established");
   }
 
   let recovery = await readRecovery(paths.recovery);
   if (!atOrAfter(checkpoint.step, "manifest-created")) {
-    console.log("\n6/7 Creating the customer-owned GitHub App from a manifest.");
+    console.log("\n  Opening GitHub to create your private App…");
     if (!recovery) {
       const appOwner: AppOwner = checkpoint.githubAppOwner
         ?? missingAppOwner();
@@ -184,6 +196,7 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
     assertManifestOwner(recovery.app, checkpoint.githubAppOwner, paths.recovery);
     checkpoint.githubAppSlug = recovery.app.slug;
     checkpoint = await advance(paths.checkpoint, checkpoint, "manifest-created");
+    console.log(`  ✓ GitHub App created: ${recovery.app.slug}`);
   }
 
   let operatorToken: string;
@@ -202,7 +215,7 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   }
 
   if (!atOrAfter(checkpoint.step, "secrets-uploaded")) {
-    console.log("\n7/7 Uploading GitHub credentials directly to the Gateway.");
+    console.log("  Securing GitHub credentials in the Gateway…");
     if (!recovery) throw new Error(`Setup recovery file is missing: ${paths.recovery}`);
     const secrets: Record<string, string> = {
       GITHUB_APP_ID: String(recovery.app.id),
@@ -224,12 +237,20 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
       cloudflareAccountId: required(checkpoint.cloudflareAccountId, "Cloudflare account ID"),
     });
     for (const [name, value] of Object.entries(secrets)) {
-      uploadSecret(repositoryRoot, "apps/github-gateway", name, value, gatewayConfig);
+      uploadSecret(
+        repositoryRoot,
+        "apps/github-gateway",
+        name,
+        value,
+        gatewayConfig,
+        options.quietCommands === true,
+      );
     }
     checkpoint = await advance(paths.checkpoint, checkpoint, "secrets-uploaded");
+    console.log("  ✓ Credentials secured");
   }
 
-  console.log("\nVerifying the linked stack.");
+  console.log("  Running final connection checks…");
   await verifyGateway(
     required(checkpoint.gatewayOrigin, "Gateway origin"),
     required(checkpoint.gardenerOrigin, "Gardener origin"),
@@ -241,10 +262,14 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   await unlink(paths.recovery).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
   });
-  console.log(`\nGardener Gateway is ready for ${workspace}.`);
-  console.log(`Gardener: ${checkpoint.gardenerOrigin}`);
-  console.log(`Gateway:  ${checkpoint.gatewayOrigin}`);
-  console.log(`Operator token: ${paths.operatorToken} (mode 0600)`);
+  console.log(`  ✓ Gardener is ready for ${workspace}`);
+  console.log(`\n  Gardener: ${checkpoint.gardenerOrigin}`);
+  console.log(`  Gateway:  ${checkpoint.gatewayOrigin}`);
+  if (options.quietCommands) {
+    console.log(`  Local setup state: ${paths.directory}`);
+  } else {
+    console.log(`  Operator token: ${paths.operatorToken} (mode 0600)`);
+  }
 }
 
 async function seedPermanentOwner(
@@ -252,6 +277,7 @@ async function seedPermanentOwner(
   owner: { id: string; login: string },
   databaseName: string,
   config: string,
+  quiet: boolean,
 ): Promise<void> {
   const temporary = await mkdtemp(join(tmpdir(), "gardener-owner-"));
   const file = join(temporary, "owner.sql");
@@ -270,13 +296,13 @@ async function seedPermanentOwner(
     wrangler(repositoryRoot, "apps/gardener", [
       "d1", "execute", databaseName, "--remote", "--file", file,
       "--config", config,
-    ]);
+    ], undefined, { quiet });
     const verification = wrangler(repositoryRoot, "apps/gardener", [
       "d1", "execute", databaseName, "--remote", "--json",
       "--command",
       `SELECT role, permanent FROM memberships WHERE user_id = ${userId}`,
       "--config", config,
-    ]);
+    ], undefined, { quiet });
     if (!containsPermanentOwner(verification.stdout)) {
       throw new Error("Permanent owner bootstrap verification failed");
     }
@@ -284,7 +310,7 @@ async function seedPermanentOwner(
       "d1", "execute", databaseName, "--remote", "--json",
       "--command", "SELECT value FROM settings WHERE key = 'global_paused'",
       "--config", config,
-    ]);
+    ], undefined, { quiet });
     if (!containsGlobalPause(pauseVerification.stdout)) {
       throw new Error("Fresh Gardener is not globally paused");
     }
