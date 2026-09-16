@@ -1,0 +1,23 @@
+apps/github-gateway/src/repositories.ts
+  s_bd330f4e44b317::t_b916e7715816fe 52,82
+apps/github-gateway/src/github-client.ts
+  s_bd330f4e44b317::t_0a1021683bc2cc 143-150,198-201,203-209
+apps/github-gateway/test/github-client.test.ts
+  s_bd330f4e44b317::t_0f8c4a85a6c2ac 8,62-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fa6dcbab1650082f91f49dd66dace7260d649962",
+  "prompts": {},
+  "sessions": {
+    "s_bd330f4e44b317": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a062bc-781a-7d1a-96db-6895b3a493a5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
