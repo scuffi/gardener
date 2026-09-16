@@ -235,7 +235,9 @@ describe("Gardener Gateway CLI", () => {
         pull_requests: "write",
       },
     });
-    expect(manifest.default_events).toContain("installation_repositories");
+    expect(manifest.default_events).not.toContain("installation");
+    expect(manifest.default_events).not.toContain("installation_repositories");
+    expect(manifest.default_events).toContain("issues");
   });
 
   it("writes local setup state and operator tokens with owner-only modes", async () => {

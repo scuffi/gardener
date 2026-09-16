@@ -38,8 +38,8 @@ export function githubAppManifest(
       "check_suite",
       "discussion",
       "discussion_comment",
-      "installation",
-      "installation_repositories",
+      // GitHub rejects installation lifecycle events in App Manifest `default_events`.
+      // The Gateway still accepts those lifecycle webhooks when GitHub sends them.
       "issue_comment",
       "issues",
       "pull_request",
