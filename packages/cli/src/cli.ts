@@ -7,6 +7,7 @@ import { planGateway } from "./plan.js";
 import { qualifyGateway } from "./qualify.js";
 import { smokeGateway } from "./smoke.js";
 import { setupGardener } from "./setup.js";
+import { terminal } from "./terminal.js";
 
 const HELP = `gardener <command>
 
@@ -179,6 +180,6 @@ function stringFlag(flags: Map<string, string | true>, name: string): string | u
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Gardener CLI failed");
+  console.error(terminal.error(error instanceof Error ? error.message : "Gardener CLI failed"));
   process.exitCode = 1;
 });

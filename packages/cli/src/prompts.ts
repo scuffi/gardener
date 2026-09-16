@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { terminal } from "./terminal.js";
 
 export async function prompt(question: string): Promise<string> {
   const readline = createInterface({ input: stdin, output: stdout });
@@ -10,11 +11,11 @@ export async function prompt(question: string): Promise<string> {
 export async function confirm(question: string, defaultValue: boolean): Promise<boolean> {
   const suffix = defaultValue ? "[Y/n]" : "[y/N]";
   while (true) {
-    const answer = (await prompt(`${question} ${suffix} `)).toLowerCase();
+    const answer = (await prompt(`${question} ${terminal.value(suffix)} `)).toLowerCase();
     if (!answer) return defaultValue;
     if (answer === "y" || answer === "yes") return true;
     if (answer === "n" || answer === "no") return false;
-    console.log("Please answer yes or no.");
+    console.log(terminal.caution("Please answer yes or no."));
   }
 }
 
@@ -25,15 +26,15 @@ export async function select(
 ): Promise<number> {
   console.log(question);
   options.forEach((option, index) => {
-    console.log(`  ${index + 1}) ${option.label}`);
-    console.log(`     ${option.description}`);
+    console.log(`  ${terminal.value(`${index + 1})`)} ${terminal.strong(option.label)}`);
+    console.log(`     ${terminal.muted(option.description)}`);
   });
   while (true) {
-    const answer = await prompt(`Choice [${defaultIndex + 1}]: `);
+    const answer = await prompt(`Choice ${terminal.value(`[${defaultIndex + 1}]`)}: `);
     if (!answer) return defaultIndex;
     const selected = Number(answer) - 1;
     if (Number.isInteger(selected) && selected >= 0 && selected < options.length) return selected;
-    console.log(`Please enter a number from 1 to ${options.length}.`);
+    console.log(terminal.caution(`Please enter a number from 1 to ${options.length}.`));
   }
 }
 

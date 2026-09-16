@@ -89,6 +89,7 @@ account, resolves the permanent owner's immutable numeric GitHub ID, rejects det
 collisions, shows a plain-English resource summary, runs all three generated Worker configurations
 through `wrangler deploy --dry-run`, and asks for a final yes/no confirmation. Infrastructure output
 stays quiet unless a command fails; pass `--verbose` to show the underlying build and Wrangler output.
+The guided output uses restrained semantic colours in interactive terminals and respects `NO_COLOR`.
 
 The checkpointed apply then:
 

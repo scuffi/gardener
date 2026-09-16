@@ -10,6 +10,7 @@ import {
   assertCloudflareResourceNamesAvailable,
   provisionCloudflareResources,
 } from "./provision.js";
+import { terminal } from "./terminal.js";
 import {
   atOrAfter,
   readCheckpoint,
@@ -78,14 +79,14 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   }
 
   if (!atOrAfter(checkpoint.step, "resources-provisioning")) {
-    console.log("\n  Preparing Cloudflare resources…");
+    printProgress("Preparing Cloudflare resources…");
     checkpoint.cloudflareAccountId = assertCloudflareResourceNamesAvailable(repositoryRoot, names);
     checkpoint = await advance(paths.checkpoint, checkpoint, "resources-provisioning");
-    console.log("  ✓ Setup intent recorded");
+    printProgressSuccess("Setup intent recorded");
   }
 
   if (!atOrAfter(checkpoint.step, "resources-provisioned")) {
-    console.log("  Creating private data stores…");
+    printProgress("Creating private data stores…");
     const resources = await provisionCloudflareResources({
       repositoryRoot,
       names,
@@ -95,11 +96,11 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
     checkpoint.gardenerDatabaseId = resources.gardenerDatabaseId;
     checkpoint.gatewayDatabaseId = resources.gatewayDatabaseId;
     checkpoint = await advance(paths.checkpoint, checkpoint, "resources-provisioned");
-    console.log("  ✓ Private databases and storage are ready");
+    printProgressSuccess("Private databases and storage are ready");
   }
 
   if (!atOrAfter(checkpoint.step, "gateway-shell-deployed")) {
-    console.log("  Deploying the GitHub Gateway…");
+    printProgress("Deploying the GitHub Gateway…");
     const shellConfig = await writeGatewayConfig({
       repositoryRoot,
       workspace,
@@ -118,11 +119,11 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
       "--config", shellConfig,
     ], undefined, commandOptions);
     checkpoint = await advance(paths.checkpoint, checkpoint, "gateway-shell-deployed");
-    console.log("  ✓ GitHub Gateway deployed");
+    printProgressSuccess("GitHub Gateway deployed");
   }
 
   if (!atOrAfter(checkpoint.step, "gardener-deployed")) {
-    console.log("  Deploying Gardener…");
+    printProgress("Deploying Gardener…");
     runCommand("pnpm", ["--filter", "@gardener/app", "build"], {
       cwd: repositoryRoot,
       quiet: commandOptions.quiet,
@@ -149,11 +150,11 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
       options.quietCommands === true,
     );
     checkpoint = await advance(paths.checkpoint, checkpoint, "gardener-deployed");
-    console.log("  ✓ Gardener deployed, migrated, and paused");
+    printProgressSuccess("Gardener deployed, migrated, and paused");
   }
 
   if (!atOrAfter(checkpoint.step, "gateway-linked")) {
-    console.log("  Connecting Gardener and the Gateway…");
+    printProgress("Connecting Gardener and the Gateway…");
     const gatewayOrigin = required(checkpoint.gatewayOrigin, "Gateway origin");
     const gardenerOrigin = required(checkpoint.gardenerOrigin, "Gardener origin");
     const gatewayConfig = await writeGatewayConfig({
@@ -169,12 +170,12 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
       "deploy", "--config", gatewayConfig,
     ], undefined, commandOptions);
     checkpoint = await advance(paths.checkpoint, checkpoint, "gateway-linked");
-    console.log("  ✓ Private connection established");
+    printProgressSuccess("Private connection established");
   }
 
   let recovery = await readRecovery(paths.recovery);
   if (!atOrAfter(checkpoint.step, "manifest-created")) {
-    console.log("\n  Opening GitHub to create your private App…");
+    printProgress("Opening GitHub to create your private App…");
     if (!recovery) {
       const appOwner: AppOwner = checkpoint.githubAppOwner
         ?? missingAppOwner();
@@ -196,7 +197,7 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
     assertManifestOwner(recovery.app, checkpoint.githubAppOwner, paths.recovery);
     checkpoint.githubAppSlug = recovery.app.slug;
     checkpoint = await advance(paths.checkpoint, checkpoint, "manifest-created");
-    console.log(`  ✓ GitHub App created: ${recovery.app.slug}`);
+    printProgressSuccess(`GitHub App created: ${terminal.value(recovery.app.slug)}`);
   }
 
   let operatorToken: string;
@@ -215,7 +216,7 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   }
 
   if (!atOrAfter(checkpoint.step, "secrets-uploaded")) {
-    console.log("  Securing GitHub credentials in the Gateway…");
+    printProgress("Securing GitHub credentials in the Gateway…");
     if (!recovery) throw new Error(`Setup recovery file is missing: ${paths.recovery}`);
     const secrets: Record<string, string> = {
       GITHUB_APP_ID: String(recovery.app.id),
@@ -247,10 +248,10 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
       );
     }
     checkpoint = await advance(paths.checkpoint, checkpoint, "secrets-uploaded");
-    console.log("  ✓ Credentials secured");
+    printProgressSuccess("Credentials secured");
   }
 
-  console.log("  Running final connection checks…");
+  printProgress("Running final connection checks…");
   await verifyGateway(
     required(checkpoint.gatewayOrigin, "Gateway origin"),
     required(checkpoint.gardenerOrigin, "Gardener origin"),
@@ -262,9 +263,9 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   await unlink(paths.recovery).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
   });
-  console.log(`  ✓ Gardener is ready for ${workspace}`);
-  console.log(`\n  Gardener: ${checkpoint.gardenerOrigin}`);
-  console.log(`  Gateway:  ${checkpoint.gatewayOrigin}`);
+  printProgressSuccess(`Gardener is ready for ${terminal.value(workspace)}`);
+  console.log(`\n  Gardener: ${terminal.value(required(checkpoint.gardenerOrigin, "Gardener origin"))}`);
+  console.log(`  Gateway:  ${terminal.value(required(checkpoint.gatewayOrigin, "Gateway origin"))}`);
   if (options.quietCommands) {
     console.log(`  Local setup state: ${paths.directory}`);
   } else {
@@ -465,6 +466,14 @@ function containsGlobalPause(output: string): boolean {
   } catch {
     return false;
   }
+}
+
+function printProgress(message: string): void {
+  console.log(`\n  ${terminal.strong(message)}`);
+}
+
+function printProgressSuccess(message: string): void {
+  console.log(`  ${terminal.success("✓")} ${message}`);
 }
 
 function sql(value: string): string {

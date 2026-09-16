@@ -16,11 +16,18 @@ import { gatewayPlan } from "../src/plan";
 import { evaluateSmoke } from "../src/smoke";
 import { setupPreview } from "../src/setup";
 import { statePaths, writePrivateJson, writePrivateText } from "../src/state";
+import { terminal } from "../src/terminal";
 
 const originalConfigHome = process.env.GARDENER_CONFIG_HOME;
+const originalForceColor = process.env.FORCE_COLOR;
+const originalNoColor = process.env.NO_COLOR;
 afterEach(() => {
   if (originalConfigHome === undefined) delete process.env.GARDENER_CONFIG_HOME;
   else process.env.GARDENER_CONFIG_HOME = originalConfigHome;
+  if (originalForceColor === undefined) delete process.env.FORCE_COLOR;
+  else process.env.FORCE_COLOR = originalForceColor;
+  if (originalNoColor === undefined) delete process.env.NO_COLOR;
+  else process.env.NO_COLOR = originalNoColor;
 });
 
 describe("Gardener Gateway CLI", () => {
@@ -47,6 +54,16 @@ describe("Gardener Gateway CLI", () => {
     expect(gateway.status).toBe(0);
     expect(gateway.stdout).toContain("plan                         Build");
     expect(gateway.stdout).toContain("destroy                      Delete");
+  });
+
+  it("uses restrained TTY colours and respects NO_COLOR", () => {
+    process.env.FORCE_COLOR = "1";
+    delete process.env.NO_COLOR;
+    expect(terminal.title("Gardener setup")).toContain("\u001b[1m\u001b[32m");
+    expect(terminal.value("agents")).toContain("\u001b[36m");
+    process.env.NO_COLOR = "";
+    expect(terminal.title("Gardener setup")).toBe("Gardener setup");
+    expect(terminal.value("agents")).toBe("agents");
   });
 
   it("parses explicit resumable command options", () => {
