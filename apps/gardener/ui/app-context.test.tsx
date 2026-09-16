@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   signOut: vi.fn(),
   syncRepositories: vi.fn(),
   beginInstallation: vi.fn(),
+  finalizeInstallation: vi.fn(),
   team: vi.fn(),
   inviteMember: vi.fn(),
   revokeInvitation: vi.fn(),
@@ -46,6 +47,7 @@ function SessionProbe() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  history.replaceState({}, "", "/");
 });
 
 describe("AppDataProvider session context", () => {
@@ -54,7 +56,7 @@ describe("AppDataProvider session context", () => {
       ok: true,
       database: true,
       workersAi: true,
-      connectConfigured: false,
+      githubGateway: { configured: false, ready: false },
       localDevelopment: true,
       agentRuntime: { enabled: true, status: "ready" },
     });
@@ -87,12 +89,55 @@ describe("AppDataProvider session context", () => {
     expect(await screen.findByRole("button", { name: "Invite GitHub user" })).toBeTruthy();
   });
 
+  it("finalizes the exact owner-bound installation request after GitHub returns", async () => {
+    history.replaceState({}, "", "/settings?installation=ready&request=installation_1234567890");
+    api.health.mockResolvedValue({
+      ok: true,
+      database: true,
+      workersAi: true,
+      githubGateway: { configured: true, ready: true },
+      localDevelopment: false,
+      agentRuntime: { enabled: true, status: "ready" },
+    });
+    api.session.mockResolvedValue({
+      authenticated: true,
+      githubLogin: "owner",
+      user: {
+        id: "user_github_101",
+        displayName: "owner",
+        role: "owner",
+        identity: { provider: "github", providerSubject: "101", login: "owner" },
+      },
+    });
+    api.state.mockResolvedValue({
+      globalPaused: true,
+      viewer: { login: "owner" },
+      setup: { completed: false, activeRepositories: 0 },
+      policies: [],
+      repositories: [],
+    });
+    api.finalizeInstallation.mockResolvedValue({ installation: {}, repositories: [] });
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <AppDataProvider><SessionProbe /></AppDataProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(api.finalizeInstallation).toHaveBeenCalledWith(
+      "installation_1234567890",
+    ));
+    expect(api.syncRepositories).not.toHaveBeenCalled();
+  });
+
   it("does not synthesize a production session", async () => {
     api.health.mockResolvedValue({
       ok: true,
       database: true,
       workersAi: true,
-      connectConfigured: true,
+      githubGateway: { configured: true, ready: true },
       localDevelopment: false,
       agentRuntime: { enabled: true, status: "ready" },
     });

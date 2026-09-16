@@ -1,8 +1,4 @@
-# Supplied by the managed Gardener Connect landing flow.
-# Install the real value as a Worker secret; never commit or log it.
-GARDENER_INSTANCE_TOKEN=
-
-# Optional Cloudflare Access service-token pair. Standard deployments leave both unset.
-# Install both as Worker secrets when one full-host Access application protects Gardener.
-# CLOUDFLARE_ACCESS_CLIENT_ID=
-# CLOUDFLARE_ACCESS_CLIENT_SECRET=
+# Gardener itself holds no GitHub credentials.
+# Local credentials belong only in apps/github-gateway/.dev.vars.
+GARDENER_WORKSPACE_ID=workspace-local
+LOCAL_DEV_BYPASS=true

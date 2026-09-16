@@ -1,15 +1,13 @@
-import { webcrypto } from "node:crypto";
-import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { canonicalOperationHash } from "@gardener/core";
 import type { Operation } from "@gardener/contracts";
-import { beginGitHubInstallation, ConnectUsernameResolutionError, executeThroughConnect, resolveGitHubUser } from "../src/connect";
+import {
+  beginGitHubInstallation,
+  executeGitHubOperation,
+  GitHubUsernameResolutionError,
+  resolveGitHubUser,
+} from "../src/providers/github/client";
 import type { Env } from "../src/env";
-
-beforeAll(() => {
-  if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto });
-});
-
-afterEach(() => vi.unstubAllGlobals());
 
 const operation: Operation = {
   schemaVersion: "v2",
@@ -29,66 +27,56 @@ const operation: Operation = {
   body: "A bounded triage response.",
 };
 
-const env = {
-  CONNECT_URL: "https://connect.example.test",
-  GARDENER_INSTANCE_TOKEN: `gdn_instance-test.${"x".repeat(20)}`,
-} as Env;
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+function environment(gateway: Partial<Env["GITHUB_GATEWAY"]>): Env {
+  return { GITHUB_GATEWAY: gateway } as unknown as Env;
 }
 
-describe("W3 instance-authenticated Connect calls",()=>{
-  it("starts installation setup with the instance token and immutable owner subject",async()=>{const fetchMock=vi.fn().mockResolvedValue(json({installationUrl:"https://github.com/apps/gardener/installations/new"}));vi.stubGlobal("fetch",fetchMock); await expect(beginGitHubInstallation(env,"101","https://gardener.example.test/")).resolves.toContain("github.com"); const [url,init]=fetchMock.mock.calls[0] as [URL,RequestInit]; expect(url.pathname).toBe("/v1/instances/installations/setup"); expect((init.headers as Record<string,string>).authorization).toBe(`Bearer ${env.GARDENER_INSTANCE_TOKEN}`); expect(JSON.parse(String(init.body))).toEqual({githubUserId:"101",redirectUri:"https://gardener.example.test/"}); expect(String(init.body)).not.toContain("identity_token");});
-  it("uses stable github_user_resolution errors without exposing upstream bodies",async()=>{vi.stubGlobal("fetch",vi.fn().mockResolvedValue(json({error:"private upstream detail"},429))); await expect(resolveGitHubUser(env,"octocat")).rejects.toEqual(expect.objectContaining<Partial<ConnectUsernameResolutionError>>({message:"github_user_resolution_429",status:429}));});
-});
+describe("GitHub Gateway binding client", () => {
+  it("starts owner-bound installation setup without a provider credential", async () => {
+    const beginInstallation = vi.fn().mockResolvedValue({
+      installationUrl: "https://github.com/apps/gardener/installations/new",
+    });
+    const env = environment({ beginInstallation } as Partial<Env["GITHUB_GATEWAY"]>);
+    const input = {
+      requestId: "installation_1234567890",
+      requestedBy: { provider: "github" as const, subject: "101", login: "owner" },
+    };
+    await expect(beginGitHubInstallation(env, input)).resolves.toContain("github.com");
+    expect(beginInstallation).toHaveBeenCalledWith(input);
+  });
 
-describe("Connect operation receipts", () => {
-  it.each([
-    { status: 409, code: "github_execution_failed", retryable: false },
-    { status: 422, code: "unsupported_operation", retryable: false },
-    { status: 503, code: "github_http_error", retryable: true },
-  ])("returns a valid exact receipt from HTTP $status", async ({ status, code, retryable }) => {
+  it("uses stable username-resolution errors", async () => {
+    const env = environment({
+      resolveUsername: vi.fn().mockRejectedValue(new Error("username_lookup_rate_limited")),
+    } as Partial<Env["GITHUB_GATEWAY"]>);
+    await expect(resolveGitHubUser(env, "octocat")).rejects.toEqual(
+      expect.objectContaining<Partial<GitHubUsernameResolutionError>>({
+        message: "github_user_resolution_429",
+        status: 429,
+      }),
+    );
+  });
+
+  it("returns a receipt bound to the exact operation", async () => {
     const operationHash = await canonicalOperationHash(operation);
     const receipt = {
-      schemaVersion: "v2",
+      schemaVersion: "v2" as const,
       operationId: operation.id,
       operationHash,
       kind: operation.kind,
-      status: "failed",
+      status: "succeeded" as const,
       attempt: 1,
       attemptedAt: "2026-01-01T00:00:00Z",
       completedAt: "2026-01-01T00:00:01Z",
-      error: { code, message: "Connect returned a typed failure.", retryable },
     };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(json({ grant: "run-grant" }))
-      .mockResolvedValueOnce(json(receipt, status));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(executeThroughConnect(env, "run-1", "event-1", operation)).resolves.toEqual(receipt);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects a non-2xx receipt that is not bound to the exact operation", async () => {
-    const operationHash = await canonicalOperationHash(operation);
-    const mismatchedReceipt = {
-      schemaVersion: "v2",
-      operationId: "different-operation",
-      operationHash,
-      kind: operation.kind,
-      status: "failed",
-      attempt: 1,
-      attemptedAt: "2026-01-01T00:00:00Z",
-      completedAt: "2026-01-01T00:00:01Z",
-      error: { code: "github_execution_failed", message: "Failure.", retryable: false },
-    };
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(json({ grant: "run-grant" }))
-      .mockResolvedValueOnce(json(mismatchedReceipt, 409)));
-
-    await expect(executeThroughConnect(env, "run-1", "event-1", operation)).rejects.toThrow(
-      "Connect /v1/operations failed (409)",
-    );
+    const executeOperation = vi.fn().mockResolvedValue({ receipt });
+    const env = environment({ executeOperation } as Partial<Env["GITHUB_GATEWAY"]>);
+    await expect(executeGitHubOperation(env, "run-1-1234567890", "event-1", operation))
+      .resolves.toEqual(receipt);
+    expect(executeOperation).toHaveBeenCalledWith({
+      runId: "run-1-1234567890",
+      eventId: "event-1",
+      operation,
+    });
   });
 });

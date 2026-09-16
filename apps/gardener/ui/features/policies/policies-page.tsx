@@ -210,7 +210,7 @@ export function PoliciesPage() {
         icon={<ShieldCheckIcon size={20} weight="fill" />}
         title="Model output is never authorization"
         description={
-          "Gardener applies these policies to every proposal. Connect revalidates repository access " +
+          "Gardener applies these policies to every proposal. The GitHub Gateway revalidates repository access " +
           "and current GitHub state immediately before each write."
         }
       />

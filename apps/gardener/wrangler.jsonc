@@ -9,6 +9,13 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/hooks/*", "/mcp", "/oauth/*", "/.well-known/*"]
   },
+  "services": [
+    {
+      "binding": "GITHUB_GATEWAY",
+      "service": "gardener-github-gateway",
+      "entrypoint": "GitHubGatewayEntrypoint"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -49,18 +56,15 @@
       "rollout_step_percentage": [100]
     }
   ],
-  "workflows": [
-    {
-      "binding": "AGENT_RUN_WORKFLOW",
-      "name": "gardener-agent-runs",
-      "class_name": "AgentRunWorkflow"
-    }
-  ],
+  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-    "CONNECT_ISSUER": "https://gardener-connect.agents-b8a.workers.dev",
-    "CONNECT_URL": "https://gardener-connect.agents-b8a.workers.dev",
+    "GARDENER_WORKSPACE_ID": "workspace-local",
     "LOCAL_DEV_BYPASS": "false"
   },
-  "observability": { "enabled": true }
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false }
+  }
 }

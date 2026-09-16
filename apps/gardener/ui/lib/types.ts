@@ -266,7 +266,7 @@ export interface HealthState {
   database: boolean;
   durableOrchestration?: boolean;
   workersAi: boolean;
-  connectConfigured: boolean;
+  githubGateway: { configured: boolean; ready: boolean };
   localDevelopment: boolean;
   computer?: boolean | { configured: boolean; experimental: boolean };
   artifactStorage?: boolean;

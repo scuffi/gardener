@@ -1,87 +1,134 @@
 # Security
 
-Gardener is under active Agent-native integration and is not an SLA-backed service. Report vulnerabilities privately to the repository maintainers; do not open a public issue containing exploit details, credentials, private repository content, or customer data.
+## Supported security model
 
-## Fail-closed release status
+Gardener V1 is a customer-deployed, single-workspace system. One Gardener Worker/D1 and one dedicated
+GitHub Gateway Worker/D1/GitHub App are installed in the customer's Cloudflare and GitHub accounts.
+The deployment is the tenant boundary; neither database contains workspace/tenant discriminator
+columns.
 
-The current runtime is operational only for one experimental bounded path: an eligible `github.issue.opened` event may produce one model-only proposal and an automatic-policy `issue.comment.create` exact effect through Connect V2. All tools, workspaces, approval-mode effects, other events/operations, and general orchestration remain unavailable. Do not treat this slice as a complete production Agent runtime; real Cloudflare staging and independent review remain required before broader release.
+Report vulnerabilities privately to the repository maintainers. Do not include live credentials,
+private repository content, webhook bodies, model prompts, or customer data in a public issue.
 
-## Credential invariants
+## Trust boundaries
 
-- GitHub App private keys, OAuth secrets, webhook secrets, and installation tokens exist only in managed or self-hosted Connect.
-- Connect never returns installation tokens or exposes a raw GitHub proxy.
-- Credentials never enter source control, URLs, logs, API payloads, Agent packages, prompts, model context, MCP clients, Computer files, artifacts, or local tools.
-- The customer instance token is a high-entropy Worker secret. Connect stores its SHA-256 hash; the token itself is not arbitrary GitHub write authority.
-- The Connect identity assertion is single-use and exchange-only. Gardener records its identifier hash for replay prevention and issues a high-entropy opaque dashboard session whose token is stored only as a hash, can expire, and can be revoked.
-- Opaque dashboard sessions, GitHub App installation, Gardener instance authentication, OAuth MCP tokens, one-run grants, and exact-effect grants are separate credentials and cannot substitute for one another.
-- Optional Cloudflare Access credentials are encrypted by Connect with an independent AES-256-GCM key, bound to the instance, and used only for outbound relay. Access never replaces inner authentication.
-- Agent workspaces receive exact-SHA snapshots with no credentialed Git remote.
+### GitHub Gateway
 
-## Agent and authoring invariants
+The Gateway is the only component trusted with GitHub App/OAuth/webhook credentials. It may mint App
+JWTs and short-lived installation tokens in memory. Those values are never persisted or returned.
+It exposes only callback, webhook, health, and authenticated sanitized operator HTTP routes.
+Provider operations are available only through the named `GitHubGatewayEntrypoint` Service Binding.
 
-- One Gardener deployment/D1 database is one workspace. Gardener owns provider-neutral users, external identity links, invitations, and owner/member memberships. Exactly one permanent owner is bootstrapped from the pre-existing Connect owner; there is no Gardener promotion or ownership-transfer UI.
-- `AGENT.md` prose describes behavior only. It cannot grant repositories, capabilities, effect kinds, network, credentials, policy modes, or bypasses.
-- Unknown fields, actions, capabilities, operations, package paths, or unavailable trusted facts fail closed. Omitted capabilities mean none.
-- Exact authored bytes, strict parsed semantics, supporting-file identities, hashes, and component versions are preserved. Agent V1 source and compiled behavior are repository-independent.
-- Drafts are mutable and paused. Publication creates an immutable paused revision; owner activation changes the workspace-global active revision. Repository deployment is a separate, versioned structural assignment disabled by default. Global activation plus an enabled exact-repository assignment is the sole run enable gate.
-- Dashboard prompts, repository content, comments, channel text, model output, tools, and eval graders are untrusted for authorization.
-- OAuth MCP requires an authorized opaque workspace session for consent, exact audience/client/principal agreement, explicit scopes, CSRF/replay protection, redaction, and per-request active-membership revalidation. It may save paused drafts but cannot publish, activate, change assignments, approve, alter policy/repositories, or execute effects.
+The Gateway does not accept arbitrary URLs, raw token requests, arbitrary REST calls, policy claims,
+or Agent instructions. It accepts strict typed operations and validates delivered event,
+repository/installation, resource, precondition, operation-ID, and canonical-hash bindings before
+requesting an installation token.
 
-## Runtime authority invariants
+### Gardener
 
-Authority is the most restrictive intersection of admission/pause, trusted event eligibility, the repository-independent compiled revision capability ceiling, workspace policy, complete repository policy, the structural assignment ceiling, authoring authorization, any temporary one-run grant, authenticated interruption decisions, exact-effect approval, and Connect execution checks. Missing or partial repository policy fails closed. Workspace-local capabilities are not gated by the assignment's persistent-effect ceiling.
+Gardener is authoritative for users, memberships, invitations, roles, sessions, Agents, assignments,
+policy, approvals, Inbox, runs, effects, and audit history. It never receives a GitHub credential.
+D1 is authoritative; Workflows and Flue coordinate execution but are not competing product ledgers.
 
-- Planning cannot persistently mutate GitHub. Harness tools can expose observations and isolated workspace actions only.
-- Repository access changes require a structural assignment change. New effect kinds, broader actors, or higher revision authority require a new revision.
-- Credentials, policy editing, bypass authority, and unrestricted repository access are never runtime-grantable.
-- Every interruption is typed, expiry-bound, eligible-responder-bound, nonce-bound, payload-bound, and replay-protected.
-- Every effect has a stable operation ID, canonical input hash, persisted intent, policy snapshot, explicit retry class, and persisted receipt.
-- Approval authorizes only the reviewed exact payload. Re-fetch and revalidation occur before an approved or automatic mutation.
-- Multiple runs/tasks may execute in parallel; optimistic expected-state/SHA preconditions replace a global Agent lock.
+The model, Agent source, MCP clients, and Computer workspaces are untrusted proposers. Only trusted
+host code can construct a persistent operation. Live state may narrow a frozen run; later widening
+never upgrades it.
 
-## Connect and GitHub invariants
+### Browser identity
 
-- Webhook HMAC is verified over raw bytes before parsing; delivery IDs are deduplicated.
-- `RepositoryEventV2` preserves immutable repository/resource/actor identities and separates event actor from resource author.
-- A short-lived grant binds the Gardener instance, signed event, installation, repository, resource, and canonical hashes of exact operations.
-- Connect validates a strict operation schema, mints a least-privilege one-repository token internally, re-fetches live state, and invokes only an allowlisted endpoint/body.
-- Unknown or not-yet-verified operation kinds return a permanent typed unsupported result. Connect never guesses an endpoint or permission.
-- Retries preserve operation identity and payload. App-owned markers/receipts prevent duplicate persistent effects.
-- Branch/commit operations are bounded, use the `gardener/` namespace, reject force pushes, and enforce denied paths/file/size limits.
-- PR creation is draft-only. Merge binds current head/base, state, draft status, required checks and App identities, allowed method, and branch-protection state.
-- The Gardener GitHub App must never be a branch-protection or ruleset bypass actor. GitHub remains the final protection enforcement point.
-- Release publication/deletion, merge, code changes, networking, and dependency installation begin disabled.
-- Missing App permissions or installation reauthorization fails closed with an actionable health state.
+GitHub OAuth is identity proof only. Its temporary token is used for `/user` and discarded.
+Repository authority comes only from GitHub App installations. The OAuth state is a random one-use
+handoff stored only as a SHA-256 hash. Gardener also stores only the handoff hash, consumes it once,
+and creates an opaque local session.
 
-## Computer invariants
+The permanent owner is seeded from an explicitly confirmed immutable numeric GitHub ID before OAuth
+credentials are enabled. There is no first-user-wins adoption. Invitations are resolved to numeric
+subjects before storage; usernames are mutable display snapshots.
 
-Each writable run/task/principal receives a separate Cloudflare Computer Durable Object workspace.
+Session tokens are random and stored only as SHA-256 hashes. Public cookies are
+`__Host-gardener_session`, `Secure`, `HttpOnly`, path `/`, and `SameSite=Lax`; local HTTP uses
+`gardener_session`. Sessions have a 30-minute sliding idle limit and eight-hour absolute limit.
+State-changing dashboard routes require same-origin requests. MCP principals cannot substitute for
+dashboard sessions and are re-resolved against current owner membership on every invocation.
 
-- Workspace IDs derive from immutable instance/run/task/principal identity.
-- Hydration paths are normalized and credential-bearing files/configuration are rejected.
-- Typed/local Git rejects clone, fetch, pull, push, `ls-remote`, network configuration, and credential helpers.
-- Worker shell/JavaScript and Container use denied egress by default. Source scanning is defense in depth, not the network boundary.
-- Container defaults to Ask per run. Container permission does not grant network or dependency installation.
-- Execution time/source/input/output/artifact/file limits are enforced by trusted code.
-- Ambiguous execution is not automatically replayed. Unresolved Container synchronization blocks patch/artifact freezing.
-- Handles are disposed; durable leases and a sweeper must release expired workspaces and surface cleanup failure in Inbox.
-- Model-facing token-bearing Cloudflare Artifacts access is disabled; host-controlled R2 is the artifact boundary.
+## Installation security
 
-Computer is preview-only and Flue is experimental. Flue is the only configured Agent runtime, remains an untrusted integration boundary, and must pass contract validation and real platform staging. Runtime unavailability produces a typed failure; Gardener never falls back to another framework or a broader authority path.
+A current owner initiates installation. Gardener and Gateway bind the request to that owner's internal
+user ID and immutable GitHub subject. GitHub's callback proves only that an installation belonging to
+the dedicated App exists; it marks the request ready. The same initiating owner must perform a
+same-origin finalization. Organization account IDs are never treated as human user IDs.
 
-## Data and logs
+Multiple personal and organization installations are supported. Repository synchronization is
+fenced per installation. Deleted or suspended installations narrow live authority immediately.
+Newly discovered repositories do not receive assignments or configured policy implicitly.
 
-D1 is authoritative for decisions and receipts. Large content belongs in host-controlled R2 with bounded retention. Product traces are redacted observability projections and are not security audit proof. Secrets and upstream authorization headers must be removed from logs/errors; MCP applies an additional output redaction pass.
+## Webhook security and recovery
 
-The clean pre-V1 Gardener v7 cutover intentionally deletes old test Agents and run/runtime evidence without export. Repositories, settings, the Connect owner state, and existing policy modes are retained. Provider-neutral users, owner/member membership, invitations, hashed opaque sessions, structural assignments, and repository policy are implemented locally in v7. Connect stage 1 is deployed owner-only; Gardener v7 and Connect stage 2 member login are not deployed yet. Operators must acknowledge, test, and gate the destructive reset before deployment.
+Webhook bodies are bounded and verified against `X-Hub-Signature-256` before parsing. The Gateway
+hash-binds the GitHub delivery ID, event name, and exact body. Deliverable events are normalized into
+strict trusted facts. Unknown or deliberately unsupported events are recorded as terminal ignored
+deliveries rather than silently disappearing.
 
-## Required production controls
+The Gateway durably persists before returning HTTP `202`, then schedules one direct Gardener RPC
+attempt in `waitUntil`. Delivery claims use a lease and random attempt token. Old completions cannot
+overwrite a newer retry. Failed/stale deliveries are visible only through the sanitized operator
+route and require explicit retry; V1 has no Queue or autonomous retry scheduler.
 
-- Use distinct production keys and secrets; rotate Connect signing and GitHub App keys through a planned overlap window.
-- Restrict/rate-limit public bootstrap while preserving GitHub callbacks/webhooks.
-- Keep `LOCAL_DEV_BYPASS` false.
-- Configure only verified minimum GitHub App permissions and obtain installation-owner approval for expansions.
-- Verify the App is absent from every branch/ruleset bypass list.
-- Keep unrestricted networking, dependency installation, automatic code changes, direct push, and auto-merge disabled.
-- If Access is enabled, use one full-host application and a dedicated Connect Service Auth token, never a public path bypass or **Any Access Service Token**.
-- Complete migration concurrency, replay/idempotency, OAuth consent, browser security/accessibility, Connect live-state, and real Cloudflare Workflows/Worker Loader/Durable Object/R2/Container tests before release.
+The operator token is independent of provider execution, stored locally with mode `0600`, accepted
+only on `/ops/doctor` and `/ops/deliveries/:id/retry`, and compared without early exit. Rotate it if
+exposed.
+
+## Exact effects
+
+All 29 GitHub operation schemas remain declared. Capability discovery marks exactly 12 verified
+executors available and 17 unavailable. Unsupported kinds fail before credentials or GitHub I/O.
+Gardener's currently qualified automatic runtime is narrower: `issue.comment.create` only.
+
+Operation receipts are keyed by stable operation ID and bind canonical operation hash, exact JSON,
+run, delivered event, repository, installation, and resource. Execution and delivery use fenced
+leases. Terminal receipts are hash-bound and verified on replay. Ambiguous comments are reconciled
+using the exact App-authored marker included in the canonical body:
+
+```html
+<!-- gardener-operation:op_abcd1234 -->
+```
+
+Provider APIs remain at-least-once at the transport boundary; reconciliation plus stable IDs prevents
+duplicate qualified effects.
+
+## Secret handling
+
+Gateway secrets:
+
+- `GITHUB_APP_ID`
+- `GITHUB_APP_SLUG`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- `GITHUB_WEBHOOK_SECRET`
+- `GATEWAY_OPERATOR_TOKEN`
+- `OPERATION_MARKER_KEY`
+
+Do not place them in Gardener bindings, argv, URLs, generated config, source files, telemetry, or
+logs. `gardener setup` sends secrets through Wrangler stdin. Temporary manifest credentials
+are stored only in `~/.config/gardener/<workspace>/setup-recovery.json` with mode `0600`, retained on
+partial failure, and deleted only after health/doctor verification.
+
+Cloudflare Access may protect Gardener as defense in depth. It is not the product identity or
+provider-operation protocol. Service Bindings—not Access service tokens—protect Worker-to-Worker RPC.
+
+## Deployment and incident rules
+
+- Review printed resources and commands before setup.
+- Never run production deployment, migration, App permission expansion, or redelivery without owner
+  approval.
+- Use `--containers-rollout none` whenever Computer is unchanged.
+- Pause and drain before changing a hash-bound runtime/adapter version.
+- End qualification with `global_paused=true`.
+- Treat unexpected repository/installation, event-integrity, operation-ID, receipt-integrity, or
+  attempt-token mismatches as security incidents; preserve both D1 databases and audit records.
+- Revoke/rotate the GitHub App key, OAuth secret, webhook secret, operator token, and marker key from
+  the owning accounts as appropriate. Do not export installation tokens—they are intentionally not
+  retained.
+
+See [Architecture](docs/architecture.md) and the [Gateway runbook](docs/github-gateway.md).

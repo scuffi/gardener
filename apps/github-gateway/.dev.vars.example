@@ -1,0 +1,16 @@
+# Copy to .dev.vars for private local development only. Never commit real values.
+# These credentials belong only to the customer-owned GitHub Gateway.
+GITHUB_CLIENT_ID=Iv1.example
+GITHUB_CLIENT_SECRET=replace-me
+GITHUB_APP_ID=123456
+GITHUB_APP_SLUG=gardener
+GITHUB_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+GITHUB_WEBHOOK_SECRET=replace-with-random-secret
+
+# Distinct local operator and canonical marker keys (at least 32 random bytes each).
+GATEWAY_OPERATOR_TOKEN=replace-with-random-operator-token
+OPERATION_MARKER_KEY=replace-with-random-marker-key
+
+GATEWAY_ORIGIN=http://localhost:8788
+GARDENER_ORIGIN=http://localhost:8787
+GARDENER_WORKSPACE_ID=workspace-local

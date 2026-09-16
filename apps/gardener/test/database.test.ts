@@ -24,6 +24,9 @@ beforeAll(async () => {
   vi.doMock("../migrations/0007_team_workspace_foundation.sql?raw", () => ({
     default: readFileSync(new URL("../migrations/0007_team_workspace_foundation.sql", import.meta.url), "utf8"),
   }));
+  vi.doMock("../migrations/0008_flue_native_runtime.sql?raw", () => ({
+    default: readFileSync(new URL("../migrations/0008_flue_native_runtime.sql", import.meta.url), "utf8"),
+  }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -33,7 +36,7 @@ describe("Agent-native database initialization", () => {
     try {
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       for (const removed of ["workflows", "workflow_revisions", "events", "proposals"]) {
@@ -63,7 +66,7 @@ describe("Agent-native database initialization", () => {
       sqlite.prepare("INSERT INTO agents (id, slug, name, created_by) VALUES (?, ?, ?, ?)")
         .run("agent-v4", "agent-v4", "Agent v4", "legacy");
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
       expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([]);
       const columns = sqlite.prepare("PRAGMA table_info(repository_events)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("admission_status");
@@ -89,7 +92,7 @@ describe("Agent-native database initialization", () => {
       `).run("historical-run", "historical-agent", "historical-revision", JSON.stringify({ harness: { id: "cloudflare-agents", version: "1.0.0" } }), digest, digest, digest, "2026-09-10T12:00:00.000Z");
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       expect(sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get()).toBeUndefined();
     } finally {

@@ -43,7 +43,7 @@ const healthy = {
   ok: true,
   database: true,
   workersAi: true,
-  connectConfigured: true,
+  githubGateway: { configured: true, ready: true },
   localDevelopment: false,
   agentRuntime: { enabled: true, status: "ready" },
 };

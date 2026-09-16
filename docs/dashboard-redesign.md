@@ -485,7 +485,7 @@ Ships last because it aggregates everything the earlier phases expose. Charts he
 **Phase 7 — Polish and gates.**
 Skeletons everywhere, motion pass with `prefers-reduced-motion`, responsive audit at 360/768/1280/1920,
 keyboard traversal of every surface, Axe serious/critical clean, light and dark verified per surface,
-then update `smoke:onboarding` to cover the new routes.
+then add a customer-owned Gateway onboarding smoke that covers the new routes.
 
 ### Kill list
 

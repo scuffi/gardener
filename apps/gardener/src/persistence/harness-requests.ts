@@ -66,7 +66,7 @@ export class D1HarnessRequestStore implements HarnessSubmissionStore {
     const row = await this.requestRow(runId, requestId);
     if (!row) return null;
     const request: unknown = JSON.parse(row.request_json);
-    assertHarnessRequest(request, expectedHarnessBinding("flue"));
+    assertHarnessRequest(request, { id: "flue", adapterVersion: row.harness_version });
     if (
       request.runId !== runId
       || request.requestId !== requestId
@@ -117,7 +117,7 @@ export class D1HarnessRequestStore implements HarnessSubmissionStore {
     const row = await this.submissionRow(runId, requestId);
     if (!row) return null;
     const submission: unknown = JSON.parse(row.submission_json);
-    assertHarnessSubmission(submission, expectedHarnessBinding("flue"));
+    assertHarnessSubmission(submission, { id: "flue", adapterVersion: row.harness_version });
     if (
       submission.runId !== runId
       || submission.requestId !== requestId

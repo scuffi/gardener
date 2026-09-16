@@ -31,8 +31,8 @@ beforeAll(() => {
 
 const context = vi.hoisted(() => ({
   value: {
-    health: { connectConfigured: true, localDevelopment: false } as {
-      connectConfigured: boolean;
+    health: { githubGateway: { configured: true, ready: true }, localDevelopment: false } as {
+      githubGateway: { configured: boolean; ready: boolean };
       localDevelopment: boolean;
     } | null,
     loading: false,
@@ -54,7 +54,10 @@ import { SignInPage } from "./sign-in-page";
 
 afterEach(() => {
   cleanup();
-  context.value.health = { connectConfigured: true, localDevelopment: false };
+  context.value.health = {
+    githubGateway: { configured: true, ready: true },
+    localDevelopment: false,
+  };
   context.value.loading = false;
   context.value.error = null;
 });
@@ -68,7 +71,7 @@ describe("Gardener sign-in", () => {
     expect(heading.id).toBe("signin-heading");
     expect(button.hasAttribute("disabled")).toBe(false);
     expect(button.getAttribute("aria-describedby")).toContain("signin-owner-note");
-    expect(screen.getByText(/Repository access is managed separately through Gardener Connect/)).toBeTruthy();
+    expect(screen.getByText(/Repository access is managed by your customer-owned GitHub Gateway/)).toBeTruthy();
     expect(screen.getByText("Customer-deployed on Cloudflare Workers")).toBeTruthy();
     expect(screen.queryByText(/Powered by Cloudflare/i)).toBeNull();
     expect(container.querySelector(".gardener-sidebar")).toBeNull();
@@ -103,7 +106,10 @@ describe("Gardener sign-in", () => {
   });
 
   it("keeps the sign-in action disabled when the deployment is not configured", () => {
-    context.value.health = { connectConfigured: false, localDevelopment: false };
+    context.value.health = {
+      githubGateway: { configured: false, ready: false },
+      localDevelopment: false,
+    };
     render(<SignInPage />);
 
     expect(screen.getByText("Dashboard sign-in is not configured")).toBeTruthy();

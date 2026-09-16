@@ -1,4 +1,5 @@
 import { changed, decodeJson, encodeJson } from "./shared";
+import { FLUE_NATIVE_DRIVER } from "../flue-native-protocol";
 
 export interface RepositoryEventInput {
   id: string;
@@ -181,6 +182,14 @@ export async function listRepositoryEventRunIds(db: D1Database, eventId: string)
 export type RunKind = "live" | "simulation" | "manual" | "scheduled";
 export type RunStatus = "admitted" | "queued" | "running" | "waiting" | "completed" | "completed_with_errors" | "failed" | "cancelled";
 
+export interface AtomicHarnessRequestInput {
+  requestId: string;
+  harnessId: string;
+  harnessVersion: string;
+  requestJson: string;
+  requestHash: string;
+}
+
 export interface CreateRunInput {
   id: string;
   kind: RunKind;
@@ -188,6 +197,11 @@ export interface CreateRunInput {
   agentId: string;
   agentRevisionId: string;
   workflowInstanceId: string | null;
+  runtimeDriver?: "workflow-v1" | "flue-native-v1";
+  /** Immutable native protocol configuration selected at admission. */
+  nativeModelId?: string | null;
+  nativeProfile?: string | null;
+  nativeRequestProtocol?: string | null;
   parentRunId: string | null;
   status: RunStatus;
   runSnapshot: unknown;
@@ -215,6 +229,11 @@ interface RunRow {
   agent_id: string;
   agent_revision_id: string;
   workflow_instance_id: string | null;
+  runtime_driver?: "workflow-v1" | "flue-native-v1";
+  native_model_id?: string | null;
+  native_profile?: string | null;
+  native_request_protocol?: string | null;
+  terminal_claim_hash?: string | null;
   parent_run_id: string | null;
   status: RunStatus;
   run_snapshot_json: string;
@@ -231,6 +250,10 @@ interface RunRow {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  result_json?: string | null;
+  result_hash?: string | null;
+  cancel_requested_at?: string | null;
+  cancel_reason?: string | null;
   repository_id?: string | null;
   assignment_id?: string | null;
   assignment_version?: number | null;
@@ -246,6 +269,11 @@ export interface RunDto {
   agentId: string;
   agentRevisionId: string;
   workflowInstanceId: string | null;
+  runtimeDriver: "workflow-v1" | "flue-native-v1";
+  nativeModelId: string | null;
+  nativeProfile: string | null;
+  nativeRequestProtocol: string | null;
+  terminalClaimHash: string | null;
   parentRunId: string | null;
   status: RunStatus;
   runSnapshot: unknown;
@@ -262,6 +290,10 @@ export interface RunDto {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  result: unknown | null;
+  resultHash: string | null;
+  cancelRequestedAt: string | null;
+  cancelReason: string | null;
   repositoryId: string | null;
   assignmentId: string | null;
   assignmentVersion: number | null;
@@ -278,6 +310,11 @@ function runDto(row: RunRow): RunDto {
     agentId: row.agent_id,
     agentRevisionId: row.agent_revision_id,
     workflowInstanceId: row.workflow_instance_id,
+    runtimeDriver: row.runtime_driver ?? "workflow-v1",
+    nativeModelId: row.native_model_id ?? null,
+    nativeProfile: row.native_profile ?? null,
+    nativeRequestProtocol: row.native_request_protocol ?? null,
+    terminalClaimHash: row.terminal_claim_hash ?? null,
     parentRunId: row.parent_run_id,
     status: row.status,
     runSnapshot: decodeJson(row.run_snapshot_json),
@@ -294,6 +331,10 @@ function runDto(row: RunRow): RunDto {
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    result: decodeJson(row.result_json ?? null),
+    resultHash: row.result_hash ?? null,
+    cancelRequestedAt: row.cancel_requested_at ?? null,
+    cancelReason: row.cancel_reason ?? null,
     repositoryId: row.repository_id ?? null,
     assignmentId: row.assignment_id ?? null,
     assignmentVersion: row.assignment_version ?? null,
@@ -340,6 +381,10 @@ function assertRunIdentity(row: RunRow, input: CreateRunInput, binding: RunBindi
     || row.agent_id !== input.agentId
     || row.agent_revision_id !== input.agentRevisionId
     || row.workflow_instance_id !== input.workflowInstanceId
+    || (row.runtime_driver ?? "workflow-v1") !== (input.runtimeDriver ?? "workflow-v1")
+    || (row.native_model_id ?? null) !== (input.nativeModelId ?? null)
+    || (row.native_profile ?? null) !== (input.nativeProfile ?? null)
+    || (row.native_request_protocol ?? null) !== (input.nativeRequestProtocol ?? null)
     || row.parent_run_id !== input.parentRunId
     || row.run_snapshot_hash !== input.runSnapshotHash
     || row.policy_snapshot_hash !== input.policySnapshotHash
@@ -357,6 +402,19 @@ function assertRunIdentity(row: RunRow, input: CreateRunInput, binding: RunBindi
   }
 }
 
+function assertNativeProtocolBinding(
+  input: CreateRunInput,
+  runtimeDriver: "workflow-v1" | "flue-native-v1",
+): void {
+  const nativeValues = [input.nativeModelId, input.nativeProfile, input.nativeRequestProtocol];
+  if (runtimeDriver === FLUE_NATIVE_DRIVER && nativeValues.some((value) => !value)) {
+    throw new Error("Flue-native runs require immutable model, profile, and request protocol bindings");
+  }
+  if (runtimeDriver !== FLUE_NATIVE_DRIVER && nativeValues.some((value) => value != null)) {
+    throw new Error("Historical runs cannot bind native protocol configuration");
+  }
+}
+
 export async function getRun(db: D1Database, runId: string): Promise<RunDto | null> {
   const row = await db.prepare("SELECT * FROM agent_runs WHERE id = ?").bind(runId).first<RunRow>();
   return row ? runDto(row) : null;
@@ -364,24 +422,29 @@ export async function getRun(db: D1Database, runId: string): Promise<RunDto | nu
 
 export async function createRun(db: D1Database, input: CreateRunInput): Promise<{ run: RunDto; created: boolean }> {
   const binding = runBinding(input);
+  const runtimeDriver = input.runtimeDriver ?? "workflow-v1";
+  assertNativeProtocolBinding(input, runtimeDriver);
   const baseValues = [input.id, input.kind, input.repositoryEventId, input.agentId, input.agentRevisionId,
-    input.workflowInstanceId, input.parentRunId, input.status, encodeJson(input.runSnapshot), input.runSnapshotHash,
+    input.workflowInstanceId, runtimeDriver, input.nativeModelId ?? null, input.nativeProfile ?? null,
+    input.nativeRequestProtocol ?? null, input.parentRunId, input.status, encodeJson(input.runSnapshot), input.runSnapshotHash,
     encodeJson(input.policySnapshot), input.policySnapshotHash, encodeJson(input.capabilitySnapshot),
     input.capabilitySnapshotHash, input.harnessId, input.harnessVersion, encodeJson(input.budgets)] as const;
   const result = binding
     ? await db.prepare(`INSERT OR IGNORE INTO agent_runs (
-        id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, parent_run_id, status,
-        run_snapshot_json, run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json,
-        capability_snapshot_hash, harness_id, harness_version, budgets_json, repository_id, assignment_id,
-        assignment_version, assignment_config_hash, repository_policy_hash, repository_policy_version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, runtime_driver, native_model_id,
+        native_profile, native_request_protocol, parent_run_id, status, run_snapshot_json, run_snapshot_hash,
+        policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json, capability_snapshot_hash,
+        harness_id, harness_version, budgets_json, repository_id, assignment_id, assignment_version,
+        assignment_config_hash, repository_policy_hash, repository_policy_version
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(...baseValues, binding.repositoryId, binding.assignmentId, binding.assignmentVersion,
         binding.assignmentConfigHash, binding.repositoryPolicyHash, binding.repositoryPolicyVersion).run()
     : await db.prepare(`INSERT OR IGNORE INTO agent_runs (
-        id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, parent_run_id, status,
-        run_snapshot_json, run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json,
-        capability_snapshot_hash, harness_id, harness_version, budgets_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(...baseValues).run();
+        id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, runtime_driver, native_model_id,
+        native_profile, native_request_protocol, parent_run_id, status, run_snapshot_json, run_snapshot_hash,
+        policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json, capability_snapshot_hash,
+        harness_id, harness_version, budgets_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(...baseValues).run();
 
   let row = await db.prepare("SELECT * FROM agent_runs WHERE id = ?").bind(input.id).first<RunRow>();
   if (!row && input.kind === "live" && input.repositoryEventId !== null) {
@@ -397,13 +460,31 @@ export async function createRun(db: D1Database, input: CreateRunInput): Promise<
 
 export async function admitEventAgentRun(
   db: D1Database,
-  input: CreateRunInput & { admissionId: string; admissionKey: string },
+  input: CreateRunInput & {
+    admissionId: string;
+    admissionKey: string;
+    initialHarnessRequest?: AtomicHarnessRequestInput;
+  },
 ): Promise<{ run: RunDto; created: boolean }> {
   if (input.kind !== "live" || input.repositoryEventId === null) {
     throw new Error("Event admission requires a live run and repository event");
   }
   const binding = runBinding(input);
   if (!binding) throw new Error("Live runs require a complete binding");
+  const runtimeDriver = input.runtimeDriver ?? "workflow-v1";
+  assertNativeProtocolBinding(input, runtimeDriver);
+  if (runtimeDriver === FLUE_NATIVE_DRIVER && !input.initialHarnessRequest) {
+    throw new Error("Flue-native admission requires its immutable initial request");
+  }
+  if (runtimeDriver !== FLUE_NATIVE_DRIVER && input.initialHarnessRequest) {
+    throw new Error("Historical admission cannot store a native initial request");
+  }
+  if (input.initialHarnessRequest && (
+    input.initialHarnessRequest.harnessId !== input.harnessId
+    || input.initialHarnessRequest.harnessVersion !== input.harnessVersion
+  )) {
+    throw new Error("Atomic harness request does not match the run harness binding");
+  }
 
   const existingAdmission = await db.prepare(`
     SELECT admission_key FROM event_agent_admissions
@@ -422,16 +503,18 @@ export async function admitEventAgentRun(
   }
 
   const runValues = [input.id, input.kind, input.repositoryEventId, input.agentId, input.agentRevisionId,
-    input.workflowInstanceId, input.parentRunId, input.status, encodeJson(input.runSnapshot), input.runSnapshotHash,
+    input.workflowInstanceId, runtimeDriver, input.nativeModelId ?? null, input.nativeProfile ?? null,
+    input.nativeRequestProtocol ?? null, input.parentRunId, input.status, encodeJson(input.runSnapshot), input.runSnapshotHash,
     encodeJson(input.policySnapshot), input.policySnapshotHash, encodeJson(input.capabilitySnapshot), input.capabilitySnapshotHash,
     input.harnessId, input.harnessVersion, encodeJson(input.budgets)] as const;
   const admissionGuardValues = [input.repositoryEventId, input.agentId, input.agentRevisionId, input.admissionKey] as const;
   const runInsert = db.prepare(`INSERT INTO agent_runs (
-      id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, parent_run_id, status,
-      run_snapshot_json, run_snapshot_hash, policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json,
-      capability_snapshot_hash, harness_id, harness_version, budgets_json, repository_id, assignment_id,
-      assignment_version, assignment_config_hash, repository_policy_hash, repository_policy_version)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      id, kind, repository_event_id, agent_id, agent_revision_id, workflow_instance_id, runtime_driver, native_model_id,
+      native_profile, native_request_protocol, parent_run_id, status, run_snapshot_json, run_snapshot_hash,
+      policy_snapshot_json, policy_snapshot_hash, capability_snapshot_json, capability_snapshot_hash,
+      harness_id, harness_version, budgets_json, repository_id, assignment_id, assignment_version,
+      assignment_config_hash, repository_policy_hash, repository_policy_version)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE EXISTS (SELECT 1 FROM event_agent_admissions WHERE event_id=? AND agent_id=? AND revision_id=? AND admission_key=?)
       AND NOT EXISTS (
         SELECT 1 FROM agent_runs
@@ -441,12 +524,37 @@ export async function admitEventAgentRun(
     .bind(...runValues, binding.repositoryId, binding.assignmentId, binding.assignmentVersion,
       binding.assignmentConfigHash, binding.repositoryPolicyHash, binding.repositoryPolicyVersion,
       ...admissionGuardValues, input.repositoryEventId, input.agentId, input.agentRevisionId);
-  const results = await db.batch([
+  const statements = [
     db.prepare(`INSERT INTO event_agent_admissions (id,event_id,agent_id,revision_id,admission_key,status)
       VALUES (?, ?, ?, ?, ?, 'admitted') ON CONFLICT(event_id,agent_id,revision_id) DO NOTHING`).bind(
       input.admissionId, input.repositoryEventId, input.agentId, input.agentRevisionId, input.admissionKey),
     runInsert,
-  ]);
+  ];
+  if (input.initialHarnessRequest) {
+    const request = input.initialHarnessRequest;
+    statements.push(
+      db.prepare(`INSERT OR IGNORE INTO harness_requests(
+          run_id, request_id, harness_id, harness_version, request_json, request_hash)
+        SELECT id, ?, ?, ?, ?, ? FROM agent_runs
+        WHERE id=? AND runtime_driver='flue-native-v1' AND native_model_id=?
+          AND native_profile=? AND native_request_protocol=?`)
+        .bind(
+          request.requestId,
+          request.harnessId,
+          request.harnessVersion,
+          request.requestJson,
+          request.requestHash,
+          input.id,
+          input.nativeModelId,
+          input.nativeProfile,
+          input.nativeRequestProtocol,
+        ),
+      db.prepare(`INSERT OR IGNORE INTO flue_dispatch_outbox(run_id, request_id)
+        SELECT run_id, request_id FROM harness_requests WHERE run_id=? AND request_id=?`)
+        .bind(input.id, request.requestId),
+    );
+  }
+  const results = await db.batch(statements);
 
   const admission = await db.prepare(`
     SELECT admission_key FROM event_agent_admissions
@@ -468,6 +576,20 @@ export async function admitEventAgentRun(
   if (created) assertRunIdentity(row, input, binding);
   else if (row.repository_event_id !== input.repositoryEventId || row.agent_id !== input.agentId || row.agent_revision_id !== input.agentRevisionId) {
     throw new Error("Event Agent run identity conflict");
+  }
+  if (created && input.initialHarnessRequest) {
+    const request = await db.prepare(`SELECT request_json,request_hash FROM harness_requests
+      WHERE run_id=? AND request_id=?`).bind(input.id, input.initialHarnessRequest.requestId)
+      .first<{ request_json: string; request_hash: string }>();
+    const outbox = await db.prepare(`SELECT 1 ok FROM flue_dispatch_outbox
+      WHERE run_id=? AND request_id=?`).bind(input.id, input.initialHarnessRequest.requestId).first<{ ok: number }>();
+    if (
+      request?.request_json !== input.initialHarnessRequest.requestJson
+      || request.request_hash !== input.initialHarnessRequest.requestHash
+      || !outbox
+    ) {
+      throw new Error("Atomic native request admission failed");
+    }
   }
   return { run: runDto(row), created };
 }

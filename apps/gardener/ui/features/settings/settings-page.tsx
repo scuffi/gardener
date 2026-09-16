@@ -78,9 +78,9 @@ export function SettingsPage() {
       icon: CpuIcon,
     },
     {
-      name: "Gardener Connect",
-      description: "GitHub identity, installation access, and writes",
-      ready: health.connectConfigured,
+      name: "GitHub Gateway",
+      description: "Customer-owned GitHub identity, installation access, and writes",
+      ready: health.githubGateway.ready,
       icon: GithubLogoIcon,
     },
   ];

@@ -15,6 +15,7 @@ beforeAll(async () => {
   vi.doMock("../migrations/0005_agent_runtime_admission.sql?raw", () => ({ default: migration("0005_agent_runtime_admission.sql") }));
   vi.doMock("../migrations/0006_flue_harness_requests.sql?raw", () => ({ default: migration("0006_flue_harness_requests.sql") }));
   vi.doMock("../migrations/0007_team_workspace_foundation.sql?raw", () => ({ default: migration("0007_team_workspace_foundation.sql") }));
+  vi.doMock("../migrations/0008_flue_native_runtime.sql?raw", () => ({ default: migration("0008_flue_native_runtime.sql") }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -123,7 +124,7 @@ function seedCompleteV6Graph(sqlite: DatabaseSync): void {
   `);
 }
 
-describe("schema v7 team/workspace cutover", () => {
+describe("schema v8 Flue-native cutover", () => {
   it("upgrades v6, resets pre-V1 Agent data, and preserves repositories and global policy", async () => {
     const sqlite = v6Database();
     try {
@@ -143,7 +144,7 @@ describe("schema v7 team/workspace cutover", () => {
 
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
       expect(sqlite.prepare("SELECT id FROM repositories ORDER BY id").all()).toEqual([{ id: "repo-active" }, { id: "repo-inactive" }]);
       expect(sqlite.prepare("SELECT mode FROM operation_policies WHERE operation_kind = 'issue.comment.create'").get()).toEqual({ mode: "automatic" });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 0 });
@@ -171,9 +172,20 @@ describe("schema v7 team/workspace cutover", () => {
         { key: "policy_version", value: "1" },
       ]);
       const indexes = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_audit_dedupe_%' ORDER BY name").all();
-      expect(indexes).toEqual([{ name: "idx_audit_dedupe_membership" }, { name: "idx_audit_dedupe_policy_unconfigured" }]);
+      expect(indexes).toEqual([
+        { name: "idx_audit_dedupe_membership" },
+        { name: "idx_audit_dedupe_policy_unconfigured" },
+        { name: "idx_audit_dedupe_run_cancellation" },
+      ]);
       const runColumns = (sqlite.prepare("PRAGMA table_info(agent_runs)").all() as Array<{ name: string }>).map((row) => row.name);
-      expect(runColumns).toEqual(expect.arrayContaining(["assignment_id", "assignment_version", "assignment_config_hash", "repository_id", "repository_policy_hash", "repository_policy_version"]));
+      expect(runColumns).toEqual(expect.arrayContaining([
+        "assignment_id", "assignment_version", "assignment_config_hash", "repository_id",
+        "repository_policy_hash", "repository_policy_version", "runtime_driver",
+        "result_json", "result_hash", "cancel_requested_at", "cancel_reason",
+        "native_model_id", "native_profile", "native_request_protocol", "terminal_claim_hash",
+      ]));
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='flue_dispatch_outbox'").get())
+        .toEqual({ name: "flue_dispatch_outbox" });
       const auditColumns = (sqlite.prepare("PRAGMA table_info(audit_records)").all() as Array<{ name: string }>).map((row) => row.name);
       expect(auditColumns).toEqual(expect.arrayContaining(["actor", "actor_user_id", "actor_identity_json"]));
       expect(() => sqlite.prepare("INSERT INTO users (id, display_name) VALUES ('u', 'User')").run()).not.toThrow();
@@ -196,6 +208,33 @@ describe("schema v7 team/workspace cutover", () => {
     }
   });
 
+  it("upgrades an existing v7 database additively without deleting product rows", async () => {
+    const sqlite = v6Database();
+    try {
+      sqlite.exec(migration("0007_team_workspace_foundation.sql"));
+      sqlite.prepare("INSERT INTO agents(id,slug,name,created_by) VALUES('agent-v7','v7','V7','owner')").run();
+      sqlite.exec(`
+        INSERT INTO agent_revisions(id,agent_id,revision,source_md,source_hash,parsed_json,parsed_hash,
+          compiled_json,compiled_hash,provenance_json,provenance_hash,compiler_version,catalog_version,runtime_version,published_by)
+        VALUES('revision-v7','agent-v7',1,'source','${digest}','{}','${digest}','{}','${digest}','{}','${digest}','1','1','1','owner');
+        INSERT INTO agent_runs(id,kind,agent_id,agent_revision_id,workflow_instance_id,status,run_snapshot_json,
+          run_snapshot_hash,policy_snapshot_json,policy_snapshot_hash,capability_snapshot_json,
+          capability_snapshot_hash,harness_id,harness_version,budgets_json)
+        VALUES('run-v7','manual','agent-v7','revision-v7','workflow-v7','completed','{}','${digest}','{}','${digest}',
+          '{}','${digest}','flue','2.0.2','{}');
+      `);
+      await ensureDatabase(d1Database(sqlite));
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton=1").get()).toEqual({ version: 8 });
+      expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v7" }]);
+      expect(sqlite.prepare("SELECT runtime_driver FROM agent_runs WHERE id='run-v7'").get())
+        .toEqual({ runtime_driver: "workflow-v1" });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='flue_dispatch_outbox'").get())
+        .toEqual({ name: "flue_dispatch_outbox" });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("guards destructive statements during direct manual SQL replay after v7", async () => {
     const sqlite = v6Database();
     try {
@@ -209,31 +248,31 @@ describe("schema v7 team/workspace cutover", () => {
         for (const statement of statements) sqlite.exec(statement);
       }).toThrow(/duplicate column name/);
       expect(sqlite.prepare("SELECT id FROM agents").all()).toEqual([{ id: "agent-v7" }]);
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
     } finally {
       sqlite.close();
     }
   });
 
-  it.each([4, 5])("takes a complete v%i database through the remaining chain to v7", async (version) => {
+  it.each([4, 5])("takes a complete v%i database through the remaining chain to v8", async (version) => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       sqlite.exec(migration("0001_initial.sql"));
       sqlite.exec("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)");
       if (version === 5) sqlite.exec(migration("0005_agent_runtime_admission.sql"));
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_repository_assignments'").get()).toEqual({ name: "agent_repository_assignments" });
     } finally {
       sqlite.close();
     }
   });
 
-  it("takes a fresh database through the complete chain to v7", async () => {
+  it("takes a fresh database through the complete chain to v8", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 7 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 8 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_repository_assignments'").get()).toEqual({ name: "agent_repository_assignments" });
     } finally {
       sqlite.close();

@@ -217,6 +217,8 @@ export interface CreateEffectInput {
   policyMode: PolicyMode;
   policySnapshotHash: string;
   status: "proposed" | "blocked" | "pending_approval" | "approved";
+  /** Native terminal effects must be inserted only while their run is active and uncancelled. */
+  requireActiveUncancelledNativeRun?: boolean;
 }
 
 interface EffectRow {
@@ -304,12 +306,7 @@ export async function createEffect(db: D1Database, input: CreateEffectInput): Pr
   if (input.status === "approved" && (input.policyMode !== "automatic" || input.interruptionId !== null)) {
     throw new Error("Only an automatic policy decision may create an approved effect");
   }
-  await db.prepare(`
-    INSERT OR IGNORE INTO effects (
-      id, operation_id, run_id, task_id, step_id, interruption_id, effect_kind,
-      operation_json, operation_hash, rationale, policy_mode, policy_snapshot_hash, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  const values = [
     input.id,
     input.operationId,
     input.runId,
@@ -323,7 +320,26 @@ export async function createEffect(db: D1Database, input: CreateEffectInput): Pr
     input.policyMode,
     input.policySnapshotHash,
     input.status,
-  ).run();
+  ] as const;
+  if (input.requireActiveUncancelledNativeRun) {
+    await db.prepare(`
+      INSERT OR IGNORE INTO effects (
+        id, operation_id, run_id, task_id, step_id, interruption_id, effect_kind,
+        operation_json, operation_hash, rationale, policy_mode, policy_snapshot_hash, status
+      ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM agent_runs WHERE id=? AND runtime_driver='flue-native-v1'
+          AND cancel_requested_at IS NULL AND status IN ('admitted','queued','running','waiting')
+      )
+    `).bind(...values, input.runId).run();
+  } else {
+    await db.prepare(`
+      INSERT OR IGNORE INTO effects (
+        id, operation_id, run_id, task_id, step_id, interruption_id, effect_kind,
+        operation_json, operation_hash, rationale, policy_mode, policy_snapshot_hash, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...values).run();
+  }
   const effect = await getEffect(db, input.id);
   if (!effect) throw new Error("Effect creation failed");
   if (
@@ -344,10 +360,22 @@ export async function claimEffectExecution(
   const result = await db.prepare(`
     UPDATE effects SET status = 'executing'
     WHERE id = ? AND operation_hash = ? AND status = 'approved'
+      AND EXISTS (
+        SELECT 1 FROM agent_runs
+        WHERE agent_runs.id=effects.run_id
+          AND (runtime_driver<>'flue-native-v1' OR (
+            cancel_requested_at IS NULL AND agent_runs.status IN ('admitted','queued','running','waiting')
+          ))
+      )
   `).bind(input.effectId, input.operationHash).run();
   if (changed(result)) return true;
   const effect = await getEffect(db, input.effectId);
-  return effect?.status === "executing" && effect.operationHash === input.operationHash;
+  if (effect?.status !== "executing" || effect.operationHash !== input.operationHash) return false;
+  const allowed = await db.prepare(`SELECT 1 ok FROM agent_runs WHERE id=?
+    AND (runtime_driver<>'flue-native-v1' OR (
+      cancel_requested_at IS NULL AND status IN ('admitted','queued','running','waiting')
+    ))`).bind(effect.runId).first<{ ok: number }>();
+  return Boolean(allowed);
 }
 
 export async function recordEffectOutcome(
@@ -388,6 +416,113 @@ export async function recordEffectOutcome(
   const updated = await getEffect(db, input.effectId);
   if (!updated) throw new Error("Effect disappeared after outcome persistence");
   return { effect: updated, receipt, retryable: status === "executing" };
+}
+
+export async function markEffectNotExecuted(
+  db: D1Database,
+  input: {
+    effectId: string;
+    operationHash: string;
+    runId: string;
+    expectedStatus: "approved" | "executing";
+    reason: "cancelled" | "authority_denied" | "deadline_expired" | "execution_blocked";
+  },
+): Promise<EffectDto> {
+  const projection = input.reason === "cancelled"
+    ? {
+        status: "cancelled" as const,
+        error: { code: "cancelled", message: "Cancellation denied the exact effect before provider execution", retryable: false },
+      }
+    : input.reason === "authority_denied"
+      ? {
+          status: "stale" as const,
+          error: { code: "effect_authority_denied", message: "Live authority denied the exact effect before provider execution", retryable: false },
+        }
+      : input.reason === "deadline_expired"
+        ? {
+            status: "failed" as const,
+            error: { code: "effect_deadline_expired", message: "The exact effect deadline expired before provider execution", retryable: false },
+          }
+        : {
+            status: "failed" as const,
+            error: { code: "effect_execution_blocked", message: "The exact effect could not enter provider execution", retryable: false },
+          };
+  await db.prepare(`UPDATE effects SET status=?, error_json=?
+    WHERE id=? AND run_id=? AND operation_hash=? AND status=?`)
+    .bind(
+      projection.status,
+      encodeJson(projection.error),
+      input.effectId,
+      input.runId,
+      input.operationHash,
+      input.expectedStatus,
+    ).run();
+  const effect = await getEffect(db, input.effectId);
+  if (!effect || effect.operationHash !== input.operationHash || effect.runId !== input.runId) {
+    throw new Error("Not-executed effect binding conflict");
+  }
+  if (effect.status === "executed") return effect;
+  if (effect.status !== projection.status || (effect.error as { code?: unknown } | null)?.code !== projection.error.code) {
+    throw new Error("Not-executed effect projection conflict");
+  }
+  return effect;
+}
+
+export async function markEffectOutcomeUnknown(
+  db: D1Database,
+  input: { effectId: string; operationHash: string; runId: string },
+): Promise<EffectDto> {
+  const error = {
+    code: "gateway_outcome_unknown",
+    message: "The exact Gateway operation may have been applied, but no bound receipt proves its outcome",
+    retryable: false,
+  };
+  const payload = {
+    runId: input.runId,
+    effectId: input.effectId,
+    operationHash: input.operationHash,
+    code: error.code,
+  };
+  const payloadHash = await canonicalSha256(payload);
+  await db.batch([
+    db.prepare(`UPDATE effects SET status='failed', error_json=?
+      WHERE id=? AND run_id=? AND operation_hash=? AND status='executing'`)
+      .bind(encodeJson(error), input.effectId, input.runId, input.operationHash),
+    db.prepare(`INSERT INTO inbox_items (
+        id, kind, run_id, entity_type, entity_id, status, priority, title, summary,
+        payload_json, payload_hash, eligible_responders_json)
+      SELECT ?, 'effect', ?, 'effect', ?, 'open', 'high',
+        'Effect outcome needs verification',
+        'The exact Gateway operation may have been applied but its outcome is unknown', ?, ?, '[]'
+      WHERE EXISTS (
+        SELECT 1 FROM effects WHERE id=? AND run_id=? AND operation_hash=?
+          AND status='failed' AND json_extract(error_json, '$.code')='gateway_outcome_unknown'
+      )
+      ON CONFLICT(kind, entity_type, entity_id) DO UPDATE SET
+        status='open', priority=excluded.priority, title=excluded.title, summary=excluded.summary,
+        payload_json=excluded.payload_json, payload_hash=excluded.payload_hash,
+        eligible_responders_json=excluded.eligible_responders_json,
+        updated_at=CURRENT_TIMESTAMP, resolved_at=NULL`)
+      .bind(
+        `inbox_${payloadHash}`,
+        input.runId,
+        input.effectId,
+        encodeJson(payload),
+        payloadHash,
+        input.effectId,
+        input.runId,
+        input.operationHash,
+      ),
+  ]);
+  const effect = await getEffect(db, input.effectId);
+  if (!effect || effect.operationHash !== input.operationHash || effect.runId !== input.runId) {
+    throw new Error("Unknown effect outcome binding conflict");
+  }
+  if (effect.status === "executed") return effect;
+  if (effect.status !== "failed" || (effect.error as { code?: unknown } | null)?.code !== error.code) {
+    throw new Error("Unknown effect outcome projection conflict");
+  }
+  return effect;
 }
 
 export interface PutInboxItemInput {

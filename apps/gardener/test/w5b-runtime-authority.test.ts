@@ -58,6 +58,7 @@ async function fixture(frozenMode: PolicyMode = "automatic"): Promise<Fixture> {
   sqlite.exec(migration("0006_flue_harness_requests.sql"));
   sqlite.exec("UPDATE operation_policies SET mode='automatic' WHERE operation_kind='issue.comment.create'; INSERT INTO repositories(id,installation_id,owner,name,default_branch,active) VALUES('10','20','acme','widgets','main',1)");
   sqlite.exec(migration("0007_team_workspace_foundation.sql"));
+  sqlite.exec(migration("0008_flue_native_runtime.sql"));
   sqlite.prepare("INSERT INTO settings(key,value) VALUES('global_paused','false') ON CONFLICT(key) DO UPDATE SET value='false'").run();
   const db = d1Database(sqlite);
   const compiled = await compileAgentRevision(createAgentSource(markdown), {

@@ -6,15 +6,14 @@ import { agentManagement, createGardenerMcpServices } from "../src/agent-managem
 import { issueDashboardSession } from "../src/identity";
 import { resolveRequestAuthorization, type AuthorizationVariables } from "../src/authorization";
 import type { Env } from "../src/env";
-import { migration, newAgentDatabase } from "./persistence-test-db";
+import { newAgentDatabase } from "./persistence-test-db";
 
 function environment(db: D1Database): Env {
   return {
     DB: db,
     LOCAL_DEV_BYPASS: "true",
-    GARDENER_INSTANCE_TOKEN: "gdn_instance-1.abcdefghijklmnopqrstuvwxyz012345",
-    CONNECT_ISSUER: "https://connect.example",
-    CONNECT_URL: "https://connect.example",
+    GARDENER_WORKSPACE_ID: "workspace-1",
+    GITHUB_GATEWAY: {} as Env["GITHUB_GATEWAY"],
     AI_MODEL: "@cf/test/model",
     AI: {} as Ai,
     ASSETS: { fetch: async () => new Response("not found", { status: 404 }) } as unknown as Fetcher,
@@ -48,7 +47,6 @@ Read the issue and summarize relevant facts. Do not claim any mutation occurred.
 `);
 
 function upgrade(sqlite: import("node:sqlite").DatabaseSync): void {
-  sqlite.exec(migration("0007_team_workspace_foundation.sql"));
   sqlite.exec("INSERT OR IGNORE INTO users(id,display_name)VALUES('local-development','Local developer')");
   sqlite.exec("INSERT OR IGNORE INTO external_identities(id,user_id,provider,provider_subject,username)VALUES('identity-local','local-development','github','1','local-development')");
   sqlite.exec("INSERT OR IGNORE INTO memberships(id,user_id,role,permanent)VALUES('membership-local','local-development','owner',1)");
@@ -56,7 +54,7 @@ function upgrade(sqlite: import("node:sqlite").DatabaseSync): void {
 
 describe("Agent-native management API", () => {
   it("resolves the production HTTPS prefixed cookie and ignores cookie/header presence without a valid session", async () => {
-    const { sqlite, db }=newAgentDatabase();try{upgrade(sqlite);sqlite.exec("INSERT INTO gardener_schema(singleton,version)VALUES(1,7); INSERT INTO agents(id,slug,name,created_by)VALUES('agent-one','one','Agent One','local-development')");const env=environment(db);env.LOCAL_DEV_BYPASS="false";
+    const { sqlite, db }=newAgentDatabase();try{upgrade(sqlite);sqlite.exec("INSERT INTO agents(id,slug,name,created_by)VALUES('agent-one','one','Agent One','local-development')");const env=environment(db);env.LOCAL_DEV_BYPASS="false";
       const session=await issueDashboardSession(db,{userId:"local-development",displayName:"Local developer",role:"owner",permanent:true,identity:{provider:"github",providerSubject:"1",login:"local-development"}},true);
       const secureApp=new Hono<{Bindings:Env;Variables:AuthorizationVariables}>();secureApp.use("/api/*",async(c,next)=>{const principal=await resolveRequestAuthorization(c.req.raw,c.env);if(!principal)return c.json({error:"authentication_required"},401);c.set("authorization",principal);c.set("actor",principal.userId);c.set("actorLogin",principal.displayName);return next()});secureApp.route("/api",agentManagement);
       let response=await secureApp.request("https://gardener.example/api/agents/agent-one/assignments",{headers:{cookie:`__Host-gardener_session=${session.token}`}},env);expect(response.status).toBe(200);

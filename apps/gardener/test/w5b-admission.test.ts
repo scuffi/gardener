@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { DatabaseSync } from "node:sqlite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentProvenanceV1, RepositoryEventV2 } from "@gardener/contracts";
 import {
   calculateAssignmentConfigHash,
@@ -10,6 +10,30 @@ import {
 } from "@gardener/core";
 import type { Env } from "../src/env";
 import { getAssignment } from "../src/persistence";
+
+const native = vi.hoisted(() => ({
+  createInitialFlueRequest: vi.fn(async (input: any) => ({
+    schemaVersion: "gardener.harness.request/v1",
+    requestId: `request-${input.runId}`,
+    runId: input.runId,
+    snapshot: {
+      agentRevisionId: input.agentRevisionId,
+      agentRevisionHash: "a".repeat(64),
+      promptReference: input.runSnapshotHash,
+      policySnapshotReference: input.policySnapshotHash,
+      toolCatalogVersion: "test",
+      harness: { id: "flue", adapterVersion: "gardener-flue-native/v1" },
+    },
+    prompt: "bounded",
+    model: { id: input.modelId },
+    tools: [],
+    budget: { maxTurns: 1, maxToolCalls: 1, maxInputTokens: 1000, maxOutputTokens: 100,
+      maxRuntimeMs: 30_000, deadlineAt: "2099-01-01T00:00:00.000Z" },
+  })),
+  ensureInitialFlueDispatch: vi.fn(),
+}));
+vi.mock("../src/flue-native-runtime", () => native);
+
 import { admitAgentRunsForEvent } from "../src/run-admission";
 import { d1Database, migration } from "./persistence-test-db";
 
@@ -77,41 +101,10 @@ ${modelContent}
 `;
 }
 
-interface WorkflowCall {
-  id: string;
-  params: { runId: string; runSnapshotHash: string };
-}
-
-function workflow(failCreates = 0) {
-  const calls = { create: [] as WorkflowCall[], get: [] as string[], status: [] as string[], restart: [] as string[] };
-  const existing = new Set<string>();
-  let failures = failCreates;
-  const binding = {
-    async create(call: WorkflowCall) {
-      calls.create.push(call);
-      if (failures-- > 0) throw new Error("workflow temporarily unavailable");
-      existing.add(call.id);
-    },
-    async get(id: string) {
-      calls.get.push(id);
-      if (!existing.has(id)) throw new Error("instance.not_found");
-      return {
-        status: async () => {
-          calls.status.push(id);
-          return { status: "queued" };
-        },
-        restart: async () => { calls.restart.push(id); },
-      };
-    },
-  };
-  return { binding, calls };
-}
-
 interface Fixture {
   sqlite: DatabaseSync;
   db: D1Database;
   env: Env;
-  workflow: ReturnType<typeof workflow>;
   envelopeHash: string;
 }
 
@@ -135,6 +128,7 @@ async function fixture(options: { failCreates?: number; completePolicy?: boolean
             ('102','201','acme','tools','main',1);
   `);
   sqlite.exec(migration("0007_team_workspace_foundation.sql"));
+  sqlite.exec(migration("0008_flue_native_runtime.sql"));
   sqlite.exec(`
     INSERT INTO users(id,display_name) VALUES('owner','Owner');
     INSERT INTO repository_events(
@@ -147,10 +141,16 @@ async function fixture(options: { failCreates?: number; completePolicy?: boolean
     sqlite.exec("DELETE FROM repository_operation_policies WHERE repository_id='101'; DELETE FROM repository_capability_policies WHERE repository_id='101'");
   }
   const db = d1Database(sqlite);
-  const flow = workflow(options.failCreates);
+  let failures = options.failCreates ?? 0;
+  native.createInitialFlueRequest.mockClear();
+  native.ensureInitialFlueDispatch.mockReset();
+  native.ensureInitialFlueDispatch.mockImplementation(async (_env: Env, runId: string) => {
+    if (failures-- > 0) throw new Error("Flue dispatch temporarily unavailable");
+    return { runId, submissionId: "submission-1" };
+  });
   const envelopeHash = await canonicalSha256(event);
-  const env = { DB: db, AGENT_RUN_WORKFLOW: flow.binding } as unknown as Env;
-  return { sqlite, db, env, workflow: flow, envelopeHash };
+  const env = { DB: db, AI_MODEL: "@cf/test/model" } as unknown as Env;
+  return { sqlite, db, env, envelopeHash };
 }
 
 async function addAgent(
@@ -234,7 +234,7 @@ describe("W5B admission and retry integration", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ agentId: "agent-one", revisionId: "revision-one", created: true });
     const row = f.sqlite.prepare(`SELECT repository_id,assignment_id,assignment_version,assignment_config_hash,
-      repository_policy_hash,repository_policy_version FROM agent_runs`).get() as Record<string, unknown>;
+      repository_policy_hash,repository_policy_version,native_model_id FROM agent_runs`).get() as Record<string, unknown>;
     expect(row).toEqual({
       repository_id: "101",
       assignment_id: "assignment-one",
@@ -242,9 +242,12 @@ describe("W5B admission and retry integration", () => {
       assignment_config_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
       repository_policy_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
       repository_policy_version: 1,
+      native_model_id: "@cf/test/model",
     });
-    expect(f.workflow.calls.create).toHaveLength(1);
-    expect(JSON.stringify(f.workflow.calls)).not.toContain(modelContent);
+    expect(count(f.sqlite, "harness_requests")).toBe(1);
+    expect(count(f.sqlite, "flue_dispatch_outbox")).toBe(1);
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledOnce();
+    expect(JSON.stringify(native.ensureInitialFlueDispatch.mock.calls)).not.toContain(modelContent);
   });
 
   it.each([
@@ -257,7 +260,7 @@ describe("W5B admission and retry integration", () => {
     expect(await admit(f)).toEqual([]);
     expect(count(f.sqlite, "agent_runs")).toBe(0);
     expect(count(f.sqlite, "audit_records")).toBe(0);
-    expect(f.workflow.calls.create).toEqual([]);
+    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
   });
 
   it("admits two independently assigned Agents as two runs", async () => {
@@ -266,7 +269,7 @@ describe("W5B admission and retry integration", () => {
     await addAgent(f, "two");
     expect(await admit(f)).toHaveLength(2);
     expect(count(f.sqlite, "agent_runs")).toBe(2);
-    expect(f.workflow.calls.create).toHaveLength(2);
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(2);
   });
 
   it.each(["missing", "partial"])("latches a %s repository policy and permanently dedupes its audit", async (kind) => {
@@ -279,7 +282,7 @@ describe("W5B admission and retry integration", () => {
     expect(f.sqlite.prepare("SELECT action,detail_json FROM audit_records").all()).toEqual([
       { action: "repository.policy_unconfigured", detail_json: null },
     ]);
-    expect(f.workflow.calls.create).toEqual([]);
+    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -295,7 +298,7 @@ describe("W5B admission and retry integration", () => {
     expect(f.sqlite.prepare("SELECT action,detail_json FROM audit_records").all()).toEqual([
       { action: "policy.invalid", detail_json: JSON.stringify({ code }) },
     ]);
-    expect(f.workflow.calls.create).toEqual([]);
+    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
   });
 
   it("fails envelope, compiled revision, and assignment corruption closed without reflective audit detail", async () => {
@@ -324,8 +327,11 @@ describe("W5B admission and retry integration", () => {
     await addAgent(f, "one");
     const first = await admit(f);
     const original = f.sqlite.prepare("SELECT * FROM agent_runs").get() as Record<string, unknown>;
+    f.env.AI_MODEL = "@cf/test/model-after-rollout";
     expect(await admit(f)).toEqual([{ ...first[0], created: false }]);
-    expect(f.workflow.calls.create).toHaveLength(1);
+    expect(f.sqlite.prepare("SELECT * FROM agent_runs").get()).toEqual(original);
+    expect(original.native_model_id).toBe("@cf/test/model");
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(2);
 
     const assignment = await getAssignment(f.db, "assignment-one");
     expect(assignment).not.toBeNull();
@@ -336,8 +342,7 @@ describe("W5B admission and retry integration", () => {
     f.sqlite.exec("UPDATE settings SET value='2' WHERE key='policy_version'");
     expect(await admit(f)).toEqual([{ ...first[0], created: false }]);
     expect(f.sqlite.prepare("SELECT * FROM agent_runs").get()).toEqual(original);
-    expect(f.workflow.calls.create).toHaveLength(1);
-    expect(f.workflow.calls.get).toHaveLength(2);
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(3);
   });
 
   it.each(["workspace", "repository", "assignment"])("does not create a bounded run when %s authority requires approval", async (layer) => {
@@ -347,49 +352,32 @@ describe("W5B admission and retry integration", () => {
     await addAgent(f, "one", { authorityCeiling: layer === "assignment" ? "approval" : "automatic" });
     expect(await admit(f)).toEqual([]);
     expect(count(f.sqlite, "agent_runs")).toBe(0);
-    expect(f.workflow.calls.create).toEqual([]);
+    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
   });
 
-  it("propagates Workflow failure, then redelivery reconciles the persisted run without duplication", async () => {
+  it("propagates dispatch failure, then redelivery reuses the persisted native run", async () => {
     const f = await fixture({ failCreates: 1 });
     await addAgent(f, "one");
-    await expect(admit(f)).rejects.toThrow("workflow temporarily unavailable");
+    await expect(admit(f)).rejects.toThrow("Flue dispatch temporarily unavailable");
     expect(count(f.sqlite, "agent_runs")).toBe(1);
     expect(count(f.sqlite, "event_agent_admissions")).toBe(1);
-    expect(f.sqlite.prepare("SELECT status FROM agent_runs").get()).toEqual({ status: "queued" });
-    expect(f.workflow.calls).toMatchObject({ create: [expect.any(Object)], get: [], status: [] });
+    expect(count(f.sqlite, "harness_requests")).toBe(1);
+    expect(count(f.sqlite, "flue_dispatch_outbox")).toBe(1);
+    const frozenRequest = f.sqlite.prepare("SELECT request_json,request_hash FROM harness_requests").get();
+    expect(f.sqlite.prepare("SELECT status,runtime_driver,workflow_instance_id FROM agent_runs").get()).toEqual({
+      status: "queued", runtime_driver: "flue-native-v1", workflow_instance_id: null,
+    });
+    f.env.AI_MODEL = "@cf/test/model-after-crash";
     const retried = await admit(f);
     expect(retried).toMatchObject([{ created: false, agentId: "agent-one", revisionId: "revision-one" }]);
     expect(count(f.sqlite, "agent_runs")).toBe(1);
     expect(count(f.sqlite, "event_agent_admissions")).toBe(1);
-    expect(f.workflow.calls.create).toHaveLength(2);
-    expect(f.workflow.calls.create.map((call) => call.id)).toEqual([retried[0]!.runId, retried[0]!.runId]);
-    expect(f.workflow.calls.get).toEqual([retried[0]!.runId]);
-    expect(f.workflow.calls.status).toEqual([]);
-    expect(f.workflow.calls.restart).toEqual([]);
-  });
-
-  it("propagates non-not-found Workflow get errors and every status error", async () => {
-    const f = await fixture();
-    await addAgent(f, "one");
-    await admit(f);
-    const unexpectedCreate = async () => { throw new Error("create must not be called"); };
-    f.env.AGENT_RUN_WORKFLOW = {
-      create: unexpectedCreate,
-      get: async () => { throw new Error("workflow provider unavailable"); },
-    } as unknown as Workflow;
-    await expect(admit(f)).rejects.toThrow("workflow provider unavailable");
-
-    f.env.AGENT_RUN_WORKFLOW = {
-      create: unexpectedCreate,
-      get: async () => ({
-        status: async () => { throw new Error("workflow status unavailable"); },
-        restart: async () => undefined,
-      }),
-    } as unknown as Workflow;
-    await expect(admit(f)).rejects.toThrow("workflow status unavailable");
-    expect(count(f.sqlite, "agent_runs")).toBe(1);
-    expect(count(f.sqlite, "event_agent_admissions")).toBe(1);
+    expect(f.sqlite.prepare("SELECT request_json,request_hash FROM harness_requests").get()).toEqual(frozenRequest);
+    expect(JSON.parse((frozenRequest as { request_json: string }).request_json).model.id).toBe("@cf/test/model");
+    expect(native.createInitialFlueRequest).toHaveBeenCalledOnce();
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(2);
+    expect(native.ensureInitialFlueDispatch.mock.calls.map(([, runId]) => runId))
+      .toEqual([retried[0]!.runId, retried[0]!.runId]);
   });
 
   it("rolls back run and admission when an assignment-version race aborts the insert", async () => {
@@ -403,8 +391,10 @@ describe("W5B admission and retry integration", () => {
     await expect(admit(f)).rejects.toThrow(/assignment version race/);
     expect(count(f.sqlite, "agent_runs")).toBe(0);
     expect(count(f.sqlite, "event_agent_admissions")).toBe(0);
+    expect(count(f.sqlite, "harness_requests")).toBe(0);
+    expect(count(f.sqlite, "flue_dispatch_outbox")).toBe(0);
     expect((f.sqlite.prepare("SELECT version FROM agent_repository_assignments").get() as { version: number }).version).toBe(1);
-    expect(f.workflow.calls.create).toEqual([]);
+    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
   });
 
   it.each(["global", "repository"])("skips %s pauses before touching policy", async (scope) => {

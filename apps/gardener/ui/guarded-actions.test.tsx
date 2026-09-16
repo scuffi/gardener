@@ -42,7 +42,7 @@ const health: HealthState = {
   ok: true,
   database: true,
   workersAi: true,
-  connectConfigured: true,
+  githubGateway: { configured: true, ready: true },
   localDevelopment: true,
   agentRuntime: { enabled: true, status: "bounded-issue-comment-v3" },
 };

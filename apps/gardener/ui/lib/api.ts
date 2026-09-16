@@ -166,7 +166,12 @@ export const gardenerApi = {
     api<{ removed: true }>(`/api/members/${encodeURIComponent(id)}`, remove()),
 
   beginInstallation: () =>
-    api<{ installationUrl: string }>("/api/install/start", { method: "POST" }),
+    api<{ requestId: string; installationUrl: string }>("/api/install/start", { method: "POST" }),
+  finalizeInstallation: (requestId: string) =>
+    api<{ installation: unknown; repositories: unknown[] }>(
+      "/api/install/finalize",
+      json({ requestId }),
+    ),
   syncRepositories: () =>
     api<{ repositories: unknown[] }>("/api/repositories/sync", { method: "POST" }),
   activate: (profile: SetupProfile) =>

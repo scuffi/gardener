@@ -61,7 +61,7 @@ export function SetupWizard() {
   const [profile, setProfile] = useState<SetupProfile>(state?.setup.profile ?? "safe");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const step = repositories === 0 ? 1 : 2;
-  const connectReady = Boolean(health?.connectConfigured || health?.localDevelopment);
+  const gatewayReady = Boolean(health?.githubGateway.ready || health?.localDevelopment);
 
   const installMutation = useMutation({
     mutationFn: gardenerApi.beginInstallation,
@@ -104,15 +104,15 @@ export function SetupWizard() {
         }
       />
 
-      {!connectReady ? (
+      {!gatewayReady ? (
         <Banner
           className="mb-4"
           variant="alert"
           icon={<WarningCircleIcon size={20} weight="fill" />}
           title="GitHub connection is not configured"
           description={
-            "The Worker is deployed, but Gardener Connect cannot verify this instance. " +
-            "Add a valid GARDENER_INSTANCE_TOKEN and redeploy before continuing."
+            "The Worker is deployed, but the customer-owned GitHub Gateway is not ready. " +
+            "Resume `gardener gateway init` and verify both private Service Bindings."
           }
         />
       ) : null}
@@ -176,7 +176,7 @@ export function SetupWizard() {
               </div>
               <h2 className="text-xl font-semibold text-kumo-strong">Select repository access</h2>
               <p className="mt-2 mb-6 max-w-[650px] text-base leading-relaxed text-kumo-subtle">
-                {"Install the shared Gardener GitHub App and choose only the repositories it may observe. " +
+                {"Install this workspace's GitHub App and choose only the repositories it may observe. " +
                   "You can change access later in GitHub."}
               </p>
               <Button
@@ -281,7 +281,7 @@ export function SetupWizard() {
         <div className="flex-1">
           <strong className="text-sm font-semibold text-kumo-default">Credentials stay isolated</strong>
           <p className="mt-1 text-sm leading-relaxed text-kumo-subtle">
-            {"GitHub credentials remain in Gardener Connect and are never sent to this Worker, the Flue runtime, " +
+            {"GitHub credentials remain in your GitHub Gateway and are never sent to Gardener, the Flue runtime, " +
               "models, or Computer workspaces."}
           </p>
         </div>

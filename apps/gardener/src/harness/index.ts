@@ -35,9 +35,6 @@ export {
 } from "./validation";
 export {
   NarrowedHarnessToolFacade,
-  createValidatedHarness,
-  type HarnessBackend,
-  type HarnessBackendRead,
   type HarnessRequestStore,
   type HarnessSubmissionStore,
 } from "./adapter";

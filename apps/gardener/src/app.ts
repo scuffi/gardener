@@ -1,40 +1,37 @@
-import { canonicalSha256 } from "@gardener/core";
 import { Hono } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
-import { bearerToken, verifyEventToken, verifyIdentityToken } from "./auth";
 import { auditActor, compareAndSetOperationPolicies, policyMutationPermission, requirePermission, resolveMcpAuthorization, resolveRequestAuthorization, type AuthorizationVariables } from "./authorization";
 import {
   beginGitHubInstallation,
   beginGitHubLogin,
-  claimGardenerInstance,
-  ConnectUsernameResolutionError,
+  finalizeGitHubInstallation,
+  GitHubUsernameResolutionError,
   listConnectedRepositories,
   resolveGitHubUser,
-} from "./connect";
+} from "./providers/github/client";
 import {
-  consumeIdentityAssertion, dashboardSessionPayload, IdentityExchangeError, INVITATION_TTL_SECONDS, issueDashboardSession,
+  consumeProviderLogin, dashboardSessionPayload, IdentityExchangeError, INVITATION_TTL_SECONDS, issueDashboardSession,
   LOCAL_SESSION_COOKIE, resolveDashboardSession, revokeDashboardSession,
   SECURE_SESSION_COOKIE, sessionTokenFromRequest,
 } from "./identity";
 import { ensureDatabase } from "./database";
+import { abortFlueRun, flueInstanceExists } from "./flue-native-runtime";
+import { FLUE_NATIVE_DRIVER, FLUE_NATIVE_PROFILE } from "./flue-native-protocol";
+import { reconcileFlueRuntime } from "./flue-reconciler";
 import { audit, getSetting, repositoryPauseSetting, setSetting } from "./instance-state";
-import { operationKindSchema, policyModeSchema, type RepositoryEventV2 } from "./domain";
-import { cloudflareAccessCredentials, instanceId, type Env } from "./env";
+import { operationKindSchema, policyModeSchema } from "./domain";
+import { instanceId, type Env } from "./env";
 import { createGardenerMcpOAuthProvider, type ConsentConsumeResult, type ConsentStateStore, type GardenerMcpEnv, type StoredConsentState } from "./mcp";
 import {
-  admitRepositoryEvent,
-  claimRepositoryEventAdmission,
-  completeRepositoryEventAdmission,
   getRun,
+  requestRunCancellation,
+  RunCancellationConflictError,
   listAgents,
   listOpenInbox,
-  listRepositoryEventRunIds,
-  releaseRepositoryEventAdmission,
 } from "./persistence";
 import { setupPolicyProfile, setupProfileIds } from "./setup";
 import { agentCatalog, agentManagement, createGardenerMcpServices } from "./agent-management";
-import { admitAgentRunsForEvent } from "./run-admission";
 
 interface AppBindings {
   Bindings: Env;
@@ -58,95 +55,53 @@ app.onError((error, c) => {
 app.get("/api/health", async (c) => {
   let database = false;
   try { await c.env.DB.prepare("SELECT 1").first(); database = true; } catch { /* reported below */ }
-  let connectConfigured = false;
-  try { connectConfigured = Boolean(c.env.CONNECT_URL && c.env.CONNECT_ISSUER && instanceId(c.env)); } catch { /* invalid bootstrap */ }
+  let githubGateway = { configured: false, ready: false };
+  try {
+    const health = await c.env.GITHUB_GATEWAY.health();
+    githubGateway = { configured: true, ready: health.ready };
+  } catch { /* reported below */ }
   const oauthConfigured = Boolean(c.env.OAUTH_KV);
-  const agentRuntime = { enabled: true, status: "bounded-issue-comment-v3" } as const;
+  const agentRuntime = { enabled: true, driver: FLUE_NATIVE_DRIVER, profile: FLUE_NATIVE_PROFILE } as const;
   return c.json({
-    ok: database && Boolean(c.env.AI) && connectConfigured && agentRuntime.enabled,
+    ok: database && Boolean(c.env.AI) && githubGateway.ready && agentRuntime.enabled,
     durableOrchestration: agentRuntime.enabled,
     database,
     workersAi: Boolean(c.env.AI),
-    connectConfigured,
+    githubGateway,
     oauthMcp: { configured: oauthConfigured, route: "/mcp" },
     agentRuntime,
+    reconciliation: { driver: "d1-cron-v1" },
     computer: { configured: Boolean(c.env.COMPUTER_WORKSPACES && c.env.COMPUTER_LOADER), experimental: true },
     localDevelopment: c.env.LOCAL_DEV_BYPASS === "true",
   });
 });
 
-app.post("/hooks/connect", async (c) => {
-  const headerToken = bearerToken(c.req.header("authorization"));
-  if (!headerToken) return c.json({ error: "Connect event authorization required" }, 401);
-  let event: RepositoryEventV2;
-  try { event = await verifyEventToken(headerToken, c.env); }
-  catch { return c.json({ error: "Invalid, expired, or unsupported V2 event signature" }, 401); }
-  if (!("deliveryId" in event)) return c.json({ error: "Connect hooks accept only provider-attested events" }, 400);
-
-  await upsertEventRepository(c.env.DB, event);
-  const resource = eventResource(event);
-  const admitted = await admitRepositoryEvent(c.env.DB, {
-    id: event.id,
-    provider: "github",
-    deliveryId: event.deliveryId,
-    eventKind: event.kind,
-    action: event.action,
-    repositoryId: event.repository.id,
-    resourceType: resource.type,
-    resourceId: resource.id,
-    actor: event.actor,
-    resourceAuthor: event.resourceAuthor,
-    facts: trustedEventFacts(event),
-    envelope: event,
-    envelopeHash: await canonicalSha256(event),
-    occurredAt: event.occurredAt,
-  });
-  if (admitted.admitted) await audit(c.env.DB, "connect", "repository_event.received", "repository_event", event.id, { deliveryId: event.deliveryId, kind: event.kind, action: event.action });
-  const admissionToken = crypto.randomUUID();
-  const now = new Date();
-  const claimed = await claimRepositoryEventAdmission(c.env.DB, {
-    eventId: event.id,
-    token: admissionToken,
-    now: now.toISOString(),
-    leaseExpiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
-  });
-  if (!claimed) {
-    const runIds = await listRepositoryEventRunIds(c.env.DB, event.id);
-    return c.json({ accepted: true, duplicate: !admitted.admitted, runs: runIds.map((runId) => ({ runId, created: false })), runtime: "bounded-issue-comment-v3" }, 200);
-  }
-  try {
-    const runs = await admitAgentRunsForEvent(c.env, admitted.event.envelope, admitted.event.envelopeHash);
-    if (!await completeRepositoryEventAdmission(c.env.DB, { eventId: event.id, token: admissionToken, now: new Date().toISOString() })) {
-      throw new Error("Repository event admission completion lost its lease");
-    }
-    return c.json({ accepted: true, duplicate: !admitted.admitted, runs, runtime: "bounded-issue-comment-v3" }, admitted.admitted ? 202 : 200);
-  } catch (error) {
-    await releaseRepositoryEventAdmission(c.env.DB, { eventId: event.id, token: admissionToken });
-    throw error;
-  }
-});
-
-app.get("/api/auth/start", async (c) => c.redirect(await beginGitHubLogin(c.env, new URL(c.req.url).origin), 302));
-app.post("/api/auth/session", async (c) => {
-  if (c.req.header("origin") !== new URL(c.req.url).origin) return c.json({ error: "invalid_origin" }, 403);
-  const { token } = z.object({ token: z.string().min(1).max(20_000) }).strict().parse(await c.req.json());
-  let assertion; try { assertion=await verifyIdentityToken(token,c.env); } catch { return c.json({error:"invalid_identity_assertion"},401); }
+app.get("/api/auth/start", async (c) => c.redirect(await beginGitHubLogin(c.env), 302));
+app.get("/api/auth/github/complete", async (c) => {
+  const handoff = z.string().min(16).max(255).parse(c.req.query("handoff"));
   let principal;
-  try { principal = await consumeIdentityAssertion(c.env.DB, assertion, c.env.CONNECT_ISSUER); }
+  try { principal = await consumeProviderLogin(c.env.DB, handoff); }
   catch (error) {
-    if (error instanceof IdentityExchangeError) return c.json({ error: error.code }, error.code === "identity_not_authorized" ? 403 : 409);
+    if (error instanceof IdentityExchangeError) {
+      return c.json({ error: error.code }, error.code === "identity_not_authorized" ? 403 : 409);
+    }
     throw error;
   }
   clearSessionCookies(c);
   const secure = new URL(c.req.url).protocol === "https:";
   const session = await issueDashboardSession(c.env.DB, principal, secure);
-  setCookie(c, session.cookieName, session.token, { httpOnly: true, secure, sameSite: "Lax", path: "/", maxAge: session.maxAge });
-  return c.json(dashboardSessionPayload(principal));
+  setCookie(c, session.cookieName, session.token, {
+    httpOnly: true,
+    secure,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: session.maxAge,
+  });
+  return c.redirect("/", 302);
 });
 app.get("/api/auth/session", async (c) => {
   const token = sessionTokenFromRequest(c.req.raw); const session = token ? await resolveDashboardSession(c.env.DB, token) : null;
   if (!session) { clearSessionCookies(c); return c.json({ authenticated: false }); }
-  if (session.role === "owner" && cloudflareAccessCredentials(c.env)) await claimGardenerInstance(c.env, new URL(c.req.url).origin);
   return c.json(dashboardSessionPayload(session));
 });
 app.post("/api/auth/logout", async (c) => {
@@ -178,7 +133,7 @@ app.get("/api/members", async (c) => {
 app.post("/api/invitations", async (c) => {
   const denied=requirePermission(c, "member.manage", dashboardPrincipalKinds); if(denied) return denied;
   const { githubUsername }=z.object({ githubUsername:z.string().trim().min(1).max(39).regex(/^(?!.*--)[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/) }).strict().parse(await c.req.json());
-  let resolved; try { resolved=await resolveGitHubUser(c.env, githubUsername); } catch(error) { if(error instanceof ConnectUsernameResolutionError) return c.json({ error:`github_user_resolution_${error.status}` }, error.status); throw error; }
+  let resolved; try { resolved=await resolveGitHubUser(c.env, githubUsername); } catch(error) { if(error instanceof GitHubUsernameResolutionError) return c.json({ error:`github_user_resolution_${error.status}` }, error.status); throw error; }
   const existing=await c.env.DB.prepare("SELECT m.id FROM memberships m JOIN external_identities e ON e.user_id=m.user_id WHERE e.provider='github' AND e.provider_subject=?").bind(resolved.githubUserId).first();
   if(existing) return c.json({ error:"already_a_member" },409);
   const id=`invitation_${crypto.randomUUID().replaceAll("-","")}`; const actor=auditActor(c.get("authorization"));
@@ -211,20 +166,91 @@ app.route("/api", agentManagement);
 app.get("/api/agent-catalog", (c) => { const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); return denied??c.json(agentCatalog); });
 app.post("/api/install/start", async (c) => {
   const denied=requirePermission(c,"installation.manage",dashboardPrincipalKinds); if(denied)return denied;
-  const body=z.object({redirectUri:z.string().url().max(2048).optional()}).strict().parse(await c.req.json().catch(()=>({})));
-  const origin=new URL(c.req.url).origin; const redirectUri=body.redirectUri??`${origin}/`; if(new URL(redirectUri).origin!==origin)return c.json({error:"invalid_redirect_uri"},400);
-  return c.json({ installationUrl: await beginGitHubInstallation(c.env, c.get("authorization").identity.providerSubject, redirectUri) });
+  const principal = c.get("authorization");
+  const requestId = `installation_${crypto.randomUUID().replaceAll("-", "")}`;
+  const expiresAt = Math.floor(Date.now() / 1_000) + 15 * 60;
+  await c.env.DB.prepare(
+    "INSERT INTO provider_installation_requests " +
+    "(id, provider, initiated_by_user_id, initiated_by_subject, initiated_by_login, expires_at) " +
+    "VALUES (?, 'github', ?, ?, ?, ?)",
+  ).bind(
+    requestId,
+    principal.userId,
+    principal.identity.providerSubject,
+    principal.identity.login,
+    expiresAt,
+  ).run();
+  const requestedBy = {
+    provider: "github" as const,
+    subject: principal.identity.providerSubject,
+    login: principal.identity.login,
+  };
+  return c.json({
+    requestId,
+    installationUrl: await beginGitHubInstallation(c.env, { requestId, requestedBy }),
+  });
+});
+app.post("/api/install/finalize", async (c) => {
+  const denied=requirePermission(c,"installation.manage",dashboardPrincipalKinds); if(denied)return denied;
+  const { requestId } = z.object({ requestId: z.string().min(16).max(255) }).strict().parse(await c.req.json());
+  const principal = c.get("authorization");
+  const now = Math.floor(Date.now() / 1_000);
+  const finalizeToken = `finalize_${crypto.randomUUID().replaceAll("-", "")}`;
+  const claimed = await c.env.DB.prepare(
+    "UPDATE provider_installation_requests SET status = 'finalizing', finalize_token = ?, " +
+    "finalize_lease_expires_at = ? WHERE id = ? AND provider = 'github' " +
+    "AND initiated_by_user_id = ? AND initiated_by_subject = ? AND expires_at >= ? AND " +
+    "(status = 'pending' OR (status = 'finalizing' AND finalize_lease_expires_at <= ?))",
+  ).bind(
+    finalizeToken,
+    now + 5 * 60,
+    requestId,
+    principal.userId,
+    principal.identity.providerSubject,
+    now,
+    now,
+  ).run();
+  if ((claimed.meta.changes ?? 0) !== 1) {
+    return c.json({ error: "installation_request_not_found" }, 404);
+  }
+  let result;
+  try {
+    result = await finalizeGitHubInstallation(c.env, {
+      requestId,
+      requestedBy: {
+        provider: "github",
+        subject: principal.identity.providerSubject,
+        login: principal.identity.login,
+      },
+    });
+    await storeConnectedRepositories(c.env.DB, result.repositories, false);
+  } catch (error) {
+    await c.env.DB.prepare(
+      "UPDATE provider_installation_requests SET status = 'pending', finalize_token = NULL, " +
+      "finalize_lease_expires_at = NULL WHERE id = ? AND finalize_token = ?",
+    ).bind(requestId, finalizeToken).run();
+    throw error;
+  }
+  const completed = await c.env.DB.prepare(
+    "UPDATE provider_installation_requests SET status = 'completed', installation_id = ?, " +
+    "finalize_token = NULL, finalize_lease_expires_at = NULL, completed_at = CURRENT_TIMESTAMP " +
+    "WHERE id = ? AND status = 'finalizing' AND finalize_token = ?",
+  ).bind(result.installation.id, requestId, finalizeToken).run();
+  if ((completed.meta.changes ?? 0) !== 1) throw new Error("installation_finalize_lease_lost");
+  await auditWithPrincipal(
+    c.env.DB,
+    principal,
+    "installation.connected",
+    "installation",
+    result.installation.id,
+    { account: result.installation.accountLogin, repositories: result.repositories.length },
+  );
+  return c.json(result);
 });
 app.post("/api/repositories/sync", async (c) => {
   const denied=requirePermission(c,"repository.sync",dashboardPrincipalKinds); if(denied)return denied;
   const repositories = await listConnectedRepositories(c.env);
-  await c.env.DB.prepare("UPDATE repositories SET active = 0, updated_at = CURRENT_TIMESTAMP").run();
-  for (const repository of repositories) {
-    await c.env.DB.prepare(
-      "INSERT INTO repositories (id, installation_id, owner, name, default_branch, active) VALUES (?, ?, ?, ?, ?, 1) " +
-      "ON CONFLICT(id) DO UPDATE SET installation_id = excluded.installation_id, owner = excluded.owner, name = excluded.name, default_branch = excluded.default_branch, active = 1, updated_at = CURRENT_TIMESTAMP",
-    ).bind(repository.id, repository.installationId, repository.owner, repository.name, repository.defaultBranch ?? null).run();
-  }
+  await storeConnectedRepositories(c.env.DB, repositories);
   await auditWithPrincipal(c.env.DB,c.get("authorization"),"repositories.synced","instance",instanceId(c.env),{count:repositories.length});
   return c.json({ repositories });
 });
@@ -251,7 +277,7 @@ app.put("/api/policies/:operation", async (c) => {
 app.post("/api/setup/activate", async (c) => {
   const denied=requirePermission(c,"policy.widen",dashboardPrincipalKinds); if(denied)return denied;
   const { profile } = z.object({ profile: z.enum(setupProfileIds) }).strict().parse(await c.req.json());
-  if (!await c.env.DB.prepare("SELECT 1 FROM repositories WHERE active = 1 LIMIT 1").first()) return c.json({ error: "Connect at least one repository before completing setup" }, 409);
+  if (!await c.env.DB.prepare("SELECT 1 FROM repositories WHERE active = 1 LIMIT 1").first()) return c.json({ error: "Connect at least one repository through the GitHub Gateway before completing setup" }, 409);
   const policies = setupPolicyProfile(profile);
   await c.env.DB.batch([
     ...Object.entries(policies).map(([operation, mode]) => c.env.DB.prepare("UPDATE operation_policies SET mode = ?, updated_at = CURRENT_TIMESTAMP WHERE operation_kind = ?").bind(mode, operation)),
@@ -281,17 +307,37 @@ app.put("/api/repositories/:id/pause", async (c) => {
 app.get("/api/runs", async (c) => {
   const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
   const limit = z.coerce.number().int().min(1).max(100).default(50).parse(c.req.query("limit"));
-  return c.json({ runs: (await c.env.DB.prepare("SELECT id, kind, agent_id, agent_revision_id, status, harness_id, harness_version, created_at, started_at, completed_at FROM agent_runs ORDER BY created_at DESC LIMIT ?").bind(limit).all()).results });
+  return c.json({ runs: (await c.env.DB.prepare("SELECT id, kind, agent_id, agent_revision_id, status, runtime_driver, harness_id, harness_version, result_json, result_hash, cancel_requested_at, cancel_reason, created_at, started_at, completed_at FROM agent_runs ORDER BY created_at DESC LIMIT ?").bind(limit).all()).results });
+});
+app.post("/api/runs/:id/cancel", async (c) => {
+  const denied=requirePermission(c,"run.cancel",dashboardPrincipalKinds);if(denied)return denied;
+  const run=await getRun(c.env.DB,c.req.param("id"));if(!run)return c.json({error:"Run not found"},404);
+  if(run.runtimeDriver!==FLUE_NATIVE_DRIVER)return c.json({error:"Run is terminal or not Flue-native"},409);
+  const body=z.object({reason:z.string().trim().max(2_000).default("Cancellation requested")}).strict().parse(await c.req.json().catch(()=>({})));
+  try {
+    await requestRunCancellation(c.env.DB,{
+      runId:run.id,
+      reason:body.reason,
+      audit:auditActor(c.get("authorization")),
+    });
+  } catch (error) {
+    if(error instanceof RunCancellationConflictError)return c.json({error:"Run is terminal or not Flue-native"},409);
+    throw error;
+  }
+  // Replays deliberately retry convergence after any prior post-commit crash.
+  try{if(await flueInstanceExists(run.id))await abortFlueRun(run.id);}catch{/* D1/Cron owns convergence. */}
+  return c.json({accepted:true,runId:run.id},202);
 });
 app.get("/api/runs/:id", async (c) => {
   const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
   const run = await getRun(c.env.DB, c.req.param("id")); if (!run) return c.json({ error: "Run not found" }, 404);
-  const [tasks, steps, effects] = await Promise.all([
+  const [tasks, steps, effects, flueSubmissions] = await Promise.all([
     c.env.DB.prepare("SELECT id, parent_task_id, stable_key, kind, status, parallel_group, depth, created_at, started_at, completed_at FROM run_tasks WHERE run_id = ? ORDER BY created_at").bind(run.id).all(),
     c.env.DB.prepare("SELECT id, task_id, stable_key, kind, status, attempt_count, max_attempts, created_at, started_at, completed_at FROM run_steps WHERE run_id = ? ORDER BY created_at").bind(run.id).all(),
     c.env.DB.prepare("SELECT id, operation_id, effect_kind, policy_mode, status, created_at, decided_at, executed_at FROM effects WHERE run_id = ? ORDER BY created_at").bind(run.id).all(),
+    c.env.DB.prepare("SELECT request_id,state,attempt_count,settlement_outcome,settled_at FROM flue_dispatch_outbox WHERE run_id=? ORDER BY created_at").bind(run.id).all(),
   ]);
-  return c.json({ run, tasks: tasks.results, steps: steps.results, effects: effects.results });
+  return c.json({ run, tasks: tasks.results, steps: steps.results, effects: effects.results, flueSubmissions: flueSubmissions.results });
 });
 app.get("/api/state", async (c) => {
   const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
@@ -330,32 +376,36 @@ function clearSessionCookies(c: Parameters<typeof deleteCookie>[0]): void {
   deleteCookie(c, LOCAL_SESSION_COOKIE, { path: "/" });
 }
 
-async function upsertEventRepository(db: D1Database, event: RepositoryEventV2): Promise<void> {
-  await db.prepare(
-    "INSERT INTO repositories (id, installation_id, owner, name, default_branch, active, updated_at) VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP) " +
-      "ON CONFLICT(id) DO UPDATE SET installation_id = excluded.installation_id, owner = excluded.owner, name = excluded.name, default_branch = excluded.default_branch, active = 1, updated_at = CURRENT_TIMESTAMP",
-  ).bind(event.repository.id, event.repository.installationId, event.repository.owner, event.repository.name, event.repository.defaultBranch).run();
-}
-
-function eventResource(event: RepositoryEventV2): { type: string; id: string } {
-  if ("comment" in event) return { type: "comment", id: event.comment.id };
-  if ("review" in event) return { type: "review", id: event.review.id };
-  if ("issue" in event) return { type: "issue", id: event.issue.id };
-  if ("pullRequest" in event) return { type: "pull_request", id: event.pullRequest.id };
-  if ("discussion" in event) return { type: "discussion", id: event.discussion.id };
-  if ("checkRun" in event) return { type: "check_run", id: event.checkRun.id };
-  if ("checkSuite" in event) return { type: "check_suite", id: event.checkSuite.id };
-  if ("release" in event) return { type: "release", id: event.release.id };
-  if ("push" in event) return { type: "push", id: event.push.after };
-  if ("requestId" in event) return { type: "manual", id: event.requestId };
-  return { type: "schedule", id: event.scheduleId };
-}
-
-function trustedEventFacts(event: RepositoryEventV2): Record<string, unknown> {
-  if ("pullRequest" in event) return { labels: event.pullRequest.labels, draft: event.pullRequest.draft, headSha: event.pullRequest.head.sha, baseRef: event.pullRequest.base.ref, baseSha: event.pullRequest.base.sha };
-  if ("issue" in event) return { labels: event.issue.labels, state: event.issue.state, updatedAt: event.issue.updatedAt };
-  if ("discussion" in event) return { labels: event.discussion.labels, state: event.discussion.state, answered: event.discussion.answered, updatedAt: event.discussion.updatedAt };
-  return {};
+async function storeConnectedRepositories(
+  db: D1Database,
+  repositories: Array<{
+    id: string;
+    installationId: string;
+    owner: string;
+    name: string;
+    defaultBranch: string;
+  }>,
+  replaceAll = true,
+): Promise<void> {
+  const statements = repositories.map((repository) => db.prepare(
+    "INSERT INTO repositories " +
+    "(id, installation_id, owner, name, default_branch, active) VALUES (?, ?, ?, ?, ?, 1) " +
+    "ON CONFLICT(id) DO UPDATE SET installation_id = excluded.installation_id, " +
+    "owner = excluded.owner, name = excluded.name, default_branch = excluded.default_branch, " +
+    "active = 1, updated_at = CURRENT_TIMESTAMP",
+  ).bind(
+    repository.id,
+    repository.installationId,
+    repository.owner,
+    repository.name,
+    repository.defaultBranch,
+  ));
+  if (replaceAll) {
+    statements.unshift(
+      db.prepare("UPDATE repositories SET active = 0, updated_at = CURRENT_TIMESTAMP"),
+    );
+  }
+  if (statements.length) await db.batch(statements);
 }
 
 async function digest(value: string): Promise<string> {
@@ -415,6 +465,11 @@ export const gardenerWorker = {
       consentState: (ownerEnv) => new D1ConsentStateStore(ownerEnv.DB),
     }, { issuer: origin, audience: `${origin}/mcp` });
     return provider.fetch(request, env as GardenerMcpEnv & Env, ctx);
+  },
+  async scheduled(controller:ScheduledController,env:Env):Promise<void>{
+    await ensureDatabase(env.DB);
+    const summary=await reconcileFlueRuntime(env,{now:new Date(controller.scheduledTime),limit:20});
+    console.log("flue reconciliation",JSON.stringify(summary));
   },
 } satisfies ExportedHandler<Env>;
 

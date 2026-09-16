@@ -84,11 +84,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [stateQuery.error, notify]);
 
   useEffect(() => {
-    const installationComplete = new URLSearchParams(location.search).get("installation") === "complete";
-    if (!installationComplete || !authenticated || installationHandled.current) return;
+    const parameters = new URLSearchParams(location.search);
+    const installationReady = parameters.get("installation") === "ready";
+    const requestId = parameters.get("request");
+    if (!installationReady || !requestId || !authenticated || installationHandled.current) return;
     installationHandled.current = true;
     void gardenerApi
-      .syncRepositories()
+      .finalizeInstallation(requestId)
       .then(async () => {
         navigate(defaultRoute, { replace: true });
         await queryClient.invalidateQueries({ queryKey: queryPrefixes.state });
@@ -101,9 +103,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       .catch((error: unknown) => {
         notify({
           tone: "error",
-          title: "Repository sync failed",
+          title: "Repository connection failed",
           description:
-            error instanceof Error ? error.message : "Try again from Repositories.",
+            error instanceof Error ? error.message : "Try connecting the GitHub App again.",
         });
       });
   }, [authenticated, navigate, notify, queryClient]);

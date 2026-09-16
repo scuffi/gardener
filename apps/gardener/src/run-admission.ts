@@ -26,7 +26,12 @@ import {
   type RepositoryPolicyView,
 } from "./repository-policy";
 import type { Env } from "./env";
-import type { AgentRunWorkflowPayload } from "./runtime";
+import { createInitialFlueRequest, ensureInitialFlueDispatch } from "./flue-native-runtime";
+import {
+  FLUE_NATIVE_DRIVER,
+  FLUE_NATIVE_PROFILE,
+  FLUE_NATIVE_REQUEST_PROTOCOL,
+} from "./flue-native-protocol";
 import { ZodError } from "zod";
 
 interface ActiveAssignmentRevisionRow {
@@ -37,8 +42,18 @@ interface ActiveAssignmentRevisionRow {
   compiled_hash: string;
 }
 
-export function isCurrentFlueRun(run: { harnessId: string; harnessVersion: string }): boolean {
-  return run.harnessId === "flue" && run.harnessVersion === HARNESS_ADAPTER_VERSIONS.flue;
+export function isCurrentFlueRun(run: {
+  harnessId: string;
+  harnessVersion: string;
+  runtimeDriver?: string;
+  nativeProfile?: string | null;
+  nativeRequestProtocol?: string | null;
+}): boolean {
+  return run.runtimeDriver === FLUE_NATIVE_DRIVER
+    && run.nativeProfile === FLUE_NATIVE_PROFILE
+    && run.nativeRequestProtocol === FLUE_NATIVE_REQUEST_PROTOCOL
+    && run.harnessId === "flue"
+    && run.harnessVersion === HARNESS_ADAPTER_VERSIONS.flue;
 }
 
 export interface AdmittedAgentRun {
@@ -52,12 +67,6 @@ function deterministicParseCode(error: unknown): "invalid_json" | "invalid_schem
   if (error instanceof SyntaxError) return "invalid_json";
   if (error instanceof ZodError) return "invalid_schema";
   return null;
-}
-
-function isWorkflowInstanceNotFound(error: unknown): boolean {
-  if (typeof error === "object" && error !== null && "code" in error
-    && (error as { code?: unknown }).code === "instance.not_found") return true;
-  return error instanceof Error && error.message.startsWith("instance.not_found");
 }
 
 async function recordUnconfiguredPolicy(db: D1Database, repositoryId: string): Promise<void> {
@@ -128,7 +137,11 @@ export async function admitAgentRunsForEvent(
     const runId = `run_${admissionKey}`;
     const existing = await getRun(env.DB, runId);
     if (existing) {
-      if (isCurrentFlueRun(existing)) await ensureWorkflow(env, runId, { runId, runSnapshotHash: existing.runSnapshotHash }, false);
+      if (!isCurrentFlueRun(existing)) {
+        if (!["completed", "completed_with_errors", "failed", "cancelled"].includes(existing.status)) {
+          throw new Error("legacy workflow-v1 run cannot be resumed by the Flue-native runtime");
+        }
+      } else if (!existing.cancelRequestedAt) await ensureInitialFlueDispatch(env, runId);
       admitted.push({ runId, agentId: row.agent_id, revisionId: row.revision_id, created: false });
       continue;
     }
@@ -181,6 +194,16 @@ export async function admitAgentRunsForEvent(
       || snapshot.effectiveCapabilities.effects.find((item) => item.capability === "issue.comment.create")?.mode !== "automatic"
     ) continue;
     const capabilitySnapshotHash = await canonicalSha256(snapshot.effectiveCapabilities);
+    const initialRequest = await createInitialFlueRequest({
+      runId,
+      agentRevisionId: row.revision_id,
+      runSnapshotHash: snapshot.snapshotHash,
+      policySnapshotHash: workspacePolicy.policyHash,
+      runSnapshot: snapshot,
+      event,
+      modelId: env.AI_MODEL,
+      admittedAt: new Date().toISOString(),
+    });
     const result = await admitEventAgentRun(env.DB, {
         admissionId: `admission_${admissionKey}`,
         admissionKey,
@@ -189,7 +212,11 @@ export async function admitAgentRunsForEvent(
         repositoryEventId: event.id,
         agentId: row.agent_id,
         agentRevisionId: row.revision_id,
-        workflowInstanceId: runId,
+        workflowInstanceId: null,
+        runtimeDriver: FLUE_NATIVE_DRIVER,
+        nativeModelId: env.AI_MODEL,
+        nativeProfile: FLUE_NATIVE_PROFILE,
+        nativeRequestProtocol: FLUE_NATIVE_REQUEST_PROTOCOL,
         parentRunId: null,
         status: "queued",
         runSnapshot: snapshot,
@@ -207,40 +234,18 @@ export async function admitAgentRunsForEvent(
         assignmentConfigHash: snapshot.assignment.configHash,
         repositoryPolicyHash: snapshot.repository.policyHash,
         repositoryPolicyVersion: snapshot.repository.policyVersion,
+        initialHarnessRequest: {
+          requestId: initialRequest.requestId,
+          harnessId: initialRequest.snapshot.harness.id,
+          harnessVersion: initialRequest.snapshot.harness.adapterVersion,
+          requestJson: JSON.stringify(initialRequest),
+          requestHash: await canonicalSha256(initialRequest),
+        },
     });
-    // Workflow and persistence failures must escape so the event lease is released and redelivery reconciles this run.
-    await ensureWorkflow(env, result.run.id, { runId: result.run.id, runSnapshotHash: result.run.runSnapshotHash }, result.created);
+    // Dispatch and persistence failures escape; the durable outbox remains available to Cron.
+    await ensureInitialFlueDispatch(env, result.run.id);
     if (result.created) await audit(env.DB, "runtime", "agent_run.admitted", "agent_run", result.run.id, { eventId: event.id, agentId: row.agent_id, revisionId: row.revision_id });
     admitted.push({ runId: result.run.id, agentId: row.agent_id, revisionId: row.revision_id, created: result.created });
   }
   return admitted;
-}
-
-async function ensureWorkflow(
-  env: Pick<Env, "DB" | "AGENT_RUN_WORKFLOW">,
-  id: string,
-  params: AgentRunWorkflowPayload,
-  newlyCreated: boolean,
-): Promise<void> {
-  const binding = env.AGENT_RUN_WORKFLOW as Workflow<AgentRunWorkflowPayload>;
-  if (newlyCreated) {
-    await binding.create({ id, params });
-    return;
-  }
-  let instance: WorkflowInstance;
-  try {
-    instance = await binding.get(id);
-  } catch (error) {
-    if (!isWorkflowInstanceNotFound(error)) throw error;
-    await binding.create({ id, params });
-    return;
-  }
-  const status = await instance.status();
-  if (["queued", "running", "paused", "waiting", "waitingForPause", "complete"].includes(status.status)) return;
-  if (status.status === "unknown") {
-    await binding.create({ id, params });
-    return;
-  }
-  const run = await getRun(env.DB, id);
-  if (run && !["completed", "completed_with_errors", "failed", "cancelled"].includes(run.status)) await instance.restart();
 }

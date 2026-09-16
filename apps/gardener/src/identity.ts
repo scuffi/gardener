@@ -1,6 +1,8 @@
 import type { WorkspaceRole } from "@gardener/contracts";
-import type { Env } from "./env";
-import type { VerifiedIdentityAssertion } from "./auth";
+import {
+  completeGitHubLoginSchema,
+  type CompleteGitHubLogin,
+} from "@gardener/provider-github";
 
 export const SESSION_IDLE_TTL_SECONDS = 30 * 60;
 export const SESSION_ABSOLUTE_TTL_SECONDS = 8 * 60 * 60;
@@ -33,7 +35,9 @@ export interface DashboardSession extends ActivePrincipalRecord {
 }
 
 export class IdentityExchangeError extends Error {
-  constructor(readonly code: "identity_assertion_replayed" | "identity_not_authorized") { super(code); }
+  constructor(readonly code: "identity_handoff_replayed" | "identity_not_authorized") {
+    super(code);
+  }
 }
 
 export async function sha256(value: string): Promise<string> {
@@ -50,33 +54,144 @@ function ids(subject: string) {
   return { userId: `user_github_${subject}`, identityId: `identity_github_${subject}`, membershipId: `membership_github_${subject}` };
 }
 
-export async function consumeIdentityAssertion(db: D1Database, assertion: VerifiedIdentityAssertion, issuer: string): Promise<ActivePrincipalRecord> {
-  const jtiHash = await sha256(assertion.jti);
-  const consumed = await db.prepare("INSERT INTO consumed_identity_assertions (issuer, jti_hash, subject, expires_at) VALUES (?, ?, ?, ?) ON CONFLICT(issuer, jti_hash) DO NOTHING")
-    .bind(issuer, jtiHash, assertion.sub, assertion.exp).run();
-  if ((consumed.meta.changes ?? 0) !== 1) throw new IdentityExchangeError("identity_assertion_replayed");
-  try { await db.prepare("DELETE FROM consumed_identity_assertions WHERE expires_at < ?").bind(Math.floor(Date.now() / 1_000)).run(); } catch { /* opportunistic pruning must not change exchange classification */ }
+export async function completeProviderLogin(
+  db: D1Database,
+  inputValue: CompleteGitHubLogin,
+): Promise<void> {
+  const input = completeGitHubLoginSchema.parse(inputValue);
+  const existing = await activePrincipalBySubject(db, input.identity.subject);
+  const invitation = await db.prepare(
+    "SELECT 1 FROM invitations WHERE provider = 'github' AND provider_subject = ? " +
+    "AND status = 'pending' AND created_at >= datetime('now', ?) LIMIT 1",
+  ).bind(input.identity.subject, `-${INVITATION_TTL_SECONDS} seconds`).first();
+  if (!existing && !invitation) throw new IdentityExchangeError("identity_not_authorized");
 
-  const generated = ids(assertion.sub);
-  const linked = await db.prepare("SELECT user_id FROM external_identities WHERE provider='github' AND provider_subject=?").bind(assertion.sub).first<{user_id:string}>();
-  const { identityId, membershipId } = generated; const userId = linked?.user_id ?? generated.userId;
-  const existingMembership = linked ? await db.prepare("SELECT 1 FROM memberships WHERE user_id=?").bind(linked.user_id).first() : null;
-  const ownerEligible = assertion.instanceOwner && !await db.prepare("SELECT 1 FROM memberships WHERE role='owner' AND user_id<>?").bind(userId).first();
-  const invitationEligible = await db.prepare("SELECT 1 FROM invitations WHERE provider='github' AND provider_subject=? AND status='pending' AND created_at >= datetime('now', ?) LIMIT 1").bind(assertion.sub, `-${INVITATION_TTL_SECONDS} seconds`).first();
-  if (!existingMembership && !ownerEligible && !invitationEligible) throw new IdentityExchangeError("identity_not_authorized");
+  const handoffHash = await sha256(input.handoffId);
+  const inserted = await db.prepare(
+    "INSERT INTO provider_login_handoffs " +
+    "(handoff_hash, provider, provider_subject, username, expires_at) " +
+    "VALUES (?, 'github', ?, ?, ?) ON CONFLICT(handoff_hash) DO NOTHING",
+  ).bind(handoffHash, input.identity.subject, input.identity.login, input.expiresAt).run();
+  if ((inserted.meta.changes ?? 0) === 1) return;
 
-  const profile = JSON.stringify({ login: assertion.githubLogin });
-  const actorIdentity = JSON.stringify({ provider: "github", providerSubject: assertion.sub, login: assertion.githubLogin });
-  const eligibleSql = "(EXISTS (SELECT 1 FROM memberships WHERE user_id = ?) OR (? = 1 AND NOT EXISTS (SELECT 1 FROM memberships WHERE role = 'owner' AND user_id <> ?)) OR EXISTS (SELECT 1 FROM invitations WHERE provider = 'github' AND provider_subject = ? AND status = 'pending' AND created_at >= datetime('now', ?)))";
+  const prior = await db.prepare(
+    "SELECT provider_subject, username, expires_at FROM provider_login_handoffs " +
+    "WHERE handoff_hash = ?",
+  ).bind(handoffHash).first<{ provider_subject: string; username: string; expires_at: number }>();
+  if (
+    !prior ||
+    prior.provider_subject !== input.identity.subject ||
+    prior.username !== input.identity.login ||
+    prior.expires_at !== input.expiresAt
+  ) {
+    throw new IdentityExchangeError("identity_handoff_replayed");
+  }
+}
+
+export async function consumeProviderLogin(
+  db: D1Database,
+  handoffId: string,
+): Promise<ActivePrincipalRecord> {
+  const handoffHash = await sha256(handoffId);
+  const handoff = await db.prepare(
+    "SELECT provider_subject, username, expires_at, consumed_at FROM provider_login_handoffs " +
+    "WHERE handoff_hash = ?",
+  ).bind(handoffHash).first<{
+    provider_subject: string;
+    username: string;
+    expires_at: number;
+    consumed_at: string | null;
+  }>();
+  if (!handoff || handoff.expires_at < Math.floor(Date.now() / 1_000)) {
+    throw new IdentityExchangeError("identity_not_authorized");
+  }
+  if (handoff.consumed_at) throw new IdentityExchangeError("identity_handoff_replayed");
+
+  const generated = ids(handoff.provider_subject);
+  const linked = await db.prepare(
+    "SELECT user_id FROM external_identities WHERE provider = 'github' AND provider_subject = ?",
+  ).bind(handoff.provider_subject).first<{ user_id: string }>();
+  const userId = linked?.user_id ?? generated.userId;
+  const existingMembership = linked
+    ? await db.prepare("SELECT 1 FROM memberships WHERE user_id = ?").bind(linked.user_id).first()
+    : null;
+  const invitation = await db.prepare(
+    "SELECT 1 FROM invitations WHERE provider = 'github' AND provider_subject = ? " +
+    "AND status = 'pending' AND created_at >= datetime('now', ?) LIMIT 1",
+  ).bind(handoff.provider_subject, `-${INVITATION_TTL_SECONDS} seconds`).first();
+  if (!existingMembership && !invitation) throw new IdentityExchangeError("identity_not_authorized");
+
+  const consumed = await db.prepare(
+    "UPDATE provider_login_handoffs SET consumed_at = CURRENT_TIMESTAMP " +
+    "WHERE handoff_hash = ? AND consumed_at IS NULL AND expires_at >= ?",
+  ).bind(handoffHash, Math.floor(Date.now() / 1_000)).run();
+  if ((consumed.meta.changes ?? 0) !== 1) {
+    throw new IdentityExchangeError("identity_handoff_replayed");
+  }
+
+  const profile = JSON.stringify({ login: handoff.username });
+  const actorIdentity = JSON.stringify({
+    provider: "github",
+    providerSubject: handoff.provider_subject,
+    login: handoff.username,
+  });
   await db.batch([
-    db.prepare(`INSERT INTO users (id, display_name) SELECT ?, ? WHERE ${eligibleSql} ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP`).bind(userId, assertion.githubLogin, userId, assertion.instanceOwner ? 1 : 0, userId, assertion.sub, `-${INVITATION_TTL_SECONDS} seconds`),
-    db.prepare(`INSERT INTO external_identities (id, user_id, provider, provider_subject, username, profile_json) SELECT ?, ?, 'github', ?, ?, ? WHERE ${eligibleSql} ON CONFLICT(provider, provider_subject) DO UPDATE SET username = excluded.username, profile_json = excluded.profile_json`).bind(identityId, userId, assertion.sub, assertion.githubLogin, profile, userId, assertion.instanceOwner ? 1 : 0, userId, assertion.sub, `-${INVITATION_TTL_SECONDS} seconds`),
-    db.prepare("INSERT INTO memberships (id, user_id, role, permanent) SELECT ?, ?, 'owner', 1 WHERE ? = 1 AND NOT EXISTS (SELECT 1 FROM memberships WHERE role = 'owner' AND user_id <> ?) ON CONFLICT(user_id) DO NOTHING").bind(membershipId, userId, assertion.instanceOwner ? 1 : 0, userId),
-    db.prepare("INSERT INTO memberships (id, user_id, role, permanent, created_by_user_id) SELECT ?, ?, 'member', 0, i.invited_by_user_id FROM invitations i WHERE i.provider = 'github' AND i.provider_subject = ? AND i.status = 'pending' AND i.created_at >= datetime('now', ?) ORDER BY i.created_at, i.id LIMIT 1 ON CONFLICT(user_id) DO NOTHING").bind(membershipId, userId, assertion.sub, `-${INVITATION_TTL_SECONDS} seconds`),
-    db.prepare("UPDATE invitations SET status = 'accepted', accepted_by_user_id = ?, accepted_at = CURRENT_TIMESTAMP WHERE provider = 'github' AND provider_subject = ? AND status = 'pending' AND created_at >= datetime('now', ?) AND EXISTS (SELECT 1 FROM memberships WHERE user_id = ?)").bind(userId, assertion.sub, `-${INVITATION_TTL_SECONDS} seconds`, userId),
-    db.prepare("INSERT OR IGNORE INTO audit_records (actor, actor_user_id, actor_identity_json, action, resource_type, resource_id, detail_json) SELECT ?, ?, ?, 'membership.invitation_accepted', 'invitation', id, json_object('role', 'member') FROM invitations WHERE provider = 'github' AND provider_subject = ? AND status = 'accepted' AND accepted_by_user_id = ?").bind(assertion.githubLogin, userId, actorIdentity, assertion.sub, userId),
+    db.prepare(
+      "INSERT INTO users (id, display_name) VALUES (?, ?) " +
+      "ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP",
+    ).bind(userId, handoff.username),
+    db.prepare(
+      "INSERT INTO external_identities " +
+      "(id, user_id, provider, provider_subject, username, profile_json) " +
+      "VALUES (?, ?, 'github', ?, ?, ?) " +
+      "ON CONFLICT(provider, provider_subject) DO UPDATE SET " +
+      "username = excluded.username, profile_json = excluded.profile_json",
+    ).bind(
+      generated.identityId,
+      userId,
+      handoff.provider_subject,
+      handoff.username,
+      profile,
+    ),
+    db.prepare(
+      "INSERT INTO memberships (id, user_id, role, permanent, created_by_user_id) " +
+      "SELECT ?, ?, 'member', 0, i.invited_by_user_id FROM invitations i " +
+      "WHERE i.provider = 'github' AND i.provider_subject = ? AND i.status = 'pending' " +
+      "AND i.created_at >= datetime('now', ?) ORDER BY i.created_at, i.id LIMIT 1 " +
+      "ON CONFLICT(user_id) DO NOTHING",
+    ).bind(
+      generated.membershipId,
+      userId,
+      handoff.provider_subject,
+      `-${INVITATION_TTL_SECONDS} seconds`,
+    ),
+    db.prepare(
+      "UPDATE invitations SET status = 'accepted', accepted_by_user_id = ?, " +
+      "accepted_at = CURRENT_TIMESTAMP WHERE provider = 'github' AND provider_subject = ? " +
+      "AND status = 'pending' AND created_at >= datetime('now', ?) " +
+      "AND EXISTS (SELECT 1 FROM memberships WHERE user_id = ?)",
+    ).bind(
+      userId,
+      handoff.provider_subject,
+      `-${INVITATION_TTL_SECONDS} seconds`,
+      userId,
+    ),
+    db.prepare(
+      "INSERT OR IGNORE INTO audit_records " +
+      "(actor, actor_user_id, actor_identity_json, action, resource_type, resource_id, detail_json) " +
+      "SELECT ?, ?, ?, 'membership.invitation_accepted', 'invitation', id, " +
+      "json_object('role', 'member') FROM invitations WHERE provider = 'github' " +
+      "AND provider_subject = ? AND status = 'accepted' AND accepted_by_user_id = ?",
+    ).bind(
+      handoff.username,
+      userId,
+      actorIdentity,
+      handoff.provider_subject,
+      userId,
+    ),
   ]);
-  const principal = await activePrincipalBySubject(db, assertion.sub);
+
+  const principal = await activePrincipalBySubject(db, handoff.provider_subject);
   if (!principal) throw new IdentityExchangeError("identity_not_authorized");
   return principal;
 }

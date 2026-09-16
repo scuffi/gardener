@@ -53,8 +53,11 @@ export function migration(name = "0001_initial.sql"): string {
 export function newAgentDatabase(): { sqlite: DatabaseSync; db: D1Database } {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(migration());
+  sqlite.exec("INSERT INTO gardener_schema(singleton,version) VALUES(1,4)");
   sqlite.exec(migration("0005_agent_runtime_admission.sql"));
   sqlite.exec(migration("0006_flue_harness_requests.sql"));
+  sqlite.exec(migration("0007_team_workspace_foundation.sql"));
+  sqlite.exec(migration("0008_flue_native_runtime.sql"));
   return { sqlite, db: d1Database(sqlite) };
 }
 

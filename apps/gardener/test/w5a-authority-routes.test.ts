@@ -8,7 +8,7 @@ import type { AuthorizationVariables } from "../src/authorization";
 import type { Env } from "../src/env";
 import { migration,newAgentDatabase } from "./persistence-test-db";
 
-function setup(){const {sqlite,db}=newAgentDatabase();sqlite.exec(migration("0007_team_workspace_foundation.sql"));sqlite.exec(`
+function setup(){const {sqlite,db}=newAgentDatabase();sqlite.exec(`
   INSERT INTO users(id,display_name)VALUES('owner','Owner Name'),('member','Member Name');
   INSERT INTO external_identities(id,user_id,provider,provider_subject,username)VALUES('oi','owner','github','1','owner'),('mi','member','github','2','member');
   INSERT INTO memberships(id,user_id,role,permanent)VALUES('om','owner','owner',1),('mm','member','member',0);

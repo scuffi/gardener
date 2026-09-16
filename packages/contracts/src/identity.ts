@@ -4,7 +4,7 @@ export const githubNumericIdSchema = z.string().regex(/^[1-9][0-9]{0,31}$/, "exp
 export const githubAccountTypeSchema = z.enum(["User", "Organization", "Bot", "Mannequin"]);
 export type GitHubAccountType = z.infer<typeof githubAccountTypeSchema>;
 
-/** Connect-attested identity. Login is only a mutable display hint; id is authoritative. */
+/** Provider-attested identity. Login is only a mutable display hint; id is authoritative. */
 export const githubIdentitySchema = z.object({
   id: githubNumericIdSchema,
   login: z.string().trim().min(1).max(255),

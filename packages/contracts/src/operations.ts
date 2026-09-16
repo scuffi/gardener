@@ -71,6 +71,9 @@ const operationOptions = [
   pullBase.extend({ kind: z.literal("pull_request.reviewer.remove"), reviewerIds: z.array(githubNumericIdSchema).min(1).max(15) }).strict(),
   pullBase.extend({ kind: z.literal("pull_request.update"), title: z.string().trim().min(1).max(256).optional(), body: z.string().max(65_536).optional(), draft: z.boolean().optional(), state: z.enum(["open", "closed"]).optional() }).strict().superRefine((value, context) => {
     if (value.title === undefined && value.body === undefined && value.draft === undefined && value.state === undefined) context.addIssue({ code: "custom", message: "pull request update requires at least one change" });
+    if (value.draft !== undefined && (value.title !== undefined || value.body !== undefined || value.state !== undefined)) {
+      context.addIssue({ code: "custom", message: "draft state must be updated in a separate exact operation" });
+    }
   }),
   operationBase.extend({ kind: z.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
   operationBase.extend({
@@ -119,7 +122,22 @@ function collectStrings(value: unknown, output: string[]): void {
 }
 
 export const operationSchema = z.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
-  const strings: string[] = []; collectStrings(operation, strings);
+  const strings: string[] = [];
+  if (
+    operation.kind === "issue.comment.create" ||
+    operation.kind === "pull_request.review.submit" ||
+    operation.kind === "pull_request.open_draft"
+  ) {
+    const marker = `<!-- gardener-operation:${operation.id} -->`;
+    const bodyWithoutExactMarker = operation.body === marker
+      ? ""
+      : operation.body.endsWith(`\n${marker}`)
+        ? operation.body.slice(0, -(marker.length + 1))
+        : operation.body;
+    collectStrings({ ...operation, body: bodyWithoutExactMarker }, strings);
+  } else {
+    collectStrings(operation, strings);
+  }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
   if (operation.kind === "pull_request.merge") {
@@ -136,7 +154,7 @@ export const operationReceiptSchema = z.object({
   error: z.object({ code: z.string().min(1).max(100), message: z.string().min(1).max(2_000), retryable: z.boolean() }).strict().optional(),
 }).strict().superRefine((receipt, context) => {
   if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
-  if (receipt.status === "failed" && !receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "failed receipts require an error" });
-  if (receipt.status !== "failed" && receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "only failed receipts may contain an error" });
+  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
+  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
 });
 export type OperationReceipt = z.infer<typeof operationReceiptSchema>;

@@ -99,23 +99,18 @@ CREATE TABLE IF NOT EXISTS invitations (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invitations_pending_subject
   ON invitations(provider, provider_subject) WHERE status = 'pending';
 
-CREATE TABLE IF NOT EXISTS consumed_identity_assertions (
-  issuer TEXT NOT NULL CHECK (length(issuer) > 0),
-  jti_hash TEXT NOT NULL CHECK (length(jti_hash) = 64),
-  subject TEXT NOT NULL CHECK (length(subject) > 0),
+CREATE TABLE IF NOT EXISTS provider_login_handoffs (
+  handoff_hash TEXT PRIMARY KEY CHECK (length(handoff_hash) = 64),
+  provider TEXT NOT NULL CHECK (provider = 'github'),
+  provider_subject TEXT NOT NULL CHECK (length(provider_subject) > 0),
+  username TEXT NOT NULL CHECK (length(username) > 0),
   expires_at INTEGER NOT NULL CHECK (expires_at > 0),
-  consumed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (issuer, jti_hash)
+  completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  consumed_at TEXT
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_consumed_identity_assertions_expiry
-  ON consumed_identity_assertions(expires_at);
-
-CREATE TRIGGER IF NOT EXISTS consumed_identity_assertions_no_update
-BEFORE UPDATE ON consumed_identity_assertions
-BEGIN
-  SELECT RAISE(ABORT, 'consumed identity assertions are immutable');
-END;
+CREATE INDEX IF NOT EXISTS idx_provider_login_handoffs_expiry
+  ON provider_login_handoffs(expires_at, consumed_at);
 
 CREATE TABLE IF NOT EXISTS dashboard_sessions (
   token_hash TEXT PRIMARY KEY CHECK (length(token_hash) = 64),
@@ -134,6 +129,25 @@ CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_user
   ON dashboard_sessions(user_id, revoked_at, idle_expires_at);
 CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_expiry
   ON dashboard_sessions(absolute_expires_at);
+
+CREATE TABLE IF NOT EXISTS provider_installation_requests (
+  id TEXT PRIMARY KEY CHECK (length(id) > 0),
+  provider TEXT NOT NULL CHECK (provider = 'github'),
+  initiated_by_user_id TEXT NOT NULL,
+  initiated_by_subject TEXT NOT NULL,
+  initiated_by_login TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'finalizing', 'completed')),
+  expires_at INTEGER NOT NULL CHECK (expires_at > 0),
+  installation_id TEXT,
+  finalize_token TEXT,
+  finalize_lease_expires_at INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TEXT,
+  FOREIGN KEY (initiated_by_user_id) REFERENCES users(id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_provider_installation_requests_expiry
+  ON provider_installation_requests(expires_at, status);
 
 CREATE TABLE IF NOT EXISTS agent_repository_assignments (
   id TEXT PRIMARY KEY CHECK (length(id) > 0),

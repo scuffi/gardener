@@ -1,11 +1,6 @@
 # Copy to .dev.vars for private local development only. Never commit real values.
-GARDENER_INSTANCE_TOKEN=gdn_local-dev.replace-with-bootstrap-token
-CONNECT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-
-# Optional full-host Cloudflare Access service-token pair. Set both or neither.
-# Production values belong in Worker secrets, not this file.
-# CLOUDFLARE_ACCESS_CLIENT_ID=service-token-client-id.access
-# CLOUDFLARE_ACCESS_CLIENT_SECRET=service-token-client-secret
+# Gardener has no GitHub App, OAuth, webhook, or installation credentials.
+GARDENER_WORKSPACE_ID=workspace-local
 
 # Local dashboard bypass only. This must remain false in every public deployment.
 LOCAL_DEV_BYPASS=true

@@ -31,7 +31,7 @@ const brandRingStyle: CSSProperties = {
 
 export function SignInPage() {
   const { health, loading, error, refresh } = useGardener();
-  const connectReady = Boolean(health?.connectConfigured || health?.localDevelopment);
+  const gatewayReady = Boolean(health?.githubGateway.ready || health?.localDevelopment);
   const unavailable = Boolean(error && !health);
 
   return (
@@ -142,14 +142,14 @@ export function SignInPage() {
                       Sign in with the owner account to tend this Gardener deployment.
                     </p>
 
-                    {!connectReady ? (
+                    {!gatewayReady ? (
                       <Banner
                         className="mt-5"
                         variant="alert"
                         icon={<WarningCircleIcon size={20} weight="fill" />}
                         title="Dashboard sign-in is not configured"
                         description={
-                          "Add a valid GARDENER_INSTANCE_TOKEN to this Worker and redeploy before signing in."
+                          "Finish GitHub Gateway setup and verify both private Service Bindings before signing in."
                         }
                       />
                     ) : null}
@@ -161,7 +161,7 @@ export function SignInPage() {
                       variant="primary"
                       size="lg"
                       icon={GithubLogoIcon}
-                      disabled={!connectReady}
+                      disabled={!gatewayReady}
                       aria-describedby="signin-description signin-owner-note"
                       onClick={() => {
                         location.href = "/api/auth/start";
@@ -182,7 +182,7 @@ export function SignInPage() {
                       />
                       <p className="text-xs leading-relaxed text-kumo-subtle">
                         <strong className="font-semibold text-kumo-default">Credentials stay isolated.</strong>{" "}
-                        Repository access is managed separately through Gardener Connect.
+                        Repository access is managed by your customer-owned GitHub Gateway.
                       </p>
                     </div>
                   </>

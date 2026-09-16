@@ -4,7 +4,7 @@ export const HARNESS_IDS = ["flue"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 export const HARNESS_ADAPTER_VERSIONS = {
-  flue: "2.0.2",
+  flue: "gardener-flue-native/v1",
 } as const satisfies Record<HarnessId, string>;
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -71,7 +71,7 @@ export interface HarnessRequest {
   };
   tools: readonly HarnessToolDescriptor[];
   budget: HarnessBudget;
-  /** Optional host-owned, completed-only JSON Schema for result.data. It narrows shape, never authority, and cannot be combined with tools. */
+  /** Optional host-owned, completed-only JSON Schema for legacy structured-text mode. Native tool mode omits it. */
   resultDataSchema?: { [key: string]: JsonValue };
   context?: readonly {
     name: string;

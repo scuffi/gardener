@@ -24,7 +24,6 @@ interface Fixture {
 
 async function fixture(): Promise<Fixture> {
   const { sqlite, db } = newAgentDatabase();
-  sqlite.exec(migration("0007_team_workspace_foundation.sql"));
   sqlite.prepare("INSERT INTO users (id, display_name) VALUES ('owner-1', 'Owner')").run();
   sqlite.prepare(`INSERT INTO repositories (id, installation_id, owner, name, default_branch)
     VALUES ('repo-1', 'installation-1', 'acme', 'garden', 'main')`).run();

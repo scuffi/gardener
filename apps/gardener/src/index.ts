@@ -3,7 +3,7 @@
 export * from "./app";
 export { ComputerWorkspace } from "./workspace/computer-workspace";
 export { WorkspaceProxy, WorkspaceServiceProxy } from "./workspace/exports";
-export { AgentRunWorkflow } from "./runtime";
+export { GardenerGitHubEntrypoint } from "./providers/github/ingress";
 export * from "virtual:flue/worker";
 
 import { gardenerWorker } from "./app";

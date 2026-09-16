@@ -29,7 +29,7 @@ export function NeedsAttentionPanel({
   const unhealthyServices = [
     !health.database && "database",
     !health.workersAi && "Workers AI",
-    !health.connectConfigured && "Gardener Connect",
+    !health.githubGateway.ready && "GitHub Gateway",
     !health.agentRuntime.enabled && "agent runtime",
   ].filter((service): service is string => Boolean(service));
   const alerts = [

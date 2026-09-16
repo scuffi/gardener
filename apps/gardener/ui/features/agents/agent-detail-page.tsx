@@ -219,7 +219,7 @@ export function AgentDetailPage() {
           title="Authority remains layered"
           description={
             "Instructions do not override compiled capabilities, instance policy, temporary " +
-            "grants, exact-effect approval, or Connect live-state checks."
+            "grants, exact-effect approval, or GitHub Gateway live-state checks."
           }
         />
       </div>

@@ -1,0 +1,23 @@
+{
+  "name": "@gardener/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gardener": "dist/cli.js"
+  },
+  "dependencies": {
+    "@gardener/provider-github": "workspace:*"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --sourcemap --outfile=dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "pnpm build && vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.3",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}

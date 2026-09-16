@@ -13,7 +13,7 @@ Current exact versions relevant to the Agent-native foundation include:
 | Package/product | Pinned version | Status and boundary |
 | --- | ---: | --- |
 | Cloudflare Computer | `@cloudflare/computer@0.2.1` | Preview-only. Behind `ExecutionWorkspace`; requires SQLite Durable Objects, Worker Loader experimental support, R2, and optional Container staging. |
-| Flue runtime/Vite/CLI | `2.0.3` | Experimental. Gardener's only product Agent runtime, behind the internal harness contract. |
+| Flue runtime/Vite/CLI | `2.0.3` | Experimental. Gardener's only Agent runtime; native runs pin product adapter `gardener-flue-native/v1` separately. |
 | Cloudflare Agents SDK | `agents@0.22.0` | Used only for stateless MCP helpers, not Agent execution. |
 | Workers OAuth provider | `@cloudflare/workers-oauth-provider@0.10.3` | OAuth boundary; requires audience/client/owner/scope and consent validation. |
 | MCP server | `@modelcontextprotocol/server@2.0.0` | Stateless authoring protocol only. |
@@ -28,10 +28,10 @@ Flue and Computer are not promoted to trusted policy or authorization components
 ## Required validation by subsystem
 
 - **Contracts/compiler:** malformed, unknown, oversized, duplicate, traversal, canonical-byte, hash, repository-resolution, capability, eligibility, and semantic-diff tests.
-- **D1/Workflows:** fresh install, destructive upgrade, concurrent initialization, immutable revision, idempotency, replay, wait/expiry, cancellation, and child-join tests.
+- **D1/Flue reconciliation:** fresh install, destructive/additive upgrade, immutable driver/result, outbox fencing, keyed replay, abnormal settlement, cancellation, and expiry tests.
 - **Computer:** workerd tests for filesystem/Git/shell/JavaScript; Docker/Cloudflare tests for Container sync, denied egress, cleanup, and ambiguous execution.
-- **Flue runtime:** framework-neutral contract conformance plus deployed Flue Durable Object and AI binding/Gateway model tests.
+- **Flue runtime:** direct driver, tool-preserving bounded provider, terminal protocol, exact-effect replay, and deployed Durable Object/AI binding tests.
 - **MCP/OAuth:** dynamic client, owner consent, PKCE/provider behavior, exact audience, scopes, replay, CSRF, redaction, and negative-authority tests.
-- **Connect:** real GitHub webhook fixtures, permission checks, exact operation hashes, stale-state conflicts, retry receipts, and unsupported-operation behavior.
+- **GitHub Gateway:** real webhook fixtures, permission checks, Service Binding contracts, exact operation hashes, stale-state conflicts, retry receipts, and unavailable-operation behavior.
 
-CI evidence cannot substitute for Cloudflare staging where Workflows, Dynamic Workers, Worker Loader, Containers, Durable Objects, and R2 differ from local execution.
+CI evidence cannot substitute for Cloudflare staging where Cron, Dynamic Workers, Worker Loader, Containers, Durable Objects, and R2 differ from local execution.

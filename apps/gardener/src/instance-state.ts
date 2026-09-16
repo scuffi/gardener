@@ -138,6 +138,7 @@ export async function assertLiveAutomaticAuthority(env: Env, runId: string, oper
     throw new LiveAuthorityReadError(cause);
   }
   if (!run || !run.repositoryEventId || run.status !== "running") throw new Error("Run is not active");
+  if (run.cancelRequestedAt) throw new Error("Run cancellation denies effect execution");
   const snapshot = agentRunSnapshotV1Schema.parse(run.runSnapshot);
   const frozenWorkspace = instancePolicyV1Schema.parse(run.policySnapshot);
   const [snapshotHash, workspaceHash] = await Promise.all([

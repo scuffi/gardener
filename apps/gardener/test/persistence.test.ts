@@ -220,7 +220,6 @@ describe("Agent persistence", () => {
   it("deduplicates event/Agent live admission without imposing a global run lock", async () => {
     const { sqlite, db } = newAgentDatabase();
     try {
-      sqlite.exec(migration("0007_team_workspace_foundation.sql"));
       sqlite.prepare("INSERT INTO users (id, display_name) VALUES ('owner-1', 'Owner')").run();
       sqlite.prepare(`
         INSERT INTO repositories (id, installation_id, owner, name, default_branch)
