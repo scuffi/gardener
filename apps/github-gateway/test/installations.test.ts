@@ -24,6 +24,46 @@ beforeAll(() => {
 });
 
 describe("owner-bound installation setup", () => {
+  it("validates discovered repository contracts before persisting synchronized state", async () => {
+    const { sqlite, db } = testDatabase();
+    try {
+      github.getInstallation.mockResolvedValue({
+        id: "7",
+        accountId: "50",
+        accountLogin: "acme",
+        accountType: "Organization",
+      });
+      github.discoverRepositories.mockResolvedValue([{
+        id: "9",
+        installationId: "7",
+        owner: "acme",
+        name: "widgets",
+        defaultBranch: "main",
+      }]);
+      const env = {
+        DB: db,
+        GITHUB_APP_SLUG: "gardener-team",
+        GARDENER_ORIGIN: "https://gardener.example.workers.dev",
+      } as Env;
+      const request = {
+        requestId: "installation_contract_drift",
+        requestedBy: { provider: "github" as const, subject: "101", login: "owner" },
+      };
+      const started = await beginGitHubInstallation(env, request);
+      const state = new URL(started.installationUrl).searchParams.get("state");
+      await completeGitHubInstallationCallback(env, { installationId: "7", state: state! });
+
+      await expect(finalizeGitHubInstallation(env, request)).rejects.toThrow();
+      expect(sqlite.prepare("SELECT COUNT(*) count FROM repositories").get()).toEqual({ count: 0 });
+      expect(sqlite.prepare(
+        "SELECT sync_generation, sync_lease_token, sync_lease_expires_at FROM installations WHERE id = '7'",
+      ).get()).toEqual({ sync_generation: 0, sync_lease_token: null, sync_lease_expires_at: null });
+      expect(sqlite.prepare(
+        "SELECT finalized_at FROM installation_flows WHERE request_id = ?",
+      ).get(request.requestId)).toEqual({ finalized_at: null });
+    } finally { sqlite.close(); }
+  });
+
   it("binds finalization to the immutable initiating subject and supports renamed logins", async () => {
     const { sqlite, db } = testDatabase();
     try {

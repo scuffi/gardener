@@ -5,6 +5,7 @@ import type { Env } from "../src/env";
 import {
   GitHubOperationError,
   branchProtectionHash,
+  discoverRepositories,
   executeGitHubOperation,
 } from "../src/github-client";
 import { normalizeGitHubWebhook } from "../src/webhooks";
@@ -55,6 +56,41 @@ describe("RepositoryEventV2 normalization", () => {
     expect(normalizeGitHubWebhook("check_run", { ...common, action: "completed", check_run: { id: 61, name: "test", head_sha: sha, status: "completed", conclusion: "success", details_url: null, completed_at: "2026-01-01T00:00:03Z" } }, "check", "i")).toMatchObject({ kind: "github.check_run", resourceAuthor: null });
     expect(normalizeGitHubWebhook("push", { ...common, before: baseSha, after: sha, ref: "refs/heads/main", forced: false, created: false, deleted: false, commits: [], head_commit: { timestamp: "2026-01-01T00:00:04Z" } }, "push", "i")).toMatchObject({ kind: "github.push", action: "pushed", resourceAuthor: null });
     expect(normalizeGitHubWebhook("release", { ...common, action: "published", release: { id: 71, tag_name: "v1.0.0", target_commitish: sha, name: "v1", body: "notes", draft: false, prerelease: false, published_at: "2026-01-01T00:00:05Z", updated_at: "2026-01-01T00:00:05Z", html_url: "https://github.com/acme/widgets/releases/tag/v1.0.0", author: account(15, "releaser") } }, "release", "i")).toMatchObject({ kind: "github.release", resourceAuthor: { id: "15" } });
+  });
+});
+
+describe("GitHub repository discovery", () => {
+  it("returns the provider-qualified repository contract used by installation finalization", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const env = {
+      GITHUB_APP_ID: "1",
+      GITHUB_APP_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    } as Env;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/app/installations/7/access_tokens") {
+        return new Response(JSON.stringify({ token: "installation-token" }), { status: 201 });
+      }
+      if (url.pathname === "/installation/repositories") {
+        return new Response(JSON.stringify({
+          repositories: [{
+            id: 9,
+            full_name: "acme/widgets",
+            default_branch: "main",
+          }],
+        }));
+      }
+      return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+    }));
+
+    await expect(discoverRepositories(env, "7")).resolves.toEqual([{
+      provider: "github",
+      id: "9",
+      installationId: "7",
+      owner: "acme",
+      name: "widgets",
+      defaultBranch: "main",
+    }]);
   });
 });
 

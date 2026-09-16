@@ -44,9 +44,12 @@ export async function syncInstallationRepositories(
     ).bind(installation.id, leaseToken).first<{ sync_generation: number }>();
     if (!current) throw new Error("repository_sync_lease_lost");
     const discovered = await discoverRepositories(env, installation.id);
+    // Validate the complete provider boundary before mutating authoritative state.
+    // A contract drift must not leave a partially synchronized installation behind.
+    const connected = discovered.map((repository) => connectedGitHubRepositorySchema.parse(repository));
     const generation = current.sync_generation + 1;
 
-    const statements = discovered.map((repository) => env.DB.prepare(
+    const statements = connected.map((repository) => env.DB.prepare(
       "INSERT INTO repositories " +
       "(id, installation_id, owner, name, default_branch, active, sync_generation, updated_at) " +
       "VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP) " +
@@ -76,7 +79,7 @@ export async function syncInstallationRepositories(
     ]);
     if ((results.at(-1)?.meta.changes ?? 0) !== 1) throw new Error("repository_sync_lease_lost");
 
-    return discovered.map((repository) => connectedGitHubRepositorySchema.parse(repository));
+    return connected;
   } catch (error) {
     await env.DB.prepare(
       "UPDATE installations SET sync_lease_token = NULL, sync_lease_expires_at = NULL " +

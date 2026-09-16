@@ -140,7 +140,14 @@ async function installationToken(env: Env, installationId: string, repositoryNam
   return data.token;
 }
 
-export interface DiscoveredRepository { id: string; installationId: string; owner: string; name: string; defaultBranch?: string }
+export interface DiscoveredRepository {
+  provider: "github";
+  id: string;
+  installationId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+}
 export async function fetchPullRequestForWebhook(env: Env, payload: unknown): Promise<unknown | null> {
   if (!record(payload) || !record(payload.issue) || payload.issue.pull_request === undefined || !positiveInteger(payload.issue.number) || !record(payload.repository) || typeof payload.repository.name !== "string" || !record(payload.repository.owner) || typeof payload.repository.owner.login !== "string" || !record(payload.installation) || !positiveInteger(payload.installation.id)) return null;
   const token = await installationToken(env, String(payload.installation.id), payload.repository.name, { metadata: "read", pull_requests: "read" });
@@ -188,9 +195,18 @@ export async function discoverRepositories(env: Env, installationId: string): Pr
     const data = await jsonResponse(await github(`/installation/repositories?per_page=100&page=${page}`, token), "Repository discovery");
     if (!record(data) || !Array.isArray(data.repositories)) throw new Error("Repository discovery response was invalid");
     for (const item of data.repositories) {
-      if (!record(item) || !positiveInteger(item.id) || typeof item.full_name !== "string") continue;
+      if (
+        !record(item) || !positiveInteger(item.id) || typeof item.full_name !== "string"
+        || typeof item.default_branch !== "string"
+      ) continue;
       const slug = parseRepositoryFullName(item.full_name); if (!slug) continue;
-      repositories.push({ id: String(item.id), installationId, ...slug, ...(typeof item.default_branch === "string" ? { defaultBranch: item.default_branch } : {}) });
+      repositories.push({
+        provider: "github",
+        id: String(item.id),
+        installationId,
+        ...slug,
+        defaultBranch: item.default_branch,
+      });
     }
     if (data.repositories.length < 100) return repositories;
   }
