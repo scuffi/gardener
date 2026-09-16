@@ -40,6 +40,13 @@ Public Gateway routes are deliberately small:
 The last two routes require the independent operator bearer token. That token is never accepted for
 provider execution.
 
+The Gateway's workers.dev route must be public so GitHub can send webhooks and browser callbacks;
+its HMAC, one-use state, bearer, and Service Binding checks remain the authorization boundaries.
+Gardener itself may remain behind Cloudflare Access. When account-wide “Protect all Workers” is
+enabled, setup uses `cloudflared access curl` to prove both deployments through the operator's
+Cloudflare identity, then opens the Gateway's Access settings and asks the operator to make only that
+Worker public. It never treats an authenticated CLI probe as proof that GitHub can reach a webhook.
+
 Gardener calls the named `GitHubGatewayEntrypoint` Service Binding for health, login initiation,
 installation initiation/finalization, repository synchronization, username resolution, capability
 discovery, and bounded operation execution. The Gateway calls the named

@@ -1,21 +1,21 @@
 import { readFile } from "node:fs/promises";
+import { fetchJsonEndpoint } from "./access.js";
 import { readCheckpoint, statePaths } from "./state.js";
 
 export async function doctor(workspace: string): Promise<void> {
   const { origin, token } = await operatorContext(workspace);
-  const [healthResponse, doctorResponse] = await Promise.all([
-    fetch(`${origin}/health`, { headers: { accept: "application/json" } }),
-    fetch(`${origin}/ops/doctor`, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-    }),
+  const [health, diagnostics] = await Promise.all([
+    fetchJsonEndpoint(
+      `${origin}/health`,
+      { headers: { accept: "application/json" } },
+      { label: "Gateway health" },
+    ) as Promise<Record<string, unknown>>,
+    fetchJsonEndpoint(
+      `${origin}/ops/doctor`,
+      { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+      { label: "Gateway doctor" },
+    ) as Promise<{ failedDeliveries?: unknown[]; staleDeliveries?: unknown[] }>,
   ]);
-  const health = await healthResponse.json() as Record<string, unknown>;
-  const diagnostics = await doctorResponse.json() as {
-    failedDeliveries?: unknown[];
-    staleDeliveries?: unknown[];
-  };
-  if (!healthResponse.ok) throw new Error(`Gateway health failed (${healthResponse.status})`);
-  if (!doctorResponse.ok) throw new Error(`Gateway doctor failed (${doctorResponse.status})`);
   const report = {
     health,
     failedDeliveries: diagnostics.failedDeliveries ?? [],

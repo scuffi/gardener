@@ -90,6 +90,9 @@ collisions, shows a plain-English resource summary, runs all three generated Wor
 through `wrangler deploy --dry-run`, and asks for a final yes/no confirmation. Infrastructure output
 stays quiet unless a command fails; pass `--verbose` to show the underlying build and Wrangler output.
 The guided output uses restrained semantic colours in interactive terminals and respects `NO_COLOR`.
+If account-wide Cloudflare Access is enabled, setup verifies both Workers through the operator's
+`cloudflared` identity, keeps Gardener protected, and explains that the Gateway must be made public
+for GitHub webhooks and callbacks before final verification can pass.
 
 The checkpointed apply then:
 

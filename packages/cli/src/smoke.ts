@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { fetchJsonEndpoint } from "./access.js";
 import {
   availableGitHubOperationKinds,
   gatewayDoctorResultSchema,
@@ -36,25 +37,27 @@ export interface SmokeReport {
 
 export async function smokeGateway(workspace: string): Promise<void> {
   const { origin, gardenerOrigin, token } = await operatorContext(workspace);
-  const signal = AbortSignal.timeout(15_000);
-  const [gatewayResponse, doctorResponse, gardenerResponse] = await Promise.all([
-    fetch(`${origin}/health`, { headers: { accept: "application/json" }, signal }),
-    fetch(`${origin}/ops/doctor`, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-      signal,
-    }),
-    fetch(`${gardenerOrigin}/api/health`, {
-      headers: { accept: "application/json" },
-      signal,
-    }),
+  const [gatewayValue, diagnosticsValue, gardenerValue] = await Promise.all([
+    fetchJsonEndpoint(
+      `${origin}/health`,
+      { headers: { accept: "application/json" } },
+      { label: "Gateway health" },
+    ),
+    fetchJsonEndpoint(
+      `${origin}/ops/doctor`,
+      { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+      { label: "Gateway doctor" },
+    ),
+    fetchJsonEndpoint(
+      `${gardenerOrigin}/api/health`,
+      { headers: { accept: "application/json" } },
+      { label: "Gardener health", allowUserAccess: true },
+    ),
   ]);
-  if (!gatewayResponse.ok) throw new Error(`Gateway health failed (${gatewayResponse.status})`);
-  if (!doctorResponse.ok) throw new Error(`Gateway doctor failed (${doctorResponse.status})`);
-  if (!gardenerResponse.ok) throw new Error(`Gardener health failed (${gardenerResponse.status})`);
 
-  const gateway = githubGatewayHealthSchema.parse(await gatewayResponse.json());
-  const diagnostics = gatewayDoctorResultSchema.parse(await doctorResponse.json());
-  const gardener = await gardenerResponse.json() as GardenerHealth;
+  const gateway = githubGatewayHealthSchema.parse(gatewayValue);
+  const diagnostics = gatewayDoctorResultSchema.parse(diagnosticsValue);
+  const gardener = gardenerValue as GardenerHealth;
   const report = evaluateSmoke(workspace, gateway, diagnostics, gardener);
   const paths = statePaths(workspace);
   const timestamp = report.checkedAt.replaceAll(":", "-");

@@ -2,9 +2,14 @@ import { randomBytes } from "node:crypto";
 import { mkdtemp, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import {
+  CloudflareAccessRedirectError,
+  cloudflaredAccessJson,
+  fetchJsonEndpoint,
+} from "./access.js";
 import { runCommand, uploadSecret, workerOrigin, wrangler } from "./commands.js";
 import { deploymentNames, writeGardenerConfig, writeGatewayConfig } from "./config.js";
-import { createGitHubAppFromManifest, type AppOwner } from "./manifest.js";
+import { createGitHubAppFromManifest, openBrowser, type AppOwner } from "./manifest.js";
 import { confirmExact, prompt, resolveGitHubOwner } from "./prompts.js";
 import {
   assertCloudflareResourceNamesAvailable,
@@ -252,11 +257,13 @@ export async function initializeGateway(options: InitOptions): Promise<void> {
   }
 
   printProgress("Running final connection checks…");
-  await verifyGateway(
-    required(checkpoint.gatewayOrigin, "Gateway origin"),
-    required(checkpoint.gardenerOrigin, "Gardener origin"),
+  await verifyGateway({
+    gatewayOrigin: required(checkpoint.gatewayOrigin, "Gateway origin"),
+    gardenerOrigin: required(checkpoint.gardenerOrigin, "Gardener origin"),
+    gatewayWorker: names.gatewayWorker,
+    cloudflareAccountId: required(checkpoint.cloudflareAccountId, "Cloudflare account ID"),
     operatorToken,
-  );
+  });
   if (!atOrAfter(checkpoint.step, "complete")) {
     checkpoint = await advance(paths.checkpoint, checkpoint, "complete");
   }
@@ -320,32 +327,90 @@ async function seedPermanentOwner(
   }
 }
 
-async function verifyGateway(
-  origin: string,
-  gardenerOrigin: string,
-  operatorToken: string,
-): Promise<void> {
-  const health = await fetch(`${origin}/health`, { headers: { accept: "application/json" } });
-  const healthBody = await health.json() as { ready?: boolean };
-  if (!health.ok || healthBody.ready !== true) throw new Error("Gateway health check is not ready");
-  const doctor = await fetch(`${origin}/ops/doctor`, {
-    headers: { authorization: `Bearer ${operatorToken}`, accept: "application/json" },
-  });
-  const doctorBody = await doctor.json() as { health?: { ready?: boolean } };
-  if (!doctor.ok) throw new Error(`Gateway doctor failed (${doctor.status})`);
+async function verifyGateway(input: {
+  gatewayOrigin: string;
+  gardenerOrigin: string;
+  gatewayWorker: string;
+  cloudflareAccountId: string;
+  operatorToken: string;
+}): Promise<void> {
+  let healthBody: { ready?: boolean };
+  try {
+    healthBody = await fetchJsonEndpoint(
+      `${input.gatewayOrigin}/health`,
+      { headers: { accept: "application/json" } },
+      { label: "Gateway health" },
+    ) as { ready?: boolean };
+  } catch (error) {
+    if (!(error instanceof CloudflareAccessRedirectError)) throw error;
+    await verifyProtectedDeployment(input.gatewayOrigin, input.gardenerOrigin);
+    const dashboard = `https://dash.cloudflare.com/${input.cloudflareAccountId}`
+      + `/workers/services/view/${encodeURIComponent(input.gatewayWorker)}/production/access`;
+    openBrowser(dashboard);
+    console.log(`\n  ${terminal.caution("Cloudflare Access is protecting the GitHub Gateway.")}`);
+    console.log("  The deployment is healthy through your Cloudflare identity, but GitHub cannot use");
+    console.log("  an interactive Access login for webhooks and OAuth callbacks.");
+    console.log(`\n  Open the ${terminal.strong("Access")} tab for ${terminal.value(input.gatewayWorker)}`);
+    console.log(`  and choose ${terminal.strong("Make this Worker public")}. Gardener itself may remain protected.`);
+    await prompt(`\n  ${terminal.strong("Press Enter after the Gateway is public to retry:")} `);
+    try {
+      healthBody = await fetchJsonEndpoint(
+        `${input.gatewayOrigin}/health`,
+        { headers: { accept: "application/json" } },
+        { label: "Gateway health" },
+      ) as { ready?: boolean };
+    } catch (retryError) {
+      if (retryError instanceof CloudflareAccessRedirectError) {
+        throw new Error(
+          "The GitHub Gateway is still protected by Cloudflare Access. Make this Worker public and rerun setup.",
+        );
+      }
+      throw retryError;
+    }
+    printProgressSuccess("GitHub can now reach the Gateway");
+  }
+  if (healthBody.ready !== true) throw new Error("Gateway health check is not ready");
+
+  const doctorBody = await fetchJsonEndpoint(
+    `${input.gatewayOrigin}/ops/doctor`,
+    { headers: { authorization: `Bearer ${input.operatorToken}`, accept: "application/json" } },
+    { label: "Gateway doctor" },
+  ) as { health?: { ready?: boolean } };
   if (doctorBody.health?.ready !== true) {
     throw new Error("Gateway credential and binding verification is not ready");
   }
-  const gardener = await fetch(`${gardenerOrigin}/api/health`, {
-    headers: { accept: "application/json" },
-  });
-  const gardenerBody = await gardener.json() as {
-    ok?: boolean;
-    githubGateway?: { configured?: boolean; ready?: boolean };
-  };
-  if (!gardener.ok || gardenerBody.ok !== true || gardenerBody.githubGateway?.ready !== true) {
+
+  const gardenerBody = await fetchJsonEndpoint(
+    `${input.gardenerOrigin}/api/health`,
+    { headers: { accept: "application/json" } },
+    { label: "Gardener health", allowUserAccess: true },
+  ) as { ok?: boolean; githubGateway?: { configured?: boolean; ready?: boolean } };
+  if (gardenerBody.ok !== true || gardenerBody.githubGateway?.ready !== true) {
     throw new Error("Gardener to Gateway binding verification is not ready");
   }
+}
+
+async function verifyProtectedDeployment(
+  gatewayOrigin: string,
+  gardenerOrigin: string,
+): Promise<void> {
+  console.log(`\n  ${terminal.caution("Cloudflare Access detected.")} Verifying with your Cloudflare identity…`);
+  const gateway = cloudflaredAccessJson(
+    `${gatewayOrigin}/health`,
+    "Gateway health",
+  ) as { ready?: boolean; database?: boolean; githubApp?: boolean; gardenerBinding?: boolean };
+  const gardener = cloudflaredAccessJson(
+    `${gardenerOrigin}/api/health`,
+    "Gardener health",
+  ) as { ok?: boolean; database?: boolean; githubGateway?: { ready?: boolean } };
+  if (
+    gateway.ready !== true || gateway.database !== true || gateway.githubApp !== true
+    || gateway.gardenerBinding !== true || gardener.ok !== true || gardener.database !== true
+    || gardener.githubGateway?.ready !== true
+  ) {
+    throw new Error("The deployment is reachable through Cloudflare Access but is not ready");
+  }
+  printProgressSuccess("Both Workers are healthy through your Cloudflare identity");
 }
 
 async function readRecovery(path: string): Promise<SetupRecovery | null> {

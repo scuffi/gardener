@@ -154,7 +154,7 @@ function manifestForm(action: string, state: string, manifest: unknown): string 
     `</form><p>Opening GitHub…</p><script>document.getElementById('manifest').submit()</script>`;
 }
 
-function openBrowser(url: string): void {
+export function openBrowser(url: string): void {
   const [command, args] = process.platform === "darwin"
     ? ["open", [url]]
     : process.platform === "win32"

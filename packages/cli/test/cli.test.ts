@@ -8,6 +8,7 @@ import {
   availableGitHubOperationKinds,
   unavailableGitHubOperationKinds,
 } from "@gardener/provider-github";
+import { CloudflareAccessRedirectError, fetchJsonEndpoint } from "../src/access";
 import { parse } from "../src/args";
 import { deploymentNames, writeGatewayConfig } from "../src/config";
 import { destroyPlan, destroyQualification } from "../src/destroy";
@@ -64,6 +65,26 @@ describe("Gardener Gateway CLI", () => {
     process.env.NO_COLOR = "";
     expect(terminal.title("Gardener setup")).toBe("Gardener setup");
     expect(terminal.value("agents")).toBe("agents");
+  });
+
+  it("explains Cloudflare Access redirects instead of parsing HTML as JSON", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("<!doctype html>", {
+      status: 302,
+      headers: {
+        location: "https://team.cloudflareaccess.com/cdn-cgi/access/login/example",
+        "content-type": "text/html",
+      },
+    });
+    try {
+      await expect(fetchJsonEndpoint(
+        "https://gardener.example.workers.dev/health",
+        {},
+        { label: "Gardener health" },
+      )).rejects.toBeInstanceOf(CloudflareAccessRedirectError);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("parses explicit resumable command options", () => {
