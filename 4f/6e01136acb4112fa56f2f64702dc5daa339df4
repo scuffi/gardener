@@ -1,0 +1,31 @@
+apps/gardener/migrations/0009_starter_agents.sql
+  s_de0b486c128948::t_0faf0efc97df8b 1-20
+apps/gardener/src/database.ts
+  s_5da66bf6bc6455::t_2be996ab03eac1 7,9,73-77,80-81,87-88,95-96,104-105,130,139
+pnpm-lock.yaml
+  s_de0b486c128948::t_99c4908664b2f4 14-16,22,70,101,107,110,113,131,146,149,152,189,211,224,243,259,3621-3625,4478,4483,4757,4760,4767,4826,4830,4834,4861,4865,4869,5225,5232,5234,5241,5408,5413,5581,5584,5586,5588,5595,5597,5604,5606,5613,5632,5639,5655,5663,5670,5686,5694,5701,5715,7655-7660,7784,7796,7799,7811,7814,7826,7829,7841,7844,7852,7854,7857,7868,7877,7880,7891,7900,7903,7914
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4f6e01136acb4112fa56f2f64702dc5daa339df4",
+  "prompts": {},
+  "sessions": {
+    "s_5da66bf6bc6455": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a79b-d357-7ec9-952b-746d1a0724ea",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
