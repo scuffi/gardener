@@ -37,7 +37,7 @@ describe("W5A assignment and repository policy persistence",()=>{
   }finally{sqlite.close()}});
   it("fails a stale epoch closed and resolves a missing repository policy as disabled",async()=>{const{sqlite,db}=database();try{
     const stale=await writeAssignment(db,{id:"assignment-one",agentId:"agent-one",repositoryId:"10",enabled:false,authorityCeiling:"disabled",removedAt:null,expectedEpoch:9,action:"added",details:{action:"added",agentId:"agent-one",repositoryId:"10"},actor,actorUserId:"owner"});expect(stale).toBeNull();expect(await findAssignment(db,"agent-one","10")).toBeNull();expect(await getAssignmentEpoch(db)).toBe(1);
-    const view=await getRepositoryPolicy(db,"10");expect(view).toMatchObject({configured:false,message:"Policy not configured — nothing will run"});expect(Object.values(view!.policy.operationModes).every(mode=>mode==="disabled")).toBe(true);
+    const view=await getRepositoryPolicy(db,"10");expect(view).toMatchObject({configured:false,message:"Policy not configured — Agent runs have no effect authority"});expect(Object.values(view!.policy.operationModes).every(mode=>mode==="disabled")).toBe(true);
     const updated=await putRepositoryPolicy(db,"10",disabledPolicyInput(view!),actor);expect(updated).toBe("updated");expect(await getRepositoryPolicy(db,"10")).toMatchObject({configured:true,policyVersion:2,policy:{version:2}});
   }finally{sqlite.close()}});
   it("keeps repository-local generations and hashes stable when another repository changes",async()=>{const{sqlite,db}=database();try{

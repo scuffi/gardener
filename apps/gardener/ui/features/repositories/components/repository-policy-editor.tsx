@@ -172,8 +172,11 @@ export function RepositoryPolicyEditor({
         <Banner
           variant="error"
           icon={<ShieldCheckIcon size={20} aria-hidden="true" />}
-          title="Policy not configured — nothing will run"
-          description="A complete repository policy is required before any assigned Agent can run."
+          title="Policy not configured — effects are disabled"
+          description={
+            "Matching assigned Agents still run and remain visible, but no persistent effect can " +
+            "execute until a complete repository policy is configured."
+          }
         />
         {mutationError ? (
           <Banner variant="error" title="Repository policy unavailable" description={mutationError} />
@@ -206,7 +209,8 @@ export function RepositoryPolicyEditor({
           title="Configure this repository with no authority?"
           description={
             "This atomically creates all 29 operation, 10 observation, and 10 workspace entries. " +
-            "Every entry is disabled and no observations are allowed, so nothing will run."
+            "Every entry is disabled and no observations are allowed, so Agent runs remain " +
+            "proposal-only and no persistent effect can execute."
           }
           confirmLabel="Configure complete disabled policy"
           loading={mutation.isPending}

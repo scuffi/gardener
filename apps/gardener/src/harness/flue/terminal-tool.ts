@@ -3,7 +3,9 @@ import {
   instancePolicyV1Schema,
   operationSchema,
   repositoryEventV2Schema,
+  type AgentRunSnapshotV1,
   type Operation,
+  type PolicyMode,
 } from "@gardener/contracts";
 import {
   agentRunSnapshotHashContent,
@@ -50,6 +52,15 @@ export interface ExactCommentEffect {
   effectId: string;
   operation: Operation;
   operationHash: string;
+}
+
+/** Frozen effect authority controls execution, never whether the Agent model turn runs. */
+export function frozenIssueCommentMode(
+  snapshot: Pick<AgentRunSnapshotV1, "effectiveCapabilities">,
+): PolicyMode {
+  return snapshot.effectiveCapabilities.effects.find(
+    (item) => item.capability === "issue.comment.create",
+  )?.mode ?? "disabled";
 }
 
 export async function constructExactCommentEffect(
@@ -110,6 +121,16 @@ export async function submitGardenerOutput(
   });
   if (data.outcome === "abstain") {
     return { output: { outcome: "abstain", persisted: true }, terminate: true };
+  }
+
+  const authorityMode = frozenIssueCommentMode(snapshot);
+  if (authorityMode !== "automatic") {
+    // Preserve the trusted model result and proposal for the visible run, but do not manufacture an
+    // executable effect. Durable approval semantics will be added with the permission-model overhaul.
+    return {
+      output: { outcome: "issue_comment", status: "proposal_only", authorityMode },
+      terminate: true,
+    };
   }
 
   const frozen = await constructExactCommentEffect(run.id, event, data.proposal);
@@ -424,9 +445,6 @@ export async function validateNativeBinding(env: Env, request: HarnessRequest) {
     || snapshot.repository.policyHash !== run.repositoryPolicyHash
     || snapshot.repository.policyVersion !== run.repositoryPolicyVersion
     || event.repository.id !== run.repositoryId
-    || snapshot.effectiveCapabilities.effects.find(
-      (item) => item.capability === "issue.comment.create",
-    )?.mode !== "automatic"
   ) {
     throw new Error("Native run snapshot, event, or authority binding is invalid");
   }

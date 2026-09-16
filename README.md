@@ -55,9 +55,10 @@ Assignments are the only runtime enablement gate. New assignments are disabled. 
 include three system-published starter revisions—Issue triage, Bug intake, and Documentation helper—
 with active revision pointers but no repository assignments, so they have no runtime authority until
 an owner explicitly assigns and enables one. “All current” materializes current repository IDs and
-never follows future repositories. Missing repository policy means nothing runs. Effective authority
-is the most restrictive intersection of workspace, repository, Agent, assignment, provider, and live
-state.
+never follows future repositories. Matching enabled assignments always produce visible Agent runs;
+missing or restrictive policy removes tool/effect authority rather than suppressing the run. Effective
+authority is the most restrictive intersection of workspace, repository, Agent, assignment, provider,
+and live state.
 
 Read [Agent authoring](docs/agent-authoring.md), [Architecture](docs/architecture.md),
 [GitHub Gateway operations](docs/github-gateway.md), and [Security](SECURITY.md).

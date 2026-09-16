@@ -50,7 +50,7 @@ function policy(configured: boolean): RepositoryPolicyView {
   const workspaceModes = Object.fromEntries(workspaceCapabilities.map((key) => [key, "disabled"]));
   return {
     configured,
-    message: configured ? undefined : "Policy not configured — nothing will run",
+    message: configured ? undefined : "Policy not configured — Agent runs have no effect authority",
     repository: { id: repository.id, name: "cloudflare/workers-sdk", active: true },
     policy: {
       schemaVersion: "v1",
@@ -231,7 +231,7 @@ describe("repository-centric authority", () => {
   it("configures a missing policy only for owners with an exhaustive disabled body", async () => {
     renderPage();
     await userEvent.click(await screen.findByText("View details"));
-    expect(await screen.findByText("Policy not configured — nothing will run")).toBeTruthy();
+    expect(await screen.findByText("Policy not configured — effects are disabled")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Configure complete disabled policy" }));
     const dialog = await screen.findByRole("alertdialog");
     await userEvent.click(

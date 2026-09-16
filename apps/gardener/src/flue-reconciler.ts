@@ -118,47 +118,43 @@ async function reconcileClaim(
   const store = new D1HarnessRequestStore(env.DB);
   const request = await store.get(item.runId, item.requestId);
   if (!request) throw new Error("Outbox request is missing");
-  let receipt = await store.getSubmission(item.runId, item.requestId);
+  const receipt = await store.getSubmission(item.runId, item.requestId);
 
   if (run.cancelRequestedAt) {
-    if (!receipt) {
-      // Never create cancelled work. A keyed replay is permitted only to adopt
-      // a lost receipt from a conversation proven to exist already.
-      if (!await flueInstanceExists(run.id)) {
-        await settleRunNonterminalEffects(env, run.id, request.budget.deadlineAt);
-        if (!terminalRunStatuses.has(run.status)) {
-          await finalizeNativeRun(env.DB, {
-            runId: run.id,
-            status: "cancelled",
-            usage: run.usage,
-            error: { code: "cancelled", message: "Cancellation requested" },
-          });
-        }
-        await recordFlueSettlement(env.DB, item.runId, item.requestId, item.claimToken, "aborted");
-        summary.settled += 1;
-        return;
-      }
-      receipt = await dispatchStoredFlueRequest(env, item.runId, item.requestId, item.claimToken);
-      try { await abortFlueRun(run.id); } catch { /* next accepted-row sweep retries abort */ }
-      summary.rescheduled += 1;
-      return;
+    // D1 cancellation is the authority boundary. Once terminalized, a late Durable Object callback
+    // cannot claim the terminal tool or persist an executable effect. Do not wait indefinitely for
+    // the remote runtime to acknowledge abort before converging authoritative product state.
+    try { if (await flueInstanceExists(run.id)) await abortFlueRun(run.id); } catch { /* D1 still fails closed */ }
+    await settleRunNonterminalEffects(env, run.id, request.budget.deadlineAt);
+    if (!terminalRunStatuses.has(run.status)) {
+      await finalizeNativeRun(env.DB, {
+        runId: run.id,
+        status: "cancelled",
+        usage: run.usage,
+        error: { code: "cancelled", message: "Cancellation requested" },
+      });
     }
-    await abortFlueRun(run.id);
+    await recordFlueSettlement(env.DB, item.runId, item.requestId, item.claimToken, "aborted");
+    summary.settled += 1;
+    return;
+  }
+
+  if (Date.parse(request.budget.deadlineAt) <= now.getTime()) {
+    // The immutable request deadline applies even after Flue accepted the submission. A provider or
+    // Durable Object that never settles must not leave the Gardener run active forever.
+    try { if (await flueInstanceExists(run.id)) await abortFlueRun(run.id); } catch { /* D1 still fails closed */ }
+    const error = { code: "native_deadline_expired", message: "The native run exceeded its immutable deadline" };
+    await settleRunNonterminalEffects(env, run.id, request.budget.deadlineAt);
+    if (!terminalRunStatuses.has(run.status)) {
+      await finalizeNativeRun(env.DB, { runId: run.id, status: "failed", usage: run.usage, error });
+      await putRunFailureInbox(env, run.id, error);
+    }
+    await recordFlueSettlement(env.DB, item.runId, item.requestId, item.claimToken, "failed", { code: error.code });
+    summary.settled += 1;
+    return;
   }
 
   if (!receipt) {
-    const instanceExists = await flueInstanceExists(run.id);
-    if (!instanceExists && Date.parse(request.budget.deadlineAt) <= now.getTime()) {
-      const error = { code: "native_deadline_expired", message: "The native run expired before Flue accepted it" };
-      await settleRunNonterminalEffects(env, run.id, request.budget.deadlineAt);
-      if (!terminalRunStatuses.has(run.status)) {
-        await finalizeNativeRun(env.DB, { runId: run.id, status: "failed", usage: run.usage, error });
-        await putRunFailureInbox(env, run.id, error);
-      }
-      await recordFlueSettlement(env.DB, item.runId, item.requestId, item.claimToken, "failed", { code: error.code });
-      summary.settled += 1;
-      return;
-    }
     await dispatchStoredFlueRequest(env, item.runId, item.requestId, item.claimToken);
     summary.rescheduled += 1;
     return;

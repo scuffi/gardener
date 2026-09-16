@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { RepositoryEventV2 } from "@gardener/contracts";
-import { constructExactCommentEffect } from "../src/harness/flue/terminal-tool";
+import type { AgentRunSnapshotV1, RepositoryEventV2 } from "@gardener/contracts";
+import { constructExactCommentEffect, frozenIssueCommentMode } from "../src/harness/flue/terminal-tool";
 
 const event:RepositoryEventV2={schemaVersion:"v2",id:"event-one",deliveryId:"delivery-one",instanceId:"instance-one",occurredAt:"2026-09-15T00:00:00.000Z",
   repository:{provider:"github",id:"101",installationId:"201",owner:"acme",name:"widgets",defaultBranch:"main"},kind:"github.issue",action:"opened",
@@ -9,6 +9,16 @@ const event:RepositoryEventV2={schemaVersion:"v2",id:"event-one",deliveryId:"del
     updatedAt:"2026-09-15T00:00:00.000Z",htmlUrl:"https://github.com/acme/widgets/issues/1"}};
 
 describe("Flue terminal exact-effect compatibility",()=>{
+  it.each(["disabled", "approval", "automatic"] as const)("reads %s execution authority from the frozen snapshot without gating the model run",(mode)=>{
+    const snapshot={effectiveCapabilities:{effects:[{capability:"issue.comment.create",mode}]}} as AgentRunSnapshotV1;
+    expect(frozenIssueCommentMode(snapshot)).toBe(mode);
+  });
+
+  it("defaults missing frozen comment authority to disabled",()=>{
+    const snapshot={effectiveCapabilities:{effects:[]}} as unknown as AgentRunSnapshotV1;
+    expect(frozenIssueCommentMode(snapshot)).toBe("disabled");
+  });
+
   it("preserves operation id, canonical hash, effect id, and marker bytes",async()=>{
     const result=await constructExactCommentEffect("run_golden",event,{kind:"issue_comment_proposal",body:"Hello",rationale:"Useful"});
     const operationId="op_1a697c9bbcdd6e94d0d8b6aab8cf9942f8e70ca340411f78f6f89228e42ef399";

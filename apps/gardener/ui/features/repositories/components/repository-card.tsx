@@ -106,7 +106,7 @@ export function RepositoryCard({
                     ? "Policy unavailable"
                     : configured
                       ? `${automaticOperations} operations effective automatically`
-                      : "Policy not configured — nothing will run"}
+                      : "Policy not configured — effects disabled"}
               </span>
             </span>
           </span>

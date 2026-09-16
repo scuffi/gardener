@@ -107,7 +107,7 @@ export async function getRepositoryPolicy(db:D1Database,repositoryId:string):Pro
   const repositoryConstraints=Object.fromEntries(Array.from(capabilityRows,([key,row])=>[key,row.constraints]));
   const effectiveOps=Object.fromEntries(operationKindSchema.options.map(key=>[key,rank[operationModes[key]!]<=rank[workspaceOp[key]??"disabled"]?operationModes[key]:workspaceOp[key]??"disabled"])) as Record<string,PolicyMode>;
   const effectiveWorkspace=Object.fromEntries(workspaceCapabilityValues.map(key=>[key,rank[workspaceModes[key]??"disabled"]<=rank[workspaceCap[key]??"disabled"]?(workspaceModes[key]??"disabled"):(workspaceCap[key]??"disabled")])) as Record<string,PolicyMode>;
-  return {configured,...(!configured?{message:"Policy not configured — nothing will run"}:{}),repository:{id:repo.id,name:`${repo.owner}/${repo.name}`,active:repo.active===1},policy,policyVersion,policyHash:hash,repositoryConstraints,
+  return {configured,...(!configured?{message:"Policy not configured — Agent runs have no effect authority"}:{}),repository:{id:repo.id,name:`${repo.owner}/${repo.name}`,active:repo.active===1},policy,policyVersion,policyHash:hash,repositoryConstraints,
     workspaceCeilings:{operationModes:workspaceOp,observation:workspaceCap,workspaceModes:workspaceCap,constraints},
     effective:{operationModes:effectiveOps,allowedObservations:allowedObservations.filter(key=>(workspaceCap[key]??"disabled")!=="disabled"),workspaceModes:effectiveWorkspace}};
 }

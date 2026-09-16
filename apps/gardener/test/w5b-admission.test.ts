@@ -272,17 +272,24 @@ describe("W5B admission and retry integration", () => {
     expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(2);
   });
 
-  it.each(["missing", "partial"])("latches a %s repository policy and permanently dedupes its audit", async (kind) => {
+  it.each(["missing", "partial"])("runs with a fail-closed snapshot for a %s repository policy and permanently dedupes its audit", async (kind) => {
     const f = await fixture({ completePolicy: kind !== "missing" });
     if (kind === "partial") f.sqlite.exec("DELETE FROM repository_operation_policies WHERE repository_id='101' AND operation_kind='issue.close'");
     await addAgent(f, "one");
     await addAgent(f, "two");
-    expect(await admit(f)).toEqual([]);
-    expect(await admit(f)).toEqual([]);
-    expect(f.sqlite.prepare("SELECT action,detail_json FROM audit_records").all()).toEqual([
+    expect(await admit(f)).toHaveLength(2);
+    expect(await admit(f)).toHaveLength(2);
+    const snapshots = f.sqlite.prepare("SELECT run_snapshot_json FROM agent_runs ORDER BY id").all() as Array<{ run_snapshot_json: string }>;
+    expect(snapshots).toHaveLength(2);
+    for (const row of snapshots) {
+      const snapshot = JSON.parse(row.run_snapshot_json);
+      expect(snapshot.effectiveCapabilities.effects.find((item: { capability: string }) => item.capability === "issue.comment.create")).toBeUndefined();
+      expect(snapshot.effectiveCapabilities.observation).not.toContain("github.issue.read");
+    }
+    expect(f.sqlite.prepare("SELECT action,detail_json FROM audit_records WHERE action='repository.policy_unconfigured'").all()).toEqual([
       { action: "repository.policy_unconfigured", detail_json: null },
     ]);
-    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(4);
   });
 
   it.each([
@@ -345,14 +352,16 @@ describe("W5B admission and retry integration", () => {
     expect(native.ensureInitialFlueDispatch).toHaveBeenCalledTimes(3);
   });
 
-  it.each(["workspace", "repository", "assignment"])("does not create a bounded run when %s authority requires approval", async (layer) => {
+  it.each(["workspace", "repository", "assignment"])("runs with frozen proposal-only authority when %s authority requires approval", async (layer) => {
     const f = await fixture();
     if (layer === "workspace") f.sqlite.exec("UPDATE operation_policies SET mode='approval' WHERE operation_kind='issue.comment.create'");
     if (layer === "repository") f.sqlite.exec("UPDATE repository_operation_policies SET mode='approval' WHERE repository_id='101' AND operation_kind='issue.comment.create'");
     await addAgent(f, "one", { authorityCeiling: layer === "assignment" ? "approval" : "automatic" });
-    expect(await admit(f)).toEqual([]);
-    expect(count(f.sqlite, "agent_runs")).toBe(0);
-    expect(native.ensureInitialFlueDispatch).not.toHaveBeenCalled();
+    expect(await admit(f)).toHaveLength(1);
+    expect(count(f.sqlite, "agent_runs")).toBe(1);
+    const snapshot = JSON.parse((f.sqlite.prepare("SELECT run_snapshot_json FROM agent_runs").get() as { run_snapshot_json: string }).run_snapshot_json);
+    expect(snapshot.effectiveCapabilities.effects.find((item: { capability: string }) => item.capability === "issue.comment.create").mode).toBe("approval");
+    expect(native.ensureInitialFlueDispatch).toHaveBeenCalledOnce();
   });
 
   it("propagates dispatch failure, then redelivery reuses the persisted native run", async () => {

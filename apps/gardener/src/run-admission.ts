@@ -153,9 +153,10 @@ export async function admitAgentRunsForEvent(
           getRepositoryPolicy(env.DB, event.repository.id),
         ]);
         if (!repositoryPolicy?.configured) {
-          // This latch is per event; the unconfigured-policy audit is permanently deduped by migration 0007.
+          // Missing repository authority is represented by the complete all-disabled snapshot returned
+          // by getRepositoryPolicy. It must not suppress the Agent's model run: policy gates effects,
+          // not whether a matching assigned Agent gets to observe and reason about its trigger event.
           await recordUnconfiguredPolicy(env.DB, event.repository.id);
-          policyUnavailable = true;
         }
       } catch (error) {
         const explicitCode = error instanceof RepositoryPolicyReadError
@@ -168,7 +169,7 @@ export async function admitAgentRunsForEvent(
         policyUnavailable = true;
       }
     }
-    if (policyUnavailable || !workspacePolicy || !repositoryPolicy?.configured) continue;
+    if (policyUnavailable || !workspacePolicy || !repositoryPolicy) continue;
 
     let snapshot: Awaited<ReturnType<typeof createAgentRunSnapshot>>;
     try {
@@ -187,12 +188,9 @@ export async function admitAgentRunsForEvent(
       await audit(env.DB, "runtime", "run_admission.invalid", "agent_repository_assignment", row.assignment_id, { code: error.code });
       continue;
     }
-    if (
-      event.kind !== "github.issue"
-      || event.action !== "opened"
-      || !snapshot.effectiveCapabilities.observation.includes("github.issue.read")
-      || snapshot.effectiveCapabilities.effects.find((item) => item.capability === "issue.comment.create")?.mode !== "automatic"
-    ) continue;
+    // Trigger/eligibility and assignment state decide whether the Agent runs. Frozen capabilities
+    // decide what that run may observe through tools and which proposed effects may execute.
+    if (event.kind !== "github.issue" || event.action !== "opened") continue;
     const capabilitySnapshotHash = await canonicalSha256(snapshot.effectiveCapabilities);
     const initialRequest = await createInitialFlueRequest({
       runId,

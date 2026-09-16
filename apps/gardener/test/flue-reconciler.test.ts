@@ -47,7 +47,7 @@ const operation = {
   body: "Hello",
 };
 
-async function fixture(options: { request?: boolean; receipt?: boolean } = { request: true }) {
+async function fixture(options: { request?: boolean; receipt?: boolean; deadlineAt?: string } = { request: true }) {
   const { sqlite, db } = newAgentDatabase();
   sqlite.exec(`
     INSERT INTO agents(id,slug,name,created_by) VALUES('agent','agent','Agent','owner');
@@ -70,7 +70,7 @@ async function fixture(options: { request?: boolean; receipt?: boolean } = { req
       policySnapshotReference: digest, toolCatalogVersion: "1", harness: expectedHarnessBinding("flue") },
     prompt: "bounded", model: { id: "@cf/test/model" }, tools: [],
     budget: { maxTurns: 1, maxToolCalls: 1, maxInputTokens: 1000, maxOutputTokens: 100,
-      maxRuntimeMs: 30_000, deadlineAt: "2099-01-01T00:00:00.000Z" },
+      maxRuntimeMs: 30_000, deadlineAt: options.deadlineAt ?? "2099-01-01T00:00:00.000Z" },
   };
   const store = new D1HarnessRequestStore(db);
   if (options.request !== false) {
@@ -139,7 +139,7 @@ describe("Flue-native reconciler", () => {
     } finally { f.sqlite.close(); }
   });
 
-  it("adopts only a proven existing cancelled instance before aborting it", async () => {
+  it("aborts an existing cancelled instance and immediately converges D1 without redispatch", async () => {
     const f = await fixture();
     try {
       await requestRunCancellation(f.db, {
@@ -147,14 +147,36 @@ describe("Flue-native reconciler", () => {
         audit: { actor: "Owner", actorUserId: null, actorIdentityJson: "{}" },
       });
       runtime.flueInstanceExists.mockResolvedValue(true);
-      runtime.dispatchStoredFlueRequest.mockResolvedValue({ submissionId: "adopted" });
       const result = await reconcileFlueRuntime({ DB: f.db } as any, { now });
-      expect(result.rescheduled).toBe(1);
-      expect(runtime.dispatchStoredFlueRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ DB: f.db }), "run-native", "request-native", expect.any(String),
-      );
+      expect(result.settled).toBe(1);
+      expect(runtime.dispatchStoredFlueRequest).not.toHaveBeenCalled();
       expect(runtime.abortFlueRun).toHaveBeenCalledWith("run-native");
       expect(flue.read).not.toHaveBeenCalled();
+      expect(await getRun(f.db, "run-native")).toMatchObject({ status: "cancelled" });
+      expect(await getFlueDispatch(f.db, "run-native", "request-native")).toMatchObject({
+        state: "settled", settlementOutcome: "aborted",
+      });
+    } finally { f.sqlite.close(); }
+  });
+
+  it("fails an accepted submission once its immutable deadline expires instead of retrying forever", async () => {
+    const f = await fixture({ request: true, receipt: true, deadlineAt: "2097-12-31T23:59:00.000Z" });
+    try {
+      runtime.flueInstanceExists.mockResolvedValue(true);
+      const result = await reconcileFlueRuntime({ DB: f.db } as any, { now });
+      expect(result.settled).toBe(1);
+      expect(result.rescheduled).toBe(0);
+      expect(runtime.abortFlueRun).toHaveBeenCalledWith("run-native");
+      expect(flue.read).not.toHaveBeenCalled();
+      expect(await getRun(f.db, "run-native")).toMatchObject({
+        status: "failed",
+        error: { code: "native_deadline_expired" },
+      });
+      expect(await getFlueDispatch(f.db, "run-native", "request-native")).toMatchObject({
+        state: "settled", settlementOutcome: "failed",
+      });
+      expect(f.sqlite.prepare("SELECT COUNT(*) count FROM inbox_items WHERE kind='failed_run' AND run_id='run-native'").get())
+        .toEqual({ count: 1 });
     } finally { f.sqlite.close(); }
   });
 
