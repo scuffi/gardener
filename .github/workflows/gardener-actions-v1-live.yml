@@ -1,0 +1,17 @@
+name: Gardener Actions v1 live spike
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  gardener:
+    name: Exercise private-repository planning transport
+    permissions:
+      contents: read # Passed to the reusable workflow for its unprivileged checkout.
+      id-token: write # Passed to the reusable workflow for Gardener OIDC authentication.
+    uses: scuffi/gardener/.github/workflows/gardener-reusable-spike.yml@22d6ac3f43acbaf8bc3f34b5a954399a7c0726a1 # zizmor: ignore[stale-action-refs]
+    with:
+      harness-url: https://gardener-actions-v1-spike.4g3nts.com
+      agent-hash: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
