@@ -1,0 +1,29 @@
+name: Gardener planning runner
+description: Connects an unprivileged GitHub Actions job to a customer-deployed Gardener harness.
+author: Gardener
+inputs:
+  harness-url:
+    description: HTTPS origin of the customer-deployed Gardener harness.
+    required: true
+  agent-hash:
+    description: Lowercase SHA-256 digest of the compiled Agent definition.
+    required: true
+  max-reconnects:
+    description: Maximum Cap'n Web reconnection attempts after the initial connection.
+    required: false
+    default: "5"
+outputs:
+  status:
+    description: Terminal planning status.
+  summary:
+    description: Bounded terminal planning summary.
+  last-server-sequence:
+    description: Last server action sequence observed by the runner.
+  last-completed-sequence:
+    description: Last action sequence durably completed by the runner.
+runs:
+  using: node24
+  main: dist/index.cjs
+branding:
+  icon: activity
+  color: green

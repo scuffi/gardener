@@ -1,5 +1,7 @@
 node_modules/
 dist/
+!actions/runner/dist/
+!actions/runner/dist/index.cjs
 .wrangler/
 .dev.vars
 .env

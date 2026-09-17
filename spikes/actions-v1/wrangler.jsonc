@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gardener-actions-v1-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-17",
+  "workers_dev": true,
+  "limits": {
+    "cpu_ms": 5000
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSIONS",
+        "class_name": "SpikeSession"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SpikeSession"]
+    }
+  ]
+}
