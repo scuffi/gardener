@@ -7,6 +7,7 @@ Date: 2026-09-17
 - Planning runner/action commit: `fc46492dde64a0fd2f6a48cc41c7f926df39241f`
 - Planning reusable workflow commit: `bd6ac76f84e5969797507bd8ab52b97afceac05b`
 - OIDC replay probe/action commit: `ffa37e44942e42ca9f97c3714f06d88abeb77de7`
+- Phase-capable OIDC probe commit: `72c265f69ab323071ebf1a5c8db19b58127cafe8`
 - OIDC replay reusable workflow commit: `c9ba5c23efec1cb552ff0c66821f9e27365c238c`
 - Runner: fixed `ubuntu-24.04` GitHub-hosted runner
 - Checkout: `actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803` (`v6.1.0`)
@@ -15,7 +16,7 @@ Date: 2026-09-17
 
 - Worker: `gardener-actions-v1-spike`
 - Endpoint: <https://gardener-actions-v1-spike.agents-b8a.workers.dev>
-- Latest qualified version: `7b0798c8-9d63-4b34-a347-635f0e41aa0e`
+- Latest qualified version: `d92156d6-3639-464d-a95d-5d7bc10ea49e`
 - Binding: SQLite Durable Object `SESSIONS` / `SpikeSession`
 - Current enrollment: public repository ID `1374842705`, owner ID `45369682`
 - Current trusted workflow: `scuffi/gardener-actions-v1-public-smoke/.github/workflows/gardener-reusable.yml@9d0324729f5caa5c31a9517c846b95d8dffec76e`
@@ -38,6 +39,8 @@ The entire isolated spike Worker was made public for qualification. It holds no 
 - Numeric owner ID: `45369682`
 - Public runner action commit: `4ef4b1b0d9e7bbb2858d17168d08eec9b1552ac3`
 - Public reusable workflow commit: `9d0324729f5caa5c31a9517c846b95d8dffec76e`
+- Public effects probe action commit: `f2e699efdf8165477ffcbe2d3affd4cfc9a81f24`
+- Public effects reusable workflow commit: `acb13ef9f0e18fca43f46d055539cc75c59315c3`
 
 ## Positive live qualifications
 
@@ -70,6 +73,12 @@ Initial run: <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions
 Independent repeat: <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35256179260>
 
 Both public-repository runs completed through the full-SHA-pinned public reusable workflow and action with `Contents: read`, real GitHub OIDC, edge Durable Object routing, Cap'n Web callback, and `github-actions-capnweb-ok`. The repeat used a distinct run/session and demonstrates run isolation rather than stale session reuse.
+
+### Environment-bound effects identity
+
+Run: <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35257188403>
+
+An automatic `gardener-effects` GitHub Environment produced a real OIDC token carrying the environment claim. The probe presented `phase: effects`; the Worker required the exact trusted effects reusable workflow and `environment: gardener-effects`, authenticated it successfully, then rejected reuse of the same effects token. The job had only implicit metadata read and `id-token: write`; it had no checkout or shell executor. This qualifies cryptographic separation of planning and effects identities, but not effect execution itself.
 
 ### Result bounds and shell lifecycle
 
