@@ -1,0 +1,33 @@
+name: Gardener deliberately untrusted reusable spike
+
+on:
+  workflow_call:
+    inputs:
+      harness-url:
+        required: true
+        type: string
+      agent-hash:
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  plan:
+    name: Untrusted workflow identity probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # Required only for the unprivileged repository checkout.
+      id-token: write # Required to present the deliberately untrusted workflow identity.
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Present an untrusted reusable workflow identity
+        uses: scuffi/gardener/actions/runner@fc46492dde64a0fd2f6a48cc41c7f926df39241f # zizmor: ignore[stale-action-refs]
+        with:
+          harness-url: ${{ inputs.harness-url }}
+          agent-hash: ${{ inputs.agent-hash }}
+          max-reconnects: "1"
