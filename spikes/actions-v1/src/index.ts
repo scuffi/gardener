@@ -95,6 +95,10 @@ export class SpikeSession extends DurableObject<Env> {
     this.#runner = runner.dup();
   }
 
+  async storedAction(operationId: string): Promise<RunnerActionV1 | undefined> {
+    return (await this.ctx.storage.get<StoredAction>(`${ACTION_PREFIX}${operationId}`))?.action;
+  }
+
   async invoke(input: RunnerActionV1): Promise<RunnerActionResultV1> {
     const action = runnerActionV1Schema.parse(input);
     const key = `${ACTION_PREFIX}${action.operationId}`;
@@ -223,20 +227,22 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
   }
 
   async run(): Promise<RunnerTerminalV1> {
-    const result = await this.session.invoke({
-      schemaVersion: "gardener.runner.action/v1",
+    const operationId = "spike-run-command";
+    const action = await this.session.storedAction(operationId) ?? {
+      schemaVersion: "gardener.runner.action/v1" as const,
       sequence: 1,
-      operationId: "spike-run-command",
-      kind: "shell.exec",
+      operationId,
+      kind: "shell.exec" as const,
       command: this.env.SPIKE_COMMAND ?? "test -z \"${GITHUB_TOKEN-}\" && test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN-}\" && printf 'github-actions-capnweb-ok'",
       cwd: "/workspace",
       timeoutMs: 30_000,
       maxOutputBytes: 64 * 1024,
-    });
+    };
+    const result = await this.session.invoke(action);
     return {
       schemaVersion: "gardener.runner.terminal/v1",
       status: result.status === "completed" ? "completed" : "failed",
-      summary: result.stdout || result.stderr || result.status,
+      summary: boundedSummary(result.stdout || result.stderr || result.status),
       lastServerSequence: 1,
       lastCompletedSequence: 1,
     };
@@ -253,6 +259,12 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
   resume(input: ResumeCursorV1, runner: RpcStub<RunnerCapability>): Promise<ResumeStateV1> {
     return this.session.resume(input, runner);
   }
+}
+
+function boundedSummary(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  if (bytes.byteLength <= 16 * 1024) return value;
+  return new TextDecoder().decode(bytes.slice(0, 16 * 1024));
 }
 
 function requiredSetting(value: string | undefined, name: string): string {
