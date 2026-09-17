@@ -22,11 +22,14 @@ async function main(): Promise<void> {
   try {
     const harnessUrl = core.getInput("harness-url", { required: true });
     const agentHash = core.getInput("agent-hash", { required: true });
+    const phaseInput = core.getInput("phase") || "plan";
+    if (phaseInput !== "plan" && phaseInput !== "effects") throw new Error("phase must be plan or effects");
+    const phase: "plan" | "effects" = phaseInput;
     const audience = new URL(harnessUrl).origin;
     const token = await core.getIDToken(audience);
     core.setSecret(token);
-    const hello = helloFromOidcToken(token, agentHash, "plan");
-    const url = sessionSocketUrl(harnessUrl, hello, "plan");
+    const hello = helloFromOidcToken(token, agentHash, phase);
+    const url = sessionSocketUrl(harnessUrl, hello, phase);
     const runner = new NullRunner();
     const cursor = {
       schemaVersion: "gardener.runner.cursor/v1" as const,

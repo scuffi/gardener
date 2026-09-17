@@ -43080,11 +43080,14 @@ async function main() {
   try {
     const harnessUrl = getInput("harness-url", { required: true });
     const agentHash = getInput("agent-hash", { required: true });
+    const phaseInput = getInput("phase") || "plan";
+    if (phaseInput !== "plan" && phaseInput !== "effects") throw new Error("phase must be plan or effects");
+    const phase = phaseInput;
     const audience = new URL(harnessUrl).origin;
     const token = await getIDToken(audience);
     setSecret(token);
-    const hello = helloFromOidcToken(token, agentHash, "plan");
-    const url2 = sessionSocketUrl(harnessUrl, hello, "plan");
+    const hello = helloFromOidcToken(token, agentHash, phase);
+    const url2 = sessionSocketUrl(harnessUrl, hello, phase);
     const runner = new NullRunner();
     const cursor = {
       schemaVersion: "gardener.runner.cursor/v1",

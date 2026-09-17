@@ -8,6 +8,10 @@ inputs:
   agent-hash:
     description: Lowercase SHA-256 digest for the probe identity.
     required: true
+  phase:
+    description: OIDC phase to present; plan or effects.
+    required: false
+    default: plan
 outputs:
   replay-rejected:
     description: Set to true when the second authentication was rejected as a replay.
