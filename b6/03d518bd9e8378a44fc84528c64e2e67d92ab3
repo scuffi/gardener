@@ -1,0 +1,147 @@
+PRD.md
+  s_de0b486c128948::t_06a28af82865b7 5,11,21,35,73-76,78,92,94,96,151,156-161,175,179,187,201-202
+README.md
+  s_de0b486c128948::t_217b44132f6090 7-13,49,51,53-54,56,61-63
+apps/gardener/Dockerfile.computer
+  s_de0b486c128948::t_3b00d4d7b3b373 19
+apps/gardener/migrations/0009_starter_agents.sql
+  s_de0b486c128948::t_e6e822011145d3 6,11,16
+apps/gardener/package.json
+  s_de0b486c128948::t_d8c55e74bd1354 28,42,52
+apps/gardener/src/agent-management.ts
+  s_de0b486c128948::t_faa6d491438cc1 31,105-110,201-207,211,224-233,239-244,249,253,263-335,339-352,382,410,413,422
+apps/gardener/src/app.ts
+  s_de0b486c128948::t_b0d7533f23c574 358,471
+apps/gardener/src/flue-native-runtime.ts
+  s_de0b486c128948::t_cfb44c55b75db3 7,68,70-71,193-194
+apps/gardener/src/harness/adapter.ts
+  s_de0b486c128948::t_3f84f5b790fbc6 22,43-44
+apps/gardener/src/harness/flue/bounded-cloudflare-provider.ts
+  s_de0b486c128948::t_9eb62d017a9b11 7-10,22-23,31-35,41-42,55,66,88,94,103-105,107-121,126-127,135-137,154-162,181-187,191-250
+apps/gardener/src/harness/flue/generic-agent.ts
+  s_de0b486c128948::t_4d4c82d779ab40 20-26,66-69,99-104,110-111,124,126-134,153,161,187,213
+apps/gardener/src/harness/flue/terminal-tool.ts
+  s_de0b486c128948::t_7404f6f914cdf8 25,46-50,52,129-130,418-419,421-425,427
+apps/gardener/src/harness/types.ts
+  s_de0b486c128948::t_6cd200703a2afa 52,56,214
+apps/gardener/src/harness/validation.ts
+  s_de0b486c128948::t_98f4f92db59eaf 285-286
+apps/gardener/src/index.ts
+  s_de0b486c128948::t_42f55aa0c0cbaa 4
+apps/gardener/src/instance-state.ts
+  s_de0b486c128948::t_2f48791d78e0b0 12,207,209,221-318
+apps/gardener/src/persistence/agents.ts
+  s_de0b486c128948::t_decb4e373e03b0 115-116,123-128,259-310,321-322,333-334,341-342,353-410,412-415
+apps/gardener/src/repository-policy.ts
+  s_de0b486c128948::t_abd120e69dc0bd 19-22,66-67,92-97,101-116,118-121,123,127,130,177-223,234,238-250
+apps/gardener/src/run-admission.ts
+  s_de0b486c128948::t_307baea484fd84 3-5,7-8,11,16-17,80-150,222,224-239,243,245-249,252
+apps/gardener/src/workspace/computer-workspace.ts
+  s_de0b486c128948::t_99cdac0ea914cf 18-21,23-26,66,77,106-116,143,470-491,496,513,645,653-659,721-730
+apps/gardener/src/workspace/policy.ts
+  s_de0b486c128948::t_c103e8d0cb6bc3 53
+apps/gardener/src/workspace/types.ts
+  s_de0b486c128948::t_efb5a85c98b9c1 23-25,31-33,76
+apps/gardener/test/agent-management.test.ts
+  s_de0b486c128948::t_1fd68a53d19692 92,98-99,137,156-160,162-163,168-169
+apps/gardener/test/flue-bounded-provider.test.ts
+  s_de0b486c128948::t_67e9d20c4fc3e7 41-42,50,55,67-71,73-78,90,92-96,104,111-218,240,242-256,259,261
+apps/gardener/test/flue-native-agent.test.ts
+  s_de0b486c128948::t_afc5a0479d4925 29-37,89,99,103-125,157
+apps/gardener/test/harness-contract.test.ts
+  s_de0b486c128948::t_a7b080f561c03f 78,81-87
+apps/gardener/test/w5a-assignment-policy.test.ts
+  s_de0b486c128948::t_201b6c3068b994 38,40,75,77-80
+apps/gardener/test/w5a-authority-routes.test.ts
+  s_de0b486c128948::t_81b80a5cb65e67 3-8,13,15-58,69-275
+apps/gardener/test/w5b-admission.test.ts
+  s_de0b486c128948::t_42c5fd6e797335 275-276,280-281,284-288,290-310,322-328,375,379,387-401
+apps/gardener/test/w5b-runtime-authority.test.ts
+  s_de0b486c128948::t_f2d4a44410c1d6 16,33-36,44-45,64,66,132-143,167-173,193-204
+apps/gardener/test/workspace-policy.test.ts
+  s_de0b486c128948::t_458c2f82b9d718 154-160
+apps/gardener/ui/features/agents/agent-detail-page.tsx
+  s_de0b486c128948::t_1963cb193fde92 1-2,4,140-144,166-167
+apps/gardener/ui/features/agents/agent-editor-page.test.tsx
+  s_de0b486c128948::t_303fbdb0a99a31 4,8,82,88,92-148
+apps/gardener/ui/features/agents/agent-editor-page.tsx
+  s_de0b486c128948::t_ad5488360311f7 11,13,19,67,83,115-119,124-126,131,134-135,139-143,148-149,188,304-305,326,332-371
+apps/gardener/ui/features/agents/components/agent-deployments.test.tsx
+  s_de0b486c128948::t_5ee422e238a5ef 182-185,277,280-281,493-494
+apps/gardener/ui/features/agents/components/agent-deployments.tsx
+  s_de0b486c128948::t_a83fa779f21657 43-45,53-60,223,275,278,320,361,386,403,412-417,429-433,436-442,444-446,506-511,523,530-534,537-543,546,625-626
+apps/gardener/ui/features/repositories/components/repository-assignment-list.tsx
+  s_de0b486c128948::t_f1e09e4f165a79 14-15,18-19,39,46-51,54-58,79-83,88-94
+apps/gardener/ui/features/repositories/components/repository-card.tsx
+  s_de0b486c128948::t_4e8b4b68d4a795 27,32,111,176-180
+apps/gardener/ui/features/repositories/components/repository-policy-editor.tsx
+  s_de0b486c128948::t_bc931162e33ae4 1,89,117-123,131,149-175,196-201,203-216,359-379
+apps/gardener/ui/features/repositories/repositories-page.test.tsx
+  s_de0b486c128948::t_58eceb556b51a3 25,54,191,202,205,233,236-246,248-252
+apps/gardener/ui/features/repositories/repositories-page.tsx
+  s_de0b486c128948::t_84f8ee40b04b2f 130
+apps/gardener/ui/guarded-actions.test.tsx
+  s_de0b486c128948::t_bcd725a7faa998 258,265,269
+apps/gardener/ui/lib/agent-api.test.ts
+  s_de0b486c128948::t_24272920f6af2d 23-24,32-33,35
+apps/gardener/ui/lib/api.ts
+  s_de0b486c128948::t_f3fca286a4800e 19,212,214-219,221-223,252-256
+apps/gardener/ui/lib/team-api.test.ts
+  s_de0b486c128948::t_6e6dc9a626fd4d 83,129
+apps/gardener/ui/lib/types.ts
+  s_de0b486c128948::t_9d690a66f236a7 232-236
+apps/github-gateway/package.json
+  s_de0b486c128948::t_914ce8380075b3 24
+apps/github-gateway/src/operations.ts
+  s_de0b486c128948::t_d9a5cde836c2d1 157
+apps/github-gateway/test/operations.test.ts
+  s_de0b486c128948::t_ae8c4d7100fea9 112
+docs/adr/0001-team-workspace-and-agent-deployments.md
+  s_de0b486c128948::t_78eb6b0e23a45a 26-27,33,35,39,41,45,67
+docs/agent-authoring.md
+  s_de0b486c128948::t_442c2a88aeb469 5,154,156-157,160,172,200,202
+docs/architecture.md
+  s_de0b486c128948::t_4505e53c8647cb 24,150-151,157-160,172,178-182,187-191,194,198-217,226-231,236-238,289-291
+docs/dashboard-redesign.md
+  s_de0b486c128948::t_f5ca39d3d4e544 67,212-215
+docs/foundation-status.md
+  s_de0b486c128948::t_5ae474dffd4a1b 58-72,75-78,98-123,127,131-135
+examples/agents/bug-intake/AGENT.md
+  s_de0b486c128948::t_5658a874334f53 16-17
+examples/agents/documentation-helper/AGENT.md
+  s_de0b486c128948::t_8eaef230fdac1e 16-17
+examples/agents/issue-triage/AGENT.md
+  s_de0b486c128948::t_961f858e5dcf9e 16-17
+package.json
+  s_de0b486c128948::t_410bf1a1d86262 26
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_b11a879888a3bb 153-154
+packages/contracts/test/agent-native.test.ts
+  s_de0b486c128948::t_1c874e5c9264a4 177
+packages/core/src/capabilities.ts
+  s_de0b486c128948::t_11ced8cdf6f088 25-29,32,56-60
+packages/core/src/snapshot.ts
+  s_de0b486c128948::t_0da6eafbcb9459 134-146
+packages/core/test/agent-foundation.test.ts
+  s_de0b486c128948::t_d08e803d4f8da4 254-257,259-270
+pnpm-lock.yaml
+  s_de0b486c128948::t_4835f02e60ac4a 12-13,22,25,66-67,101,103-104,107,110,133-134,149,152,155,179-180,189,192,211,224,243,259,288-290,292-294,653-654,684-685,1672-1673,1675-1676,2096-2097,2671-2672,3660-3661,3873-3874,4008,4016,4018,4475,4482,4506,4530,4754,4757,4823,4827,4858,4862,5412,5414,5416,5629,5641,5660,5672,5769,6390,6392-6393,6395,6406,6410,7103,7105,7707,7838,7846,7848,7867,7871,7890,7894,7913,7935,7960,7971,7978,7989
+pnpm-workspace.yaml
+  s_de0b486c128948::t_b348051d81415e 50-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b603d518bd9e8378a44fc84528c64e2e67d92ab3",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
