@@ -49,6 +49,14 @@ describe("PlanningShellExecutor", () => {
     expect(result.outputTruncated).toBe(true);
   });
 
+  it("cancels an active process group", async () => {
+    const executor = new PlanningShellExecutor(await temporaryWorkspace());
+    const executing = executor.execute(action("sleep 5"));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await executor.cancel("operation-one");
+    await expect(executing).resolves.toMatchObject({ status: "cancelled", exitCode: null });
+  });
+
   it("times out a process group", async () => {
     const executor = new PlanningShellExecutor(await temporaryWorkspace());
     const result = await executor.execute({ ...action("sleep 5"), timeoutMs: 25 });

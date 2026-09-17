@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --format=cjs --outfile=../../actions/runner/dist/index.cjs"
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --format=cjs --outfile=../../actions/runner/dist/index.cjs",
+    "build:replay-probe": "esbuild src/replay-probe.ts --bundle --platform=node --target=node24 --format=cjs --outfile=../../actions/replay-probe/dist/index.cjs"
   },
   "dependencies": {
     "@actions/core": "3.0.1",
