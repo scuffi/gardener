@@ -26,6 +26,7 @@ interface Env {
   ALLOWED_OWNER_ID?: string;
   TRUSTED_JOB_WORKFLOW_REF?: string;
   EFFECTS_ENVIRONMENT?: string;
+  SPIKE_COMMAND?: string;
 }
 
 interface StoredAction {
@@ -209,12 +210,15 @@ class PublicApi extends RpcTarget implements PublicSessionCapability {
       if (oidcToken.length > 16 * 1024 || oidcToken.split(".").length !== 3) throw new Error("OIDC token was rejected");
     }
     this.session.attachRunner(runner);
-    return new AuthenticatedApi(this.session);
+    return new AuthenticatedApi(this.session, this.env);
   }
 }
 
 class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapability {
-  constructor(readonly session: SpikeSession) {
+  constructor(
+    readonly session: SpikeSession,
+    readonly env: Env,
+  ) {
     super();
   }
 
@@ -224,7 +228,7 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
       sequence: 1,
       operationId: "spike-run-command",
       kind: "shell.exec",
-      command: "test -z \"${GITHUB_TOKEN-}\" && test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN-}\" && printf 'github-actions-capnweb-ok'",
+      command: this.env.SPIKE_COMMAND ?? "test -z \"${GITHUB_TOKEN-}\" && test -z \"${ACTIONS_ID_TOKEN_REQUEST_TOKEN-}\" && printf 'github-actions-capnweb-ok'",
       cwd: "/workspace",
       timeoutMs: 30_000,
       maxOutputBytes: 64 * 1024,

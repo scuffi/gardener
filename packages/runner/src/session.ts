@@ -29,7 +29,7 @@ class RunnerApi extends RpcTarget implements RunnerCapability {
   }
 
   async result(operationId: string): Promise<RunnerActionResultV1 | null> {
-    return this.executor.result(operationId) ?? null;
+    return await this.executor.result(operationId) ?? null;
   }
 
   cancel(operationId: string): Promise<void> {

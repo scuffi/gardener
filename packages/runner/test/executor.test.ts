@@ -32,6 +32,16 @@ describe("PlanningShellExecutor", () => {
     await expect(executor.execute(action("printf second"))).rejects.toThrow(/different shell input/);
   });
 
+  it("lets a replacement session await an action still running locally", async () => {
+    const executor = new PlanningShellExecutor(await temporaryWorkspace());
+    const executing = executor.execute(action("sleep 0.05; printf reconciled"));
+    await expect(executor.result("operation-one")).resolves.toMatchObject({
+      status: "completed",
+      stdout: "reconciled",
+    });
+    await expect(executing).resolves.toMatchObject({ status: "completed" });
+  });
+
   it("bounds combined output by UTF-8 bytes", async () => {
     const executor = new PlanningShellExecutor(await temporaryWorkspace());
     const result = await executor.execute({ ...action("printf '123456789'"), maxOutputBytes: 4 });

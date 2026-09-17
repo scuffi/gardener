@@ -57,8 +57,10 @@ export class PlanningShellExecutor {
     timer.unref();
   }
 
-  result(operationId: string): RunnerActionResultV1 | undefined {
-    return this.#records.get(operationId)?.result;
+  async result(operationId: string): Promise<RunnerActionResultV1 | undefined> {
+    const record = this.#records.get(operationId);
+    if (record?.result) return record.result;
+    return record?.promise;
   }
 
   cursor(): { lastServerSequence: number; lastCompletedSequence: number } {

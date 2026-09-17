@@ -43107,8 +43107,10 @@ var PlanningShellExecutor = class {
     }, 2e3);
     timer.unref();
   }
-  result(operationId) {
-    return this.#records.get(operationId)?.result;
+  async result(operationId) {
+    const record2 = this.#records.get(operationId);
+    if (record2?.result) return record2.result;
+    return record2?.promise;
   }
   cursor() {
     const completed = [...this.#records.values()].map((record2) => record2.result?.sequence ?? 0);
@@ -43228,7 +43230,7 @@ var RunnerApi = class extends RpcTarget {
     return this.executor.execute(action);
   }
   async result(operationId) {
-    return this.executor.result(operationId) ?? null;
+    return await this.executor.result(operationId) ?? null;
   }
   cancel(operationId) {
     return this.executor.cancel(operationId);
