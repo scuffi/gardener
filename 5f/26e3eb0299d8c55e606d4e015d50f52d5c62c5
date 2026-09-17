@@ -1,0 +1,43 @@
+.gitignore
+  s_5da66bf6bc6455::t_ae1d4f417d1723 3-4
+actions/runner/action.yml
+  s_5da66bf6bc6455::t_f98a54c904c9ef 1-29
+packages/protocol/src/rpc.ts
+  s_5da66bf6bc6455::t_6fd978e20decb8 1-35
+packages/protocol/src/schema.ts
+  s_5da66bf6bc6455::t_319c9baac78677 1-72
+packages/protocol/test/capnweb-session.test.ts
+  s_5da66bf6bc6455::t_d28b5f2b06035d 1-284
+packages/runner/src/session.ts
+  s_5da66bf6bc6455::t_f9c04e06993c33 1-72
+packages/runner/test/context.test.ts
+  s_5da66bf6bc6455::t_377b09ab675787 1-42
+pnpm-lock.yaml
+  s_de0b486c128948::t_be304d1be27c34 12-13,22,25,40,43,66-67,101,103-104,107,110,133-134,149,152,155,179-180,189,192,211,224,243-268,284-340,344-355,381-383,385-387,749-751,780-781,1768-1769,1771-1772,1861-1863,2195-2196,2248-2250,2773-2774,3728-3731,3762-3765,3770-3771,3983-3984,4031-4042,4101-4116,4146,4154,4156,4613,4620,4646-4647,4670,4678,4680,4693,4703,4894,4896-4897,4943,4945-4946,4963,4965,4967,4998,5000,5002,5042,5209,5552,5554,5556,5634,5648-5651,5774,5786,5805,5817,5914,5981-5982,6537,6539-6540,6542,6553,6557,7230,7232,7250,7252,7331,7807-7808,7852-7855,7859,7990,7998,8000,8019,8023,8042,8046,8065,8087,8130-8148,8159,8176-8177
+pnpm-workspace.yaml
+  s_de0b486c128948::t_ee9033a256bac8 4,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5f26e3eb0299d8c55e606d4e015d50f52d5c62c5",
+  "prompts": {},
+  "sessions": {
+    "s_5da66bf6bc6455": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a79b-d357-7ec9-952b-746d1a0724ea",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
