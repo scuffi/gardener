@@ -13,5 +13,5 @@ jobs:
       id-token: write # Passed to the reusable workflow for Gardener OIDC authentication.
     uses: scuffi/gardener/.github/workflows/gardener-reusable-spike.yml@22d6ac3f43acbaf8bc3f34b5a954399a7c0726a1 # zizmor: ignore[stale-action-refs]
     with:
-      harness-url: https://gardener-actions-v1-spike.4g3nts.com
+      harness-url: https://gardener-actions-v1-spike.agents-b8a.workers.dev
       agent-hash: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

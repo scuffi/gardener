@@ -47,13 +47,13 @@ The run completed with summary `reconnected-without-replay`; durable state conta
 ## Deployed Cloudflare Worker
 
 - Worker: `gardener-actions-v1-spike`
-- Custom domain: `https://gardener-actions-v1-spike.4g3nts.com`
-- Latest version: `e4d4b501-d26f-485c-b1e7-87cf4a227bd4`
+- Endpoint: `https://gardener-actions-v1-spike.agents-b8a.workers.dev`
+- Latest version: `849b2213-47a3-48af-a5a9-a3fa65962b52`
 - Binding: SQLite Durable Object `SESSIONS` / `SpikeSession`
 - Enrolled numeric repository ID: `1374701263`
 - Trusted reusable workflow ref: `scuffi/gardener/.github/workflows/gardener-reusable-spike.yml@bd6ac76f84e5969797507bd8ab52b97afceac05b`
 
-Wrangler deployment and dry-run compilation succeeded. Direct GitHub-hosted access to both the custom domain and `workers.dev` currently receives a Cloudflare Access `302` before the Worker. Run `35245227632` therefore failed before WebSocket authentication. The successful live runs used a temporary public `trycloudflare.com` tunnel to the same local Worker implementation; that tunnel was removed after qualification.
+Wrangler deployment and dry-run compilation succeeded. Direct GitHub-hosted access to the default `workers.dev` endpoint currently receives a Cloudflare Access `302` before the Worker. Run `35245227632` therefore failed before WebSocket authentication. A temporary custom domain was tested as a possible Access bypass, produced the same `302`, and was removed. The successful live runs used a temporary public `trycloudflare.com` tunnel to the same local Worker implementation; that tunnel was removed after qualification.
 
 ## Remaining release blocker
 
