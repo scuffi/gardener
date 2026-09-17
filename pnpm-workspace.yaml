@@ -19,7 +19,7 @@ minimumReleaseAgeExclude:
   - "@types/node"
   - miniflare
   - wrangler
-  - '@cloudflare/kumo@2.13.1 || 2.13.2'
+  - '@cloudflare/kumo@2.13.1 || 2.13.2 || 2.14.0'
   # Optional Kumo peer, consumed tree-shaken by the dashboard's chart surfaces.
   - echarts@6.1.0
   - '@cloudflare/vite-plugin@1.54.4 || 1.54.6 || 1.54.7'
