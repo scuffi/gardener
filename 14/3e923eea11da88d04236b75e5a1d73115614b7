@@ -1,0 +1,31 @@
+apps/gardener/package.json
+  s_5da66bf6bc6455::t_baaef1c0b8694b 17
+pnpm-lock.yaml
+  s_de0b486c128948::t_e87130417247e8 33-34,610-611,627-628,678-679,4527,4530,4541,4582,4584
+pnpm-workspace.yaml
+  s_de0b486c128948::t_56f28d9a5e18cf 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "143e923eea11da88d04236b75e5a1d73115614b7",
+  "prompts": {},
+  "sessions": {
+    "s_5da66bf6bc6455": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a79b-d357-7ec9-952b-746d1a0724ea",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
