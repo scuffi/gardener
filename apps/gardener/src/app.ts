@@ -304,6 +304,23 @@ app.put("/api/repositories/:id/pause", async (c) => {
   await auditWithPrincipal(c.env.DB,c.get("authorization"),paused?"repository.paused":"repository.resumed","repository",id,repository);
   return c.json({ id, paused });
 });
+app.get("/api/actions/runs", async (c) => {
+  const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
+  const { results } = await c.env.DB.prepare(
+    "SELECT id,repository_id,github_run_id,github_run_attempt,status,outcome_json,effect_receipt_json,created_at,updated_at FROM actions_task_runs ORDER BY created_at DESC LIMIT 25",
+  ).all<{ id:string;repository_id:string;github_run_id:string;github_run_attempt:number;status:string;outcome_json:string|null;effect_receipt_json:string|null;created_at:string;updated_at:string }>();
+  return c.json({ runs: results.map((run) => ({
+    id: run.id,
+    repositoryId: run.repository_id,
+    githubRunId: run.github_run_id,
+    githubRunAttempt: run.github_run_attempt,
+    status: run.status,
+    outcome: run.outcome_json ? JSON.parse(run.outcome_json) : null,
+    effectReceipt: run.effect_receipt_json ? JSON.parse(run.effect_receipt_json) : null,
+    createdAt: run.created_at,
+    updatedAt: run.updated_at,
+  })) });
+});
 app.get("/api/runs", async (c) => {
   const denied=requirePermission(c,"workspace.view",dashboardPrincipalKinds); if(denied)return denied;
   const limit = z.coerce.number().int().min(1).max(100).default(50).parse(c.req.query("limit"));

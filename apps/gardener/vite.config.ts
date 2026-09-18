@@ -6,7 +6,7 @@ import { defineConfig, type Plugin } from "vite";
 
 const fluePlugins = flue({
   app: "src/app.ts",
-  agents: "harness/flue/generic-agent.ts",
+  agents: "**/*agent.ts",
   providers: ["cloudflare"],
   // Repository and model content must never be copied into Workers Traces.
   tracing: false,
@@ -15,12 +15,12 @@ const fluePlugins = flue({
   // Gardener also has a React client environment. Flue's source transforms
   // belong only to the Worker environment and must not parse client TSX.
   applyToEnvironment(environment) {
-    return environment.name === "gardener";
+    return environment.name === "gardener_actions_v1_runtime";
   },
 }));
 
 export default defineConfig({
-  // Flue must scan and contribute its one generic Durable Object before the
+  // Flue must scan and contribute its generic Durable Objects before the
   // Cloudflare plugin resolves the Worker configuration.
   plugins: [...fluePlugins, react(), tailwindcss(), cloudflare({ config: flueWorkerConfig() })],
   build: {

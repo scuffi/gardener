@@ -303,6 +303,26 @@ export type RunStatus =
   | "failed"
   | "cancelled";
 
+export interface ActionsTaskRunSummary {
+  id: string;
+  repositoryId: string;
+  githubRunId: string;
+  githubRunAttempt: number;
+  status: string;
+  outcome: null | {
+    status: string;
+    summary?: string;
+    proposedEffects?: Array<{ kind: string; body?: string }>;
+  };
+  effectReceipt: null | {
+    operationId: string;
+    commentId: string;
+    commentUrl: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RunSummary {
   id: string;
   kind: string;

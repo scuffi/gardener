@@ -1,0 +1,29 @@
+name: Gardener exact effects
+description: Applies one validated Gardener effect without checking out or executing repository code.
+author: Gardener
+inputs:
+  artifact-path:
+    description: Path to the downloaded Gardener effect plan.
+    required: true
+  expected-sha256:
+    description: SHA-256 digest emitted by the planning job.
+    required: true
+  github-token:
+    description: Effects-job GitHub token.
+    required: true
+  harness-url:
+    description: HTTPS origin of the Gardener runner ingress.
+    required: true
+outputs:
+  comment-id:
+    description: GitHub comment identifier.
+  comment-url:
+    description: URL of the created or reconciled comment.
+  operation-id:
+    description: Stable Gardener operation identifier.
+runs:
+  using: node24
+  main: dist/index.cjs
+branding:
+  icon: message-square
+  color: green

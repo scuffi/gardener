@@ -5,8 +5,9 @@ import flueHarnessRequests from "../migrations/0006_flue_harness_requests.sql?ra
 import teamWorkspaceFoundation from "../migrations/0007_team_workspace_foundation.sql?raw";
 import flueNativeRuntime from "../migrations/0008_flue_native_runtime.sql?raw";
 import starterAgents from "../migrations/0009_starter_agents.sql?raw";
+import actionsTaskRuntime from "../migrations/0010_actions_task_runtime.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 9;
+export const AGENT_SCHEMA_VERSION = 10;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -70,43 +71,23 @@ async function apply(db: D1Database, sql: string): Promise<void> {
 async function initialize(db: D1Database): Promise<void> {
   const version = await installedVersion(db);
   if (version === AGENT_SCHEMA_VERSION) return;
-  if (version === 8) {
-    await apply(db, starterAgents);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener starter Agent migration did not complete");
-    return;
-  }
-  if (version === 7) {
-    await apply(db, flueNativeRuntime);
-    await apply(db, starterAgents);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue-native and starter Agent migrations did not complete");
-    return;
-  }
-  if (version === 6) {
-    await apply(db, teamWorkspaceFoundation);
-    await apply(db, flueNativeRuntime);
-    await apply(db, starterAgents);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener team/workspace, Flue-native, and starter Agent migrations did not complete");
-    return;
-  }
-  if (version === 5) {
-    await apply(db, flueHarnessRequests);
-    await apply(db, teamWorkspaceFoundation);
-    await apply(db, flueNativeRuntime);
-    await apply(db, starterAgents);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Flue, team/workspace, Flue-native, and starter Agent migrations did not complete");
-    return;
-  }
-  if (version === 4) {
-    await apply(db, agentRuntimeAdmission);
-    await apply(db, flueHarnessRequests);
-    await apply(db, teamWorkspaceFoundation);
-    await apply(db, flueNativeRuntime);
-    await apply(db, starterAgents);
-    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) throw new Error("Gardener Agent runtime, team/workspace, Flue-native, and starter Agent migrations did not complete");
-    return;
-  }
+
   if (version !== null) {
-    throw new Error(`Unsupported Gardener database schema version ${version}`);
+    const migrationsByVersion: Record<number, readonly string[]> = {
+      4: [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime],
+      5: [flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime],
+      6: [teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime],
+      7: [flueNativeRuntime, starterAgents, actionsTaskRuntime],
+      8: [starterAgents, actionsTaskRuntime],
+      9: [actionsTaskRuntime],
+    };
+    const migrations = migrationsByVersion[version];
+    if (!migrations) throw new Error(`Unsupported Gardener database schema version ${version}`);
+    for (const migration of migrations) await apply(db, migration);
+    if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) {
+      throw new Error("Gardener Actions task runtime migration did not complete");
+    }
+    return;
   }
 
   const legacy = await tableExists(db, "workflows")
@@ -123,11 +104,9 @@ async function initialize(db: D1Database): Promise<void> {
       // establishes the historical v4 baseline before applying later migrations.
       await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)").run();
     }
-    await apply(db, agentRuntimeAdmission);
-    await apply(db, flueHarnessRequests);
-    await apply(db, teamWorkspaceFoundation);
-    await apply(db, flueNativeRuntime);
-    await apply(db, starterAgents);
+    for (const migration of [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime]) {
+      await apply(db, migration);
+    }
   } catch (error) {
     // 0004's first write is a plain unique INSERT in the same atomic batch. A
     // losing initializer aborts before any DROP. Fresh initializers race only
@@ -136,7 +115,7 @@ async function initialize(db: D1Database): Promise<void> {
   }
 
   if ((await installedVersion(db)) !== AGENT_SCHEMA_VERSION) {
-    throw new Error("Gardener Agent Flue-native and starter Agent schema initialization did not complete");
+    throw new Error("Gardener Actions task runtime schema initialization did not complete");
   }
 }
 

@@ -36,6 +36,9 @@ beforeAll(async () => {
   vi.doMock("../migrations/0009_starter_agents.sql?raw", () => ({
     default: readFileSync(new URL("../migrations/0009_starter_agents.sql", import.meta.url), "utf8"),
   }));
+  vi.doMock("../migrations/0010_actions_task_runtime.sql?raw", () => ({
+    default: readFileSync(new URL("../migrations/0010_actions_task_runtime.sql", import.meta.url), "utf8"),
+  }));
   ({ ensureDatabase, migrationStatements } = await import("../src/database"));
 });
 
@@ -45,7 +48,7 @@ describe("Agent-native database initialization", () => {
     try {
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 10 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 3 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_revisions").get()).toEqual({ count: 3 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_activations").get()).toEqual({ count: 3 });
@@ -80,6 +83,9 @@ describe("Agent-native database initialization", () => {
       }
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_records'").get()).toEqual({ name: "audit_records" });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mcp_consent_states'").get()).toEqual({ name: "mcp_consent_states" });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'actions_repository_enrollments'").get()).toEqual({ name: "actions_repository_enrollments" });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'actions_task_runs'").get()).toEqual({ name: "actions_task_runs" });
+      expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'actions_task_audit'").get()).toEqual({ name: "actions_task_audit" });
       expect(sqlite.prepare("SELECT mode FROM operation_policies WHERE operation_kind = 'issue.label.add'").get()).toEqual({ mode: "approval" });
       expect(sqlite.prepare("SELECT mode FROM operation_policies WHERE operation_kind = 'discussion.comment.create'").get()).toEqual({ mode: "disabled" });
       const operationKinds = (sqlite.prepare("SELECT operation_kind FROM operation_policies ORDER BY operation_kind").all() as Array<{ operation_kind: string }>)
@@ -102,7 +108,7 @@ describe("Agent-native database initialization", () => {
       sqlite.prepare("INSERT INTO agents (id, slug, name, created_by) VALUES (?, ?, ?, ?)")
         .run("agent-v4", "agent-v4", "Agent v4", "legacy");
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 10 });
       expect(sqlite.prepare("SELECT id FROM agents ORDER BY id").all()).toHaveLength(3);
       const columns = sqlite.prepare("PRAGMA table_info(repository_events)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("admission_status");
@@ -128,7 +134,7 @@ describe("Agent-native database initialization", () => {
       `).run("historical-run", "historical-agent", "historical-revision", JSON.stringify({ harness: { id: "cloudflare-agents", version: "1.0.0" } }), digest, digest, digest, "2026-09-10T12:00:00.000Z");
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 9 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 10 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'harness_requests'").get()).toEqual({ name: "harness_requests" });
       expect(sqlite.prepare("SELECT * FROM agent_runs WHERE id = 'historical-run'").get()).toBeUndefined();
     } finally {

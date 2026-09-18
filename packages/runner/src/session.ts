@@ -2,6 +2,7 @@ import { RpcTarget, newWebSocketRpcSession } from "capnweb";
 import {
   runnerTerminalV1Schema,
   type PublicSessionCapability,
+  type RunnerEventV1,
   type RunnerActionResultV1,
   type RunnerActionV1,
   type RunnerCapability,
@@ -16,6 +17,7 @@ export interface RunPlanningSessionOptions {
   maxReconnects: number;
   getOidcToken(audience: string): Promise<string>;
   executor?: PlanningShellExecutor;
+  event?: RunnerEventV1;
   onReconnect?(attempt: number, error: unknown): void;
 }
 
@@ -53,7 +55,7 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
       const session = root.authenticate(hello, oidcToken, runner);
       const cursor = executor.cursor();
       await session.resume({ schemaVersion: "gardener.runner.cursor/v1", ...cursor }, runner);
-      return runnerTerminalV1Schema.parse(await session.run());
+      return runnerTerminalV1Schema.parse(await session.run(options.event));
     } catch (error) {
       lastError = error;
       if (attempt >= options.maxReconnects) break;

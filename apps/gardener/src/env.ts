@@ -1,5 +1,6 @@
 import type { GitHubGatewayRpc } from "@gardener/provider-github";
 import type { HarnessToolFacade } from "./harness";
+import type { TaskRunnerSession } from "./task-runtime/session";
 
 export interface Env {
   DB: D1Database;
@@ -14,6 +15,7 @@ export interface Env {
   COMPUTER_LOADER: unknown;
   COMPUTER_INPUTS?: R2Bucket;
   GARDENER_HARNESS_TOOLS?: HarnessToolFacade;
+  RUNNER_SESSIONS: DurableObjectNamespace<TaskRunnerSession>;
 
   /** OAuth is mounted only when an operator provisions the required KV binding. */
   OAUTH_KV?: KVNamespace;

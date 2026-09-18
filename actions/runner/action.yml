@@ -21,6 +21,10 @@ outputs:
     description: Last server action sequence observed by the runner.
   last-completed-sequence:
     description: Last action sequence durably completed by the runner.
+  effect-artifact-path:
+    description: Absolute path to the validated effect artifact produced by planning.
+  effect-artifact-sha256:
+    description: SHA-256 digest of the validated effect artifact.
 runs:
   using: node24
   main: dist/index.cjs

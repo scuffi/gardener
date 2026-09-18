@@ -12,3 +12,4 @@ export * from "./agent";
 export * from "./runs";
 export * from "./interruptions";
 export * from "./simulations";
+export * from "./task";

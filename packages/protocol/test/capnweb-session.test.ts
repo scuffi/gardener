@@ -15,6 +15,7 @@ import {
   type RunnerActionResultV1,
   type RunnerActionV1,
   type RunnerCapability,
+  type RunnerEffectReceiptV1,
   type RunnerHelloV1,
 } from "../src";
 
@@ -101,6 +102,10 @@ class TestSession extends RpcTarget implements AuthenticatedSessionCapability {
         .unresolvedAfter(0)
         .map((record) => record.action.operationId),
     };
+  }
+
+  recordEffect(receipt: RunnerEffectReceiptV1): Promise<RunnerEffectReceiptV1> {
+    return Promise.resolve(receipt);
   }
 
   [Symbol.dispose](): void {

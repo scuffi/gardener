@@ -17,6 +17,7 @@ import {
   statusTone,
   TableSkeleton,
 } from "../../primitives";
+import type { ActionsTaskRunSummary } from "../../lib/types";
 import { formatDuration } from "./format-run";
 
 export function RunsPage() {
@@ -24,6 +25,10 @@ export function RunsPage() {
   const query = useQuery({
     queryKey: queryKeys.runs,
     queryFn: () => gardenerApi.runs(),
+  });
+  const actionsRunsQuery = useQuery({
+    queryKey: ["actions-task-runs"],
+    queryFn: () => gardenerApi.actionsRuns(),
   });
 
   if (query.isLoading) {
@@ -75,6 +80,7 @@ export function RunsPage() {
           />
         }
       />
+      <ActionsRunsPanel runs={actionsRunsQuery.data?.runs ?? []} loading={actionsRunsQuery.isLoading} />
       <Panel padded={false}>
         {!runs.length ? (
           <EmptyState
@@ -162,5 +168,39 @@ export function RunsPage() {
         )}
       </Panel>
     </>
+  );
+}
+
+function ActionsRunsPanel({ runs, loading }: { runs: ActionsTaskRunSummary[]; loading: boolean }) {
+  return (
+    <Panel padded={false}>
+      <div className="border-b border-kumo-hairline px-4 py-3">
+        <h2 className="m-0 text-sm font-semibold text-kumo-strong">Actions-native issue triage</h2>
+        <p className="mb-0 mt-1 text-xs text-kumo-subtle">Planning outcomes and exact GitHub comment receipts.</p>
+      </div>
+      {loading ? (
+        <div className="px-4 py-4 text-sm text-kumo-subtle">Loading Actions runs…</div>
+      ) : runs.length === 0 ? (
+        <div className="px-4 py-4 text-sm text-kumo-subtle">No Actions-native triage run has started.</div>
+      ) : (
+        <ul className="m-0 list-none divide-y divide-kumo-hairline p-0">
+          {runs.map((run) => {
+            const comment = run.outcome?.proposedEffects?.find((effect) => effect.kind === "issue.comment.create")?.body;
+            return (
+              <li key={run.id} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[150px_1fr_180px]">
+                <span><StatusBadge tone={statusTone(run.effectReceipt ? "completed" : run.status)}>{run.effectReceipt ? "Comment posted" : sentenceCase(run.status)}</StatusBadge></span>
+                <div className="min-w-0">
+                  <div className="font-medium text-kumo-strong">{run.outcome?.summary ?? "Planning in progress"}</div>
+                  {comment ? <div className="mt-1 line-clamp-2 text-xs text-kumo-subtle">{comment}</div> : null}
+                </div>
+                <div className="text-xs text-kumo-subtle">
+                  {run.effectReceipt ? <Link href={run.effectReceipt.commentUrl}>View GitHub comment</Link> : `GitHub run ${run.githubRunId}`}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }

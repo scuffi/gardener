@@ -3,6 +3,8 @@ import type {
   ResumeCursorV1,
   RunnerActionResultV1,
   RunnerActionV1,
+  RunnerEffectReceiptV1,
+  RunnerEventV1,
   RunnerHelloV1,
   RunnerTerminalV1,
 } from "./schema";
@@ -20,10 +22,11 @@ export interface ResumeStateV1 {
 }
 
 export interface AuthenticatedSessionCapability extends RpcTarget {
-  run(): Promise<RunnerTerminalV1>;
+  run(event?: RunnerEventV1): Promise<RunnerTerminalV1>;
   invoke(action: RunnerActionV1): Promise<RunnerActionResultV1>;
   reconcile(result: RunnerActionResultV1): Promise<RunnerActionResultV1>;
   resume(cursor: ResumeCursorV1, runner: RpcStub<RunnerCapability>): Promise<ResumeStateV1>;
+  recordEffect(receipt: RunnerEffectReceiptV1): Promise<RunnerEffectReceiptV1>;
 }
 
 export interface PublicSessionCapability extends RpcTarget {

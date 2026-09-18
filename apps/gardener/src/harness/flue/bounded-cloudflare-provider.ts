@@ -6,7 +6,7 @@ import {
 import type { HarnessBudget } from "../types";
 import { FLUE_NATIVE_INPUT_BYTES_PER_TOKEN } from "../../flue-native-protocol";
 
-const NATIVE_BOUNDED_MODEL_PREFIX = "gardener-native-bounded-v1";
+const NATIVE_BOUNDED_MODEL_PREFIX = "gardener-native-bounded-v2";
 const MINIMUM_PROVIDER_OUTPUT_TOKENS = 16;
 let installedBinding: CloudflareAIBinding | undefined;
 
@@ -16,8 +16,9 @@ type PayloadTransform = ProviderStreamOptions["onPayload"];
 
 interface EncodedBudget {
   model: string;
+  maxTurns: number;
   maxInputBytes: number;
-  maxOutputTokens: number;
+  maxOutputTokensPerTurn: number;
   maxRuntimeMs: number;
   deadlineAtMs: number;
 }
@@ -29,7 +30,11 @@ export function boundedCloudflareModel(model: string, budget: HarnessBudget): st
   }
   const modelId = model.startsWith("cloudflare/") ? model.slice("cloudflare/".length) : model;
   const maxInputBytes = inputByteLimit(budget.maxInputTokens);
-  return `cloudflare/${NATIVE_BOUNDED_MODEL_PREFIX}:${maxInputBytes}:${budget.maxOutputTokens}:${budget.maxRuntimeMs}:${Date.parse(budget.deadlineAt)}:${encodeURIComponent(modelId)}`;
+  const maxOutputTokensPerTurn = Math.floor(budget.maxOutputTokens / budget.maxTurns);
+  if (maxOutputTokensPerTurn < MINIMUM_PROVIDER_OUTPUT_TOKENS) {
+    throw new Error(`Flue requires at least ${MINIMUM_PROVIDER_OUTPUT_TOKENS} output tokens per permitted turn`);
+  }
+  return `cloudflare/${NATIVE_BOUNDED_MODEL_PREFIX}:${budget.maxTurns}:${maxInputBytes}:${maxOutputTokensPerTurn}:${budget.maxRuntimeMs}:${Date.parse(budget.deadlineAt)}:${encodeURIComponent(modelId)}`;
 }
 
 /** Register a tool-preserving provider wrapper around Flue's supported Workers AI provider. */
@@ -42,7 +47,7 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
 
   provider.stream = ((model, context, options) => {
     const budget = decodeBoundedModel(model.id);
-    enforceFirstModelTurn(context);
+    enforceTurnLimit(context, budget.maxTurns);
     enforceInputByteLimit(context, budget.maxInputBytes);
     return stream(
       resolveActualModel(provider, model, budget.model),
@@ -53,7 +58,7 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
 
   provider.streamSimple = ((model, context, options) => {
     const budget = decodeBoundedModel(model.id);
-    enforceFirstModelTurn(context);
+    enforceTurnLimit(context, budget.maxTurns);
     enforceInputByteLimit(context, budget.maxInputBytes);
     return streamSimple(
       resolveActualModel(provider, model, budget.model),
@@ -72,8 +77,8 @@ function boundedProviderOptions(
   return {
     ...options,
     maxTokens: options?.maxTokens === undefined
-      ? budget.maxOutputTokens
-      : Math.min(options.maxTokens, budget.maxOutputTokens),
+      ? budget.maxOutputTokensPerTurn
+      : Math.min(options.maxTokens, budget.maxOutputTokensPerTurn),
     signal: deadlineSignal(options?.signal, budget.deadlineAtMs, budget.maxRuntimeMs),
     onPayload: nativeToolPayload(options?.onPayload, budget.maxInputBytes),
   };
@@ -97,18 +102,21 @@ function nativeToolPayload(
 }
 
 function decodeBoundedModel(model: string): EncodedBudget {
-  const [prefix, input, output, runtime, deadline, encodedModel, ...extra] = model.split(":");
+  const [prefix, turns, input, output, runtime, deadline, encodedModel, ...extra] = model.split(":");
+  const maxTurns = Number(turns);
   const maxInputBytes = Number(input);
-  const maxOutputTokens = Number(output);
+  const maxOutputTokensPerTurn = Number(output);
   const maxRuntimeMs = Number(runtime);
   const deadlineAtMs = Number(deadline);
   if (
     prefix !== NATIVE_BOUNDED_MODEL_PREFIX
     || extra.length > 0
+    || !Number.isSafeInteger(maxTurns)
+    || maxTurns < 1
     || !Number.isSafeInteger(maxInputBytes)
     || maxInputBytes < 1
-    || !Number.isSafeInteger(maxOutputTokens)
-    || maxOutputTokens < MINIMUM_PROVIDER_OUTPUT_TOKENS
+    || !Number.isSafeInteger(maxOutputTokensPerTurn)
+    || maxOutputTokensPerTurn < MINIMUM_PROVIDER_OUTPUT_TOKENS
     || !Number.isSafeInteger(maxRuntimeMs)
     || maxRuntimeMs < 1
     || !Number.isSafeInteger(deadlineAtMs)
@@ -121,7 +129,7 @@ function decodeBoundedModel(model: string): EncodedBudget {
   if (!decoded || decoded.startsWith("cloudflare/")) {
     throw new Error("Flue model request contains an invalid bounded model id");
   }
-  return { model: decoded, maxInputBytes, maxOutputTokens, maxRuntimeMs, deadlineAtMs };
+  return { model: decoded, maxTurns, maxInputBytes, maxOutputTokensPerTurn, maxRuntimeMs, deadlineAtMs };
 }
 
 function enforceInputByteLimit(value: unknown, maxInputBytes: number): void {
@@ -140,9 +148,10 @@ function inputByteLimit(maxInputTokens: number): number {
   return limit;
 }
 
-function enforceFirstModelTurn(context: { messages: readonly { role?: unknown }[] }): void {
-  if (context.messages.some((message) => message.role === "assistant" || message.role === "toolResult")) {
-    throw new Error("Gardener native profile permits exactly one model turn");
+function enforceTurnLimit(context: { messages: readonly { role?: unknown }[] }, maxTurns: number): void {
+  const completedTurns = context.messages.filter((message) => message.role === "assistant").length;
+  if (completedTurns >= maxTurns) {
+    throw new Error(`Gardener native profile permits at most ${maxTurns} model turn${maxTurns === 1 ? "" : "s"}`);
   }
 }
 

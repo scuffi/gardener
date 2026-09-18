@@ -47,7 +47,7 @@ describe("bounded native Flue Cloudflare provider", () => {
 
   it("uses a new native protocol id and rejects the provider output-token floor", () => {
     expect(boundedCloudflareModel("@cf/test/model", budget))
-      .toMatch(/^cloudflare\/gardener-native-bounded-v1:8000:77:30000:\d+:%40cf%2Ftest%2Fmodel$/);
+      .toMatch(/^cloudflare\/gardener-native-bounded-v2:1:8000:77:30000:\d+:%40cf%2Ftest%2Fmodel$/);
     expect(() => boundedCloudflareModel("@cf/test/model", { ...budget, maxOutputTokens: 15 }))
       .toThrow(/at least 16/i);
   });
@@ -116,7 +116,7 @@ describe("bounded native Flue Cloudflare provider", () => {
     )).toBe("stream-result");
   });
 
-  it("rejects a second model turn from the durable conversation context", () => {
+  it("rejects a model turn beyond the immutable turn limit", () => {
     const provider = installedProvider();
     expect(() => provider.stream(
       { id: encoded(), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
@@ -126,8 +126,24 @@ describe("bounded native Flue Cloudflare provider", () => {
         { role: "toolResult", toolCallId: "call-1", toolName: "bad", content: [], isError: true },
       ] },
       {},
-    )).toThrow(/exactly one model turn/i);
+    )).toThrow(/at most 1 model turn/i);
     expect(mocks.baseStream).not.toHaveBeenCalled();
+  });
+
+  it("permits bounded tool follow-up turns and divides the total output ceiling", () => {
+    const provider = installedProvider();
+    const multiTurn = { ...budget, maxTurns: 4, maxOutputTokens: 80 };
+    expect(provider.stream(
+      { id: encoded(multiTurn), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
+      { messages: [{ role: "user" }, { role: "assistant" }, { role: "toolResult" }] },
+      {},
+    )).toBe("stream-result");
+    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(20);
+    expect(() => provider.stream(
+      { id: encoded(multiTurn), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
+      { messages: Array.from({ length: 4 }, () => ({ role: "assistant" })) },
+      {},
+    )).toThrow(/at most 4 model turns/i);
   });
 
   it("rejects an expired absolute deadline before provider dispatch", () => {

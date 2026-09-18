@@ -7,6 +7,7 @@ import type {
   AgentSimulation,
   AgentSummary,
   AgentValidation,
+  ActionsTaskRunSummary,
   AppState,
   AssignmentAuthorityInput,
   AssignmentListResponse,
@@ -263,6 +264,7 @@ export const gardenerApi = {
 
   history: () => api<{ items: HistoryItem[] }>("/api/history"),
 
+  actionsRuns: () => api<{ runs: ActionsTaskRunSummary[] }>("/api/actions/runs"),
   runs: (limit = 50) => api<{ runs: RunSummary[] }>(`/api/runs?limit=${limit}`),
   run: (id: string) => api<RunDetailResponse>(`/api/runs/${encodeURIComponent(id)}`),
 };

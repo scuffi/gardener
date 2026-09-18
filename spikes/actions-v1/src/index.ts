@@ -13,6 +13,7 @@ import {
   type RunnerActionResultV1,
   type RunnerActionV1,
   type RunnerCapability,
+  type RunnerEffectReceiptV1,
   type RunnerHelloV1,
   type RunnerTerminalV1,
 } from "@gardener/protocol";
@@ -258,6 +259,10 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
 
   resume(input: ResumeCursorV1, runner: RpcStub<RunnerCapability>): Promise<ResumeStateV1> {
     return this.session.resume(input, runner);
+  }
+
+  recordEffect(_receipt: RunnerEffectReceiptV1): Promise<RunnerEffectReceiptV1> {
+    return Promise.reject(new Error("The transport spike does not accept product effect receipts"));
   }
 }
 

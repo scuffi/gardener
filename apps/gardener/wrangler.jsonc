@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "gardener",
+  "name": "gardener-actions-v1-runtime",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat", "experimental", "global_fetch_strictly_public"],
@@ -19,7 +19,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "gardener",
+      "database_name": "gardener-actions-v1-runtime",
       "migrations_dir": "migrations"
     }
   ],
@@ -33,7 +33,8 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COMPUTER_WORKSPACES", "class_name": "ComputerWorkspace" }
+      { "name": "COMPUTER_WORKSPACES", "class_name": "ComputerWorkspace" },
+      { "name": "RUNNER_SESSIONS", "class_name": "TaskRunnerSession" }
     ]
   },
   "migrations": [
@@ -44,6 +45,10 @@
     {
       "tag": "flue-only-runtime-v1",
       "deleted_classes": ["GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness"]
+    },
+    {
+      "tag": "actions-task-runtime-v1",
+      "new_sqlite_classes": ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"]
     }
   ],
   "containers": [
