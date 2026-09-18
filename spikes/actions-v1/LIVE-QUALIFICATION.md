@@ -2,6 +2,42 @@
 
 Date: 2026-09-17
 
+## Actions-native issue-triage product proof (2026-09-18)
+
+Successful workflow run (attempt 16): <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35327258456>
+
+Trigger issue: <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/2>
+
+Exact bot comment: <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/2#issuecomment-5731407050>
+
+This run qualified the concrete MVP path:
+
+- an `issues: opened` event carrying the pre-existing `gardener-test` label invoked a full-SHA-pinned reusable workflow;
+- the planning job used `ubuntu-24.04`, `contents: read`, `id-token: write`, and checkout with `persist-credentials: false`;
+- GitHub OIDC authenticated the numeric repository and owner IDs, run attempt, event, ref, SHA, hosted runner, audience, and reusable-workflow commit;
+- the Gardener Worker invoked a fixed repository listing through the Cap'n Web runner before Flue inference;
+- Flue and Workers AI emitted one schema-validated `issue.comment.create` proposal;
+- planning uploaded canonical `gardener.task-effect-plan/v1` JSON addressed by SHA-256;
+- the checkout-free effects job used `issues: write` and `id-token: write`, revalidated the artifact, and posted the exact body as `github-actions[bot]`;
+- the comment carries `<!-- gardener-operation:op_7a46cbf67042cd1345a29652564b8526c7143aa28a1a2584b795ee9f304cbe34 -->` for reconciliation;
+- D1 persisted the completed model outcome and `gardener.runner.effect-receipt/v1`, including artifact digest `a2ca12d791ccf0d0cd7f98f90299f4aa95034e93ec1a0e7308d27d310ca1e698` and GitHub comment ID `5731407050`;
+- the deployed Runs UI consumes `/api/actions/runs` and renders the model summary, proposed comment, and receipt link.
+
+Pinned smoke components:
+
+- bundled runner/effects Actions: `1e60ff1c6cb43e8c0872bc5e264d4d4d8b37d6e9`;
+- reusable two-job workflow: `ba368dd86dcb8be97a096f6211602ab93f9819ce`;
+- caller workflow revision used by the proof: `fa86fda`;
+- task bundle hash: `d3ea6c38276b0e67f6757354abbd60afc596eaafd0702622eaa8ca95499f849f`.
+
+Deployed product resources:
+
+- runtime Worker: `gardener-actions-v1-runtime`, version `20256bf6-f679-47e8-8f69-ee99d3077fd9` at the successful proof;
+- isolated D1 database: `gardener-actions-v1-runtime` (`e5b4c408-55d6-42f7-802e-93542cf93877`), schema version 10;
+- public ingress: the previously qualified `gardener-actions-v1-spike` hostname now forwards only `/session/<id>` to `GardenerRunnerIngressEntrypoint`; product-forwarding version `be74cb4e-4dea-423f-b4c4-fd463308df3e`.
+
+Attempts 1–15 were diagnostic, not accepted proofs. They exposed and resolved: account Access interception on a newly created ingress hostname, non-fetch RPC WebSocket response serialization, missing `fetch()` on the service entrypoint, a Flue model that required explicit native `tool_choice`, a Flue continuation payload incompatibility, canonical tool-result publication failure, and a preflight path of `.` rejected by repository confinement. The successful attempt used fixed host-driven Cap'n Web inspection followed by one forced, validated terminal model tool; the privileged job still received only the resulting exact artifact.
+
 ## Pinned Gardener components
 
 - Planning runner/action commit: `fc46492dde64a0fd2f6a48cc41c7f926df39241f`

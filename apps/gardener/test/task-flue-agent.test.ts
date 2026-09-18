@@ -17,6 +17,7 @@ vi.mock("@flue/runtime/cloudflare", () => ({ extend: vi.fn(() => ({})) }));
 
 import {
   GardenerTaskFlueAgent,
+  installGardenerTaskDatabase,
   installGardenerTaskToolFacade,
 } from "../src/task-runtime/flue-agent";
 
@@ -58,14 +59,16 @@ function request(): HarnessRequest {
 }
 
 describe("canonical task Flue agent", () => {
-  const writeOutcome = vi.fn();
+  const databaseRun = vi.fn(async () => ({ success: true }));
+  const databaseBind = vi.fn((_outcome: string, _runId: string) => ({ run: databaseRun }));
+  const databasePrepare = vi.fn(() => ({ bind: databaseBind }));
   const setCompletedRunnerTools = vi.fn();
   const invoke = vi.fn(async () => ({ status: "completed", stdout: "README", stderr: "" }));
 
   beforeEach(() => {
     vi.clearAllMocks();
-    flue.useDataWriter.mockReturnValue(writeOutcome);
     flue.usePersistentState.mockReturnValue([1, setCompletedRunnerTools]);
+    installGardenerTaskDatabase({ prepare: databasePrepare } as unknown as D1Database);
     installGardenerTaskToolFacade({ invoke });
   });
 
@@ -113,7 +116,9 @@ describe("canonical task Flue agent", () => {
         comment: { body: "Thanks. The likely next step is to add a regression test.", rationale: "Repository evidence supports this next step." },
       },
     })).resolves.toEqual({ output: { accepted: true }, terminate: true });
-    expect(writeOutcome).toHaveBeenCalledWith({
+    expect(databasePrepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE actions_task_runs"));
+    const persisted = JSON.parse(databaseBind.mock.calls.at(-1)![0]);
+    expect(persisted).toEqual({
       schemaVersion: "gardener.task-outcome/v1",
       runId: value.runId,
       taskId: "fixture.issue-triage",
@@ -138,7 +143,7 @@ describe("canonical task Flue agent", () => {
     GardenerTaskFlueAgent();
     const terminal = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "submit_task_outcome_v1");
     await expect(terminal.run({ data: { summary: "Invented", observations: [], comment: { body: "Invented", rationale: "None" } } })).rejects.toThrow(/requires evidence/);
-    expect(writeOutcome).not.toHaveBeenCalled();
+    expect(databaseRun).not.toHaveBeenCalled();
   });
 
   it("fails closed when a tool-bearing task has no trusted runner facade", () => {

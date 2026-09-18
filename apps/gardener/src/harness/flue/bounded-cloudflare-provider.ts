@@ -96,9 +96,33 @@ function nativeToolPayload(
     }
     // Native execution uses Flue's serialized tool catalog, never assistant-text JSON mode.
     const { response_format: _legacyStructuredMode, ...native } = value as Record<string, unknown>;
+    forceIssueTriageTool(native);
     enforceInputByteLimit(native, maxInputBytes);
     return native;
   };
+}
+
+function forceIssueTriageTool(payload: Record<string, unknown>): void {
+  const tools = Array.isArray(payload.tools) ? payload.tools : [];
+  const names = tools.map((tool) => {
+    if (typeof tool !== "object" || tool === null) return undefined;
+    const record = tool as Record<string, unknown>;
+    if (typeof record.name === "string") return record.name;
+    const fn = record.function;
+    return typeof fn === "object" && fn !== null && typeof (fn as Record<string, unknown>).name === "string"
+      ? (fn as Record<string, unknown>).name as string
+      : undefined;
+  });
+  if (!names.includes("submit_task_outcome_v1")) return;
+  const messages = Array.isArray(payload.messages) ? payload.messages : [];
+  const hasToolResult = messages.some((message) => {
+    if (typeof message !== "object" || message === null) return false;
+    const role = (message as Record<string, unknown>).role;
+    return role === "tool" || role === "toolResult";
+  });
+  const name = hasToolResult || !names.includes("repository_list_files") ? "submit_task_outcome_v1" : "repository_list_files";
+  if (!names.includes(name)) throw new Error(`Required issue-triage tool ${name} is missing`);
+  payload.tool_choice = { type: "function", function: { name } };
 }
 
 function decodeBoundedModel(model: string): EncodedBudget {

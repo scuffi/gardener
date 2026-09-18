@@ -40,7 +40,7 @@ const TOOL_DESCRIPTORS = {
  * Pure adapter from the canonical task contract into the existing Flue harness
  * seam. It does not parse repository source and cannot manufacture effects.
  */
-export async function createTaskHarnessRequest(input: unknown): Promise<HarnessRequest> {
+export async function createTaskHarnessRequest(input: unknown, repositoryObservation?: JsonValue): Promise<HarnessRequest> {
   const request = taskRunRequestV1Schema.parse(input);
   const actualBundleHash = await canonicalSha256(request.bundle);
   if (actualBundleHash !== request.bundleHash) throw new Error("Task bundle hash does not match canonical bundle bytes");
@@ -72,7 +72,7 @@ export async function createTaskHarnessRequest(input: unknown): Promise<HarnessR
     },
     prompt: renderTaskPrompt(request),
     model: request.model,
-    tools: request.bundle.tools.map((tool) => ({ ...TOOL_DESCRIPTORS[tool] })),
+    tools: repositoryObservation === undefined ? request.bundle.tools.map((tool) => ({ ...TOOL_DESCRIPTORS[tool] })) : [],
     budget: {
       maxTurns: request.bundle.limits.maxTurns,
       maxToolCalls: request.bundle.limits.maxToolCalls,
@@ -81,7 +81,10 @@ export async function createTaskHarnessRequest(input: unknown): Promise<HarnessR
       maxRuntimeMs: deadlineAt - admittedAt,
       deadlineAt: request.deadlineAt,
     },
-    context: [{ name: "normalized-event-v1", content: JSON.stringify(request.event) }],
+    context: [
+      { name: "normalized-event-v1", content: JSON.stringify(request.event) },
+      ...(repositoryObservation === undefined ? [] : [{ name: "repository-inspection-v1", content: JSON.stringify(repositoryObservation) }]),
+    ],
   };
 }
 

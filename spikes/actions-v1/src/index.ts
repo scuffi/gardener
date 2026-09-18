@@ -21,6 +21,7 @@ import { verifyGitHubActionsOidc } from "./github-oidc";
 
 interface Env {
   SESSIONS: DurableObjectNamespace<SpikeSession>;
+  GARDENER?: { fetch(request: Request): Promise<Response> };
   OIDC_MODE?: "github";
   OIDC_AUDIENCE?: string;
   ALLOWED_REPOSITORY_ID?: string;
@@ -49,6 +50,7 @@ export default {
     if (url.pathname === "/health") return Response.json({ ok: true, spike: "actions-v1" });
     const isSessionRoute = SESSION_PATH.test(url.pathname);
     const isLocalTestHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (isSessionRoute && env.GARDENER && !isLocalTestHost) return env.GARDENER.fetch(request);
     if (!isSessionRoute && !isLocalTestHost) return new Response("Not found", { status: 404 });
     const route = SESSION_PATH.exec(url.pathname) ?? INVOKE_PATH.exec(url.pathname) ?? STATE_PATH.exec(url.pathname);
     if (!route?.[1]) return new Response("Not found", { status: 404 });

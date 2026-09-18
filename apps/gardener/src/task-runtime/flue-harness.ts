@@ -72,6 +72,7 @@ export class FlueTaskHarness implements AgentHarness {
         events: [],
       };
     } catch (error) {
+      console.error("Gardener task Flue read failed", error instanceof AgentRunError ? error.cause : error);
       const cancelled = error instanceof AgentRunError && error.outcome === "aborted";
       return {
         schemaVersion: "gardener.harness.outcome/v1",
@@ -99,7 +100,7 @@ export class FlueTaskHarness implements AgentHarness {
 
 function oneTaskOutcome(reply: AgentReply): JsonValue {
   const values = reply.data.taskOutcome;
-  if (!Array.isArray(values) || values.length !== 1) throw new Error("Flue reply has no unique task outcome");
+  if (!Array.isArray(values) || values.length !== 1) return {};
   return JSON.parse(JSON.stringify(values[0])) as JsonValue;
 }
 

@@ -9,31 +9,17 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/hooks/*", "/mcp", "/oauth/*", "/.well-known/*"]
   },
-  "services": [
-    {
-      "binding": "GITHUB_GATEWAY",
-      "service": "gardener-github-gateway",
-      "entrypoint": "GitHubGatewayEntrypoint"
-    }
-  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "gardener-actions-v1-runtime",
+      "database_id": "e5b4c408-55d6-42f7-802e-93542cf93877",
       "migrations_dir": "migrations"
     }
   ],
   "ai": { "binding": "AI" },
-  "worker_loaders": [{ "binding": "COMPUTER_LOADER" }],
-  "r2_buckets": [
-    {
-      "binding": "COMPUTER_INPUTS",
-      "bucket_name": "gardener-computer-inputs"
-    }
-  ],
   "durable_objects": {
     "bindings": [
-      { "name": "COMPUTER_WORKSPACES", "class_name": "ComputerWorkspace" },
       { "name": "RUNNER_SESSIONS", "class_name": "TaskRunnerSession" }
     ]
   },
@@ -49,16 +35,6 @@
     {
       "tag": "actions-task-runtime-v1",
       "new_sqlite_classes": ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"]
-    }
-  ],
-  "containers": [
-    {
-      "class_name": "ComputerWorkspace",
-      "image": "./Dockerfile.computer",
-      "instance_type": "standard-1",
-      "max_instances": 5,
-      "rollout_active_grace_period": 0,
-      "rollout_step_percentage": [100]
     }
   ],
   "triggers": { "crons": ["* * * * *"] },

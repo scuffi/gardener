@@ -9,7 +9,6 @@ import {
 import { canonicalSha256 } from "@gardener/core";
 import {
   useAgentFinish,
-  useDataWriter,
   useInitialData,
   useInstruction,
   useModel,
@@ -50,12 +49,16 @@ type TaskFlueEnv = Omit<Env, "AI"> & {
   GARDENER_HARNESS_TOOLS?: HarnessToolFacade;
 };
 
-let taskEnv: TaskFlueEnv | undefined;
+let taskDatabase: D1Database | undefined;
 let taskToolFacade: HarnessToolFacade | undefined;
 
 /** Installed by the generated Flue Durable Object extension, never by task source or model input. */
 export function installGardenerTaskToolFacade(facade: HarnessToolFacade | undefined): void {
   taskToolFacade = facade;
+}
+
+export function installGardenerTaskDatabase(database: D1Database | undefined): void {
+  taskDatabase = database;
 }
 
 /**
@@ -72,14 +75,14 @@ export function GardenerTaskFlueAgent(): string {
   const narrowed = request.tools.length > 0
     ? new NarrowedHarnessToolFacade(request, requireTaskToolFacade())
     : null;
-  const writeTaskOutcome = useDataWriter("taskOutcome");
   const [completedRunnerTools, setCompletedRunnerTools] = usePersistentState("completedRunnerTools", 0);
 
   useModel(boundedCloudflareModel(request.model.id, request.budget), { compaction: false });
   useInstruction(renderContext(request));
   useInstruction([
     "This task triages one opened issue and proposes one comment.",
-    "The listed tools are the complete observation/workspace capability set.",
+    "Repository inspection has already been performed by trusted host code through the runner and is supplied as repository-inspection-v1 context.",
+    "The listed tools are the complete remaining capability set.",
     "The comment is only a proposal; a separate trusted effects job posts it exactly.",
     `Call ${TASK_TERMINAL_TOOL} exactly once with summary, observations, and comment.`,
     "Do not return the outcome as assistant text.",
@@ -101,7 +104,8 @@ export function GardenerTaskFlueAgent(): string {
     input: inspectOnlyTerminalSchema,
     output: v.object({ accepted: v.boolean() }),
     async run({ data }) {
-      if (completedRunnerTools < 1) throw new Error("Issue triage requires evidence from a completed runner tool");
+      const trustedInspection = request.context?.some((item) => item.name === "repository-inspection-v1");
+      if (completedRunnerTools < 1 && !trustedInspection) throw new Error("Issue triage requires evidence from a completed runner tool");
       const eventItem = request.context?.find((item) => item.name === "normalized-event-v1");
       const event = normalizedEventV1Schema.parse(JSON.parse(eventItem?.content ?? "null"));
       if (event.kind !== "github.issue.opened") throw new Error("Issue triage requires an opened issue event");
@@ -123,7 +127,9 @@ export function GardenerTaskFlueAgent(): string {
           rationale: data.comment.rationale,
         }],
       }) as TaskOutcomeV1;
-      writeTaskOutcome(outcome);
+      await requireTaskEnv().DB.prepare(
+        "UPDATE actions_task_runs SET outcome_json=?,status='completed',updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      ).bind(JSON.stringify(outcome), request.runId).run();
       return { output: { accepted: true }, terminate: true };
     },
   });
@@ -171,13 +177,18 @@ export const cloudflare = extend<CloudflareAgentLike, TaskFlueEnv>({
     return class GardenerTaskFlueBase extends Base {
       constructor(ctx: DurableObjectState, env: TaskFlueEnv) {
         super(ctx, env);
-        taskEnv = env;
+        taskDatabase = env.DB;
         taskToolFacade = env.GARDENER_HARNESS_TOOLS ?? new RunnerSessionToolFacade(env.RUNNER_SESSIONS);
         installBoundedCloudflareProvider(env.AI);
       }
     };
   },
 });
+
+function requireTaskEnv(): Pick<TaskFlueEnv, "DB"> {
+  if (!taskDatabase) throw new Error("Task Flue environment is unavailable");
+  return { DB: taskDatabase };
+}
 
 function requireTaskToolFacade(): HarnessToolFacade {
   if (!taskToolFacade) throw new Error("Task runner tool facade is unavailable");

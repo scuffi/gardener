@@ -269,7 +269,25 @@ export class TaskRunnerSession extends DurableObject<Env> {
       admittedAt,
       deadlineAt: new Date(Date.parse(admittedAt) + bundle.limits.runtimeSeconds * 1_000).toISOString(),
     };
-    const harnessRequest = await createTaskHarnessRequest(request);
+    const draftHarnessRequest = await createTaskHarnessRequest(request);
+    const inspection = await this.invokeHarnessTool({
+      runId: request.runId,
+      requestId: draftHarnessRequest.requestId,
+      toolCallId: "trusted-preflight-list-files",
+      toolName: "repository_list_files",
+      input: { maxEntries: 200 },
+    });
+    if (inspection.status !== "completed") throw new Error("Trusted repository preflight inspection failed");
+    const harnessRequest = await createTaskHarnessRequest(request, JSON.parse(JSON.stringify({
+      schemaVersion: "gardener.task-tool-result/v1",
+      operationId: inspection.operationId,
+      tool: "repository.list_files",
+      status: inspection.status,
+      exitCode: inspection.exitCode,
+      stdout: inspection.stdout,
+      stderr: inspection.stderr,
+      outputTruncated: inspection.outputTruncated,
+    })) as JsonValue);
     const existing = await this.env.DB.prepare(
       "SELECT status,request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(identity.sessionId).first<{ status: string; request_json: string; harness_submission_json: string | null; outcome_json: string | null }>();
@@ -289,7 +307,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
         "UPDATE actions_task_runs SET harness_submission_json=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE id=? AND harness_submission_json IS NULL",
       ).bind(JSON.stringify(submission), identity.sessionId).run();
     }
-    const outcome = translateHarnessOutcome(request, await harness.read(submission));
+    const harnessOutcome = await harness.read(submission);
+    const terminalRow = await this.env.DB.prepare("SELECT outcome_json FROM actions_task_runs WHERE id=?")
+      .bind(identity.sessionId).first<{ outcome_json: string | null }>();
+    const outcome = terminalRow?.outcome_json
+      ? taskOutcomeV1Schema.parse(JSON.parse(terminalRow.outcome_json))
+      : translateHarnessOutcome(request, harnessOutcome);
     await this.env.DB.batch([
       this.env.DB.prepare(
         "UPDATE actions_task_runs SET status=?,outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",

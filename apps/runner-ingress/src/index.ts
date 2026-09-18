@@ -1,9 +1,5 @@
-interface GardenerRunnerService {
-  openRunnerSession(request: Request): Promise<Response>;
-}
-
 interface Env {
-  GARDENER: GardenerRunnerService;
+  GARDENER: { fetch(request: Request): Promise<Response> };
 }
 
 const SESSION_PATH = /^\/session\/[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/;
@@ -15,6 +11,6 @@ export default {
       return Response.json({ ok: true, service: "gardener-runner-ingress" });
     }
     if (!SESSION_PATH.test(url.pathname)) return new Response("Not found", { status: 404 });
-    return env.GARDENER.openRunnerSession(request);
+    return env.GARDENER.fetch(request);
   },
 } satisfies ExportedHandler<Env>;

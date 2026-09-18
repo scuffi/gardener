@@ -18,7 +18,7 @@ export class RunnerSessionToolFacade implements HarnessToolFacade {
     if (!tool) throw new Error("Unknown task runner tool");
     const session = this.sessions.get(this.sessions.idFromName(invocation.runId));
     const result = await session.invokeHarnessTool(invocation) as RunnerActionResultV1;
-    return taskToolResultV1Schema.parse({
+    const parsed = taskToolResultV1Schema.parse({
       schemaVersion: "gardener.task-tool-result/v1",
       operationId: result.operationId,
       tool,
@@ -27,6 +27,7 @@ export class RunnerSessionToolFacade implements HarnessToolFacade {
       stdout: result.stdout,
       stderr: result.stderr,
       outputTruncated: result.outputTruncated,
-    }) as JsonValue;
+    });
+    return JSON.parse(JSON.stringify(parsed)) as JsonValue;
   }
 }
