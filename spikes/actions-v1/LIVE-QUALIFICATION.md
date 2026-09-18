@@ -66,7 +66,22 @@ node packages/cli/dist/cli.js actions enroll \
   --config apps/gardener/wrangler.jsonc
 ```
 
-`actions enroll` resolves immutable numeric repository and owner IDs from GitHub and performs an idempotent D1 upsert. `actions disable` is the non-destructive enrollment rollback. The generator was checked byte-for-byte against the qualified private caller, and `actions enroll` was run successfully against the existing private enrollment. D1 creation/migrations, Worker deployment, immutable Actions release publication, and end-to-end qualification still need to be composed around these primitives before setup is fully reproducible.
+`actions enroll` resolves immutable numeric repository and owner IDs from GitHub and performs an idempotent D1 upsert. `actions disable` is the non-destructive enrollment rollback. The generator was checked byte-for-byte against the qualified private caller, and `actions enroll` was run successfully against the existing private enrollment. D1 creation/migrations, Worker deployment, and end-to-end qualification still need to be composed around these primitives before setup is fully reproducible.
+
+Gardener-owned release assets are now published in the public, branch-protected repository <https://github.com/scuffi/gardener-actions>:
+
+- bundled runner/effects Actions commit: `71ec3e643887d8952ab780da42f406e7b234f1bb`;
+- reusable workflow commit: `1069cbd7317970865e4366d99eb7c711df9ccee6`;
+- release: <https://github.com/scuffi/gardener-actions/releases/tag/v1.0.0>.
+
+The bundled files are byte-identical to the qualified Action commit. `main` requires a code-owner review, stale-review dismissal, last-push approval, conversation resolution, linear history, and administrator enforcement; force pushes and deletion are disabled. Consumers still pin commit SHAs rather than the mutable tag. This release repository is public because GitHub does not let arbitrary public or cross-owner customer repositories consume reusable workflows and Actions from the private Gardener source repository. It contains only releasable code and no credentials, deployment configuration, or customer data.
+
+The generated callers and D1 enrollments were migrated to the Gardener-owned workflow SHA. Both release confirmation runs succeeded on attempt 1:
+
+- public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35366056947> produced <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/7#issuecomment-5732670231>;
+- private run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35366057486> produced <https://github.com/scuffi/gardener-actions-v1-private-smoke/issues/3#issuecomment-5732671762>.
+
+Both D1 rows are completed, are bound to run attempt 1, and contain effect receipts pointing to those exact `github-actions[bot]` comments.
 
 ## Historical transport qualification (2026-09-17)
 
