@@ -38,7 +38,9 @@ Deployed product resources:
 
 Attempts 1–15 were diagnostic, not accepted proofs. They exposed and resolved: account Access interception on a newly created ingress hostname, non-fetch RPC WebSocket response serialization, missing `fetch()` on the service entrypoint, a Flue model that required explicit native `tool_choice`, a Flue continuation payload incompatibility, canonical tool-result publication failure, and a preflight path of `.` rejected by repository confinement. The successful attempt used fixed host-driven Cap'n Web inspection followed by one forced, validated terminal model tool; the privileged job still received only the resulting exact artifact.
 
-## Pinned Gardener components
+## Historical transport qualification (2026-09-17)
+
+### Pinned Gardener components
 
 - Planning runner/action commit: `fc46492dde64a0fd2f6a48cc41c7f926df39241f`
 - Planning reusable workflow commit: `bd6ac76f84e5969797507bd8ab52b97afceac05b`
@@ -48,7 +50,7 @@ Attempts 1–15 were diagnostic, not accepted proofs. They exposed and resolved:
 - Runner: fixed `ubuntu-24.04` GitHub-hosted runner
 - Checkout: `actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803` (`v6.1.0`)
 
-## Public edge Worker
+### Public edge Worker
 
 - Worker: `gardener-actions-v1-spike`
 - Endpoint: <https://gardener-actions-v1-spike.agents-b8a.workers.dev>
@@ -59,7 +61,7 @@ Attempts 1–15 were diagnostic, not accepted proofs. They exposed and resolved:
 
 The entire isolated spike Worker was made public for qualification. It holds no GitHub token, GitHub App key, UI, or administrative API. Public routes are health and Cap'n Web session establishment; `/invoke` and `/state` return `404` outside localhost.
 
-## Repositories
+### Repositories
 
 ### Private
 
@@ -78,7 +80,7 @@ The entire isolated spike Worker was made public for qualification. It holds no 
 - Public effects probe action commit: `f2e699efdf8165477ffcbe2d3affd4cfc9a81f24`
 - Public effects reusable workflow commit: `acb13ef9f0e18fca43f46d055539cc75c59315c3`
 
-## Positive live qualifications
+### Positive live qualifications
 
 ### Private repository, direct edge Worker
 
@@ -123,7 +125,7 @@ An automatic `gardener-effects` GitHub Environment produced a real OIDC token ca
 - Run `35254853133`: a 60-second command was terminated by the 30-second action timeout and propagated as `timed_out`.
 - Runner unit tests also cover active process-group cancellation, forced timeout termination, combined output bounds, credential-environment scrubbing, workspace path confinement, and operation-ID conflict detection.
 
-## Negative live qualifications
+### Negative live qualifications
 
 - A signed token from a non-allowlisted reusable workflow was rejected in run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35254311053> with `Runner hello does not match the trusted reusable workflow`.
 - After enrollment moved to the public repository, the otherwise valid private workflow was rejected in run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35256032642> with `Runner hello does not match enrolled repository identity`.
@@ -131,11 +133,11 @@ An automatic `gardener-effects` GitHub Environment produced a real OIDC token ca
 - A WebSocket frame larger than 1 MiB was closed with code 3000 and `Incoming message exceeds maximum size`.
 - Public `/state/*` and `/invoke/*` requests returned `404`.
 
-## Previously resolved ingress issue
+### Previously resolved ingress issue
 
 The account initially placed both the default `workers.dev` endpoint and an experimental custom domain behind Cloudflare Access, producing `302` before requests reached the Worker. The custom domain was removed. Access was then disabled for the isolated `gardener-actions-v1-spike.agents-b8a.workers.dev` Worker, and direct edge qualification succeeded. No Access credential is present in a planning job.
 
-## Remaining v1 work
+### Remaining v1 work recorded on 2026-09-17
 
 The mandatory public edge Cap'n Web/OIDC/reconnect gate is now qualified for public and private GitHub.com repositories. This spike does not yet prove the complete product:
 
@@ -146,7 +148,7 @@ The mandatory public edge Cap'n Web/OIDC/reconnect gate is now qualified for pub
 - The full-Git-semantics artifact contract and privileged effect executor are not implemented.
 - Issue-to-draft-PR effects, default bot identity, and optional customer GitHub App identity remain unqualified.
 
-## Repository validation
+### Repository validation
 
 After live qualification, `pnpm check` passed across the monorepo, including:
 
