@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   agents: vi.fn(),
   agentAssignments: vi.fn(),
+  actionsRuns: vi.fn(),
   runs: vi.fn(),
 }));
 
@@ -70,6 +71,19 @@ describe("clickable collection surfaces", () => {
 
   it("opens a run from its full pointer row and native keyboard link", async () => {
     const user = userEvent.setup();
+    api.actionsRuns.mockResolvedValue({
+      runs: [{
+        id: "repo-1-run-2-attempt-1-plan",
+        repositoryId: "1",
+        githubRunId: "2",
+        githubRunAttempt: 1,
+        status: "completed",
+        outcome: { status: "completed", summary: "README inspected", proposedEffects: [{ kind: "issue.comment.create", body: "Please add a regression test." }] },
+        effectReceipt: { operationId: "op_1", commentId: "99", commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-99" },
+        createdAt: "2026-09-14 08:00:00",
+        updatedAt: "2026-09-14 08:00:04",
+      }],
+    });
     api.runs.mockResolvedValue({
       runs: [
         {
@@ -85,6 +99,9 @@ describe("clickable collection surfaces", () => {
     });
     renderWithData(<RunsPage />, "/runs");
 
+    expect(await screen.findByText("README inspected")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View GitHub comment" }).getAttribute("href"))
+      .toBe("https://github.com/owner/repo/issues/7#issuecomment-99");
     const rowLink = await screen.findByRole("link", {
       name: /Open run run_0123456789abcdef.*Status: Completed.*Kind: issue\.triage/,
     });
