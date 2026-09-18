@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { disableActionsRepository, enrollActionsRepository, writeActionsCaller } from "./actions.js";
 import { parse } from "./args.js";
 import { destroyQualification } from "./destroy.js";
 import { initializeGateway } from "./init.js";
@@ -13,6 +14,7 @@ const HELP = `gardener <command>
 
 Commands:
   setup                        Plan, provision, link, and verify a Gardener workspace
+  actions <command>            Generate and enroll the Actions-native workflow
   gateway <command>            Operate, qualify, or diagnose the GitHub Gateway
 
 Run \`gardener setup --help\` or \`gardener gateway help\` for details.
@@ -29,6 +31,24 @@ Options:
   --personal                   Create the App in the signed-in personal GitHub account
   --organization <login>       Create the App under a GitHub organization
   --verbose                    Show underlying build and Wrangler command output
+  --repository-root <path>     Gardener checkout (defaults to current directory)
+`;
+
+const ACTIONS_HELP = `gardener actions <command>
+
+Commands:
+  workflow                     Write the deterministic caller workflow
+  enroll                       Upsert a numeric repository enrollment in D1
+  disable                      Disable an enrollment without deleting history
+
+Options:
+  --repository <owner/name>    Repository to enroll (enroll only)
+  --workflow-ref <ref@sha>     Exact reusable workflow reference at a full SHA
+  --audience <https-origin>    Exact runner ingress and OIDC audience
+  --task-bundle-hash <sha256>  Exact compiled task bundle (workflow only)
+  --output <path>              Caller output (workflow only)
+  --config <path>              Runtime Wrangler configuration (enroll only)
+  --database-binding <name>    D1 binding name (defaults to DB)
   --repository-root <path>     Gardener checkout (defaults to current directory)
 `;
 
@@ -84,6 +104,54 @@ async function main(argv: string[]): Promise<void> {
       verbose: flags.get("verbose") === true,
     });
     return;
+  }
+  if (scope === "actions") {
+    if (!command || command === "help" || command === "--help") {
+      console.log(ACTIONS_HELP);
+      return;
+    }
+    const { positional, flags } = parse(rest);
+    if (positional.length) throw new Error(`gardener actions ${command} does not accept positional arguments`);
+    if (command === "workflow") {
+      const workflowRef = requiredStringFlag(flags, "workflow-ref");
+      const audience = requiredStringFlag(flags, "audience");
+      const output = requiredStringFlag(flags, "output");
+      const taskBundleHash = requiredStringFlag(flags, "task-bundle-hash");
+      console.log(await writeActionsCaller({ workflowRef, audience, taskBundleHash, output }));
+      return;
+    }
+    if (command === "enroll") {
+      const workflowRef = requiredStringFlag(flags, "workflow-ref");
+      const audience = requiredStringFlag(flags, "audience");
+      const repository = requiredStringFlag(flags, "repository");
+      const config = requiredStringFlag(flags, "config");
+      const repositoryRoot = stringFlag(flags, "repository-root") ?? process.cwd();
+      const databaseBinding = stringFlag(flags, "database-binding");
+      const enrollment = await enrollActionsRepository({
+        repositoryRoot,
+        repository,
+        workflowRef,
+        audience,
+        config,
+        ...(databaseBinding ? { databaseBinding } : {}),
+      });
+      console.log(JSON.stringify(enrollment, null, 2));
+      return;
+    }
+    if (command === "disable") {
+      const repository = requiredStringFlag(flags, "repository");
+      const config = requiredStringFlag(flags, "config");
+      const repositoryRoot = stringFlag(flags, "repository-root") ?? process.cwd();
+      const databaseBinding = stringFlag(flags, "database-binding");
+      console.log(JSON.stringify(await disableActionsRepository({
+        repositoryRoot,
+        repository,
+        config,
+        ...(databaseBinding ? { databaseBinding } : {}),
+      }), null, 2));
+      return;
+    }
+    throw new Error(`Unknown actions command: ${command}`);
   }
   if (scope !== "gateway") {
     console.log(HELP);
@@ -172,6 +240,12 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   throw new Error(`Unknown gateway command: ${command}`);
+}
+
+function requiredStringFlag(flags: Map<string, string | true>, name: string): string {
+  const value = stringFlag(flags, name);
+  if (!value) throw new Error(`--${name} is required`);
+  return value;
 }
 
 function stringFlag(flags: Map<string, string | true>, name: string): string | undefined {

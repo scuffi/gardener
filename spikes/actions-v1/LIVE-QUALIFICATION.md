@@ -38,6 +38,36 @@ Deployed product resources:
 
 Attempts 1–15 were diagnostic, not accepted proofs. They exposed and resolved: account Access interception on a newly created ingress hostname, non-fetch RPC WebSocket response serialization, missing `fetch()` on the service entrypoint, a Flue model that required explicit native `tool_choice`, a Flue continuation payload incompatibility, canonical tool-result publication failure, and a preflight path of `.` rejected by repository confinement. The successful attempt used fixed host-driven Cap'n Web inspection followed by one forced, validated terminal model tool; the privileged job still received only the resulting exact artifact.
 
+## Clean confirmation and readiness findings (2026-09-18)
+
+The qualified ingress and runtime subsequently completed clean, first-attempt runs without deployment, enrollment, SQL, or operator intervention:
+
+- public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35357839645> produced <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/3#issuecomment-5731638770>;
+- private run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35358046389> produced <https://github.com/scuffi/gardener-actions-v1-private-smoke/issues/1#issuecomment-5731666007>;
+- after an unsuccessful canonical-Flue experiment was rolled back, public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35364105032> completed on attempt 1 and produced <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/6#issuecomment-5732426955>.
+
+A dedicated `gardener-runner-ingress` Worker was deployed and both enrollments were temporarily moved to its audience. Public run `35358427732` and private run `35359447838` each failed before reaching the Worker after repeated WebSocket connection attempts. Direct requests to `gardener-runner-ingress.agents-b8a.workers.dev` receive an account-level Cloudflare Access `302`; the same service-binding forwarding code works at the public `gardener-actions-v1-spike` hostname. Both callers and enrollments were restored to the qualified hostname. Removing that Access interception is an account-policy prerequisite, not a Worker code change.
+
+Canonical Flue continuation was also re-investigated in attempts 1–9 of run `35360919894`. Normalizing a Workers AI tool-call finish from `stop` to `toolUse` allowed Flue to persist the assistant/tool-result turn, proving the earlier conversation-stream invariant was caused by the provider finish reason. The next model turn then failed at the Workers AI binding boundary: the Llama chat-completions wire rejected its multi-turn assistant/tool transcript, while GPT-OSS Responses requests reached the native endpoint with function tools transformed back to a nested chat-completions shape and were rejected with validation error `8007`. Disabling the default AI Gateway did not change the result. The experiment was fully rolled back; deployed runtime version `8a5e7b25-7ca4-4d7a-83b6-e01090d63248` restores the qualified preflight/forced-terminal/direct-D1 behavior. Canonical tool-result delivery therefore remains an explicit upstream/provider-integration blocker rather than a completed readiness gate.
+
+The CLI now removes hand-written enrollment SQL and hand-authored caller YAML from the repeatable path:
+
+```sh
+pnpm --filter @gardener/cli build
+node packages/cli/dist/cli.js actions workflow \
+  --workflow-ref OWNER/ACTIONS_REPOSITORY/.github/workflows/gardener-triage-reusable.yml@FULL_SHA \
+  --audience https://RUNNER_INGRESS \
+  --task-bundle-hash SHA256 \
+  --output ../customer-repository/.github/workflows/gardener-triage.yml
+node packages/cli/dist/cli.js actions enroll \
+  --repository OWNER/CUSTOMER_REPOSITORY \
+  --workflow-ref OWNER/ACTIONS_REPOSITORY/.github/workflows/gardener-triage-reusable.yml@FULL_SHA \
+  --audience https://RUNNER_INGRESS \
+  --config apps/gardener/wrangler.jsonc
+```
+
+`actions enroll` resolves immutable numeric repository and owner IDs from GitHub and performs an idempotent D1 upsert. `actions disable` is the non-destructive enrollment rollback. The generator was checked byte-for-byte against the qualified private caller, and `actions enroll` was run successfully against the existing private enrollment. D1 creation/migrations, Worker deployment, immutable Actions release publication, and end-to-end qualification still need to be composed around these primitives before setup is fully reproducible.
+
 ## Historical transport qualification (2026-09-17)
 
 ### Pinned Gardener components

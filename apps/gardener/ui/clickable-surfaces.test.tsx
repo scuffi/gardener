@@ -78,8 +78,16 @@ describe("clickable collection surfaces", () => {
         githubRunId: "2",
         githubRunAttempt: 1,
         status: "completed",
-        outcome: { status: "completed", summary: "README inspected", proposedEffects: [{ kind: "issue.comment.create", body: "Please add a regression test." }] },
-        effectReceipt: { operationId: "op_1", commentId: "99", commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-99" },
+        outcome: {
+          status: "completed",
+          summary: "README inspected",
+          proposedEffects: [{ kind: "issue.comment.create", body: "Please add a regression test." }],
+        },
+        effectReceipt: {
+          operationId: "op_1",
+          commentId: "99",
+          commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-99",
+        },
         createdAt: "2026-09-14 08:00:00",
         updatedAt: "2026-09-14 08:00:04",
       }],

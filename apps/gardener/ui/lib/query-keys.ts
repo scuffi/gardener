@@ -21,6 +21,7 @@ export const queryKeys = {
     ["repository", id, "assignments"] as const,
   repositoryPolicy: (id: string | undefined) => ["repository", id, "policy"] as const,
   runs: ["runs"] as const,
+  actionsTaskRuns: ["actions-task-runs"] as const,
   run: (id: string | undefined) => ["run", id] as const,
 } as const;
 

@@ -9,6 +9,7 @@ import {
   unavailableGitHubOperationKinds,
 } from "@gardener/provider-github";
 import { CloudflareAccessRedirectError, fetchJsonEndpoint } from "../src/access";
+import { actionsEnrollmentSql, renderActionsCaller } from "../src/actions";
 import { parse } from "../src/args";
 import { deploymentNames, writeGatewayConfig } from "../src/config";
 import { destroyPlan, destroyQualification } from "../src/destroy";
@@ -48,6 +49,14 @@ describe("Gardener Gateway CLI", () => {
     expect(setup.stdout).toContain("gardener setup");
     expect(setup.stdout).toContain("--personal");
 
+    const actions = spawnSync(process.execPath, ["dist/cli.js", "--", "actions", "help"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    expect(actions.status).toBe(0);
+    expect(actions.stdout).toContain("workflow                     Write");
+    expect(actions.stdout).toContain("enroll                       Upsert");
+
     const gateway = spawnSync(process.execPath, ["dist/cli.js", "--", "gateway", "help"], {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -55,6 +64,48 @@ describe("Gardener Gateway CLI", () => {
     expect(gateway.status).toBe(0);
     expect(gateway.stdout).toContain("plan                         Build");
     expect(gateway.stdout).toContain("destroy                      Delete");
+  });
+
+  it("renders a deterministic full-SHA-pinned Actions caller and enrollment", () => {
+    const workflowRef = `gardener/actions/.github/workflows/triage.yml@${"a".repeat(40)}`;
+    const audience = "https://runner.example.workers.dev";
+    const taskBundleHash = "b".repeat(64);
+    expect(renderActionsCaller({ workflowRef, audience, taskBundleHash })).toBe(`name: Gardener triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  gardener:
+    if: \${{ contains(github.event.issue.labels.*.name, 'gardener-test') }}
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    uses: ${workflowRef}
+    with:
+      harness-url: ${audience}
+      task-bundle-hash: ${taskBundleHash}
+`);
+    const sql = actionsEnrollmentSql({
+      repositoryId: "1374842705",
+      ownerId: "45369682",
+      ownerLogin: "owner",
+      repositoryName: "repository",
+      visibility: "private",
+      workflowRef,
+      audience,
+    });
+    expect(sql).toContain("ON CONFLICT(repository_id) DO UPDATE");
+    expect(sql).toContain(`'${workflowRef}'`);
+    expect(sql).toContain("enabled=1");
+    expect(() => renderActionsCaller({ workflowRef: "gardener/actions/.github/workflows/triage.yml@main", audience, taskBundleHash }))
+      .toThrow(/full-sha/i);
+    expect(() => renderActionsCaller({ workflowRef, audience: `${audience}/path`, taskBundleHash }))
+      .toThrow(/HTTPS origin/);
   });
 
   it("uses restrained TTY colours and respects NO_COLOR", () => {
