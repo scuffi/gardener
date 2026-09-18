@@ -46,7 +46,7 @@ The qualified ingress and runtime subsequently completed clean, first-attempt ru
 - private run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35358046389> produced <https://github.com/scuffi/gardener-actions-v1-private-smoke/issues/1#issuecomment-5731666007>;
 - after an unsuccessful canonical-Flue experiment was rolled back, public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35364105032> completed on attempt 1 and produced <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/6#issuecomment-5732426955>.
 
-A dedicated `gardener-runner-ingress` Worker was deployed and both enrollments were temporarily moved to its audience. Public run `35358427732` and private run `35359447838` each failed before reaching the Worker after repeated WebSocket connection attempts. Direct requests to `gardener-runner-ingress.agents-b8a.workers.dev` receive an account-level Cloudflare Access `302`; the same service-binding forwarding code works at the public `gardener-actions-v1-spike` hostname. Both callers and enrollments were restored to the qualified hostname. Removing that Access interception is an account-policy prerequisite, not a Worker code change.
+A dedicated `gardener-runner-ingress` Worker was deployed and both enrollments were initially moved to its audience. Public run `35358427732` and private run `35359447838` failed before reaching the Worker after repeated WebSocket connection attempts because an account-level Cloudflare Access policy returned `302`. An exact-host bypass was subsequently added for `gardener-runner-ingress.agents-b8a.workers.dev`. The endpoint now returns its own `200` health response and completes an unauthenticated HTTP/1.1 WebSocket upgrade with `101`; authentication remains mandatory inside the Cap'n Web session.
 
 Canonical Flue continuation was also re-investigated in attempts 1–9 of run `35360919894`. Normalizing a Workers AI tool-call finish from `stop` to `toolUse` allowed Flue to persist the assistant/tool-result turn, proving the earlier conversation-stream invariant was caused by the provider finish reason. The next model turn then failed at the Workers AI binding boundary: the Llama chat-completions wire rejected its multi-turn assistant/tool transcript, while GPT-OSS Responses requests reached the native endpoint with function tools transformed back to a nested chat-completions shape and were rejected with validation error `8007`. Disabling the default AI Gateway did not change the result. The experiment was fully rolled back; deployed runtime version `8a5e7b25-7ca4-4d7a-83b6-e01090d63248` restores the qualified preflight/forced-terminal/direct-D1 behavior. Canonical tool-result delivery therefore remains an explicit upstream/provider-integration blocker rather than a completed readiness gate.
 
@@ -82,6 +82,13 @@ The generated callers and D1 enrollments were migrated to the Gardener-owned wor
 - private run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35366057486> produced <https://github.com/scuffi/gardener-actions-v1-private-smoke/issues/3#issuecomment-5732671762>.
 
 Both D1 rows are completed, are bound to run attempt 1, and contain effect receipts pointing to those exact `github-actions[bot]` comments.
+
+After the Access bypass, both generated callers and D1 OIDC audiences were moved to the dedicated ingress. The final dedicated-ingress confirmations also succeeded on attempt 1:
+
+- public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35367007114> produced <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/8#issuecomment-5732798865>;
+- private run <https://github.com/scuffi/gardener-actions-v1-private-smoke/actions/runs/35367009092> produced <https://github.com/scuffi/gardener-actions-v1-private-smoke/issues/4#issuecomment-5732791805>.
+
+The planning and effects jobs used `https://gardener-runner-ingress.agents-b8a.workers.dev` as both transport origin and OIDC audience. Their completed D1 rows include exact comment receipts. The `gardener-actions-v1-spike` service binding to the product runtime was then removed and the transport-only spike redeployed as version `c49bbac8-513b-4184-907c-246d9e5d1d93`; it is no longer a product forwarding path.
 
 ## Historical transport qualification (2026-09-17)
 

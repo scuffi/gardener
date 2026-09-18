@@ -4,13 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-17",
   "workers_dev": true,
-  "services": [
-    {
-      "binding": "GARDENER",
-      "service": "gardener-actions-v1-runtime",
-      "entrypoint": "GardenerRunnerIngressEntrypoint"
-    }
-  ],
   "limits": {
     "cpu_ms": 5000
   },
