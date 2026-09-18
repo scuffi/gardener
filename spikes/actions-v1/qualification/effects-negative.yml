@@ -1,0 +1,119 @@
+name: Gardener effect negatives
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  reject-invalid-effects:
+    if: ${{ contains(github.event.issue.labels.*.name, 'gardener-negative') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      id-token: write
+    steps:
+      - name: Create tampered artifact
+        shell: bash
+        run: printf '{}\n' > "${RUNNER_TEMP}/tampered.json"
+      - name: Reject tampered digest
+        id: tampered
+        continue-on-error: true
+        uses: scuffi/gardener-actions/actions/effects@71ec3e643887d8952ab780da42f406e7b234f1bb
+        with:
+          artifact-path: ${{ runner.temp }}/tampered.json
+          expected-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          harness-url: https://gardener-runner-ingress.agents-b8a.workers.dev
+      - name: Require tampered digest rejection
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.tampered.outcome }}
+        run: test "${OUTCOME}" = failure
+
+      - name: Create wrong-repository artifact
+        id: wrong-repository-artifact
+        shell: bash
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          artifact="${RUNNER_TEMP}/wrong-repository.json"
+          jq -cn \
+            --arg runId "repo-${REPOSITORY_ID}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}-plan" \
+            --arg repositoryId "${REPOSITORY_ID}" \
+            --argjson issueNumber "${ISSUE_NUMBER}" \
+            '{
+              schemaVersion: "gardener.task-effect-plan/v1",
+              runId: $runId,
+              taskId: "fixture.issue-triage",
+              bundleHash: ("a" * 64),
+              repository: {id: $repositoryId, fullName: "scuffi/not-this-repository"},
+              issueNumber: $issueNumber,
+              operationId: "op_negative_repository",
+              kind: "issue.comment.create",
+              body: "This comment must not be posted."
+            }' > "${artifact}"
+          echo "path=${artifact}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=$(sha256sum "${artifact}" | cut -d' ' -f1)" >> "${GITHUB_OUTPUT}"
+      - name: Reject wrong repository binding
+        id: wrong-repository
+        continue-on-error: true
+        uses: scuffi/gardener-actions/actions/effects@71ec3e643887d8952ab780da42f406e7b234f1bb
+        with:
+          artifact-path: ${{ steps.wrong-repository-artifact.outputs.path }}
+          expected-sha256: ${{ steps.wrong-repository-artifact.outputs.sha256 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          harness-url: https://gardener-runner-ingress.agents-b8a.workers.dev
+      - name: Require repository rejection
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.wrong-repository.outcome }}
+        run: test "${OUTCOME}" = failure
+
+      - name: Create wrong-issue artifact
+        id: wrong-issue-artifact
+        shell: bash
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          artifact="${RUNNER_TEMP}/wrong-issue.json"
+          jq -cn \
+            --arg runId "repo-${REPOSITORY_ID}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}-plan" \
+            --arg repositoryId "${REPOSITORY_ID}" \
+            --arg repository "${REPOSITORY}" \
+            --argjson issueNumber "$((ISSUE_NUMBER + 1))" \
+            '{
+              schemaVersion: "gardener.task-effect-plan/v1",
+              runId: $runId,
+              taskId: "fixture.issue-triage",
+              bundleHash: ("a" * 64),
+              repository: {id: $repositoryId, fullName: $repository},
+              issueNumber: $issueNumber,
+              operationId: "op_negative_issue",
+              kind: "issue.comment.create",
+              body: "This comment must not be posted."
+            }' > "${artifact}"
+          echo "path=${artifact}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=$(sha256sum "${artifact}" | cut -d' ' -f1)" >> "${GITHUB_OUTPUT}"
+      - name: Reject wrong issue binding
+        id: wrong-issue
+        continue-on-error: true
+        uses: scuffi/gardener-actions/actions/effects@71ec3e643887d8952ab780da42f406e7b234f1bb
+        with:
+          artifact-path: ${{ steps.wrong-issue-artifact.outputs.path }}
+          expected-sha256: ${{ steps.wrong-issue-artifact.outputs.sha256 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          harness-url: https://gardener-runner-ingress.agents-b8a.workers.dev
+      - name: Require issue rejection
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.wrong-issue.outcome }}
+        run: test "${OUTCOME}" = failure

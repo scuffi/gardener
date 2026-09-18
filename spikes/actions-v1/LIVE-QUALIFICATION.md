@@ -90,6 +90,14 @@ After the Access bypass, both generated callers and D1 OIDC audiences were moved
 
 The planning and effects jobs used `https://gardener-runner-ingress.agents-b8a.workers.dev` as both transport origin and OIDC audience. Their completed D1 rows include exact comment receipts. The `gardener-actions-v1-spike` service binding to the product runtime was then removed and the transport-only spike redeployed as version `c49bbac8-513b-4184-907c-246d9e5d1d93`; it is no longer a product forwarding path.
 
+## Exact-effect negative and reconciliation qualification (2026-09-18)
+
+Public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35368619328> executed the pinned released effects Action against three invalid artifacts. It observed the exact failures `Effect artifact digest mismatch`, `Effect repository binding mismatch`, and `Effect issue binding mismatch`. The qualification issue received zero comments, and each rejection happened before GitHub API or receipt recording. The job had no checkout; its write-capable token was passed only to the released effects Action, never to a shell step. The workflow source is `qualification/effects-negative.yml`.
+
+Public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/runs/35369214475> executed one valid SHA-256-bound artifact twice in the same checkout-free effects job. Both executions returned operation `op_f2f365045ffddc7f04bf2957bb327f946b07c149d52036988999321e0bc2605a` and comment ID `5733064172`. Issue <https://github.com/scuffi/gardener-actions-v1-public-smoke/issues/12> contains exactly one marked `github-actions[bot]` comment, D1 contains one matching receipt, and the immutable audit log contains exactly one `effect.executed` event. The second execution therefore reconciled rather than posting or auditing a duplicate. The reusable workflow source is `qualification/effects-reconcile-reusable.yml`.
+
+The temporary reconciliation enrollment was restored to the Gardener-owned reusable workflow immediately after qualification. Public and private product enrollments both remain on the dedicated ingress and release workflow SHA.
+
 ## Historical transport qualification (2026-09-17)
 
 ### Pinned Gardener components

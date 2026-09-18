@@ -1,0 +1,85 @@
+name: Gardener effect reconciliation
+
+on:
+  workflow_call:
+    inputs:
+      harness-url:
+        required: true
+        type: string
+      task-bundle-hash:
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  plan:
+    name: Plan reconciliation effect
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      effect-sha256: ${{ steps.gardener.outputs.effect-artifact-sha256 }}
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Plan with Gardener
+        id: gardener
+        uses: scuffi/gardener-actions/actions/runner@71ec3e643887d8952ab780da42f406e7b234f1bb
+        with:
+          harness-url: ${{ inputs.harness-url }}
+          agent-hash: ${{ inputs.task-bundle-hash }}
+      - name: Upload exact effect plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gardener-reconcile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.gardener.outputs.effect-artifact-path }}
+          if-no-files-found: error
+          retention-days: 1
+
+  effects:
+    name: Execute and reconcile exact effect
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: gardener-effects
+    permissions:
+      issues: write
+      id-token: write
+    steps:
+      - name: Download exact effect plan
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: gardener-reconcile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gardener-effect
+      - name: Execute exact effect
+        id: first
+        uses: scuffi/gardener-actions/actions/effects@71ec3e643887d8952ab780da42f406e7b234f1bb
+        with:
+          artifact-path: ${{ runner.temp }}/gardener-effect/${{ needs.plan.outputs.effect-sha256 }}.json
+          expected-sha256: ${{ needs.plan.outputs.effect-sha256 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          harness-url: ${{ inputs.harness-url }}
+      - name: Reconcile identical effect
+        id: second
+        uses: scuffi/gardener-actions/actions/effects@71ec3e643887d8952ab780da42f406e7b234f1bb
+        with:
+          artifact-path: ${{ runner.temp }}/gardener-effect/${{ needs.plan.outputs.effect-sha256 }}.json
+          expected-sha256: ${{ needs.plan.outputs.effect-sha256 }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          harness-url: ${{ inputs.harness-url }}
+      - name: Require the same GitHub receipt
+        shell: bash
+        env:
+          FIRST_COMMENT_ID: ${{ steps.first.outputs.comment-id }}
+          SECOND_COMMENT_ID: ${{ steps.second.outputs.comment-id }}
+          FIRST_OPERATION_ID: ${{ steps.first.outputs.operation-id }}
+          SECOND_OPERATION_ID: ${{ steps.second.outputs.operation-id }}
+        run: |
+          test -n "${FIRST_COMMENT_ID}"
+          test "${FIRST_COMMENT_ID}" = "${SECOND_COMMENT_ID}"
+          test "${FIRST_OPERATION_ID}" = "${SECOND_OPERATION_ID}"
