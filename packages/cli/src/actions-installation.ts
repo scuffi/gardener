@@ -5,6 +5,7 @@ import { taskBundleV1Schema } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { z } from "zod";
 import { actionsEnrollmentSql } from "./actions.js";
+import { compileGitHubActionsTask } from "./actions-target.js";
 import { runCommand, workerOrigin, wrangler } from "./commands.js";
 import { listDatabases, selectedAccountId, workerExists } from "./provision.js";
 import { ensurePrivateDirectory, writePrivateJson, writePrivateText } from "./state.js";
@@ -299,6 +300,10 @@ export async function connectActions(input: {
   const bundles: string[] = [];
   for (const [taskId, task] of Object.entries(lock.tasks).sort(([left], [right]) => left.localeCompare(right))) {
     const bundle = taskBundleV1Schema.parse(task.bundle);
+    const deployment = compileGitHubActionsTask(bundle);
+    if (canonicalJson(deployment) !== canonicalJson(task.deployment)) {
+      throw new Error(`Lock task ${taskId} does not match its github-actions/v1 deployment plan`);
+    }
     if (bundle.taskId !== taskId) throw new Error(`Lock task ${taskId} does not match its compiled bundle identity`);
     const canonical = canonicalJson(bundle);
     const hash = sha256.parse(task.bundleHash);

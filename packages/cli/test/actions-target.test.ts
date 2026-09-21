@@ -45,5 +45,14 @@ describe("github-actions/v1 target adapter", () => {
     expect(() => compileGitHubActionsTask(bundle({
       network: { default: "deny", allow: ["api.github.com"], deny: [] },
     }))).toThrow(/network rules/);
+    expect(() => compileGitHubActionsTask(bundle({
+      limits: { ...bundle().limits, runtimeSeconds: 600 },
+    }))).toThrow(/runtime-seconds/);
+    expect(() => compileGitHubActionsTask(bundle({
+      limits: { ...bundle().limits, maxTurns: 2 },
+    }))).toThrow(/max-turns/);
+    expect(() => compileGitHubActionsTask(bundle({
+      limits: { ...bundle().limits, maxToolCalls: 2 },
+    }))).toThrow(/max-tool-calls/);
   });
 });

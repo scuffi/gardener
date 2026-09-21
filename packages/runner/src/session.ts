@@ -18,7 +18,9 @@ export interface RunPlanningSessionOptions {
   getOidcToken(audience: string): Promise<string>;
   executor?: PlanningShellExecutor;
   event?: RunnerEventV1;
+  signal?: AbortSignal;
   onReconnect?(attempt: number, error: unknown): void;
+  onWarning?(message: string): void;
 }
 
 class RunnerApi extends RpcTarget implements RunnerCapability {
@@ -47,6 +49,7 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
   let lastError: unknown;
 
   while (attempt <= options.maxReconnects) {
+    if (options.signal?.aborted) throw new Error("Gardener planning was cancelled");
     let root: ReturnType<typeof newWebSocketRpcSession<PublicSessionCapability>> | undefined;
     try {
       const oidcToken = await options.getOidcToken(audience);
@@ -55,20 +58,63 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
       const session = root.authenticate(hello, oidcToken, runner);
       const cursor = executor.cursor();
       await session.resume({ schemaVersion: "gardener.runner.cursor/v1", ...cursor }, runner);
-      return runnerTerminalV1Schema.parse(await session.run(options.event));
+      if (options.signal?.aborted) throw new Error("Gardener planning was cancelled before execution");
+      let cancellationTimer: ReturnType<typeof setTimeout> | undefined;
+      let cancelListener: (() => void) | undefined;
+      const cancelled = options.signal
+        ? new Promise<never>((_, reject) => {
+            cancelListener = () => {
+              try {
+                Promise.resolve(session.cancelRun("GitHub Actions planning job was cancelled"))
+                  .catch((error) => options.onWarning?.(`Gardener cancellation RPC failed: ${message(error)}`));
+              } catch (error) {
+                options.onWarning?.(`Gardener cancellation RPC failed: ${message(error)}`);
+              }
+              cancellationTimer = setTimeout(
+                () => reject(new Error("Gardener cancellation did not settle within 5 seconds")),
+                5_000,
+              );
+              cancellationTimer.unref?.();
+            };
+            options.signal!.addEventListener("abort", cancelListener, { once: true });
+          })
+        : new Promise<never>(() => undefined);
+      try {
+        const terminal = await Promise.race([session.run(options.event), cancelled]);
+        return runnerTerminalV1Schema.parse(terminal);
+      } finally {
+        if (cancellationTimer) clearTimeout(cancellationTimer);
+        if (cancelListener) options.signal?.removeEventListener("abort", cancelListener);
+      }
     } catch (error) {
       lastError = error;
-      if (attempt >= options.maxReconnects) break;
+      if (options.signal?.aborted || attempt >= options.maxReconnects) break;
       attempt += 1;
       options.onReconnect?.(attempt, error);
-      await delay(Math.min(5_000, 250 * 2 ** (attempt - 1)));
+      await delay(Math.min(5_000, 250 * 2 ** (attempt - 1)), options.signal);
     } finally {
       root?.[Symbol.dispose]();
     }
   }
+  if (options.signal?.aborted) throw new Error("Gardener planning was cancelled", { cause: lastError });
   throw new Error(`Gardener session failed after ${attempt + 1} connection attempts`, { cause: lastError });
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new Error("Gardener planning was cancelled"));
+  return new Promise((resolve, reject) => {
+    const cancel = () => {
+      clearTimeout(timer);
+      reject(new Error("Gardener planning was cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", cancel, { once: true });
+  });
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

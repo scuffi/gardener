@@ -17,16 +17,28 @@ async function main(): Promise<void> {
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
     const event = await githubEvent();
-    const terminal = await runPlanningSession({
-      harnessUrl,
-      agentHash,
-      maxReconnects,
-      ...(event === undefined ? {} : { event }),
-      getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
-      onReconnect: (attempt, error) => {
-        core.warning(`Gardener session disconnected; reconnecting (${attempt}/${maxReconnects}): ${message(error)}`);
-      },
-    });
+    const cancellation = new AbortController();
+    const cancel = () => cancellation.abort();
+    process.once("SIGINT", cancel);
+    process.once("SIGTERM", cancel);
+    let terminal: Awaited<ReturnType<typeof runPlanningSession>>;
+    try {
+      terminal = await runPlanningSession({
+        harnessUrl,
+        agentHash,
+        maxReconnects,
+        ...(event === undefined ? {} : { event }),
+        signal: cancellation.signal,
+        getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
+        onReconnect: (attempt, error) => {
+          core.warning(`Gardener session disconnected; reconnecting (${attempt}/${maxReconnects}): ${message(error)}`);
+        },
+        onWarning: (warning) => core.warning(warning),
+      });
+    } finally {
+      process.removeListener("SIGINT", cancel);
+      process.removeListener("SIGTERM", cancel);
+    }
     core.setOutput("status", terminal.status);
     core.setOutput("summary", terminal.summary);
     core.setOutput("last-server-sequence", String(terminal.lastServerSequence));

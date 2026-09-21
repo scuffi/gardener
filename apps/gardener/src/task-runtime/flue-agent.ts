@@ -23,6 +23,7 @@ import { NarrowedHarnessToolFacade } from "../harness/adapter";
 import type { Env } from "../env";
 import type { HarnessRequest, HarnessToolFacade, JsonValue } from "../harness/types";
 import { assertHarnessRequest, expectedHarnessBinding } from "../harness/validation";
+import { boundedCloudflareModel, installBoundedCloudflareProvider } from "../harness/flue/bounded-cloudflare-provider";
 import { RunnerSessionToolFacade } from "./runner-tool-facade";
 
 const TASK_TERMINAL_TOOL = "finish_task";
@@ -76,7 +77,7 @@ export function GardenerTaskFlueAgent(): string {
   const maxRepositoryToolCalls = Math.max(1, Math.min(2, request.budget.maxToolCalls - 1));
   const writeTaskOutcome = useDataWriter("taskOutcome");
 
-  useModel(`cloudflare/${request.model.id}`, { compaction: false });
+  useModel(boundedCloudflareModel(request.model.id, request.budget), { compaction: false });
   useInstruction(renderContext(request));
   useInstruction([
     "Execute the immutable task instructions using only the listed repository tools.",
@@ -198,6 +199,7 @@ export const cloudflare = extend<CloudflareAgentLike, TaskFlueEnv>({
       constructor(ctx: DurableObjectState, env: TaskFlueEnv) {
         super(ctx, env);
         taskToolFacade = env.GARDENER_HARNESS_TOOLS ?? new RunnerSessionToolFacade(env.RUNNER_SESSIONS);
+        installBoundedCloudflareProvider(env.AI);
       }
     };
   },

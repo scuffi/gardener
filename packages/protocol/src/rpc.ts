@@ -23,6 +23,7 @@ export interface ResumeStateV1 {
 
 export interface AuthenticatedSessionCapability extends RpcTarget {
   run(event?: RunnerEventV1): Promise<RunnerTerminalV1>;
+  cancelRun(reason: string): Promise<void>;
   invoke(action: RunnerActionV1): Promise<RunnerActionResultV1>;
   reconcile(result: RunnerActionResultV1): Promise<RunnerActionResultV1>;
   resume(cursor: ResumeCursorV1, runner: RpcStub<RunnerCapability>): Promise<ResumeStateV1>;

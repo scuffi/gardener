@@ -349,8 +349,8 @@ var require_errors = __commonJS({
     "use strict";
     var kUndiciError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR");
     var UndiciError = class extends Error {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "UndiciError";
         this.code = "UND_ERR";
       }
@@ -361,10 +361,10 @@ var require_errors = __commonJS({
     };
     var kConnectTimeoutError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_CONNECT_TIMEOUT");
     var ConnectTimeoutError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "ConnectTimeoutError";
-        this.message = message2 || "Connect Timeout Error";
+        this.message = message3 || "Connect Timeout Error";
         this.code = "UND_ERR_CONNECT_TIMEOUT";
       }
       static [Symbol.hasInstance](instance) {
@@ -374,10 +374,10 @@ var require_errors = __commonJS({
     };
     var kHeadersTimeoutError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HEADERS_TIMEOUT");
     var HeadersTimeoutError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "HeadersTimeoutError";
-        this.message = message2 || "Headers Timeout Error";
+        this.message = message3 || "Headers Timeout Error";
         this.code = "UND_ERR_HEADERS_TIMEOUT";
       }
       static [Symbol.hasInstance](instance) {
@@ -387,10 +387,10 @@ var require_errors = __commonJS({
     };
     var kHeadersOverflowError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HEADERS_OVERFLOW");
     var HeadersOverflowError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "HeadersOverflowError";
-        this.message = message2 || "Headers Overflow Error";
+        this.message = message3 || "Headers Overflow Error";
         this.code = "UND_ERR_HEADERS_OVERFLOW";
       }
       static [Symbol.hasInstance](instance) {
@@ -400,10 +400,10 @@ var require_errors = __commonJS({
     };
     var kBodyTimeoutError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_BODY_TIMEOUT");
     var BodyTimeoutError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "BodyTimeoutError";
-        this.message = message2 || "Body Timeout Error";
+        this.message = message3 || "Body Timeout Error";
         this.code = "UND_ERR_BODY_TIMEOUT";
       }
       static [Symbol.hasInstance](instance) {
@@ -413,10 +413,10 @@ var require_errors = __commonJS({
     };
     var kResponseStatusCodeError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RESPONSE_STATUS_CODE");
     var ResponseStatusCodeError = class extends UndiciError {
-      constructor(message2, statusCode, headers, body) {
-        super(message2);
+      constructor(message3, statusCode, headers, body) {
+        super(message3);
         this.name = "ResponseStatusCodeError";
-        this.message = message2 || "Response Status Code Error";
+        this.message = message3 || "Response Status Code Error";
         this.code = "UND_ERR_RESPONSE_STATUS_CODE";
         this.body = body;
         this.status = statusCode;
@@ -430,10 +430,10 @@ var require_errors = __commonJS({
     };
     var kInvalidArgumentError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_INVALID_ARG");
     var InvalidArgumentError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "InvalidArgumentError";
-        this.message = message2 || "Invalid Argument Error";
+        this.message = message3 || "Invalid Argument Error";
         this.code = "UND_ERR_INVALID_ARG";
       }
       static [Symbol.hasInstance](instance) {
@@ -443,10 +443,10 @@ var require_errors = __commonJS({
     };
     var kInvalidReturnValueError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_INVALID_RETURN_VALUE");
     var InvalidReturnValueError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "InvalidReturnValueError";
-        this.message = message2 || "Invalid Return Value Error";
+        this.message = message3 || "Invalid Return Value Error";
         this.code = "UND_ERR_INVALID_RETURN_VALUE";
       }
       static [Symbol.hasInstance](instance) {
@@ -456,10 +456,10 @@ var require_errors = __commonJS({
     };
     var kAbortError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_ABORT");
     var AbortError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "AbortError";
-        this.message = message2 || "The operation was aborted";
+        this.message = message3 || "The operation was aborted";
         this.code = "UND_ERR_ABORT";
       }
       static [Symbol.hasInstance](instance) {
@@ -469,10 +469,10 @@ var require_errors = __commonJS({
     };
     var kRequestAbortedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_ABORTED");
     var RequestAbortedError = class extends AbortError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "AbortError";
-        this.message = message2 || "Request aborted";
+        this.message = message3 || "Request aborted";
         this.code = "UND_ERR_ABORTED";
       }
       static [Symbol.hasInstance](instance) {
@@ -482,10 +482,10 @@ var require_errors = __commonJS({
     };
     var kInformationalError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_INFO");
     var InformationalError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "InformationalError";
-        this.message = message2 || "Request information";
+        this.message = message3 || "Request information";
         this.code = "UND_ERR_INFO";
       }
       static [Symbol.hasInstance](instance) {
@@ -495,10 +495,10 @@ var require_errors = __commonJS({
     };
     var kRequestContentLengthMismatchError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_REQ_CONTENT_LENGTH_MISMATCH");
     var RequestContentLengthMismatchError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "RequestContentLengthMismatchError";
-        this.message = message2 || "Request body length does not match content-length header";
+        this.message = message3 || "Request body length does not match content-length header";
         this.code = "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH";
       }
       static [Symbol.hasInstance](instance) {
@@ -508,10 +508,10 @@ var require_errors = __commonJS({
     };
     var kResponseContentLengthMismatchError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RES_CONTENT_LENGTH_MISMATCH");
     var ResponseContentLengthMismatchError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "ResponseContentLengthMismatchError";
-        this.message = message2 || "Response body length does not match content-length header";
+        this.message = message3 || "Response body length does not match content-length header";
         this.code = "UND_ERR_RES_CONTENT_LENGTH_MISMATCH";
       }
       static [Symbol.hasInstance](instance) {
@@ -521,10 +521,10 @@ var require_errors = __commonJS({
     };
     var kClientDestroyedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_DESTROYED");
     var ClientDestroyedError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "ClientDestroyedError";
-        this.message = message2 || "The client is destroyed";
+        this.message = message3 || "The client is destroyed";
         this.code = "UND_ERR_DESTROYED";
       }
       static [Symbol.hasInstance](instance) {
@@ -534,10 +534,10 @@ var require_errors = __commonJS({
     };
     var kClientClosedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_CLOSED");
     var ClientClosedError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "ClientClosedError";
-        this.message = message2 || "The client is closed";
+        this.message = message3 || "The client is closed";
         this.code = "UND_ERR_CLOSED";
       }
       static [Symbol.hasInstance](instance) {
@@ -547,10 +547,10 @@ var require_errors = __commonJS({
     };
     var kSocketError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_SOCKET");
     var SocketError = class extends UndiciError {
-      constructor(message2, socket) {
-        super(message2);
+      constructor(message3, socket) {
+        super(message3);
         this.name = "SocketError";
-        this.message = message2 || "Socket error";
+        this.message = message3 || "Socket error";
         this.code = "UND_ERR_SOCKET";
         this.socket = socket;
       }
@@ -561,10 +561,10 @@ var require_errors = __commonJS({
     };
     var kNotSupportedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_NOT_SUPPORTED");
     var NotSupportedError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "NotSupportedError";
-        this.message = message2 || "Not supported error";
+        this.message = message3 || "Not supported error";
         this.code = "UND_ERR_NOT_SUPPORTED";
       }
       static [Symbol.hasInstance](instance) {
@@ -574,10 +574,10 @@ var require_errors = __commonJS({
     };
     var kBalancedPoolMissingUpstreamError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_BPL_MISSING_UPSTREAM");
     var BalancedPoolMissingUpstreamError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "MissingUpstreamError";
-        this.message = message2 || "No upstream has been added to the BalancedPool";
+        this.message = message3 || "No upstream has been added to the BalancedPool";
         this.code = "UND_ERR_BPL_MISSING_UPSTREAM";
       }
       static [Symbol.hasInstance](instance) {
@@ -587,8 +587,8 @@ var require_errors = __commonJS({
     };
     var kHTTPParserError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HTTP_PARSER");
     var HTTPParserError = class extends Error {
-      constructor(message2, code, data) {
-        super(message2);
+      constructor(message3, code, data) {
+        super(message3);
         this.name = "HTTPParserError";
         this.code = code ? `HPE_${code}` : void 0;
         this.data = data ? data.toString() : void 0;
@@ -600,10 +600,10 @@ var require_errors = __commonJS({
     };
     var kResponseExceededMaxSizeError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RES_EXCEEDED_MAX_SIZE");
     var ResponseExceededMaxSizeError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "ResponseExceededMaxSizeError";
-        this.message = message2 || "Response content exceeded max size";
+        this.message = message3 || "Response content exceeded max size";
         this.code = "UND_ERR_RES_EXCEEDED_MAX_SIZE";
       }
       static [Symbol.hasInstance](instance) {
@@ -613,10 +613,10 @@ var require_errors = __commonJS({
     };
     var kRequestRetryError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_REQ_RETRY");
     var RequestRetryError = class extends UndiciError {
-      constructor(message2, code, { headers, data }) {
-        super(message2);
+      constructor(message3, code, { headers, data }) {
+        super(message3);
         this.name = "RequestRetryError";
-        this.message = message2 || "Request retry error";
+        this.message = message3 || "Request retry error";
         this.code = "UND_ERR_REQ_RETRY";
         this.statusCode = code;
         this.data = data;
@@ -629,10 +629,10 @@ var require_errors = __commonJS({
     };
     var kResponseError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RESPONSE");
     var ResponseError = class extends UndiciError {
-      constructor(message2, code, { headers, data }) {
-        super(message2);
+      constructor(message3, code, { headers, data }) {
+        super(message3);
         this.name = "ResponseError";
-        this.message = message2 || "Response error";
+        this.message = message3 || "Response error";
         this.code = "UND_ERR_RESPONSE";
         this.statusCode = code;
         this.data = data;
@@ -645,10 +645,10 @@ var require_errors = __commonJS({
     };
     var kSecureProxyConnectionError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_PRX_TLS");
     var SecureProxyConnectionError = class extends UndiciError {
-      constructor(cause, message2, options) {
-        super(message2, { cause, ...options ?? {} });
+      constructor(cause, message3, options) {
+        super(message3, { cause, ...options ?? {} });
         this.name = "SecureProxyConnectionError";
-        this.message = message2 || "Secure Proxy Connection failed";
+        this.message = message3 || "Secure Proxy Connection failed";
         this.code = "UND_ERR_PRX_TLS";
         this.cause = cause;
       }
@@ -659,10 +659,10 @@ var require_errors = __commonJS({
     };
     var kMessageSizeExceededError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_WS_MESSAGE_SIZE_EXCEEDED");
     var MessageSizeExceededError = class extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         this.name = "MessageSizeExceededError";
-        this.message = message2 || "Max decompressed message size exceeded";
+        this.message = message3 || "Max decompressed message size exceeded";
         this.code = "UND_ERR_WS_MESSAGE_SIZE_EXCEEDED";
       }
       static [Symbol.hasInstance](instance) {
@@ -2609,14 +2609,14 @@ var require_connect = __commonJS({
       if (socket == null) {
         return;
       }
-      let message2 = "Connect Timeout Error";
+      let message3 = "Connect Timeout Error";
       if (Array.isArray(socket.autoSelectFamilyAttemptedAddresses)) {
-        message2 += ` (attempted addresses: ${socket.autoSelectFamilyAttemptedAddresses.join(", ")},`;
+        message3 += ` (attempted addresses: ${socket.autoSelectFamilyAttemptedAddresses.join(", ")},`;
       } else {
-        message2 += ` (attempted address: ${opts.hostname}:${opts.port},`;
+        message3 += ` (attempted address: ${opts.hostname}:${opts.port},`;
       }
-      message2 += ` timeout: ${opts.timeout}ms)`;
-      util.destroy(socket, new ConnectTimeoutError(message2));
+      message3 += ` timeout: ${opts.timeout}ms)`;
+      util.destroy(socket, new ConnectTimeoutError(message3));
     }
     module2.exports = buildConnector;
   }
@@ -3598,15 +3598,15 @@ var require_webidl = __commonJS({
     webidl.converters = {};
     webidl.util = {};
     webidl.errors = {};
-    webidl.errors.exception = function(message2) {
-      return new TypeError(`${message2.header}: ${message2.message}`);
+    webidl.errors.exception = function(message3) {
+      return new TypeError(`${message3.header}: ${message3.message}`);
     };
     webidl.errors.conversionFailed = function(context) {
       const plural2 = context.types.length === 1 ? "" : " one of";
-      const message2 = `${context.argument} could not be converted to${plural2}: ${context.types.join(", ")}.`;
+      const message3 = `${context.argument} could not be converted to${plural2}: ${context.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context.prefix,
-        message: message2
+        message: message3
       });
     };
     webidl.errors.invalidArgument = function(context) {
@@ -5931,12 +5931,12 @@ var require_client_h1 = __commonJS({
           return new ResponseContentLengthMismatchError();
         }
         const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-        let message2 = "";
+        let message3 = "";
         if (ptr) {
           const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-          message2 = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+          message3 = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
         }
-        return new HTTPParserError(message2, constants3.ERROR[ret], data);
+        return new HTTPParserError(message3, constants3.ERROR[ret], data);
       }
       destroy() {
         assert2(this.ptr != null);
@@ -9651,9 +9651,9 @@ var require_util3 = __commonJS({
         chunks = [];
         length = 0;
       }
-      const message2 = `Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ""}`;
+      const message3 = `Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ""}`;
       if (statusCode === 204 || !contentType || !length) {
-        queueMicrotask(() => callback(new ResponseStatusCodeError(message2, statusCode, headers)));
+        queueMicrotask(() => callback(new ResponseStatusCodeError(message3, statusCode, headers)));
         return;
       }
       const stackTraceLimit = Error.stackTraceLimit;
@@ -9669,7 +9669,7 @@ var require_util3 = __commonJS({
       } finally {
         Error.stackTraceLimit = stackTraceLimit;
       }
-      queueMicrotask(() => callback(new ResponseStatusCodeError(message2, statusCode, headers, payload)));
+      queueMicrotask(() => callback(new ResponseStatusCodeError(message3, statusCode, headers, payload)));
     }
     var isContentTypeApplicationJson = (contentType) => {
       return contentType.length > 15 && contentType[11] === "/" && contentType[0] === "a" && contentType[1] === "p" && contentType[2] === "p" && contentType[3] === "l" && contentType[4] === "i" && contentType[5] === "c" && contentType[6] === "a" && contentType[7] === "t" && contentType[8] === "i" && contentType[9] === "o" && contentType[10] === "n" && contentType[12] === "j" && contentType[13] === "s" && contentType[14] === "o" && contentType[15] === "n";
@@ -10496,11 +10496,11 @@ var require_mock_errors = __commonJS({
     var { UndiciError } = require_errors();
     var kMockNotMatchedError = /* @__PURE__ */ Symbol.for("undici.error.UND_MOCK_ERR_MOCK_NOT_MATCHED");
     var MockNotMatchedError = class _MockNotMatchedError extends UndiciError {
-      constructor(message2) {
-        super(message2);
+      constructor(message3) {
+        super(message3);
         Error.captureStackTrace(this, _MockNotMatchedError);
         this.name = "MockNotMatchedError";
-        this.message = message2 || "The request does not match any registered mock dispatches";
+        this.message = message3 || "The request does not match any registered mock dispatches";
         this.code = "UND_MOCK_ERR_MOCK_NOT_MATCHED";
       }
       static [Symbol.hasInstance](instance) {
@@ -18141,15 +18141,15 @@ var require_websocket = __commonJS({
       this.ws[kResponse].socket.resume();
     }
     function onParserError(err) {
-      let message2;
+      let message3;
       let code;
       if (err instanceof CloseEvent) {
-        message2 = err.reason;
+        message3 = err.reason;
         code = err.code;
       } else {
-        message2 = err.message;
+        message3 = err.message;
       }
-      fireEvent("error", this, () => new ErrorEvent("error", { error: err, message: message2 }));
+      fireEvent("error", this, () => new ErrorEvent("error", { error: err, message: message3 }));
       closeWebSocketConnection(this, code);
     }
     module2.exports = {
@@ -18991,19 +18991,19 @@ function toCommandProperties(annotationProperties) {
 }
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
-function issueCommand(command, properties, message2) {
-  const cmd = new Command(command, properties, message2);
+function issueCommand(command, properties, message3) {
+  const cmd = new Command(command, properties, message3);
   process.stdout.write(cmd.toString() + os.EOL);
 }
 var CMD_STRING = "::";
 var Command = class {
-  constructor(command, properties, message2) {
+  constructor(command, properties, message3) {
     if (!command) {
       command = "missing.command";
     }
     this.command = command;
     this.properties = properties;
-    this.message = message2;
+    this.message = message3;
   }
   toString() {
     let cmdStr = CMD_STRING + this.command;
@@ -19039,7 +19039,7 @@ function escapeProperty(s) {
 var crypto = __toESM(require("crypto"), 1);
 var fs = __toESM(require("fs"), 1);
 var os2 = __toESM(require("os"), 1);
-function issueFileCommand(command, message2) {
+function issueFileCommand(command, message3) {
   const filePath = process.env[`GITHUB_${command}`];
   if (!filePath) {
     throw new Error(`Unable to find environment variable for file command ${command}`);
@@ -19047,7 +19047,7 @@ function issueFileCommand(command, message2) {
   if (!fs.existsSync(filePath)) {
     throw new Error(`Missing file at path: ${filePath}`);
   }
-  fs.appendFileSync(filePath, `${toCommandValue(message2)}${os2.EOL}`, {
+  fs.appendFileSync(filePath, `${toCommandValue(message3)}${os2.EOL}`, {
     encoding: "utf8"
   });
 }
@@ -19228,16 +19228,16 @@ var RetryableHttpVerbs = ["OPTIONS", "GET", "DELETE", "HEAD"];
 var ExponentialBackoffCeiling = 10;
 var ExponentialBackoffTimeSlice = 5;
 var HttpClientError = class _HttpClientError extends Error {
-  constructor(message2, statusCode) {
-    super(message2);
+  constructor(message3, statusCode) {
+    super(message3);
     this.name = "HttpClientError";
     this.statusCode = statusCode;
     Object.setPrototypeOf(this, _HttpClientError.prototype);
   }
 };
 var HttpClientResponse = class {
-  constructor(message2) {
-    this.message = message2;
+  constructor(message3) {
+    this.message = message3;
   }
   readBody() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -20266,18 +20266,18 @@ function setOutput(name, value) {
   process.stdout.write(os4.EOL);
   issueCommand("set-output", { name }, toCommandValue(value));
 }
-function setFailed(message2) {
+function setFailed(message3) {
   process.exitCode = ExitCode.Failure;
-  error(message2);
+  error(message3);
 }
-function debug(message2) {
-  issueCommand("debug", {}, message2);
+function debug(message3) {
+  issueCommand("debug", {}, message3);
 }
-function error(message2, properties = {}) {
-  issueCommand("error", toCommandProperties(properties), message2 instanceof Error ? message2.toString() : message2);
+function error(message3, properties = {}) {
+  issueCommand("error", toCommandProperties(properties), message3 instanceof Error ? message3.toString() : message3);
 }
-function warning(message2, properties = {}) {
-  issueCommand("warning", toCommandProperties(properties), message2 instanceof Error ? message2.toString() : message2);
+function warning(message3, properties = {}) {
+  issueCommand("warning", toCommandProperties(properties), message3 instanceof Error ? message3.toString() : message3);
 }
 function getIDToken(aud) {
   return __awaiter5(this, void 0, void 0, function* () {
@@ -21457,8 +21457,8 @@ function prefixIssues(path3, issues) {
     return iss;
   });
 }
-function unwrapMessage(message2) {
-  return typeof message2 === "string" ? message2 : message2?.message;
+function unwrapMessage(message3) {
+  return typeof message3 === "string" ? message3 : message3?.message;
 }
 function attachSchema(issues, start, inst) {
   var _a3;
@@ -21476,7 +21476,7 @@ function finalizeIssue(iss, ctx, config2) {
       iss.schema = iss.inst;
   }
   const schemaError = iss.schema !== iss.inst ? iss.schema?._zod.def?.error : void 0;
-  const message2 = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
+  const message3 = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
   const full = {};
   for (const k of Object.keys(iss)) {
     if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__")
@@ -21484,7 +21484,7 @@ function finalizeIssue(iss, ctx, config2) {
     full[k] = iss[k];
   }
   full.path ?? (full.path = []);
-  full.message = message2;
+  full.message = message3;
   if (ctx?.reportInput) {
     full.input = iss.input;
   }
@@ -33195,8 +33195,8 @@ var globalRegistry = globalThis.__zod_globalRegistry;
 var INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var FALLBACK_FLAG = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var ZodCompileAsyncError = class extends Error {
-  constructor(message2 = "z.compile does not support async refinements, transforms, or checks") {
-    super(message2);
+  constructor(message3 = "z.compile does not support async refinements, transforms, or checks") {
+    super(message3);
     this.name = "ZodCompileAsyncError";
   }
 };
@@ -35888,12 +35888,12 @@ function initializeContext(params) {
     external: params?.external ?? void 0
   };
 }
-function handleUnrepresentable(schema, ctx, json2, params, message2) {
-  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message: message2 }) : ctx.unrepresentable;
+function handleUnrepresentable(schema, ctx, json2, params, message3) {
+  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message: message3 }) : ctx.unrepresentable;
   if (result === "any")
     return false;
   if (result === void 0 || result === "throw")
-    throw new Error(message2);
+    throw new Error(message3);
   Object.assign(json2, result);
   return true;
 }
@@ -42496,7 +42496,7 @@ var WebSocketTransport = class {
       this.#sendQueue = [];
       webSocket.addEventListener("open", (event) => {
         try {
-          for (let message2 of this.#sendQueue) webSocket.send(message2);
+          for (let message3 of this.#sendQueue) webSocket.send(message3);
         } catch (err) {
           this.#receivedError(err);
         }
@@ -42525,9 +42525,9 @@ var WebSocketTransport = class {
   #receiveRejecter;
   #receiveQueue = [];
   #error;
-  send(message2) {
-    if (this.#sendQueue === void 0) this.#webSocket.send(message2);
-    else this.#sendQueue.push(message2);
+  send(message3) {
+    if (this.#sendQueue === void 0) this.#webSocket.send(message3);
+    else this.#sendQueue.push(message3);
   }
   receive() {
     if (this.#receiveQueue.length > 0) return Promise.resolve(this.#receiveQueue.shift());
@@ -42538,12 +42538,12 @@ var WebSocketTransport = class {
     });
   }
   abort(reason) {
-    let message2;
-    if (reason instanceof Error) message2 = reason.message;
-    else message2 = `${reason}`;
-    let reasonBytes = new TextEncoder().encode(message2);
-    if (reasonBytes.length > 123) message2 = new TextDecoder().decode(reasonBytes.subarray(0, 123), { stream: true });
-    this.#webSocket.close(3e3, message2);
+    let message3;
+    if (reason instanceof Error) message3 = reason.message;
+    else message3 = `${reason}`;
+    let reasonBytes = new TextEncoder().encode(message3);
+    if (reasonBytes.length > 123) message3 = new TextDecoder().decode(reasonBytes.subarray(0, 123), { stream: true });
+    this.#webSocket.close(3e3, message3);
     if (!this.#error) this.#error = reason;
   }
   #receivedError(reason) {
@@ -43282,6 +43282,7 @@ async function runPlanningSession(options) {
   let attempt = 0;
   let lastError;
   while (attempt <= options.maxReconnects) {
+    if (options.signal?.aborted) throw new Error("Gardener planning was cancelled");
     let root;
     try {
       const oidcToken = await options.getOidcToken(audience);
@@ -43290,21 +43291,60 @@ async function runPlanningSession(options) {
       const session = root.authenticate(hello, oidcToken, runner);
       const cursor = executor.cursor();
       await session.resume({ schemaVersion: "gardener.runner.cursor/v1", ...cursor }, runner);
-      return runnerTerminalV1Schema.parse(await session.run(options.event));
+      if (options.signal?.aborted) throw new Error("Gardener planning was cancelled before execution");
+      let cancellationTimer;
+      let cancelListener;
+      const cancelled = options.signal ? new Promise((_, reject) => {
+        cancelListener = () => {
+          try {
+            Promise.resolve(session.cancelRun("GitHub Actions planning job was cancelled")).catch((error63) => options.onWarning?.(`Gardener cancellation RPC failed: ${message(error63)}`));
+          } catch (error63) {
+            options.onWarning?.(`Gardener cancellation RPC failed: ${message(error63)}`);
+          }
+          cancellationTimer = setTimeout(
+            () => reject(new Error("Gardener cancellation did not settle within 5 seconds")),
+            5e3
+          );
+          cancellationTimer.unref?.();
+        };
+        options.signal.addEventListener("abort", cancelListener, { once: true });
+      }) : new Promise(() => void 0);
+      try {
+        const terminal = await Promise.race([session.run(options.event), cancelled]);
+        return runnerTerminalV1Schema.parse(terminal);
+      } finally {
+        if (cancellationTimer) clearTimeout(cancellationTimer);
+        if (cancelListener) options.signal?.removeEventListener("abort", cancelListener);
+      }
     } catch (error63) {
       lastError = error63;
-      if (attempt >= options.maxReconnects) break;
+      if (options.signal?.aborted || attempt >= options.maxReconnects) break;
       attempt += 1;
       options.onReconnect?.(attempt, error63);
-      await delay(Math.min(5e3, 250 * 2 ** (attempt - 1)));
+      await delay(Math.min(5e3, 250 * 2 ** (attempt - 1)), options.signal);
     } finally {
       root?.[Symbol.dispose]();
     }
   }
+  if (options.signal?.aborted) throw new Error("Gardener planning was cancelled", { cause: lastError });
   throw new Error(`Gardener session failed after ${attempt + 1} connection attempts`, { cause: lastError });
 }
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function delay(milliseconds, signal) {
+  if (signal?.aborted) return Promise.reject(new Error("Gardener planning was cancelled"));
+  return new Promise((resolve, reject) => {
+    const cancel = () => {
+      clearTimeout(timer);
+      reject(new Error("Gardener planning was cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", cancel, { once: true });
+  });
+}
+function message(error63) {
+  return error63 instanceof Error ? error63.message : String(error63);
 }
 
 // src/main.ts
@@ -43319,16 +43359,28 @@ async function main() {
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
     const event = await githubEvent();
-    const terminal = await runPlanningSession({
-      harnessUrl,
-      agentHash,
-      maxReconnects,
-      ...event === void 0 ? {} : { event },
-      getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
-      onReconnect: (attempt, error63) => {
-        warning(`Gardener session disconnected; reconnecting (${attempt}/${maxReconnects}): ${message(error63)}`);
-      }
-    });
+    const cancellation = new AbortController();
+    const cancel = () => cancellation.abort();
+    process.once("SIGINT", cancel);
+    process.once("SIGTERM", cancel);
+    let terminal;
+    try {
+      terminal = await runPlanningSession({
+        harnessUrl,
+        agentHash,
+        maxReconnects,
+        ...event === void 0 ? {} : { event },
+        signal: cancellation.signal,
+        getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
+        onReconnect: (attempt, error63) => {
+          warning(`Gardener session disconnected; reconnecting (${attempt}/${maxReconnects}): ${message2(error63)}`);
+        },
+        onWarning: (warning2) => warning(warning2)
+      });
+    } finally {
+      process.removeListener("SIGINT", cancel);
+      process.removeListener("SIGTERM", cancel);
+    }
     setOutput("status", terminal.status);
     setOutput("summary", terminal.summary);
     setOutput("last-server-sequence", String(terminal.lastServerSequence));
@@ -43346,7 +43398,7 @@ async function main() {
     }
     if (terminal.status !== "completed") setFailed(terminal.summary);
   } catch (error63) {
-    setFailed(message(error63));
+    setFailed(message2(error63));
   }
 }
 async function githubEvent() {
@@ -43401,7 +43453,7 @@ function requiredEnvironment2(name) {
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
-function message(error63) {
+function message2(error63) {
   return error63 instanceof Error ? error63.message : "Unknown Gardener runner failure";
 }
 void main();

@@ -9,7 +9,7 @@ export interface CommandResult {
 export function runCommand(
   command: string,
   args: string[],
-  options: { cwd: string; input?: string; quiet?: boolean; allowFailure?: boolean },
+  options: { cwd: string; input?: string; quiet?: boolean; allowFailure?: boolean; timeoutMs?: number },
 ): CommandResult {
   if (!options.quiet) console.log(`$ ${[command, ...args].join(" ")}`);
   const result = spawnSync(command, args, {
@@ -18,6 +18,7 @@ export function runCommand(
     encoding: "utf8",
     env: { ...process.env, NO_COLOR: "1" },
     stdio: ["pipe", "pipe", "pipe"],
+    ...(options.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
   });
   const stdout = result.stdout ?? "";
   const stderr = result.stderr ?? "";
@@ -25,7 +26,12 @@ export function runCommand(
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
   }
-  if (result.error) throw result.error;
+  if (result.error) {
+    if ((result.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
+      throw new Error(`Command timed out: ${command} ${args.join(" ")}`);
+    }
+    throw result.error;
+  }
   const status = result.status ?? 1;
   if (status !== 0 && !options.allowFailure) {
     if (options.quiet) {

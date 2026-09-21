@@ -47,12 +47,12 @@ describe("bounded native Flue Cloudflare provider", () => {
 
   it("uses a new native protocol id and rejects the provider output-token floor", () => {
     expect(boundedCloudflareModel("@cf/test/model", budget))
-      .toMatch(/^cloudflare\/gardener-native-bounded-v2:1:8000:77:30000:\d+:%40cf%2Ftest%2Fmodel$/);
+      .toMatch(/^cloudflare\/gardener-native-bounded-v3:1:8000:77:30000:\d+:%40cf%2Ftest%2Fmodel$/);
     expect(() => boundedCloudflareModel("@cf/test/model", { ...budget, maxOutputTokens: 15 }))
       .toThrow(/at least 16/i);
   });
 
-  it("preserves Flue tools, removes legacy response_format, and caps output", async () => {
+  it("caps output without rewriting Flue's provider payload", () => {
     const provider = installedProvider();
     expect(provider.stream(
       { id: encoded(), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
@@ -63,30 +63,20 @@ describe("bounded native Flue Cloudflare provider", () => {
     const [model, , options] = mocks.baseStream.mock.calls.at(-1)!;
     expect(model).toMatchObject({ id: "@cf/test/model", name: "@cf/test/model" });
     expect(options.maxTokens).toBe(77);
-    await expect(options.onPayload(
-      { messages: [], tools: [{ name: "submit_gardener_output_v1" }], response_format: { type: "json_schema" } },
-      { api: "cloudflare-ai-binding" },
-    )).resolves.toEqual({ messages: [], tools: [{ name: "submit_gardener_output_v1" }] });
+    expect(options.onPayload).toBeUndefined();
   });
 
-  it("leaves tool selection to the model while preserving Flue's canonical transcript", async () => {
+  it("leaves tool selection and transcript serialization to Flue", () => {
     const provider = installedProvider();
     provider.stream(
       { id: encoded(), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
-      { messages: [] },
+      { messages: [{ role: "tool", content: "files" }] },
       {},
     );
-    const options = mocks.baseStream.mock.calls.at(-1)![2];
-    const payload = {
-      messages: [{ role: "tool", content: "files" }],
-      tools: [
-        { type: "function", function: { name: "repository_list_files" } },
-        { type: "function", function: { name: "finish_task" } },
-      ],
-    };
-    const result = await options.onPayload(payload, { api: "cloudflare-ai-binding" });
-    expect(result).toEqual(payload);
-    expect(result).not.toHaveProperty("tool_choice");
+    const [, context, options] = mocks.baseStream.mock.calls.at(-1)!;
+    expect(context).toEqual({ messages: [{ role: "tool", content: "files" }] });
+    expect(options).not.toHaveProperty("tool_choice");
+    expect(options.onPayload).toBeUndefined();
   });
 
   it("applies the same native bounds through streamSimple", async () => {
@@ -97,22 +87,19 @@ describe("bounded native Flue Cloudflare provider", () => {
       {},
     )).toBe("simple-result");
     const options = mocks.baseStreamSimple.mock.calls.at(-1)![2];
-    await expect(options.onPayload(
-      { messages: [], tools: [{ name: "submit_gardener_output_v1" }] },
-      { api: "cloudflare-ai-binding" },
-    )).resolves.toMatchObject({ tools: [{ name: "submit_gardener_output_v1" }] });
+    expect(options.maxTokens).toBe(77);
+    expect(options.onPayload).toBeUndefined();
   });
 
-  it("measures a trusted prior payload transformation as the final transmitted body", async () => {
+  it("preserves a trusted caller payload transform without wrapping it", () => {
     const provider = installedProvider();
+    const onPayload = vi.fn(async () => ({ messages: [], tools: [] }));
     provider.stream(
       { id: encoded({ ...budget, maxInputTokens: 80 }), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
       { messages: [] },
-      { onPayload: async () => ({ messages: [], tools: [{ description: "x".repeat(1_000) }] }) },
+      { onPayload },
     );
-    const options = mocks.baseStream.mock.calls.at(-1)![2];
-    await expect(options.onPayload({ messages: [] }, { api: "cloudflare-ai-binding" }))
-      .rejects.toThrow(/immutable 640-byte safety limit/);
+    expect(mocks.baseStream.mock.calls.at(-1)![2].onPayload).toBe(onPayload);
   });
 
   it("rejects oversized context before invoking the provider", () => {
@@ -150,20 +137,25 @@ describe("bounded native Flue Cloudflare provider", () => {
     expect(mocks.baseStream).not.toHaveBeenCalled();
   });
 
-  it("permits bounded tool follow-up turns and divides the total output ceiling", () => {
+  it("permits bounded tool follow-up turns and reserves only the remaining output ceiling", () => {
     const provider = installedProvider();
     const multiTurn = { ...budget, maxTurns: 4, maxOutputTokens: 80 };
     expect(provider.stream(
       { id: encoded(multiTurn), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
-      { messages: [{ role: "user" }, { role: "assistant" }, { role: "toolResult" }] },
+      { messages: [{ role: "user" }, { role: "assistant", usage: { output: 15 } }, { role: "toolResult" }] },
       {},
     )).toBe("stream-result");
-    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(20);
+    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(65);
     expect(() => provider.stream(
       { id: encoded(multiTurn), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
       { messages: Array.from({ length: 4 }, () => ({ role: "assistant" })) },
       {},
     )).toThrow(/at most 4 model turns/i);
+    expect(() => provider.stream(
+      { id: encoded(multiTurn), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
+      { messages: [{ role: "assistant", usage: { output: 65 } }] },
+      {},
+    )).toThrow(/output-token budget is exhausted/i);
   });
 
   it("rejects an expired absolute deadline before provider dispatch", () => {

@@ -33,6 +33,18 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
       `Task ${bundle.taskId} requests network rules that github-actions/v1 cannot yet enforce`,
     );
   }
+  if (bundle.limits.runtimeSeconds < 30 || bundle.limits.runtimeSeconds > 480) {
+    throw new Error(`Task ${bundle.taskId} runtime-seconds must be between 30 and 480 for github-actions/v1`);
+  }
+  if (bundle.limits.maxTurns < 3 || bundle.limits.maxTurns > 16) {
+    throw new Error(`Task ${bundle.taskId} max-turns must be between 3 and 16 for github-actions/v1`);
+  }
+  if (bundle.limits.maxToolCalls < 3 || bundle.limits.maxToolCalls > 64) {
+    throw new Error(`Task ${bundle.taskId} max-tool-calls must be between 3 and 64 for github-actions/v1`);
+  }
+  if (bundle.limits.inputTokens > 128_000 || bundle.limits.outputTokens > 32_000) {
+    throw new Error(`Task ${bundle.taskId} token limits exceed github-actions/v1 model bounds`);
+  }
   return {
     schemaVersion: "gardener.github-actions-task-plan/v1",
     target: GITHUB_ACTIONS_TARGET,

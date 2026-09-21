@@ -74,6 +74,7 @@ export async function qualifyActions(input: {
     runCommand("gh", ["run", "watch", run.databaseId, "--repo", repository, "--exit-status"], {
       cwd: repositoryRoot,
       quiet: true,
+      timeoutMs: 15 * 60_000,
     });
 
     const comments = githubJson(repositoryRoot, [

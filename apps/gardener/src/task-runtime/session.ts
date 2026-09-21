@@ -20,7 +20,7 @@ import {
   type RunnerHelloV1,
   type RunnerTerminalV1,
 } from "@gardener/protocol";
-import { taskEffectPlanV1Schema, taskOutcomeV1Schema, type TaskRunRequestV1 } from "@gardener/contracts";
+import { taskEffectPlanV1Schema, taskOutcomeV1Schema, taskRunRequestV1Schema, type TaskRunRequestV1 } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import type { HarnessSubmission, HarnessToolInvocation } from "../harness";
 import type { Env } from "../env";
@@ -28,6 +28,7 @@ import { createTaskHarnessRequest, translateHarnessOutcome } from "./harness-ada
 import { FlueTaskHarness } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { loadEnabledTaskBundle } from "./task-bundles";
+import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 
 interface Enrollment {
   repository_id: string;
@@ -115,9 +116,23 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const key = `${ACTION_PREFIX}${operationId}`;
     const existing = await this.ctx.storage.get<StoredAction>(key);
     if (existing) return this.invoke(existing.action);
+    await this.assertRunActive(invocation.runId);
+    await this.reserveRunnerToolBudget(invocation.runId, operationId);
     await this.settleUnresolvedBeforeNewAction(invocation.runId);
     const sequence = await this.nextSequence();
     return this.invoke(toolAction(sequence, operationId, invocation));
+  }
+
+  async invokeAuthenticated(input: RunnerActionV1): Promise<RunnerActionResultV1> {
+    const identity = this.#identity;
+    if (!identity || identity.hello.phase !== "plan") throw new Error("Runner action requires an authenticated planning session");
+    const action = runnerActionV1Schema.parse(input);
+    const existing = await this.ctx.storage.get<StoredAction>(`${ACTION_PREFIX}${action.operationId}`);
+    if (!existing) {
+      await this.assertRunActive(identity.sessionId);
+      await this.reserveRunnerToolBudget(identity.sessionId, action.operationId);
+    }
+    return this.invoke(action);
   }
 
   async invoke(input: RunnerActionV1): Promise<RunnerActionResultV1> {
@@ -234,7 +249,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       identity.hello.agentHash,
     );
     const admittedAt = new Date().toISOString();
-    const request = {
+    const freshRequest = {
       schemaVersion: "gardener.task-run-request/v1" as const,
       runId: identity.sessionId,
       bundle,
@@ -271,16 +286,24 @@ export class TaskRunnerSession extends DurableObject<Env> {
       admittedAt,
       deadlineAt: new Date(Date.parse(admittedAt) + bundle.limits.runtimeSeconds * 1_000).toISOString(),
     };
-    const harnessRequest = await createTaskHarnessRequest(request);
     const existing = await this.env.DB.prepare(
       "SELECT status,request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(identity.sessionId).first<{ status: string; request_json: string; harness_submission_json: string | null; outcome_json: string | null }>();
-    if (existing?.outcome_json) {
-      return terminalFromOutcome(JSON.parse(existing.outcome_json), await this.completedSequence(), JSON.parse(existing.request_json) as TaskRunRequestV1);
+    const request = existing
+      ? taskRunRequestV1Schema.parse(JSON.parse(existing.request_json))
+      : taskRunRequestV1Schema.parse(freshRequest);
+    if (request.runId !== identity.sessionId || request.bundleHash !== bundleHash) {
+      throw new Error("Persisted task request does not match the authenticated run");
     }
     await this.env.DB.prepare(
       "INSERT OR IGNORE INTO actions_task_runs (id,repository_id,github_run_id,github_run_attempt,phase,bundle_hash,request_json,status) VALUES (?,?,?,?,?,?,?,'admitted')",
     ).bind(identity.sessionId, identity.enrollment.repository_id, identity.hello.runId, identity.hello.runAttempt, identity.hello.phase, bundleHash, JSON.stringify(request)).run();
+    if (existing?.outcome_json) {
+      return terminalFromOutcome(JSON.parse(existing.outcome_json), await this.completedSequence(), request);
+    }
+    const cancelReason = await this.ctx.storage.get<string>("cancel-intent");
+    if (cancelReason) return this.settleCancellation(request, cancelReason);
+    const harnessRequest = await createTaskHarnessRequest(request);
     const harness = new FlueTaskHarness();
     let submission: HarnessSubmission;
     if (existing?.harness_submission_json) {
@@ -291,12 +314,48 @@ export class TaskRunnerSession extends DurableObject<Env> {
         "UPDATE actions_task_runs SET harness_submission_json=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE id=? AND harness_submission_json IS NULL",
       ).bind(JSON.stringify(submission), identity.sessionId).run();
     }
-    const harnessOutcome = await harness.read(submission);
+    const remainingRuntimeMs = remainingTaskRuntime(request.deadlineAt);
+    if (remainingRuntimeMs <= 0) {
+      await harness.cancel({ runId: request.runId, reason: "Task runtime deadline expired before inference" }).catch(() => undefined);
+      const failed = taskOutcomeV1Schema.parse({
+        schemaVersion: "gardener.task-outcome/v1",
+        runId: request.runId,
+        taskId: request.bundle.taskId,
+        bundleHash: request.bundleHash,
+        status: "failed",
+        error: { code: "runtime.deadline_exceeded", message: "Task runtime deadline expired", retryable: false },
+      });
+      await this.env.DB.batch([
+        this.env.DB.prepare(
+          "UPDATE actions_task_runs SET status='failed',outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
+        ).bind(JSON.stringify(failed), identity.sessionId),
+        this.env.DB.prepare(
+          "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
+          "SELECT ?,'task.settled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.settled')",
+        ).bind(identity.sessionId, JSON.stringify({ status: "failed", code: "runtime.deadline_exceeded", bundleHash }), identity.sessionId),
+      ]);
+      return terminalFromOutcome(failed, await this.completedSequence(), request);
+    }
+    const harnessOutcome = await harness.read(submission, {
+      signal: AbortSignal.timeout(Math.max(1, remainingRuntimeMs)),
+    });
     const terminalRow = await this.env.DB.prepare("SELECT outcome_json FROM actions_task_runs WHERE id=?")
       .bind(identity.sessionId).first<{ outcome_json: string | null }>();
     const outcome = terminalRow?.outcome_json
       ? taskOutcomeV1Schema.parse(JSON.parse(terminalRow.outcome_json))
       : translateHarnessOutcome(request, harnessOutcome);
+    if (outcome.status === "cancelled") {
+      await this.env.DB.batch([
+        this.env.DB.prepare(
+          "UPDATE actions_task_runs SET status='cancelled',outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
+        ).bind(JSON.stringify(outcome), identity.sessionId),
+        this.env.DB.prepare(
+          "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
+          "SELECT ?,'task.cancelled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.cancelled')",
+        ).bind(identity.sessionId, JSON.stringify({ reason: outcome.reason }), identity.sessionId),
+      ]);
+      return terminalFromOutcome(outcome, await this.completedSequence(), request);
+    }
     await this.env.DB.batch([
       this.env.DB.prepare(
         "UPDATE actions_task_runs SET status=?,outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
@@ -307,6 +366,78 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ).bind(identity.sessionId, JSON.stringify({ status: outcome.status, bundleHash }), identity.sessionId),
     ]);
     return terminalFromOutcome(outcome, await this.completedSequence(), request);
+  }
+
+  async cancelRun(reasonInput: string): Promise<void> {
+    const identity = this.#identity;
+    if (!identity || identity.hello.phase !== "plan") throw new Error("Only an authenticated planning session can be cancelled");
+    const reason = reasonInput.trim().slice(0, 500) || "Planning runner cancelled";
+    await this.ctx.storage.put("cancel-intent", reason);
+    const row = await this.env.DB.prepare(
+      "SELECT request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
+    ).bind(identity.sessionId).first<{
+      request_json: string;
+      harness_submission_json: string | null;
+      outcome_json: string | null;
+    }>();
+    if (!row || row.outcome_json) return;
+
+    const request = taskRunRequestV1Schema.parse(JSON.parse(row.request_json));
+    await new FlueTaskHarness().cancel({ runId: request.runId, reason }).catch(() => undefined);
+    const actions = await this.ctx.storage.list<StoredAction>({ prefix: ACTION_PREFIX });
+    await Promise.all([...actions.values()]
+      .filter((record) => record.state !== "completed")
+      .map((record) => this.#runner?.cancel(record.action.operationId).catch(() => undefined)));
+
+    await this.settleCancellation(request, reason);
+  }
+
+  private async assertRunActive(runId: string): Promise<void> {
+    if (await this.ctx.storage.get("cancel-intent")) throw new Error("Task run is cancelled");
+    const row = await this.env.DB.prepare(
+      "SELECT status,outcome_json FROM actions_task_runs WHERE id=?",
+    ).bind(runId).first<{ status: string; outcome_json: string | null }>();
+    if (!row || row.outcome_json || (row.status !== "admitted" && row.status !== "running")) {
+      throw new Error("Task run is terminal or unavailable");
+    }
+  }
+
+  private async settleCancellation(request: TaskRunRequestV1, reason: string): Promise<RunnerTerminalV1> {
+    const outcome = taskOutcomeV1Schema.parse({
+      schemaVersion: "gardener.task-outcome/v1",
+      runId: request.runId,
+      taskId: request.bundle.taskId,
+      bundleHash: request.bundleHash,
+      status: "cancelled",
+      reason,
+    });
+    await this.env.DB.batch([
+      this.env.DB.prepare(
+        "UPDATE actions_task_runs SET status='cancelled',outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
+      ).bind(JSON.stringify(outcome), request.runId),
+      this.env.DB.prepare(
+        "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
+        "SELECT ?,'task.cancelled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.cancelled')",
+      ).bind(request.runId, JSON.stringify({ reason }), request.runId),
+    ]);
+    return terminalFromOutcome(outcome, await this.completedSequence(), request);
+  }
+
+  private async reserveRunnerToolBudget(runId: string, operationId: string): Promise<void> {
+    const row = await this.env.DB.prepare(
+      "SELECT request_json FROM actions_task_runs WHERE id=?",
+    ).bind(runId).first<{ request_json: string }>();
+    if (!row) throw new Error("Task run request is unavailable for tool budget enforcement");
+    const request = taskRunRequestV1Schema.parse(JSON.parse(row.request_json));
+    await this.ctx.storage.transaction(async (transaction) => {
+      const reservationKey = `runner-tool-reservation:${operationId}`;
+      if (await transaction.get(reservationKey)) return;
+      const recorded = await transaction.list<StoredAction>({ prefix: ACTION_PREFIX });
+      const reserved = await transaction.get<number>("runner-tool-count") ?? recorded.size;
+      assertRunnerToolBudget(request.bundle.limits.maxToolCalls, reserved);
+      await transaction.put(reservationKey, true);
+      await transaction.put("runner-tool-count", reserved + 1);
+    });
   }
 
   private async settleUnresolvedBeforeNewAction(runId: string): Promise<void> {
@@ -390,7 +521,8 @@ class PublicApi extends RpcTarget implements PublicSessionCapability {
 class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapability {
   constructor(readonly session: TaskRunnerSession) { super(); }
   run(event?: RunnerEventV1): Promise<RunnerTerminalV1> { return this.session.runTask(event); }
-  invoke(action: RunnerActionV1): Promise<RunnerActionResultV1> { return this.session.invoke(action); }
+  cancelRun(reason: string): Promise<void> { return this.session.cancelRun(reason); }
+  invoke(action: RunnerActionV1): Promise<RunnerActionResultV1> { return this.session.invokeAuthenticated(action); }
   reconcile(result: RunnerActionResultV1): Promise<RunnerActionResultV1> { return this.session.reconcile(result); }
   resume(cursor: ResumeCursorV1, runner: RpcStub<RunnerCapability>): Promise<ResumeStateV1> { return this.session.resume(cursor, runner); }
   recordEffect(receipt: RunnerEffectReceiptV1): Promise<RunnerEffectReceiptV1> { return this.session.recordEffect(receipt); }

@@ -69,6 +69,10 @@ class TestSession extends RpcTarget implements AuthenticatedSessionCapability {
     };
   }
 
+  cancelRun(_reason: string): Promise<void> {
+    return Promise.resolve();
+  }
+
   async invoke(input: RunnerActionV1): Promise<RunnerActionResultV1> {
     const parsed = runnerActionV1Schema.parse(input);
     const registered = this.journal.register(parsed);

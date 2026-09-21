@@ -6,19 +6,18 @@ import {
 import type { HarnessBudget } from "../types";
 import { FLUE_NATIVE_INPUT_BYTES_PER_TOKEN } from "../../flue-native-protocol";
 
-const NATIVE_BOUNDED_MODEL_PREFIX = "gardener-native-bounded-v2";
+const NATIVE_BOUNDED_MODEL_PREFIX = "gardener-native-bounded-v3";
 const MINIMUM_PROVIDER_OUTPUT_TOKENS = 16;
 let installedBinding: CloudflareAIBinding | undefined;
 
 type CloudflareProvider = ReturnType<typeof cloudflareBindingProvider>;
 type ProviderStreamOptions = NonNullable<Parameters<CloudflareProvider["stream"]>[2]>;
-type PayloadTransform = ProviderStreamOptions["onPayload"];
 
 interface EncodedBudget {
   model: string;
   maxTurns: number;
   maxInputBytes: number;
-  maxOutputTokensPerTurn: number;
+  maxOutputTokens: number;
   maxRuntimeMs: number;
   deadlineAtMs: number;
 }
@@ -30,11 +29,7 @@ export function boundedCloudflareModel(model: string, budget: HarnessBudget): st
   }
   const modelId = model.startsWith("cloudflare/") ? model.slice("cloudflare/".length) : model;
   const maxInputBytes = inputByteLimit(budget.maxInputTokens);
-  const maxOutputTokensPerTurn = Math.floor(budget.maxOutputTokens / budget.maxTurns);
-  if (maxOutputTokensPerTurn < MINIMUM_PROVIDER_OUTPUT_TOKENS) {
-    throw new Error(`Flue requires at least ${MINIMUM_PROVIDER_OUTPUT_TOKENS} output tokens per permitted turn`);
-  }
-  return `cloudflare/${NATIVE_BOUNDED_MODEL_PREFIX}:${budget.maxTurns}:${maxInputBytes}:${maxOutputTokensPerTurn}:${budget.maxRuntimeMs}:${Date.parse(budget.deadlineAt)}:${encodeURIComponent(modelId)}`;
+  return `cloudflare/${NATIVE_BOUNDED_MODEL_PREFIX}:${budget.maxTurns}:${maxInputBytes}:${budget.maxOutputTokens}:${budget.maxRuntimeMs}:${Date.parse(budget.deadlineAt)}:${encodeURIComponent(modelId)}`;
 }
 
 /** Register a tool-preserving provider wrapper around Flue's supported Workers AI provider. */
@@ -52,7 +47,7 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
     return stream(
       resolveActualModel(provider, model, budget.model),
       context,
-      boundedProviderOptions(options, budget),
+      boundedProviderOptions(options, context, budget),
     );
   }) as typeof provider.stream;
 
@@ -63,7 +58,7 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
     return streamSimple(
       resolveActualModel(provider, model, budget.model),
       context,
-      boundedProviderOptions(options as ProviderStreamOptions | undefined, budget),
+      boundedProviderOptions(options as ProviderStreamOptions | undefined, context, budget),
     );
   }) as typeof provider.streamSimple;
 
@@ -72,32 +67,16 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
 
 function boundedProviderOptions(
   options: ProviderStreamOptions | undefined,
+  context: { messages: readonly { role?: unknown; usage?: { output?: unknown } }[] },
   budget: EncodedBudget,
 ): ProviderStreamOptions {
+  const remainingOutputTokens = outputTokensRemaining(context, budget.maxOutputTokens);
   return {
     ...options,
     maxTokens: options?.maxTokens === undefined
-      ? budget.maxOutputTokensPerTurn
-      : Math.min(options.maxTokens, budget.maxOutputTokensPerTurn),
+      ? remainingOutputTokens
+      : Math.min(options.maxTokens, remainingOutputTokens),
     signal: deadlineSignal(options?.signal, budget.deadlineAtMs, budget.maxRuntimeMs),
-    onPayload: nativeToolPayload(options?.onPayload, budget.maxInputBytes),
-  };
-}
-
-function nativeToolPayload(
-  previous: PayloadTransform | undefined,
-  maxInputBytes: number,
-): NonNullable<PayloadTransform> {
-  return async (payload, model) => {
-    const overridden = await previous?.(payload, model);
-    const value = overridden === undefined ? payload : overridden;
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new Error("Flue provider produced an unsupported native tool payload");
-    }
-    // Native execution uses Flue's serialized tool catalog, never assistant-text JSON mode.
-    const { response_format: _legacyStructuredMode, ...native } = value as Record<string, unknown>;
-    enforceInputByteLimit(native, maxInputBytes);
-    return native;
   };
 }
 
@@ -105,7 +84,7 @@ function decodeBoundedModel(model: string): EncodedBudget {
   const [prefix, turns, input, output, runtime, deadline, encodedModel, ...extra] = model.split(":");
   const maxTurns = Number(turns);
   const maxInputBytes = Number(input);
-  const maxOutputTokensPerTurn = Number(output);
+  const maxOutputTokens = Number(output);
   const maxRuntimeMs = Number(runtime);
   const deadlineAtMs = Number(deadline);
   if (
@@ -115,8 +94,8 @@ function decodeBoundedModel(model: string): EncodedBudget {
     || maxTurns < 1
     || !Number.isSafeInteger(maxInputBytes)
     || maxInputBytes < 1
-    || !Number.isSafeInteger(maxOutputTokensPerTurn)
-    || maxOutputTokensPerTurn < MINIMUM_PROVIDER_OUTPUT_TOKENS
+    || !Number.isSafeInteger(maxOutputTokens)
+    || maxOutputTokens < MINIMUM_PROVIDER_OUTPUT_TOKENS
     || !Number.isSafeInteger(maxRuntimeMs)
     || maxRuntimeMs < 1
     || !Number.isSafeInteger(deadlineAtMs)
@@ -129,7 +108,26 @@ function decodeBoundedModel(model: string): EncodedBudget {
   if (!decoded || decoded.startsWith("cloudflare/")) {
     throw new Error("Flue model request contains an invalid bounded model id");
   }
-  return { model: decoded, maxTurns, maxInputBytes, maxOutputTokensPerTurn, maxRuntimeMs, deadlineAtMs };
+  return { model: decoded, maxTurns, maxInputBytes, maxOutputTokens, maxRuntimeMs, deadlineAtMs };
+}
+
+function outputTokensRemaining(
+  context: { messages: readonly { role?: unknown; usage?: { output?: unknown } }[] },
+  maxOutputTokens: number,
+): number {
+  const used = context.messages.reduce((total, message) => {
+    if (message.role !== "assistant") return total;
+    const output = message.usage?.output;
+    if (!Number.isSafeInteger(output) || (output as number) < 0) {
+      throw new Error("Flue assistant history is missing output-token usage");
+    }
+    return total + (output as number);
+  }, 0);
+  const remaining = maxOutputTokens - used;
+  if (remaining < MINIMUM_PROVIDER_OUTPUT_TOKENS) {
+    throw new Error("Gardener model output-token budget is exhausted");
+  }
+  return remaining;
 }
 
 function enforceInputByteLimit(value: unknown, maxInputBytes: number): void {

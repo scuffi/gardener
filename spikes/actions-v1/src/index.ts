@@ -251,6 +251,10 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
     };
   }
 
+  cancelRun(_reason: string): Promise<void> {
+    return Promise.resolve();
+  }
+
   invoke(input: RunnerActionV1): Promise<RunnerActionResultV1> {
     return this.session.invoke(input);
   }

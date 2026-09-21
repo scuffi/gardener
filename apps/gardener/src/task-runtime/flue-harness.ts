@@ -1,5 +1,6 @@
 import { AgentRunError, init, type AgentReply } from "@flue/runtime";
 import { GardenerTaskFlueAgent } from "./flue-agent";
+import { boundedTaskLimitFailure } from "./task-limits";
 import {
   HARNESS_ADAPTER_VERSIONS,
   assertHarnessRequest,
@@ -51,10 +52,14 @@ export class FlueTaskHarness implements AgentHarness {
     throw new Error("Canonical task v1 permits one Flue submission per run");
   }
 
-  async read(submission: HarnessSubmission, _options?: HarnessReadOptions): Promise<HarnessOutcome> {
+  async read(submission: HarnessSubmission, options?: HarnessReadOptions): Promise<HarnessOutcome> {
     assertHarnessSubmission(submission, { id: "flue", adapterVersion: HARNESS_ADAPTER_VERSIONS.flue });
+    const handle = init(GardenerTaskFlueAgent, { id: submission.runId });
     try {
-      const reply = await init(GardenerTaskFlueAgent, { id: submission.runId }).read(submission.submissionId);
+      const reply = await handle.read(
+        submission.submissionId,
+        options?.signal ? { signal: options.signal } : undefined,
+      );
       const result = oneTaskOutcome(reply);
       return {
         schemaVersion: "gardener.harness.outcome/v1",
@@ -72,8 +77,25 @@ export class FlueTaskHarness implements AgentHarness {
         events: [],
       };
     } catch (error) {
+      if (isSignalAbort(error, options?.signal)) {
+        await handle.abort().catch(() => undefined);
+        return {
+          schemaVersion: "gardener.harness.outcome/v1",
+          harness: submission.harness,
+          runId: submission.runId,
+          requestId: submission.requestId,
+          submissionId: submission.submissionId,
+          status: "failed",
+          error: harnessError("budget-exceeded", "Task execution exceeded its runtime deadline", false),
+          usage: emptyUsage(),
+          events: [],
+        };
+      }
       console.error("Gardener task Flue read failed", error instanceof AgentRunError ? error.cause : error);
       const cancelled = error instanceof AgentRunError && error.outcome === "aborted";
+      const limitFailure = !cancelled && error instanceof AgentRunError
+        ? boundedTaskLimitFailure(error.cause)
+        : null;
       return {
         schemaVersion: "gardener.harness.outcome/v1",
         harness: submission.harness,
@@ -82,8 +104,8 @@ export class FlueTaskHarness implements AgentHarness {
         submissionId: submission.submissionId,
         status: cancelled ? "cancelled" : "failed",
         error: harnessError(
-          cancelled ? "cancelled" : "provider-error",
-          cancelled ? "Task execution was cancelled" : "Flue task execution failed",
+          cancelled ? "cancelled" : limitFailure?.code ?? "provider-error",
+          cancelled ? "Task execution was cancelled" : limitFailure?.message ?? "Flue task execution failed",
           false,
         ),
         usage: emptyUsage(),
@@ -127,6 +149,12 @@ function replyUsage(reply: AgentReply): HarnessModelUsage {
     toolCalls: integer("toolCalls"),
     model: typeof usage.model === "string" ? usage.model : "unknown",
   };
+}
+
+function isSignalAbort(error: unknown, signal: AbortSignal | undefined): boolean {
+  if (!signal?.aborted) return false;
+  if (error === signal.reason) return true;
+  return error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError");
 }
 
 function emptyUsage(): HarnessModelUsage {
