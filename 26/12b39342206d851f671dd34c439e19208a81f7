@@ -1,0 +1,19 @@
+spikes/flue-tool-compatibility/wrangler.jsonc
+  s_296363db115efb::t_995f95bf1f8bfb 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2612b39342206d851f671dd34c439e19208a81f7",
+  "prompts": {},
+  "sessions": {
+    "s_296363db115efb": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c3d7-defa-7e9a-9a1d-042c01c0ef03",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
