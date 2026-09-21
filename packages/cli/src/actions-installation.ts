@@ -106,7 +106,7 @@ export function renderRuntimeConfig(input: {
     ],
     triggers: { crons: ["* * * * *"] },
     vars: {
-      AI_MODEL: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      AI_MODEL: "@cf/moonshotai/kimi-k2.6",
       GARDENER_WORKSPACE_ID: input.workspace,
       GARDENER_DEPLOYMENT_MODE: "actions-v1",
       LOCAL_DEV_BYPASS: "false",
@@ -304,9 +304,10 @@ export async function connectActions(input: {
     const hash = sha256.parse(task.bundleHash);
     if (await canonicalSha256(bundle) !== hash) throw new Error(`Lock task ${taskId} does not match its bundle hash`);
     bundles.push(hash);
+    const sourcePath = `.gardener/${task.source}`;
     statements.push(
       `INSERT INTO actions_task_bundles(bundle_hash,task_id,bundle_json) VALUES (${sql(hash)},${sql(taskId)},${sql(canonical)}) ON CONFLICT(bundle_hash) DO NOTHING;`,
-      `INSERT INTO actions_repository_tasks(repository_id,bundle_hash,enabled) VALUES (${sql(metadata.repositoryId)},${sql(hash)},1) ON CONFLICT(repository_id,bundle_hash) DO UPDATE SET enabled=1,updated_at=CURRENT_TIMESTAMP;`,
+      `INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled) VALUES (${sql(metadata.repositoryId)},${sql(hash)},${sql(taskId)},${sql(sourcePath)},1) ON CONFLICT(repository_id,bundle_hash) DO UPDATE SET task_id=excluded.task_id,source_path=excluded.source_path,enabled=1,updated_at=CURRENT_TIMESTAMP;`,
     );
   }
   wrangler(resolve(input.sourceRoot), "apps/gardener", [
@@ -424,12 +425,18 @@ async function requiredActionsManifest(workspace: string): Promise<ActionsInstal
 
 const lockSchema = z.strictObject({
   schemaVersion: z.literal("gardener.lock/v1"),
+  target: z.strictObject({
+    id: z.literal("github-actions/v1"),
+    adapterVersion: z.literal("1"),
+    workflowRef: z.string().min(1),
+  }),
   release: z.strictObject({ workflowRef: z.string().min(1) }),
   tasks: z.record(z.string(), z.strictObject({
     source: z.string(),
     bundleHash: sha256,
     workflow: z.string(),
     bundle: z.record(z.string(), z.unknown()),
+    deployment: z.record(z.string(), z.unknown()),
   })),
 });
 

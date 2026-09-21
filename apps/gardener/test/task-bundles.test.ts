@@ -17,6 +17,8 @@ function database() {
     CREATE TABLE actions_repository_tasks (
       repository_id TEXT NOT NULL,
       bundle_hash TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      source_path TEXT NOT NULL,
       enabled INTEGER NOT NULL,
       PRIMARY KEY(repository_id,bundle_hash)
     ) STRICT;
@@ -29,9 +31,10 @@ async function seed(sqlite: DatabaseSync, repositoryId = "100", enabled = 1) {
   const bundleHash = await canonicalSha256(bundle);
   sqlite.prepare("INSERT INTO actions_task_bundles(bundle_hash,task_id,bundle_json)VALUES(?,?,?)")
     .run(bundleHash, bundle.taskId, canonicalJson(bundle));
-  sqlite.prepare("INSERT INTO actions_repository_tasks(repository_id,bundle_hash,enabled)VALUES(?,?,?)")
-    .run(repositoryId, bundleHash, enabled);
-  return { bundle, bundleHash };
+  const sourcePath = ".gardener/tasks/fixture.issue-triage/TASK.md";
+  sqlite.prepare("INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled)VALUES(?,?,?,?,?)")
+    .run(repositoryId, bundleHash, bundle.taskId, sourcePath, enabled);
+  return { bundle, bundleHash, sourcePath };
 }
 
 describe("repository task bundle authority", () => {

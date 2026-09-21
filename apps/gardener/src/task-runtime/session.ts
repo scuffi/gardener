@@ -228,7 +228,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       throw new Error("The v1 task runtime supports only planning issues runs");
     }
     const runnerEvent = runnerEventV1Schema.parse(eventInput);
-    const { bundle, bundleHash } = await loadEnabledTaskBundle(
+    const { bundle, bundleHash, sourcePath } = await loadEnabledTaskBundle(
       this.env.DB,
       identity.enrollment.repository_id,
       identity.hello.agentHash,
@@ -239,6 +239,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       runId: identity.sessionId,
       bundle,
       bundleHash,
+      sourcePath,
       policySnapshotHash: await canonicalSha256({ enrollment: identity.enrollment.repository_id, workflow: identity.enrollment.plan_job_workflow_ref }),
       event: {
         schemaVersion: "gardener.normalized-event/v1" as const,
@@ -270,25 +271,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       admittedAt,
       deadlineAt: new Date(Date.parse(admittedAt) + bundle.limits.runtimeSeconds * 1_000).toISOString(),
     };
-    const draftHarnessRequest = await createTaskHarnessRequest(request);
-    const inspection = await this.invokeHarnessTool({
-      runId: request.runId,
-      requestId: draftHarnessRequest.requestId,
-      toolCallId: "trusted-preflight-list-files",
-      toolName: "repository_list_files",
-      input: { maxEntries: 200 },
-    });
-    if (inspection.status !== "completed") throw new Error("Trusted repository preflight inspection failed");
-    const harnessRequest = await createTaskHarnessRequest(request, JSON.parse(JSON.stringify({
-      schemaVersion: "gardener.task-tool-result/v1",
-      operationId: inspection.operationId,
-      tool: "repository.list_files",
-      status: inspection.status,
-      exitCode: inspection.exitCode,
-      stdout: inspection.stdout,
-      stderr: inspection.stderr,
-      outputTruncated: inspection.outputTruncated,
-    })) as JsonValue);
+    const harnessRequest = await createTaskHarnessRequest(request);
     const existing = await this.env.DB.prepare(
       "SELECT status,request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(identity.sessionId).first<{ status: string; request_json: string; harness_submission_json: string | null; outcome_json: string | null }>();
@@ -427,7 +410,7 @@ function toolAction(sequence: number, operationId: string, invocation: HarnessTo
     command = `python3 -c 'import pathlib,sys; root=pathlib.Path.cwd().resolve(); target=pathlib.Path(sys.argv[1]).resolve(); target.relative_to(root); print(target.read_text(encoding="utf-8"), end="")' ${shellQuote(path)}`;
   } else if (invocation.toolName === "repository_list_files") {
     exactKeys(value, ["path", "maxEntries"], true);
-    const path = value.path === undefined ? "." : repositoryPath(value.path);
+    const path = value.path === undefined || value.path === "." ? "." : repositoryPath(value.path);
     const maxEntries = integer(value.maxEntries ?? 1_000, 1, 10_000, "maxEntries");
     command = `git ls-files --cached --others --exclude-standard -- ${shellQuote(path)} | sed -n '1,${maxEntries}p'`;
   } else if (invocation.toolName === "repository_exec") {
@@ -484,8 +467,15 @@ async function terminalFromOutcome(value: unknown, sequence: number, request: Ta
     schemaVersion: "gardener.task-effect-plan/v1",
     runId: outcome.runId,
     taskId: outcome.taskId,
+    taskName: request.bundle.name,
     bundleHash: outcome.bundleHash,
     repository: { id: request.event.repository.id, fullName: request.event.repository.fullName },
+    provenance: {
+      sourcePath: request.sourcePath,
+      commitSha: request.event.repository.commitSha,
+      workflowRunId: request.event.workflow.runId,
+      workflowRunAttempt: request.event.workflow.runAttempt,
+    },
     issueNumber: request.event.issue.number,
     operationId: proposed.operationId,
     kind: proposed.kind,

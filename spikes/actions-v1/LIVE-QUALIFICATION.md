@@ -133,6 +133,32 @@ The stack was then destroyed through manifest-guarded `gardener down`, recreated
 
 This proves clean creation, interruption-safe resume, idempotent rerun, guarded teardown, clean recreation, two-task execution, and exact GitHub/D1 receipt verification. The account-wide Access policy required the recreated ingress Worker to be made public again; runtime and D1 remained private.
 
+## Canonical model-directed task tools (2026-09-21)
+
+A disposable `gardener-flue-tool-probe-baseline` Worker tested canonical model tool continuation across Flue/pi-ai dependency rows 2.0.3/0.83.0, 2.0.8/0.85.1, and 2.1.0/0.86.1. Llama 3.3 stopped without a terminal tool and both GPT-OSS models hit the known Workers AI transcript-schema rejection. `@cf/moonshotai/kimi-k2.6` completed `repository_list_files → repository_read_file → terminal` on every dependency row, passed 10/10 sequential runs on the latest row, and completed an active Worker redeployment run. The probe Worker was deleted after evidence capture; full results are in `../flue-tool-compatibility/RESULTS.md`.
+
+Gardener retained its existing Flue 2.0.3/pi-ai 0.83.0 pins and promoted only Kimi K2.6. The production-shaped task runtime removed the fixed host preflight, provider `tool_choice`, custom Workers AI payload provider, and direct terminal D1 write. Flue now publishes the durable terminal outcome through `useDataWriter`; Cap'n Web repository actions remain independently journaled and idempotent.
+
+The generic release-candidate Actions are public on `scuffi/gardener-actions`:
+
+- Action commit `c9ad5ab78e8809fcd405fd185b3c874ebe9b3f04`;
+- generic reusable workflow commit `c5a64c2b46fdbaf0dec8c765ea1cb61455d1eced`;
+- review PR <https://github.com/scuffi/gardener-actions/pull/1>.
+
+The connected demo repository was rebuilt against the generic `gardener-issue-task.yml` workflow and re-enrolled with trusted task source paths. After isolating Flue's default provider and returning minimal typed model-facing tool output, both product tasks succeeded on attempt 1 with successful canonical list/read/finish records and trusted multiline provenance comments:
+
+- bug intake: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35627175572>, issue #27, comment `5764086791`, bundle `865241da70fcc31e3d66378c8ec3936894e75048419e6706732ec034bb5f9cfc`;
+- documentation helper: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35627279204>, issue #28, comment `5764102043`, bundle `305dcb6ddadd627bb887153c8af47d154d578b26243381bb4e753c19f78e43b6`.
+
+Each final public response contains a successful `repository_list_files`, successful `repository_read_file`, and successful `finish_task` record. Each comment includes a trusted source-at-commit link, workflow attempt, commit, full bundle hash, operation ID, and hidden reconciliation marker. D1 contains exact matching receipts. The successful runtime uses the default Flue Workers AI provider with minimal typed model-facing tool output; Gardener's former custom bounded provider remains only for historical runtime surfaces.
+
+The same CLI/compiler/release/runtime path was then qualified in the private repository `scuffi/gardener-actions-cli-private-demo` (repository ID `1380152255`, visibility `private`). Both tasks succeeded on attempt 1:
+
+- bug intake: run `35627845144`, issue #1, comment `5764174990`, bundle `865241da70fcc31e3d66378c8ec3936894e75048419e6706732ec034bb5f9cfc`;
+- documentation helper: run `35628015763`, issue #2, comment `5764187679`, bundle `305dcb6ddadd627bb887153c8af47d154d578b26243381bb4e753c19f78e43b6`.
+
+Private D1 rows preserve `visibility=private`, exact bundle hashes, attempt-1 plan identities, and matching GitHub receipts. No repository secret, App, PAT, webhook, or installation token was introduced.
+
 ## Historical transport qualification (2026-09-17)
 
 ### Pinned Gardener components

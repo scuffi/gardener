@@ -35,6 +35,24 @@ export const taskEffectKindV1Schema = z.enum([
 ]);
 export type TaskEffectKindV1 = z.infer<typeof taskEffectKindV1Schema>;
 
+const networkHostPattern = z.string().regex(
+  /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+  "expected a lowercase DNS hostname or leading-wildcard hostname",
+);
+
+export const taskNetworkPolicyV1Schema = z.strictObject({
+  default: z.enum(["deny", "allow"]),
+  allow: z.array(networkHostPattern).max(64),
+  deny: z.array(networkHostPattern).max(64),
+}).superRefine((policy, context) => {
+  for (const key of ["allow", "deny"] as const) {
+    if (new Set(policy[key]).size !== policy[key].length) {
+      context.addIssue({ code: "custom", path: [key], message: `${key} hosts must be unique` });
+    }
+  }
+});
+export type TaskNetworkPolicyV1 = z.infer<typeof taskNetworkPolicyV1Schema>;
+
 export const taskLimitsV1Schema = z.strictObject({
   runtimeSeconds: z.number().int().positive().max(3_600),
   maxTurns: z.number().int().positive().max(32),
@@ -57,7 +75,7 @@ export const taskBundleV1Schema = z.strictObject({
   triggers: z.array(taskTriggerV1Schema).min(1).max(20),
   tools: z.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
   effects: z.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
-  planningNetwork: z.literal("unrestricted"),
+  network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
 }).superRefine((bundle, context) => {
   for (const key of ["tools", "effects"] as const) {
@@ -143,6 +161,7 @@ export const taskRunRequestV1Schema = z.strictObject({
   runId: boundIdentifier,
   bundle: taskBundleV1Schema,
   bundleHash: sha256,
+  sourcePath: relativePath,
   policySnapshotHash: sha256,
   event: normalizedEventV1Schema,
   model: z.strictObject({ id: z.string().min(1).max(256) }),
@@ -219,8 +238,15 @@ export const taskEffectPlanV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-effect-plan/v1"),
   runId: boundIdentifier,
   taskId: identifier,
+  taskName: z.string().trim().min(1).max(100),
   bundleHash: sha256,
   repository: z.strictObject({ id: githubNumericId, fullName: repositoryFullName }),
+  provenance: z.strictObject({
+    sourcePath: relativePath,
+    commitSha: sha1,
+    workflowRunId: githubNumericId,
+    workflowRunAttempt: z.number().int().positive(),
+  }),
   issueNumber: z.number().int().positive(),
   operationId: boundIdentifier,
   kind: z.literal("issue.comment.create"),

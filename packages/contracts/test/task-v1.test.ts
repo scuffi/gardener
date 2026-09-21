@@ -21,7 +21,7 @@ function fixtureBundle(): TaskBundleV1 {
     triggers: [{ kind: "github.workflow_dispatch" }],
     tools: ["repository.list_files", "repository.read_file", "repository.exec"],
     effects: [],
-    planningNetwork: "unrestricted",
+    network: { default: "deny", allow: [], deny: [] },
     limits: {
       runtimeSeconds: 300,
       maxTurns: 8,
@@ -71,6 +71,29 @@ describe("Actions-native task v1 contracts", () => {
     })).toThrow();
   });
 
+  it("validates portable network defaults and exact/wildcard host rules", () => {
+    expect(taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      network: {
+        default: "deny",
+        allow: ["api.github.com", "*.example.com"],
+        deny: ["telemetry.example.com"],
+      },
+    }).network).toEqual({
+      default: "deny",
+      allow: ["api.github.com", "*.example.com"],
+      deny: ["telemetry.example.com"],
+    });
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      network: { default: "deny", allow: ["https://api.github.com/path"], deny: [] },
+    })).toThrow(/hostname/);
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      network: { default: "deny", allow: ["api.github.com", "api.github.com"], deny: [] },
+    })).toThrow(/unique/);
+  });
+
   it("requires unique trigger, tool, and effect declarations", () => {
     expect(() => taskBundleV1Schema.parse({
       ...fixtureBundle(),
@@ -100,6 +123,7 @@ describe("Actions-native task v1 contracts", () => {
       runId: "run:fixture:1",
       bundle: fixtureBundle(),
       bundleHash: hash,
+      sourcePath: ".gardener/tasks/fixture.inspect/TASK.md",
       policySnapshotHash: "d".repeat(64),
       event: fixtureEvent(),
       model: { id: "@cf/test/model" },

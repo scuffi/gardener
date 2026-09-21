@@ -22,10 +22,15 @@ async function main(): Promise<void> {
     const event = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8")) as Record<string, any>;
     if (requiredEnvironment("GITHUB_REPOSITORY") !== plan.repository.fullName) throw new Error("Effect repository binding mismatch");
     if (String(event.repository?.id ?? "") !== plan.repository.id) throw new Error("Effect repository identity mismatch");
+    if (requiredEnvironment("GITHUB_SHA") !== plan.provenance.commitSha) throw new Error("Effect commit binding mismatch");
+    if (requiredEnvironment("GITHUB_RUN_ID") !== plan.provenance.workflowRunId
+      || Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")) !== plan.provenance.workflowRunAttempt) {
+      throw new Error("Effect workflow run binding mismatch");
+    }
     if (event.action !== "opened" || Number(event.issue?.number) !== plan.issueNumber) throw new Error("Effect issue binding mismatch");
 
     const marker = `<!-- gardener-operation:${plan.operationId} -->`;
-    const body = `${plan.body}\n${marker}`;
+    const body = renderGardenerComment(plan, marker);
     const existing = await findExistingComment(plan.repository.fullName, plan.issueNumber, marker, token);
     const receipt = existing ?? await createComment(plan.repository.fullName, plan.issueNumber, body, token);
     await recordReceipt(harnessUrl, plan.bundleHash, {
@@ -64,6 +69,38 @@ async function recordReceipt(harnessUrl: string, bundleHash: string, receipt: Ru
   } finally {
     root[Symbol.dispose]();
   }
+}
+
+function renderGardenerComment(
+  plan: ReturnType<typeof taskEffectPlanV1Schema.parse>,
+  marker: string,
+): string {
+  const repositoryUrl = `https://github.com/${plan.repository.fullName}`;
+  const sourcePath = plan.provenance.sourcePath.split("/").map(encodeURIComponent).join("/");
+  const sourceUrl = `${repositoryUrl}/blob/${plan.provenance.commitSha}/${sourcePath}`;
+  const runUrl = `${repositoryUrl}/actions/runs/${plan.provenance.workflowRunId}/attempts/${plan.provenance.workflowRunAttempt}`;
+  const commitUrl = `${repositoryUrl}/commit/${plan.provenance.commitSha}`;
+  return [
+    `## 🌱 Gardener · ${escapeMarkdownInline(plan.taskName)}`,
+    "",
+    plan.body,
+    "",
+    "<details>",
+    "<summary>Gardener provenance</summary>",
+    "",
+    `[Task source](${sourceUrl}) · [Workflow run](${runUrl}) · [Commit](${commitUrl})`,
+    "",
+    `Bundle \`${plan.bundleHash}\`  `,
+    `Operation \`${plan.operationId}\``,
+    "",
+    "</details>",
+    "",
+    marker,
+  ].join("\n");
+}
+
+function escapeMarkdownInline(value: string): string {
+  return value.replace(/[\\`*_{}\[\]()<>#+.!|~-]/g, "\\$&");
 }
 
 interface CommentReceipt { id: number; html_url: string; body?: string }

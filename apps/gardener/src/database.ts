@@ -7,8 +7,9 @@ import flueNativeRuntime from "../migrations/0008_flue_native_runtime.sql?raw";
 import starterAgents from "../migrations/0009_starter_agents.sql?raw";
 import actionsTaskRuntime from "../migrations/0010_actions_task_runtime.sql?raw";
 import actionsTaskBundles from "../migrations/0011_actions_task_bundles.sql?raw";
+import actionsTaskSources from "../migrations/0012_actions_task_sources.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 11;
+export const AGENT_SCHEMA_VERSION = 12;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -75,13 +76,14 @@ async function initialize(db: D1Database): Promise<void> {
 
   if (version !== null) {
     const migrationsByVersion: Record<number, readonly string[]> = {
-      4: [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
-      5: [flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
-      6: [teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
-      7: [flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
-      8: [starterAgents, actionsTaskRuntime, actionsTaskBundles],
-      9: [actionsTaskRuntime, actionsTaskBundles],
-      10: [actionsTaskBundles],
+      4: [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles, actionsTaskSources],
+      5: [flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles, actionsTaskSources],
+      6: [teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles, actionsTaskSources],
+      7: [flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles, actionsTaskSources],
+      8: [starterAgents, actionsTaskRuntime, actionsTaskBundles, actionsTaskSources],
+      9: [actionsTaskRuntime, actionsTaskBundles, actionsTaskSources],
+      10: [actionsTaskBundles, actionsTaskSources],
+      11: [actionsTaskSources],
     };
     const migrations = migrationsByVersion[version];
     if (!migrations) throw new Error(`Unsupported Gardener database schema version ${version}`);
@@ -106,7 +108,7 @@ async function initialize(db: D1Database): Promise<void> {
       // establishes the historical v4 baseline before applying later migrations.
       await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)").run();
     }
-    for (const migration of [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles]) {
+    for (const migration of [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles, actionsTaskSources]) {
       await apply(db, migration);
     }
   } catch (error) {

@@ -13,8 +13,8 @@ delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 async function main(): Promise<void> {
   try {
     const harnessUrl = requiredInput("harness-url");
-    const agentHash = requiredInput("agent-hash");
-    if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("agent-hash must be a lowercase SHA-256 digest");
+    const agentHash = requiredInput("task-bundle-hash");
+    if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
     const event = await githubEvent();
     const terminal = await runPlanningSession({

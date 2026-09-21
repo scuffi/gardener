@@ -146,7 +146,7 @@ describe("schema v10 starter Agent cutover", () => {
 
       await ensureDatabase(d1Database(sqlite));
 
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 11 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 12 });
       expect(sqlite.prepare("SELECT id FROM repositories ORDER BY id").all()).toEqual([{ id: "repo-active" }, { id: "repo-inactive" }]);
       expect(sqlite.prepare("SELECT mode FROM operation_policies WHERE operation_kind = 'issue.comment.create'").get()).toEqual({ mode: "automatic" });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agents").get()).toEqual({ count: 3 });
@@ -227,7 +227,7 @@ describe("schema v10 starter Agent cutover", () => {
           '{}','${digest}','flue','2.0.2','{}');
       `);
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton=1").get()).toEqual({ version: 11 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton=1").get()).toEqual({ version: 12 });
       expect(sqlite.prepare("SELECT id FROM agents ORDER BY id").all()).toEqual([
         { id: "agent-v7" },
         { id: "agent_gardener_starter_bug_intake" },
@@ -261,31 +261,31 @@ describe("schema v10 starter Agent cutover", () => {
         { id: "agent_gardener_starter_documentation_helper" },
         { id: "agent_gardener_starter_issue_triage" },
       ]);
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 11 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 12 });
     } finally {
       sqlite.close();
     }
   });
 
-  it.each([4, 5])("takes a complete v%i database through the remaining chain to v11", async (version) => {
+  it.each([4, 5])("takes a complete v%i database through the remaining chain to v12", async (version) => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       sqlite.exec(migration("0001_initial.sql"));
       sqlite.exec("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)");
       if (version === 5) sqlite.exec(migration("0005_agent_runtime_admission.sql"));
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 11 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 12 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_repository_assignments'").get()).toEqual({ name: "agent_repository_assignments" });
     } finally {
       sqlite.close();
     }
   });
 
-  it("takes a fresh database through the complete chain to v11", async () => {
+  it("takes a fresh database through the complete chain to v12", async () => {
     const sqlite = new DatabaseSync(":memory:");
     try {
       await ensureDatabase(d1Database(sqlite));
-      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 11 });
+      expect(sqlite.prepare("SELECT version FROM gardener_schema WHERE singleton = 1").get()).toEqual({ version: 12 });
       expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_repository_assignments'").get()).toEqual({ name: "agent_repository_assignments" });
     } finally {
       sqlite.close();

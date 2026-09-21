@@ -90,11 +90,11 @@ export async function qualifyActions(input: {
       throw new Error(`Task ${taskId} returned an invalid GitHub comment receipt`);
     }
 
-    const d1 = wrangler(sourceRoot, "apps/gardener", [
+    const d1 = await executeD1WithRetry(sourceRoot, [
       "d1", "execute", manifest.cloudflare.database.name,
       "--remote", "--config", manifest.cloudflare.runtimeConfig, "--json",
       "--command", `SELECT bundle_hash,effect_receipt_json FROM actions_task_runs WHERE github_run_id='${run.databaseId.replaceAll("'", "''")}' AND effect_receipt_json IS NOT NULL;`,
-    ], undefined, { quiet: true });
+    ]);
     const rows = d1Rows(JSON.parse(d1.stdout));
     if (rows.length !== 1 || typeof rows[0]?.effect_receipt_json !== "string") {
       throw new Error(`Task ${taskId} has no unique persisted effect receipt`);
@@ -150,6 +150,19 @@ async function waitForWorkflowRun(input: {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000));
   }
   throw new Error(`Timed out waiting for ${input.workflow}`);
+}
+
+async function executeD1WithRetry(sourceRoot: string, args: string[]) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return wrangler(sourceRoot, "apps/gardener", args, undefined, { quiet: true });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000));
+    }
+  }
+  throw lastError;
 }
 
 function githubJson(cwd: string, args: string[]): unknown {

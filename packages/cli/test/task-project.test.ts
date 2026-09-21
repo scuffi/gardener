@@ -20,7 +20,10 @@ tools:
   - repository.read_file
 effects:
   - issue.comment.create
-planning-network: unrestricted
+network:
+  default: deny
+  allow: []
+  deny: []
 limits:
   runtime-seconds: 120
   max-turns: 4

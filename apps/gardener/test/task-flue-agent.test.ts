@@ -17,7 +17,6 @@ vi.mock("@flue/runtime/cloudflare", () => ({ extend: vi.fn(() => ({})) }));
 
 import {
   GardenerTaskFlueAgent,
-  installGardenerTaskDatabase,
   installGardenerTaskToolFacade,
 } from "../src/task-runtime/flue-agent";
 
@@ -59,16 +58,12 @@ function request(): HarnessRequest {
 }
 
 describe("canonical task Flue agent", () => {
-  const databaseRun = vi.fn(async () => ({ success: true }));
-  const databaseBind = vi.fn((_outcome: string, _runId: string) => ({ run: databaseRun }));
-  const databasePrepare = vi.fn(() => ({ bind: databaseBind }));
-  const setCompletedRunnerTools = vi.fn();
-  const invoke = vi.fn(async () => ({ status: "completed", stdout: "README", stderr: "" }));
+  const writeTaskOutcome = vi.fn();
+  const invoke = vi.fn(async () => ({ status: "completed", stdout: "README", stderr: "", outputTruncated: false }));
 
   beforeEach(() => {
     vi.clearAllMocks();
-    flue.usePersistentState.mockReturnValue([1, setCompletedRunnerTools]);
-    installGardenerTaskDatabase({ prepare: databasePrepare } as unknown as D1Database);
+    flue.useDataWriter.mockReturnValue(writeTaskOutcome);
     installGardenerTaskToolFacade({ invoke });
   });
 
@@ -76,24 +71,22 @@ describe("canonical task Flue agent", () => {
     const value = request();
     flue.useInitialData.mockReturnValue({ request: value });
 
-    expect(GardenerTaskFlueAgent()).toBe(value.prompt);
+    const rendered = GardenerTaskFlueAgent();
+    expect(rendered).toContain(value.prompt);
+    expect(rendered).toContain("Execution protocol");
     expect(GardenerTaskFlueAgent.agentName).toBe("gardener-task-harness");
     expect(GardenerTaskFlueAgent.durability).toEqual({ maxAttempts: 3, timeoutMs: 300_000 });
     expect(flue.useTool).toHaveBeenCalledTimes(2);
 
-    const terminal = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "submit_task_outcome_v1");
+    const terminal = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "finish_task");
     const repositoryTool = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "repository_read_file");
     expect(terminal).toBeDefined();
     expect(repositoryTool).toMatchObject({ durable: true });
 
-    const step = { do: vi.fn(async (_name: string, callback: () => unknown) => callback()) };
     await expect(repositoryTool.run({
       data: { path: "README.md" },
       toolCallId: "call-1",
-      step,
-    })).resolves.toEqual({ output: { status: "completed", stdout: "README", stderr: "" } });
-    expect(step.do).toHaveBeenCalledWith("runner-operation-v1", expect.any(Function));
-    expect(setCompletedRunnerTools).toHaveBeenCalledWith(expect.any(Function));
+    })).resolves.toEqual({ output: { content: "README" } });
     expect(invoke).toHaveBeenCalledWith(expect.objectContaining({
       runId: value.runId,
       requestId: value.requestId,
@@ -107,43 +100,44 @@ describe("canonical task Flue agent", () => {
     const value = request();
     flue.useInitialData.mockReturnValue({ request: value });
     GardenerTaskFlueAgent();
-    const terminal = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "submit_task_outcome_v1");
+    const terminal = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "finish_task");
 
     await expect(terminal.run({
       data: {
+        inspectionComplete: true,
         summary: "README inspected.",
-        observations: [{ kind: "repository", summary: "README exists.", paths: ["README.md"] }],
-        comment: { body: "Thanks. The likely next step is to add a regression test.", rationale: "Repository evidence supports this next step." },
+        commentBody: "Thanks. The likely next step is to add a regression test.",
       },
     })).resolves.toEqual({ output: { accepted: true }, terminate: true });
-    expect(databasePrepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE actions_task_runs"));
-    const persisted = JSON.parse(databaseBind.mock.calls.at(-1)![0]);
-    expect(persisted).toEqual({
+    expect(writeTaskOutcome).toHaveBeenCalledWith({
       schemaVersion: "gardener.task-outcome/v1",
       runId: value.runId,
       taskId: "fixture.issue-triage",
       bundleHash: value.snapshot.agentRevisionHash,
       status: "completed",
       summary: "README inspected.",
-      observations: [{ kind: "repository", summary: "README exists.", paths: ["README.md"] }],
+      observations: [{ kind: "repository", summary: "Canonical repository inspection completed before terminal settlement", paths: [] }],
       proposedEffects: [{
         operationId: expect.stringMatching(/^op_[a-f0-9]{64}$/),
         kind: "issue.comment.create",
         issueNumber: 7,
         body: "Thanks. The likely next step is to add a regression test.",
-        rationale: "Repository evidence supports this next step.",
+        rationale: "Model-proposed comment based on canonical repository tool results.",
       }],
     });
   });
 
-  it("rejects a terminal report that has no completed runner evidence", async () => {
+  it("rejects settlement without successful list and read evidence", () => {
     const value = request();
     flue.useInitialData.mockReturnValue({ request: value });
-    flue.usePersistentState.mockReturnValue([0, setCompletedRunnerTools]);
     GardenerTaskFlueAgent();
-    const terminal = flue.useTool.mock.calls.map((call) => call[0]).find((tool) => tool.name === "submit_task_outcome_v1");
-    await expect(terminal.run({ data: { summary: "Invented", observations: [], comment: { body: "Invented", rationale: "None" } } })).rejects.toThrow(/requires evidence/);
-    expect(databaseRun).not.toHaveBeenCalled();
+    const finish = flue.useAgentFinish.mock.calls.at(-1)![0];
+    expect(() => finish({
+      response: {
+        toolCalls: [{ tool: "finish_task", isError: false }],
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2 },
+      },
+    })).toThrow(/canonical_repository_evidence/);
   });
 
   it("fails closed when a tool-bearing task has no trusted runner facade", () => {

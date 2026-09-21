@@ -39,7 +39,7 @@
   ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
-    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_MODEL": "@cf/moonshotai/kimi-k2.6",
     "GARDENER_WORKSPACE_ID": "workspace-local",
     "GARDENER_DEPLOYMENT_MODE": "actions-v1",
     "LOCAL_DEV_BYPASS": "false",

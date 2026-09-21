@@ -5,8 +5,8 @@ inputs:
   harness-url:
     description: HTTPS origin of the customer-deployed Gardener harness.
     required: true
-  agent-hash:
-    description: Lowercase SHA-256 digest of the compiled Agent definition.
+  task-bundle-hash:
+    description: Lowercase SHA-256 digest of the compiled TaskBundleV1.
     required: true
   max-reconnects:
     description: Maximum Cap'n Web reconnection attempts after the initial connection.

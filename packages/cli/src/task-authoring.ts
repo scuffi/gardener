@@ -27,7 +27,11 @@ const authoringSchema = z.strictObject({
       message: "the bounded v1 runtime requires repository.list_files",
     }),
   effects: z.tuple([z.literal("issue.comment.create")]),
-  "planning-network": z.literal("unrestricted"),
+  network: z.strictObject({
+    default: z.enum(["deny", "allow"]),
+    allow: z.array(z.string()),
+    deny: z.array(z.string()),
+  }),
   limits: z.strictObject({
     "runtime-seconds": z.number().int().positive().max(3_600),
     "max-turns": z.number().int().positive().max(32),
@@ -73,7 +77,7 @@ export async function compileTaskSource(source: string, sourceName = "TASK.md"):
     }],
     tools: authoring.tools,
     effects: authoring.effects,
-    planningNetwork: authoring["planning-network"],
+    network: authoring.network,
     limits: {
       runtimeSeconds: authoring.limits["runtime-seconds"],
       maxTurns: authoring.limits["max-turns"],

@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gardener-flue-tool-probe-baseline",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI" },
+  "migrations": [
+    {
+      "tag": "canonical-tool-probe-v1",
+      "new_sqlite_classes": ["FlueCanonicalToolProbeAgent"]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false }
+  }
+}

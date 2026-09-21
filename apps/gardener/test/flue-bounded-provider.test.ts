@@ -69,7 +69,7 @@ describe("bounded native Flue Cloudflare provider", () => {
     )).resolves.toEqual({ messages: [], tools: [{ name: "submit_gardener_output_v1" }] });
   });
 
-  it("forces the hard-coded triage task through inspection and terminal tools", async () => {
+  it("leaves tool selection to the model while preserving Flue's canonical transcript", async () => {
     const provider = installedProvider();
     provider.stream(
       { id: encoded(), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" },
@@ -77,16 +77,16 @@ describe("bounded native Flue Cloudflare provider", () => {
       {},
     );
     const options = mocks.baseStream.mock.calls.at(-1)![2];
-    const tools = [
-      { type: "function", function: { name: "repository_list_files" } },
-      { type: "function", function: { name: "submit_task_outcome_v1" } },
-    ];
-    await expect(options.onPayload({ messages: [], tools }, { api: "cloudflare-ai-binding" }))
-      .resolves.toMatchObject({ tool_choice: { type: "function", function: { name: "repository_list_files" } } });
-    await expect(options.onPayload({ messages: [{ role: "tool", content: "files" }], tools }, { api: "cloudflare-ai-binding" }))
-      .resolves.toMatchObject({ tool_choice: { type: "function", function: { name: "submit_task_outcome_v1" } } });
-    await expect(options.onPayload({ messages: [], tools: [tools[1]] }, { api: "cloudflare-ai-binding" }))
-      .resolves.toMatchObject({ tool_choice: { type: "function", function: { name: "submit_task_outcome_v1" } } });
+    const payload = {
+      messages: [{ role: "tool", content: "files" }],
+      tools: [
+        { type: "function", function: { name: "repository_list_files" } },
+        { type: "function", function: { name: "finish_task" } },
+      ],
+    };
+    const result = await options.onPayload(payload, { api: "cloudflare-ai-binding" });
+    expect(result).toEqual(payload);
+    expect(result).not.toHaveProperty("tool_choice");
   });
 
   it("applies the same native bounds through streamSimple", async () => {

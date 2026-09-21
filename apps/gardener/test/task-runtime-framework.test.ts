@@ -67,6 +67,7 @@ async function runRequest(bundleInput: Readonly<TaskBundleV1> = inspectRepositor
     runId: "run:fixture:1",
     bundle,
     bundleHash: await canonicalSha256(bundle),
+    sourcePath: ".gardener/tasks/fixture.issue-triage/TASK.md",
     policySnapshotHash: "d".repeat(64),
     event: event("github.issue.opened"),
     model: { id: "@cf/test/model" },

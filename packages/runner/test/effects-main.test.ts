@@ -39,6 +39,9 @@ describe("exact issue-comment effects action", () => {
     vi.clearAllMocks();
     vi.resetModules();
     vi.unstubAllGlobals();
+    process.env.GITHUB_SHA = "b".repeat(40);
+    process.env.GITHUB_RUN_ID = "2";
+    process.env.GITHUB_RUN_ATTEMPT = "1";
   });
 
   it("verifies the artifact binding and creates exactly one marked comment", async () => {
@@ -47,8 +50,15 @@ describe("exact issue-comment effects action", () => {
       schemaVersion: "gardener.task-effect-plan/v1",
       runId: "repo-1-run-2-attempt-1-plan",
       taskId: "fixture.issue-triage",
+      taskName: "Issue triage",
       bundleHash: "a".repeat(64),
       repository: { id: "123", fullName: "owner/repo" },
+      provenance: {
+        sourcePath: ".gardener/tasks/triage/TASK.md",
+        commitSha: "b".repeat(40),
+        workflowRunId: "2",
+        workflowRunAttempt: 1,
+      },
       issueNumber: 7,
       operationId: "op_123",
       kind: "issue.comment.create",
@@ -79,6 +89,13 @@ describe("exact issue-comment effects action", () => {
       method: "POST",
       body: expect.stringContaining("<!-- gardener-operation:op_123 -->"),
     });
+    const posted = JSON.parse(String(fetchMock.mock.calls[1]![1]?.body)) as { body: string };
+    expect(posted.body).toContain("## 🌱 Gardener · Issue triage");
+    expect(posted.body).toContain("<summary>Gardener provenance</summary>");
+    expect(posted.body).toContain(
+      "https://github.com/owner/repo/blob/" + "b".repeat(40) + "/.gardener/tasks/triage/TASK.md",
+    );
+    expect(posted.body).toContain("https://github.com/owner/repo/actions/runs/2/attempts/1");
     expect(core.setOutput).toHaveBeenCalledWith("operation-id", "op_123");
     expect(core.recordEffect).toHaveBeenCalledWith(expect.objectContaining({
       planRunId: plan.runId,
@@ -129,8 +146,15 @@ describe("exact issue-comment effects action", () => {
       schemaVersion: "gardener.task-effect-plan/v1",
       runId: "repo-1-run-2-attempt-1-plan",
       taskId: "fixture.issue-triage",
+      taskName: "Issue triage",
       bundleHash: "a".repeat(64),
       repository: { id: "123", fullName: repository },
+      provenance: {
+        sourcePath: ".gardener/tasks/triage/TASK.md",
+        commitSha: "b".repeat(40),
+        workflowRunId: "2",
+        workflowRunAttempt: 1,
+      },
       issueNumber: 7,
       operationId: "op_binding",
       kind: "issue.comment.create",
@@ -167,8 +191,15 @@ describe("exact issue-comment effects action", () => {
       schemaVersion: "gardener.task-effect-plan/v1",
       runId: "repo-1-run-2-attempt-1-plan",
       taskId: "fixture.issue-triage",
+      taskName: "Issue triage",
       bundleHash: "a".repeat(64),
       repository: { id: "123", fullName: "owner/repo" },
+      provenance: {
+        sourcePath: ".gardener/tasks/triage/TASK.md",
+        commitSha: "b".repeat(40),
+        workflowRunId: "2",
+        workflowRunAttempt: 1,
+      },
       issueNumber: 7,
       operationId: "op_existing",
       kind: "issue.comment.create",

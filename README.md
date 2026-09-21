@@ -45,7 +45,7 @@ built-in `GITHUB_TOKEN` and OIDC.
 
 `TASK.md` is an authoring format only. `gardener build` strictly compiles it into canonical
 `TaskBundleV1`, computes its SHA-256, and writes deterministic lock and workflow files. The runtime
-never parses Markdown or YAML.
+never parses Markdown or YAML. See [Actions-native task authoring V1](docs/task-authoring-v1.md).
 
 ## Local scaffold and build
 
@@ -181,8 +181,7 @@ pnpm gardener -- down \
 
 - The CLI currently deploys from a trusted Gardener source checkout. Packaging the built runtime and
   ingress with the published CLI is required before advertising a standalone `npx gardener up`.
-- The production path retains a fixed trusted preflight and direct durable terminal-outcome
-  persistence while canonical Flue tool-result continuation is resolved at the provider boundary.
+- Actions V1 currently supports model-directed `repository.list_files` and `repository.read_file` tools only; `repository.exec` and non-empty network host rules fail compilation for this target.
 - The current privileged effect surface is exactly `issue.comment.create`.
 - Dashboard deployment through Cloudflare Access is optional and not yet part of the headless setup
   command.

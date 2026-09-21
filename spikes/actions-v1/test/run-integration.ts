@@ -72,7 +72,7 @@ async function runBundledAction(): Promise<void> {
     const action = await run("node", ["../../actions/runner/dist/index.cjs"], {
       ...process.env,
       "INPUT_HARNESS-URL": `http://127.0.0.1:${port}`,
-      "INPUT_AGENT-HASH": "b".repeat(64),
+      "INPUT_TASK-BUNDLE-HASH": "b".repeat(64),
       "INPUT_MAX-RECONNECTS": "1",
       ACTIONS_ID_TOKEN_REQUEST_URL: `http://127.0.0.1:${oidcPort}/token?api-version=1`,
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: "local-request-token",

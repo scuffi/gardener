@@ -17,7 +17,7 @@ export function inspectRepositoryFixtureBundle(): Readonly<TaskBundleV1> {
     triggers: [{ kind: "github.issue.opened", labelsAll: ["gardener-test"] }],
     tools: ["repository.list_files", "repository.read_file", "repository.exec"],
     effects: ["issue.comment.create"],
-    planningNetwork: "unrestricted",
+    network: { default: "deny", allow: [], deny: [] },
     limits: {
       runtimeSeconds: 300,
       maxTurns: 8,
