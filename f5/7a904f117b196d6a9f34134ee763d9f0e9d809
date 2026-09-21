@@ -1,0 +1,37 @@
+actions/runner/dist/index.cjs
+  s_5da66bf6bc6455::t_6ece19b7966a9f 40032-40035
+apps/gardener/test/cloudflare-access.test.ts
+  s_5da66bf6bc6455::t_d07549a9b59dd8 1-129
+apps/gardener/ui/clickable-surfaces.test.tsx
+  s_a0bfc15824dcad::t_44c34ec77142f8 18-20,90-92,94,118
+apps/gardener/ui/features/runs/runs-page.test.tsx
+  s_a0bfc15824dcad::t_a5dd14bce7ca5a 1-78
+apps/gardener/ui/features/runs/runs-page.tsx
+  s_a0bfc15824dcad::t_7c414c630da7b2 3,25-26,31,38,49,64-86,222,233-234,236-247
+packages/protocol/test/effect-receipt.test.ts
+  s_5da66bf6bc6455::t_b2b69a1606e2bd 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f57a904f117b196d6a9f34134ee763d9f0e9d809",
+  "prompts": {},
+  "sessions": {
+    "s_5da66bf6bc6455": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a79b-d357-7ec9-952b-746d1a0724ea",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_a0bfc15824dcad": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c33a-e2f0-7812-a993-00bceebbde4e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
