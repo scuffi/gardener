@@ -154,8 +154,8 @@ Each final public response contains a successful `repository_list_files`, succes
 
 The same CLI/compiler/release/runtime path was then qualified in the private repository `scuffi/gardener-actions-cli-private-demo` (repository ID `1380152255`, visibility `private`). Both tasks succeeded on attempt 1:
 
-- bug intake: run `35627845144`, issue #1, comment `5764174990`, bundle `865241da70fcc31e3d66378c8ec3936894e75048419e6706732ec034bb5f9cfc`;
-- documentation helper: run `35628015763`, issue #2, comment `5764187679`, bundle `305dcb6ddadd627bb887153c8af47d154d578b26243381bb4e753c19f78e43b6`.
+- bug intake: run `35628891374`, issue #3, comment `5764298456`, bundle `865241da70fcc31e3d66378c8ec3936894e75048419e6706732ec034bb5f9cfc`;
+- documentation helper: run `35629060316`, issue #4, comment `5764322661`, bundle `305dcb6ddadd627bb887153c8af47d154d578b26243381bb4e753c19f78e43b6`.
 
 Private D1 rows preserve `visibility=private`, exact bundle hashes, attempt-1 plan identities, and matching GitHub receipts. No repository secret, App, PAT, webhook, or installation token was introduced.
 
