@@ -31,7 +31,8 @@ const brandRingStyle: CSSProperties = {
 
 export function SignInPage() {
   const { health, loading, error, refresh } = useGardener();
-  const gatewayReady = Boolean(health?.githubGateway.ready || health?.localDevelopment);
+  const accessReady = health?.dashboardAuth?.provider === "cloudflare-access" && health.dashboardAuth.ready;
+  const authReady = Boolean(accessReady || health?.githubGateway.ready || health?.localDevelopment);
   const unavailable = Boolean(error && !health);
 
   return (
@@ -142,7 +143,7 @@ export function SignInPage() {
                       Sign in with the owner account to tend this Gardener deployment.
                     </p>
 
-                    {!gatewayReady ? (
+                    {!authReady ? (
                       <Banner
                         className="mt-5"
                         variant="alert"
@@ -160,17 +161,20 @@ export function SignInPage() {
                       className="mt-6 w-full justify-center"
                       variant="primary"
                       size="lg"
-                      icon={GithubLogoIcon}
-                      disabled={!gatewayReady}
+                      icon={accessReady ? ShieldCheckIcon : GithubLogoIcon}
+                      disabled={!authReady}
                       aria-describedby="signin-description signin-owner-note"
                       onClick={() => {
-                        location.href = "/api/auth/start";
+                        if (accessReady) location.reload();
+                        else location.href = "/api/auth/start";
                       }}
                     >
-                      Sign in with GitHub
+                      {accessReady ? "Continue with Cloudflare Access" : "Sign in with GitHub"}
                     </Button>
                     <p id="signin-owner-note" className="mt-3 text-center text-xs leading-relaxed text-kumo-subtle">
-                      Only the GitHub account bound to this deployment can continue.
+                      {accessReady
+                        ? "Only the Cloudflare Access identity bound to this deployment can continue."
+                        : "Only the GitHub account bound to this deployment can continue."}
                     </p>
 
                     <div className="mt-6 grid grid-cols-[18px_1fr] gap-3 border-t border-kumo-hairline pt-5">
@@ -182,7 +186,9 @@ export function SignInPage() {
                       />
                       <p className="text-xs leading-relaxed text-kumo-subtle">
                         <strong className="font-semibold text-kumo-default">Credentials stay isolated.</strong>{" "}
-                        Repository access is managed by your customer-owned GitHub Gateway.
+                        {accessReady
+                          ? "Dashboard identity is verified by Cloudflare Access; GitHub credentials are not used."
+                          : "Repository access is managed by your customer-owned GitHub Gateway."}
                       </p>
                     </div>
                   </>

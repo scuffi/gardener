@@ -18,6 +18,7 @@ const pages = new Map<string, ComponentType>(
 
 function AppRoutes() {
   const { health, loading, error, state, authenticated, refresh } = useGardener();
+  const actionsOnly = health?.deploymentMode === "actions-v1";
 
   if (loading || (error && !health) || !authenticated) return <SignInPage />;
   if (error && !state) {
@@ -31,7 +32,7 @@ function AppRoutes() {
       </AppShell>
     );
   }
-  if (!state?.setup.completed) {
+  if (!actionsOnly && !state?.setup.completed) {
     return (
       <AppShell>
         <SetupWizard />
@@ -40,18 +41,17 @@ function AppRoutes() {
   }
 
   return (
-    <AppShell>
+    <AppShell actionsOnly={actionsOnly}>
       <Suspense fallback={<PageHeaderSkeleton />}>
-        {/* `/` is a real route (Overview), so it is rendered from the registry like any other. */}
         <Routes>
-          {routes.flatMap((route) => {
+          {routes.filter((route) => !actionsOnly || route.id === "runs").flatMap((route) => {
             const Page = pages.get(route.id)!;
             const element = <Page />;
             return [route.path, ...(route.extraPaths ?? [])].map((path) => (
               <Route key={path} path={path} element={element} />
             ));
           })}
-          <Route path="*" element={<Navigate to={defaultRoute} replace />} />
+          <Route path="*" element={<Navigate to={actionsOnly ? "/runs" : defaultRoute} replace />} />
         </Routes>
       </Suspense>
     </AppShell>

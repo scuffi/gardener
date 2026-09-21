@@ -98,6 +98,14 @@ Public run <https://github.com/scuffi/gardener-actions-v1-public-smoke/actions/r
 
 The temporary reconciliation enrollment was restored to the Gardener-owned reusable workflow immediately after qualification. Public and private product enrollments both remain on the dedicated ingress and release workflow SHA.
 
+## Access-authenticated Actions dashboard qualification (2026-09-21)
+
+The dashboard now uses Cloudflare Access as its application identity boundary instead of requiring the archived reciprocal GitHub Gateway login. Gardener verifies the Access JWT signature and exact issuer, audience, immutable subject, and configured owner email before admitting the permanent owner principal. The full dashboard hostname remains Access-protected; only the dedicated runner ingress retains its exact-host bypass and mandatory in-session GitHub OIDC authentication.
+
+Runtime version `156a0257-2517-469a-9f65-d54753a6c4fc` exposes an explicit `actions-v1` dashboard mode. The authenticated UI skips legacy repository setup, hides legacy Agent/authority surfaces and GitHub controls, and opens a Runs-only product view. Manual browser qualification confirmed the live Actions panel displays the planning summary, proposed comment, full operation ID, full artifact SHA-256, and exact GitHub comment receipt. The UI therefore exposes the persisted outcome and receipt state already proven by the public/private live runs without reconstructing the archived Gateway product.
+
+Independent review found no blocking issue. Follow-up hardening made non-owner Access identities fail as unauthenticated instead of producing a server error, added direct cryptographic tests for signature/algorithm/issuer/audience/expiry enforcement, guaranteed Access logout even when the application POST fails, constrained receipt links to the exact `https://github.com` origin, and added tests for Access precedence and non-owner rejection.
+
 ## Historical transport qualification (2026-09-17)
 
 ### Pinned Gardener components

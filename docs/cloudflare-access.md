@@ -1,39 +1,21 @@
-# Optional Cloudflare Access
+# Cloudflare Access dashboard identity
 
-Cloudflare Access is defense in depth for the public Gardener dashboard. It is not Gardener's product
-identity protocol and it is not required for private Worker-to-Worker calls.
+Actions-native Gardener uses Cloudflare Access as the dashboard identity boundary. The dashboard Worker validates the Access application JWT again inside the application before granting an owner principal; an edge policy or header alone is not sufficient.
 
-The customer-owned GitHub Gateway and Gardener communicate through named Cloudflare Service Bindings.
-Do not create public callback credentials, Access service tokens, instance bearer tokens, or route
-bypasses for those RPC methods.
+Configure the dashboard Worker with:
 
-If Access protects Gardener:
+- `CLOUDFLARE_ACCESS_TEAM_DOMAIN`: exact HTTPS team origin, such as `https://team.cloudflareaccess.com`;
+- `CLOUDFLARE_ACCESS_AUD`: exact Access application audience;
+- `CLOUDFLARE_ACCESS_OWNER_EMAIL`: the single owner email, stored as a Worker secret.
 
-1. create one full-host Access application for the Gardener workers.dev hostname;
-2. add the customer's human identity policy;
-3. verify that the browser can reach `/api/auth/start` and receive the Gateway-completed redirect;
-4. keep Gardener's opaque local session, active membership, role checks, and same-origin write checks;
-5. do not expose `GardenerGitHubEntrypoint` through an HTTP route.
+Gardener verifies the `Cf-Access-Jwt-Assertion` signature against the team's `/cdn-cgi/access/certs` keys and binds the exact issuer, audience, subject, and normalized owner email. The first valid request creates or links the immutable `cloudflare-access` identity to the permanent workspace owner. A wrong email, missing claim, malformed configuration, invalid signature, wrong issuer, or wrong audience fails closed. Logout clears any legacy Gardener cookie and redirects through the team Access logout endpoint.
 
-The Gateway's public GitHub routes must remain reachable by GitHub and the OAuth browser flow:
+Protect the complete dashboard/runtime hostname with Access. Do not create a bypass for it. The dedicated runner hostname is the only public bypass:
 
-- `/oauth/github/callback`
-- `/installations/github/callback`
-- `/webhooks/github`
+- dashboard and API: Access protected;
+- `gardener-runner-ingress` WebSocket endpoint: exact-host Access bypass, followed by mandatory GitHub OIDC authentication inside the Cap'n Web session;
+- Worker-to-Worker runtime calls: private Service Binding, not public HTTP credentials.
 
-Do not place a full-host Access challenge in front of the Gateway unless route-level policies preserve
-those callbacks. `/ops/*` is protected by the independent Gateway operator token and returns only
-sanitized delivery diagnostics; Access may be added around it, but never replaces that token.
+`/api/health` reports `dashboardAuth.provider = cloudflare-access` only when all three settings exist and pass static validation. Keep `LOCAL_DEV_BYPASS=false` in every deployed environment.
 
-Access headers are not provider identity and must not be used to select owner/member roles. GitHub's
-immutable numeric subject arrives only through the Gateway login handoff. Repository authority comes
-only from the dedicated GitHub App installations.
-
-Operational checks:
-
-- `/api/health` reports the Gateway binding ready from Gardener.
-- Gateway `/health` reports its reverse binding ready.
-- Browser logout/revocation remains effective even while an Access session is valid.
-- A valid Access session without a Gardener session receives `authentication_required`.
-- GitHub webhooks still receive `202` after signature verification and durable persistence.
-- Provider operation execution has no public HTTP path.
+The archived Gateway architecture used a reciprocal GitHub Gateway login handoff. That remains supported for historical deployments when Access identity is not configured, but it is not required by the Actions-native dashboard.

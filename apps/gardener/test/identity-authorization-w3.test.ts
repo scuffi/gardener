@@ -5,8 +5,10 @@ import { DatabaseSync } from "node:sqlite";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   completeProviderLogin,
+  activePrincipalBySubject,
   consumeProviderLogin,
   dashboardSessionPayload,
+  ensureCloudflareAccessOwner,
   IdentityExchangeError,
   issueDashboardSession,
   resolveDashboardSession,
@@ -15,7 +17,9 @@ import {
   compareAndSetOperationPolicies,
   policyMutationPermission,
   resolveMcpAuthorization,
+  resolveRequestAuthorization,
 } from "../src/authorization";
+import type { Env } from "../src/env";
 import type { GardenerMcpPrincipal } from "../src/mcp/services";
 import { d1Database } from "./persistence-test-db";
 
@@ -174,6 +178,96 @@ describe("Gateway identity handoffs and opaque sessions", () => {
         .resolves.toBeNull();
       await expect(resolveMcpAuthorization(db, "workspace-1", token("202")))
         .resolves.toBeNull();
+    } finally { sqlite.close(); }
+  });
+});
+
+describe("Cloudflare Access owner binding", () => {
+  const accessIdentity = {
+    subject: "access-subject-1",
+    email: "owner@example.com",
+    issuer: "https://example.cloudflareaccess.com",
+  };
+
+  it("bootstraps the permanent owner when the workspace has no owner", async () => {
+    const { sqlite, db } = database();
+    try {
+      const owner = await ensureCloudflareAccessOwner(db, accessIdentity);
+      expect(owner).toMatchObject({
+        role: "owner",
+        permanent: true,
+        identity: {
+          provider: "cloudflare-access",
+          providerSubject: accessIdentity.subject,
+          login: accessIdentity.email,
+        },
+      });
+      await expect(ensureCloudflareAccessOwner(db, accessIdentity)).resolves.toEqual(owner);
+      expect(sqlite.prepare("SELECT COUNT(*) count FROM memberships WHERE role='owner'").get())
+        .toEqual({ count: 1 });
+    } finally { sqlite.close(); }
+  });
+
+  it("links Access identity to an existing permanent owner", async () => {
+    const { sqlite, db } = database();
+    try {
+      seedOwner(sqlite);
+      const owner = await ensureCloudflareAccessOwner(db, accessIdentity);
+      expect(owner).toMatchObject({
+        userId: "user_github_101",
+        role: "owner",
+        identity: { provider: "cloudflare-access", login: accessIdentity.email },
+      });
+      expect(sqlite.prepare(
+        "SELECT user_id FROM external_identities WHERE provider='cloudflare-access'",
+      ).get()).toEqual({ user_id: "user_github_101" });
+      expect(sqlite.prepare("SELECT COUNT(*) count FROM memberships WHERE role='owner'").get())
+        .toEqual({ count: 1 });
+    } finally { sqlite.close(); }
+  });
+
+  it("prefers a verified Access identity over an existing dashboard cookie", async () => {
+    const { sqlite, db } = database();
+    try {
+      seedOwner(sqlite);
+      const githubOwner = await activePrincipalBySubject(db, "101");
+      expect(githubOwner).not.toBeNull();
+      const session = await issueDashboardSession(db, githubOwner!, false);
+      const request = new Request("https://gardener.example.test/api/state", {
+        headers: { cookie: `${session.cookieName}=${session.token}` },
+      });
+      const principal = await resolveRequestAuthorization(
+        request,
+        { DB: db, LOCAL_DEV_BYPASS: "false" } as Env,
+        async () => accessIdentity,
+      );
+      expect(principal).toMatchObject({
+        userId: "user_github_101",
+        principalKind: "cloudflare-access",
+        identity: { provider: "cloudflare-access", providerSubject: accessIdentity.subject },
+      });
+    } finally { sqlite.close(); }
+  });
+
+  it("rejects an Access subject linked to a non-owner membership", async () => {
+    const { sqlite, db } = database();
+    try {
+      seedOwner(sqlite);
+      sqlite.exec(
+        "INSERT INTO users(id,display_name)VALUES('access-member','Access member');" +
+        "INSERT INTO external_identities(id,user_id,provider,provider_subject,username)" +
+        "VALUES('access-member-identity','access-member','cloudflare-access','access-subject-1','owner@example.com');" +
+        "INSERT INTO memberships(id,user_id,role,permanent)" +
+        "VALUES('access-member-membership','access-member','member',0);",
+      );
+      await expect(ensureCloudflareAccessOwner(db, accessIdentity)).rejects.toMatchObject({
+        code: "identity_not_authorized",
+      } satisfies Partial<IdentityExchangeError>);
+      await expect(resolveRequestAuthorization(
+        new Request("https://gardener.example.test/api/state"),
+        { DB: db, LOCAL_DEV_BYPASS: "false" } as Env,
+        async () => accessIdentity,
+      )).resolves.toBeNull();
     } finally { sqlite.close(); }
   });
 });

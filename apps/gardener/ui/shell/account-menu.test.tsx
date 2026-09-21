@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   role: "owner" as "owner" | "member",
+  provider: "github" as "github" | "cloudflare-access",
   authenticated: true,
   signOut: vi.fn(),
   notify: vi.fn(),
@@ -27,9 +28,9 @@ vi.mock("../app-context", () => ({
             displayName: "Human Name",
             role: harness.role,
             identity: {
-              provider: "github",
+              provider: harness.provider,
               providerSubject: "raw-provider-id",
-              login: "human-login",
+              login: harness.provider === "cloudflare-access" ? "owner@example.com" : "human-login",
             },
           },
         }
@@ -43,11 +44,11 @@ vi.mock("../providers/notifications", () => ({
 
 import { AccountMenu } from "./account-menu";
 
-function renderMenu() {
+function renderMenu(actionsOnly = false) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter>
-        <AccountMenu />
+        <AccountMenu actionsOnly={actionsOnly} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -56,6 +57,7 @@ function renderMenu() {
 afterEach(() => {
   cleanup();
   harness.role = "owner";
+  harness.provider = "github";
   harness.authenticated = true;
   harness.signOut.mockReset();
   harness.notify.mockReset();
@@ -86,6 +88,19 @@ describe("Account menu", () => {
     expect(screen.queryByText("Manage GitHub access")).toBeNull();
     expect(screen.getByText("Dashboard settings")).toBeTruthy();
     expect(screen.getByText("Sign out")).toBeTruthy();
+  });
+
+  it("shows only Access identity and sign-out in Actions mode", async () => {
+    harness.provider = "cloudflare-access";
+    renderMenu(true);
+    fireEvent.click(screen.getByRole("button", { name: "Open account menu for owner@example.com" }));
+
+    expect(await screen.findByText("Signed in with Cloudflare Access")).toBeTruthy();
+    expect(screen.getByText("owner@example.com · Owner")).toBeTruthy();
+    expect(screen.getByText("Sign out")).toBeTruthy();
+    expect(screen.queryByText("Manage GitHub access")).toBeNull();
+    expect(screen.queryByText("Dashboard settings")).toBeNull();
+    expect(screen.queryByText(/repositories connected/)).toBeNull();
   });
 
   it("renders no account UI for an unauthenticated session", () => {

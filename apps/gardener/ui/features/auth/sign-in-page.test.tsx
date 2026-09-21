@@ -33,6 +33,11 @@ const context = vi.hoisted(() => ({
   value: {
     health: { githubGateway: { configured: true, ready: true }, localDevelopment: false } as {
       githubGateway: { configured: boolean; ready: boolean };
+      dashboardAuth?: {
+        provider: "cloudflare-access" | "github-gateway";
+        configured: boolean;
+        ready: boolean;
+      };
       localDevelopment: boolean;
     } | null,
     loading: false,
@@ -103,6 +108,20 @@ describe("Gardener sign-in", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Unable to reach Gardener" })).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("Synthetic connection failure");
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("recognizes Cloudflare Access as the dashboard identity provider", () => {
+    context.value.health = {
+      githubGateway: { configured: false, ready: false },
+      dashboardAuth: { provider: "cloudflare-access", configured: true, ready: true },
+      localDevelopment: false,
+    };
+    render(<SignInPage />);
+
+    expect(screen.getByRole("button", { name: "Continue with Cloudflare Access" }).hasAttribute("disabled"))
+      .toBe(false);
+    expect(screen.getByText(/Dashboard identity is verified by Cloudflare Access/)).toBeTruthy();
+    expect(screen.queryByText("Dashboard sign-in is not configured")).toBeNull();
   });
 
   it("keeps the sign-in action disabled when the deployment is not configured", () => {

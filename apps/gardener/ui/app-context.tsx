@@ -118,11 +118,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const signOut = useCallback(() => {
-    void gardenerApi.signOut().finally(() => {
+    const configuredAccessLogout = healthQuery.data?.dashboardAuth?.provider === "cloudflare-access"
+      ? healthQuery.data.dashboardAuth.logoutUrl
+      : null;
+    void gardenerApi.signOut().then((result) => {
+      const accessLogoutUrl = result.accessLogoutUrl ?? configuredAccessLogout;
+      if (accessLogoutUrl) {
+        location.href = accessLogoutUrl;
+        return;
+      }
+      queryClient.removeQueries({ queryKey: queryPrefixes.state });
+      setSessionRevision((value) => value + 1);
+    }).catch(() => {
+      if (configuredAccessLogout) {
+        location.href = configuredAccessLogout;
+        return;
+      }
       queryClient.removeQueries({ queryKey: queryPrefixes.state });
       setSessionRevision((value) => value + 1);
     });
-  }, [queryClient]);
+  }, [healthQuery.data, queryClient]);
 
   const value = useMemo<AppContextValue>(
     () => ({

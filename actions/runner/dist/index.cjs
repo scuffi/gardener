@@ -40029,7 +40029,10 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
   operationId: identifier,
   kind: external_exports.literal("issue.comment.create"),
   commentId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  commentUrl: external_exports.url()
+  commentUrl: external_exports.url().refine(
+    (value) => new URL(value).origin === "https://github.com",
+    "Expected an HTTPS github.com comment URL"
+  )
 });
 var runnerEffectArtifactV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),

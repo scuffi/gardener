@@ -70,14 +70,26 @@ function GardenerBrand() {
  *
  * Adding a surface must never require editing this component — see `ui/AGENTS.md`.
  */
-function AppNavigation({ setupComplete }: { setupComplete: boolean }) {
+function AppNavigation({
+  setupComplete,
+  actionsOnly,
+}: {
+  setupComplete: boolean;
+  actionsOnly: boolean;
+}) {
   const { pathname } = useLocation();
   const { setOpenMobile } = useSidebar();
   const { state } = useGardener();
+  const groups = navigationGroups()
+    .map(({ group, items }) => ({
+      group,
+      items: actionsOnly ? items.filter((route) => route.id === "runs") : items,
+    }))
+    .filter(({ items }) => items.length > 0);
 
   return (
     <>
-      {navigationGroups().map(({ group, items }) => (
+      {groups.map(({ group, items }) => (
         <Sidebar.Group key={group.id}>
           <Sidebar.GroupLabel>{group.label}</Sidebar.GroupLabel>
           <Sidebar.Menu>
@@ -118,10 +130,16 @@ function AppNavigation({ setupComplete }: { setupComplete: boolean }) {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  actionsOnly = false,
+}: {
+  children: ReactNode;
+  actionsOnly?: boolean;
+}) {
   const { state, authenticated } = useGardener();
   const { pathname } = useLocation();
-  const setupComplete = Boolean(state?.setup.completed);
+  const setupComplete = actionsOnly || Boolean(state?.setup.completed);
   const current = resolveRoute(pathname);
   const ContextIcon = setupComplete ? (current?.icon ?? PlantIcon) : PlantIcon;
   const contextLabel = setupComplete ? (current?.label ?? "Gardener") : "Setup";
@@ -157,7 +175,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         </Sidebar.Header>
         <Sidebar.Content>
-          <AppNavigation setupComplete={setupComplete} />
+          <AppNavigation setupComplete={setupComplete} actionsOnly={actionsOnly} />
         </Sidebar.Content>
         <Sidebar.Footer className="grid! h-auto! overflow-visible gap-1 py-2">
           <Sidebar.Trigger
@@ -171,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               "group-data-[state=collapsed]/sidebar:after:hidden"
             }
           />
-          {authenticated ? <AccountMenu /> : null}
+          {authenticated ? <AccountMenu actionsOnly={actionsOnly} /> : null}
         </Sidebar.Footer>
       </Sidebar>
 
@@ -198,9 +216,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="max-[360px]:hidden">{contextLabel}</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {setupComplete ? <CommandPaletteTrigger /> : null}
+            {setupComplete && !actionsOnly ? <CommandPaletteTrigger /> : null}
             <ThemeToggle />
-            {setupComplete ? <AutomationMenu /> : null}
+            {setupComplete && !actionsOnly ? <AutomationMenu /> : null}
           </div>
         </header>
         <main

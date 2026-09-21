@@ -50,6 +50,23 @@ describe("shared team and authority API contracts", () => {
       githubLogin: "octocat",
       user: { displayName: "The Octocat", role: "owner" },
     });
+    expect(parseSessionState({
+      authenticated: true,
+      githubLogin: "owner@example.com",
+      user: {
+        id: "user_access_1",
+        displayName: "owner@example.com",
+        role: "owner",
+        identity: {
+          provider: "cloudflare-access",
+          providerSubject: "access-subject",
+          login: "owner@example.com",
+        },
+      },
+    })).toMatchObject({
+      authenticated: true,
+      user: { identity: { provider: "cloudflare-access" } },
+    });
     expect(parseSessionState({ authenticated: false, user: { role: "owner" } })).toEqual({
       authenticated: false,
     });

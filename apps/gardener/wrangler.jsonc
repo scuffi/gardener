@@ -41,7 +41,10 @@
   "vars": {
     "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "GARDENER_WORKSPACE_ID": "workspace-local",
-    "LOCAL_DEV_BYPASS": "false"
+    "GARDENER_DEPLOYMENT_MODE": "actions-v1",
+    "LOCAL_DEV_BYPASS": "false",
+    "CLOUDFLARE_ACCESS_TEAM_DOMAIN": "https://agents-b8a.cloudflareaccess.com",
+    "CLOUDFLARE_ACCESS_AUD": "dcf682687b48f790044cf39e6dc9c8fac775f4f1096dd198eaf32025f77f9ec7"
   },
   "observability": {
     "enabled": true,

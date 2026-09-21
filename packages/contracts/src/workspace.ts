@@ -57,7 +57,7 @@ export function workspaceRoleHasPermission(role: WorkspaceRole, permission: Work
   return (workspaceRolePermissions[role] as readonly WorkspacePermission[]).includes(permission);
 }
 
-export const principalKindSchema = z.enum(["dashboard-session", "mcp-token", "local-dev"]);
+export const principalKindSchema = z.enum(["dashboard-session", "cloudflare-access", "mcp-token", "local-dev"]);
 export type PrincipalKind = z.infer<typeof principalKindSchema>;
 
 /** Provider-neutral user record. Provider identities are linked separately. */

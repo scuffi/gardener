@@ -15,11 +15,17 @@ export interface LocalIdentity {
   login: "local-developer";
 }
 
+export interface CloudflareAccessIdentity {
+  provider: "cloudflare-access";
+  providerSubject: string;
+  login: string;
+}
+
 export interface SessionUser {
   id: string;
   displayName: string;
   role: WorkspaceRole;
-  identity: GitHubIdentity | LocalIdentity;
+  identity: GitHubIdentity | LocalIdentity | CloudflareAccessIdentity;
 }
 
 export type SessionState =
@@ -263,10 +269,17 @@ export interface PutRepositoryPolicyInput {
 
 export interface HealthState {
   ok: boolean;
+  deploymentMode?: "actions-v1" | "legacy";
   database: boolean;
   durableOrchestration?: boolean;
   workersAi: boolean;
   githubGateway: { configured: boolean; ready: boolean };
+  dashboardAuth?: {
+    provider: "cloudflare-access" | "github-gateway";
+    configured: boolean;
+    ready: boolean;
+    logoutUrl?: string | null;
+  };
   localDevelopment: boolean;
   computer?: boolean | { configured: boolean; experimental: boolean };
   artifactStorage?: boolean;
@@ -315,7 +328,11 @@ export interface ActionsTaskRunSummary {
     proposedEffects?: Array<{ kind: string; body?: string }>;
   };
   effectReceipt: null | {
+    planRunId: string;
+    bundleHash: string;
+    artifactSha256: string;
     operationId: string;
+    kind: "issue.comment.create";
     commentId: string;
     commentUrl: string;
   };

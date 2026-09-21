@@ -1,8 +1,9 @@
 import { workspaceRoleHasPermission, type PrincipalKind, type WorkspacePermission, type WorkspaceRole } from "@gardener/contracts";
 import { canonicalJson } from "@gardener/core";
 import type { Context } from "hono";
+import { verifyCloudflareAccessIdentity } from "./cloudflare-access";
 import type { Env } from "./env";
-import { activePrincipalBySubject, resolveDashboardSession, sessionTokenFromRequest, type IdentitySnapshot } from "./identity";
+import { activePrincipalBySubject, ensureCloudflareAccessOwner, IdentityExchangeError, resolveDashboardSession, sessionTokenFromRequest, type IdentitySnapshot } from "./identity";
 import type { ActiveGardenerMcpPrincipal, GardenerMcpPrincipal } from "./mcp/services";
 
 export interface AuthorizationContext {
@@ -19,7 +20,11 @@ export interface AuthorizationVariables {
   actorLogin: string;
 }
 
-export async function resolveRequestAuthorization(request: Request, env: Env): Promise<AuthorizationContext | null> {
+export async function resolveRequestAuthorization(
+  request: Request,
+  env: Env,
+  accessVerifier = verifyCloudflareAccessIdentity,
+): Promise<AuthorizationContext | null> {
   if (env.LOCAL_DEV_BYPASS === "true") {
     let owner = await env.DB.prepare("SELECT u.id user_id, u.display_name, e.provider_subject, e.username FROM memberships m JOIN users u ON u.id=m.user_id LEFT JOIN external_identities e ON e.user_id=u.id AND e.provider='github' WHERE m.role='owner' LIMIT 1").first<{user_id:string;display_name:string;provider_subject:string|null;username:string|null}>();
     if (!owner) {
@@ -31,6 +36,22 @@ export async function resolveRequestAuthorization(request: Request, env: Env): P
       owner={user_id:"local-development",display_name:"Local developer",provider_subject:"local-development",username:"local-development"};
     }
     return { userId: owner.user_id, role: "owner", displayName: "Local developer", identity: { provider: "github", providerSubject: owner.provider_subject ?? "local-development", login: owner.username ?? "local-development" }, principalKind: "local-dev" };
+  }
+  const accessIdentity = await accessVerifier(request, env);
+  if (accessIdentity) {
+    try {
+      const principal = await ensureCloudflareAccessOwner(env.DB, accessIdentity);
+      return {
+        userId: principal.userId,
+        role: principal.role,
+        displayName: principal.displayName,
+        identity: principal.identity,
+        principalKind: "cloudflare-access",
+      };
+    } catch (error) {
+      if (error instanceof IdentityExchangeError) return null;
+      throw error;
+    }
   }
   const token = sessionTokenFromRequest(request); if (!token) return null;
   const session = await resolveDashboardSession(env.DB, token); if (!session) return null;
@@ -93,7 +114,7 @@ export async function resolveMcpAuthorization(db:D1Database,expectedInstanceId:s
 export function requirePermission(
   c: Context<{ Bindings: Env; Variables: AuthorizationVariables }>,
   permission: WorkspacePermission,
-  principalKinds: readonly PrincipalKind[] = ["dashboard-session"],
+  principalKinds: readonly PrincipalKind[] = ["dashboard-session", "cloudflare-access"],
 ): Response | null {
   const principal = c.get("authorization");
   if (!principal) return c.json({ error: "authentication_required", message: "Authentication required" }, 401);

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useGardener } from "../../app-context";
 import { gardenerApi } from "../../lib/api";
 import { formatRelativeTime, sentenceCase } from "../../lib/format";
 import { queryKeys } from "../../lib/query-keys";
@@ -21,17 +22,20 @@ import type { ActionsTaskRunSummary } from "../../lib/types";
 import { formatDuration } from "./format-run";
 
 export function RunsPage() {
+  const { health } = useGardener();
+  const actionsOnly = health?.deploymentMode === "actions-v1";
   const [status, setStatus] = useState("all");
   const query = useQuery({
     queryKey: queryKeys.runs,
     queryFn: () => gardenerApi.runs(),
+    enabled: !actionsOnly,
   });
   const actionsRunsQuery = useQuery({
     queryKey: queryKeys.actionsTaskRuns,
     queryFn: () => gardenerApi.actionsRuns(),
   });
 
-  if (query.isLoading) {
+  if (!actionsOnly && query.isLoading) {
     return (
       <>
         <PageHeaderSkeleton />
@@ -42,7 +46,7 @@ export function RunsPage() {
     );
   }
 
-  if (query.error || !query.data) {
+  if (!actionsOnly && (query.error || !query.data)) {
     return (
       <>
         <PageHeader
@@ -57,7 +61,29 @@ export function RunsPage() {
     );
   }
 
-  const runs = query.data.runs;
+  if (actionsOnly) {
+    return (
+      <>
+        <PageHeader
+          title="Runs"
+          description="Issue triage plans and the exact GitHub effects executed from Actions."
+        />
+        {actionsRunsQuery.error ? (
+          <ErrorState
+            message={(actionsRunsQuery.error as Error).message}
+            onRetry={() => void actionsRunsQuery.refetch()}
+          />
+        ) : (
+          <ActionsRunsPanel
+            runs={actionsRunsQuery.data?.runs ?? []}
+            loading={actionsRunsQuery.isLoading}
+          />
+        )}
+      </>
+    );
+  }
+
+  const runs = query.data!.runs;
   const statuses = [...new Set(runs.map((run) => run.status))].sort();
   const visibleRuns = status === "all" ? runs : runs.filter((run) => run.status === status);
 
@@ -193,7 +219,7 @@ function ActionsRunsPanel({ runs, loading }: { runs: ActionsTaskRunSummary[]; lo
             return (
               <li
                 key={run.id}
-                className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[150px_1fr_180px]"
+                className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[150px_minmax(0,1fr)_minmax(280px,0.8fr)]"
               >
                 <span>
                   <StatusBadge tone={statusTone(displayStatus)}>
@@ -204,12 +230,21 @@ function ActionsRunsPanel({ runs, loading }: { runs: ActionsTaskRunSummary[]; lo
                   <div className="font-medium text-kumo-strong">{run.outcome?.summary ?? "Planning in progress"}</div>
                   {comment ? <div className="mt-1 line-clamp-2 text-xs text-kumo-subtle">{comment}</div> : null}
                 </div>
-                <div className="text-xs text-kumo-subtle">
+                <div className="grid min-w-0 gap-1 text-xs text-kumo-subtle">
+                  <div>GitHub run {run.githubRunId} · attempt {run.githubRunAttempt}</div>
                   {run.effectReceipt ? (
-                    <Link href={run.effectReceipt.commentUrl}>View GitHub comment</Link>
-                  ) : (
-                    `GitHub run ${run.githubRunId}`
-                  )}
+                    <>
+                      <div className="break-all">
+                        Operation <Mono tone="default">{run.effectReceipt.operationId}</Mono>
+                      </div>
+                      <div className="break-all">
+                        Artifact <Mono tone="default">{run.effectReceipt.artifactSha256}</Mono>
+                      </div>
+                      <Link href={run.effectReceipt.commentUrl}>
+                        GitHub comment {run.effectReceipt.commentId}
+                      </Link>
+                    </>
+                  ) : null}
                 </div>
               </li>
             );

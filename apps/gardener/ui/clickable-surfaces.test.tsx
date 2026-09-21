@@ -15,6 +15,9 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("./lib/api", () => ({ gardenerApi: api }));
+vi.mock("./app-context", () => ({
+  useGardener: () => ({ health: { deploymentMode: "legacy" } }),
+}));
 
 import { AgentsPage } from "./features/agents/agents-page";
 import { RunsPage } from "./features/runs/runs-page";
@@ -84,7 +87,11 @@ describe("clickable collection surfaces", () => {
           proposedEffects: [{ kind: "issue.comment.create", body: "Please add a regression test." }],
         },
         effectReceipt: {
+          planRunId: "repo-1-run-2-attempt-1-plan",
+          bundleHash: "a".repeat(64),
+          artifactSha256: "b".repeat(64),
           operationId: "op_1",
+          kind: "issue.comment.create",
           commentId: "99",
           commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-99",
         },
@@ -108,7 +115,7 @@ describe("clickable collection surfaces", () => {
     renderWithData(<RunsPage />, "/runs");
 
     expect(await screen.findByText("README inspected")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "View GitHub comment" }).getAttribute("href"))
+    expect(screen.getByRole("link", { name: "GitHub comment 99" }).getAttribute("href"))
       .toBe("https://github.com/owner/repo/issues/7#issuecomment-99");
     const rowLink = await screen.findByRole("link", {
       name: /Open run run_0123456789abcdef.*Status: Completed.*Kind: issue\.triage/,

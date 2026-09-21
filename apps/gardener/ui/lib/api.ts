@@ -65,7 +65,7 @@ export function parseSessionState(value: unknown): SessionState {
   }
   const identity = user.identity as Record<string, unknown>;
   if (
-    identity.provider !== "github" ||
+    (identity.provider !== "github" && identity.provider !== "cloudflare-access") ||
     typeof identity.providerSubject !== "string" ||
     typeof identity.login !== "string"
   ) {
@@ -79,7 +79,7 @@ export function parseSessionState(value: unknown): SessionState {
       displayName: user.displayName,
       role: user.role,
       identity: {
-        provider: "github",
+        provider: identity.provider,
         providerSubject: identity.providerSubject,
         login: identity.login,
       },
@@ -153,7 +153,7 @@ export function isOverlapConfirmationError(
 export const gardenerApi = {
   health: () => api<HealthState>("/api/health"),
   session: async () => parseSessionState(await api<unknown>("/api/auth/session")),
-  signOut: () => api<{ signedOut: true }>("/api/auth/logout", { method: "POST" }),
+  signOut: () => api<{ signedOut: true; accessLogoutUrl: string | null }>("/api/auth/logout", { method: "POST" }),
   state: () => api<AppState>("/api/state"),
   team: () => api<TeamResponse>("/api/members"),
   inviteMember: (githubUsername: string) =>

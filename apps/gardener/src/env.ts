@@ -9,7 +9,11 @@ export interface Env {
   AI_MODEL: string;
   GITHUB_GATEWAY: GitHubGatewayRpc;
   GARDENER_WORKSPACE_ID: string;
+  GARDENER_DEPLOYMENT_MODE?: string;
   LOCAL_DEV_BYPASS?: string;
+  CLOUDFLARE_ACCESS_TEAM_DOMAIN?: string;
+  CLOUDFLARE_ACCESS_AUD?: string;
+  CLOUDFLARE_ACCESS_OWNER_EMAIL?: string;
 
   COMPUTER_WORKSPACES: DurableObjectNamespace;
   COMPUTER_LOADER: unknown;

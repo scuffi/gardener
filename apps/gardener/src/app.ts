@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { auditActor, compareAndSetOperationPolicies, policyMutationPermission, requirePermission, resolveMcpAuthorization, resolveRequestAuthorization, type AuthorizationVariables } from "./authorization";
+import { cloudflareAccessConfigured, cloudflareAccessLogoutUrl } from "./cloudflare-access";
 import {
   beginGitHubInstallation,
   beginGitHubLogin,
@@ -38,7 +39,7 @@ interface AppBindings {
   Variables: AuthorizationVariables;
 }
 
-const dashboardPrincipalKinds = ["dashboard-session", "local-dev"] as const;
+const dashboardPrincipalKinds = ["dashboard-session", "cloudflare-access", "local-dev"] as const;
 export const app = new Hono<AppBindings>();
 
 app.use("*", async (c, next) => {
@@ -61,13 +62,29 @@ app.get("/api/health", async (c) => {
     githubGateway = { configured: true, ready: health.ready };
   } catch { /* reported below */ }
   const oauthConfigured = Boolean(c.env.OAUTH_KV);
+  const accessConfigured = cloudflareAccessConfigured(c.env);
+  const dashboardAuth = accessConfigured
+    ? {
+        provider: "cloudflare-access" as const,
+        configured: true,
+        ready: true,
+        logoutUrl: cloudflareAccessLogoutUrl(c.env),
+      }
+    : {
+        provider: "github-gateway" as const,
+        configured: githubGateway.configured,
+        ready: githubGateway.ready,
+        logoutUrl: null,
+      };
   const agentRuntime = { enabled: true, driver: FLUE_NATIVE_DRIVER, profile: FLUE_NATIVE_PROFILE } as const;
   return c.json({
-    ok: database && Boolean(c.env.AI) && githubGateway.ready && agentRuntime.enabled,
+    ok: database && Boolean(c.env.AI) && dashboardAuth.ready && agentRuntime.enabled,
     durableOrchestration: agentRuntime.enabled,
+    deploymentMode: c.env.GARDENER_DEPLOYMENT_MODE === "actions-v1" ? "actions-v1" : "legacy",
     database,
     workersAi: Boolean(c.env.AI),
     githubGateway,
+    dashboardAuth,
     oauthMcp: { configured: oauthConfigured, route: "/mcp" },
     agentRuntime,
     reconciliation: { driver: "d1-cron-v1" },
@@ -100,14 +117,15 @@ app.get("/api/auth/github/complete", async (c) => {
   return c.redirect("/", 302);
 });
 app.get("/api/auth/session", async (c) => {
-  const token = sessionTokenFromRequest(c.req.raw); const session = token ? await resolveDashboardSession(c.env.DB, token) : null;
-  if (!session) { clearSessionCookies(c); return c.json({ authenticated: false }); }
-  return c.json(dashboardSessionPayload(session));
+  const principal = await resolveRequestAuthorization(c.req.raw, c.env);
+  if (!principal) { clearSessionCookies(c); return c.json({ authenticated: false }); }
+  return c.json(dashboardSessionPayload(principal));
 });
 app.post("/api/auth/logout", async (c) => {
   if (c.req.header("origin") !== new URL(c.req.url).origin) return c.json({ error: "invalid_origin" }, 403);
   const token = sessionTokenFromRequest(c.req.raw); if (token) await revokeDashboardSession(c.env.DB, token);
-  clearSessionCookies(c); return c.json({ signedOut: true });
+  clearSessionCookies(c);
+  return c.json({ signedOut: true, accessLogoutUrl: cloudflareAccessLogoutUrl(c.env) });
 });
 
 app.use("/api/*", async (c, next) => {

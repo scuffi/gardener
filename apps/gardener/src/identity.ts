@@ -12,7 +12,7 @@ export const SECURE_SESSION_COOKIE = "__Host-gardener_session";
 export const LOCAL_SESSION_COOKIE = "gardener_session";
 
 export interface IdentitySnapshot {
-  provider: "github";
+  provider: "github" | "cloudflare-access";
   providerSubject: string;
   login: string;
 }
@@ -25,7 +25,9 @@ export interface ActivePrincipalRecord {
   identity: IdentitySnapshot;
 }
 
-export function dashboardSessionPayload(principal:ActivePrincipalRecord){
+export function dashboardSessionPayload(
+  principal: Pick<ActivePrincipalRecord, "userId" | "displayName" | "role" | "identity">,
+){
   return {authenticated:true as const,githubLogin:principal.identity.login,user:{id:principal.userId,displayName:principal.displayName,role:principal.role,identity:principal.identity}};
 }
 
@@ -200,6 +202,89 @@ export async function activePrincipalBySubject(db: D1Database, subject: string):
   const row = await db.prepare("SELECT u.id user_id, u.display_name, m.role, m.permanent, e.provider_subject, e.username FROM external_identities e JOIN users u ON u.id = e.user_id JOIN memberships m ON m.user_id = u.id WHERE e.provider = 'github' AND e.provider_subject = ?")
     .bind(subject).first<{ user_id: string; display_name: string; role: WorkspaceRole; permanent: number; provider_subject: string; username: string | null }>();
   return row ? { userId: row.user_id, displayName: row.display_name, role: row.role, permanent: Boolean(row.permanent), identity: { provider: "github", providerSubject: row.provider_subject, login: row.username ?? row.display_name } } : null;
+}
+
+export async function ensureCloudflareAccessOwner(
+  db: D1Database,
+  identity: { subject: string; email: string; issuer: string },
+): Promise<ActivePrincipalRecord> {
+  const existing = await activeCloudflareAccessPrincipal(db, identity.subject);
+  if (existing && existing.role !== "owner") {
+    throw new IdentityExchangeError("identity_not_authorized");
+  }
+  if (existing) {
+    await db.prepare(
+      "UPDATE external_identities SET username=?,profile_json=? " +
+      "WHERE provider='cloudflare-access' AND provider_subject=?",
+    ).bind(
+      identity.email,
+      JSON.stringify({ email: identity.email, issuer: identity.issuer }),
+      identity.subject,
+    ).run();
+    return { ...existing, displayName: identity.email, identity: { ...existing.identity, login: identity.email } };
+  }
+
+  const owner = await db.prepare(
+    "SELECT u.id user_id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.role='owner' LIMIT 1",
+  ).first<{ user_id: string }>();
+  const digest = await sha256(`${identity.issuer}|${identity.subject}`);
+  const userId = owner?.user_id ?? `user_access_${digest}`;
+  const identityId = `identity_access_${digest}`;
+  const profile = JSON.stringify({ email: identity.email, issuer: identity.issuer });
+
+  if (owner) {
+    await db.prepare(
+      "INSERT INTO external_identities (id,user_id,provider,provider_subject,username,profile_json) " +
+      "VALUES (?,?,'cloudflare-access',?,?,?) " +
+      "ON CONFLICT(provider,provider_subject) DO UPDATE SET username=excluded.username,profile_json=excluded.profile_json",
+    ).bind(identityId, userId, identity.subject, identity.email, profile).run();
+  } else {
+    await db.batch([
+      db.prepare("INSERT INTO users(id,display_name) VALUES(?,?)").bind(userId, identity.email),
+      db.prepare(
+        "INSERT INTO external_identities (id,user_id,provider,provider_subject,username,profile_json) " +
+        "VALUES (?,?,'cloudflare-access',?,?,?)",
+      ).bind(identityId, userId, identity.subject, identity.email, profile),
+      db.prepare(
+        "INSERT INTO memberships(id,user_id,role,permanent) VALUES(?,?,'owner',1)",
+      ).bind(`membership_access_${digest}`, userId),
+    ]);
+  }
+
+  const principal = await activeCloudflareAccessPrincipal(db, identity.subject);
+  if (!principal || principal.role !== "owner") {
+    throw new IdentityExchangeError("identity_not_authorized");
+  }
+  return principal;
+}
+
+async function activeCloudflareAccessPrincipal(
+  db: D1Database,
+  subject: string,
+): Promise<ActivePrincipalRecord | null> {
+  const row = await db.prepare(
+    "SELECT u.id user_id,u.display_name,m.role,m.permanent,e.provider_subject,e.username " +
+    "FROM external_identities e JOIN users u ON u.id=e.user_id JOIN memberships m ON m.user_id=u.id " +
+    "WHERE e.provider='cloudflare-access' AND e.provider_subject=?",
+  ).bind(subject).first<{
+    user_id: string;
+    display_name: string;
+    role: WorkspaceRole;
+    permanent: number;
+    provider_subject: string;
+    username: string | null;
+  }>();
+  return row ? {
+    userId: row.user_id,
+    displayName: row.display_name,
+    role: row.role,
+    permanent: Boolean(row.permanent),
+    identity: {
+      provider: "cloudflare-access",
+      providerSubject: row.provider_subject,
+      login: row.username ?? row.display_name,
+    },
+  } : null;
 }
 
 export async function issueDashboardSession(db: D1Database, principal: ActivePrincipalRecord, secure: boolean, now = Math.floor(Date.now() / 1000)): Promise<{ token: string; cookieName: DashboardSession["cookieName"]; maxAge: number }> {

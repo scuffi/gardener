@@ -19,7 +19,7 @@ const identityLabelClasses = cn(
   "px-2 py-2.5! font-normal!",
 );
 
-export function AccountMenu() {
+export function AccountMenu({ actionsOnly = false }: { actionsOnly?: boolean }) {
   const { state, session, signOut } = useGardener();
   const { notify } = useNotifications();
   const navigate = useNavigate();
@@ -38,6 +38,13 @@ export function AccountMenu() {
   if (!session.authenticated) return null;
   const { displayName, role, identity } = session.user;
   const login = identity.login;
+  const accessIdentity = identity.provider === "cloudflare-access";
+  const providerLabel = identity.provider === "local"
+    ? "Local development"
+    : accessIdentity
+      ? "Signed in with Cloudflare Access"
+      : "Signed in with GitHub";
+  const loginLabel = accessIdentity ? login : `@${login}`;
   const roleLabel = role === "owner" ? "Owner" : "Member";
   const initial = displayName.slice(0, 1).toUpperCase();
 
@@ -92,15 +99,15 @@ export function AccountMenu() {
             </span>
             <span className="grid min-w-0 leading-snug">
               <span className="text-[11px] font-medium text-kumo-subtle">
-                {identity.provider === "local" ? "Local development" : "Signed in with GitHub"}
+                {providerLabel}
               </span>
               <strong className="mt-0.5 truncate text-[13px] font-semibold text-kumo-strong">
                 {displayName}
               </strong>
               <span className="mt-0.5 truncate text-[11px] text-kumo-subtle">
-                @{login} · {roleLabel}
+                {loginLabel} · {roleLabel}
               </span>
-              {role === "owner" ? (
+              {role === "owner" && !actionsOnly ? (
                 <span className="mt-0.5 text-[11px] text-kumo-subtle">
                   {repositories} {repositories === 1 ? "repository" : "repositories"} connected
                 </span>
@@ -109,7 +116,7 @@ export function AccountMenu() {
           </DropdownMenu.Label>
         </DropdownMenu.Group>
         <DropdownMenu.Separator />
-        {role === "owner" ? (
+        {role === "owner" && !actionsOnly ? (
           <DropdownMenu.Item
             icon={GithubLogoIcon}
             disabled={installMutation.isPending}
@@ -118,16 +125,18 @@ export function AccountMenu() {
             {installMutation.isPending ? "Opening GitHub…" : "Manage GitHub access"}
           </DropdownMenu.Item>
         ) : null}
-        <DropdownMenu.Item icon={GearIcon} onClick={() => navigate("/settings")}>
-          Dashboard settings
-        </DropdownMenu.Item>
-        <DropdownMenu.Separator />
+        {!actionsOnly ? (
+          <DropdownMenu.Item icon={GearIcon} onClick={() => navigate("/settings")}>
+            Dashboard settings
+          </DropdownMenu.Item>
+        ) : null}
+        {!actionsOnly ? <DropdownMenu.Separator /> : null}
         <DropdownMenu.Item
           variant="danger"
           icon={SignOutIcon}
           onClick={() => {
             signOut();
-            navigate(defaultRoute, { replace: true });
+            navigate(actionsOnly ? "/runs" : defaultRoute, { replace: true });
           }}
         >
           Sign out

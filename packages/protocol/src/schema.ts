@@ -75,7 +75,10 @@ export const runnerEffectReceiptV1Schema = z.strictObject({
   operationId: identifier,
   kind: z.literal("issue.comment.create"),
   commentId: z.string().regex(/^[1-9][0-9]{0,19}$/),
-  commentUrl: z.url(),
+  commentUrl: z.url().refine(
+    (value) => new URL(value).origin === "https://github.com",
+    "Expected an HTTPS github.com comment URL",
+  ),
 });
 
 export const runnerEffectArtifactV1Schema = z.strictObject({
