@@ -32,38 +32,35 @@ afterEach(() => {
   else process.env.NO_COLOR = originalNoColor;
 });
 
-describe("Gardener Gateway CLI", () => {
-  it("runs the bundled Node entrypoint with pnpm's forwarded separator", () => {
+describe("Gardener CLI", () => {
+  it("exposes only the Actions-native local project commands", () => {
     const root = spawnSync(process.execPath, ["dist/cli.js", "--", "help"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
     expect(root.status).toBe(0);
-    expect(root.stdout).toContain("setup                        Plan, provision");
+    expect(root.stdout).toContain("init                         Create");
+    expect(root.stdout).toContain("build                        Compile");
+    expect(root.stdout).toContain("up                           Init, build, deploy, connect, and verify");
+    expect(root.stdout).toContain("qualify                      Run both demo workflows");
+    expect(root.stdout).not.toContain("gateway");
+    expect(root.stdout).not.toContain("setup");
 
-    const setup = spawnSync(process.execPath, ["dist/cli.js", "--", "setup", "--help"], {
+    const init = spawnSync(process.execPath, ["dist/cli.js", "--", "init", "--help"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
-    expect(setup.status).toBe(0);
-    expect(setup.stdout).toContain("gardener setup");
-    expect(setup.stdout).toContain("--personal");
+    expect(init.status).toBe(0);
+    expect(init.stdout).toContain("gardener init");
+    expect(init.stdout).toContain("--demos");
 
-    const actions = spawnSync(process.execPath, ["dist/cli.js", "--", "actions", "help"], {
+    const build = spawnSync(process.execPath, ["dist/cli.js", "--", "build", "--help"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
-    expect(actions.status).toBe(0);
-    expect(actions.stdout).toContain("workflow                     Write");
-    expect(actions.stdout).toContain("enroll                       Upsert");
-
-    const gateway = spawnSync(process.execPath, ["dist/cli.js", "--", "gateway", "help"], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-    expect(gateway.status).toBe(0);
-    expect(gateway.stdout).toContain("plan                         Build");
-    expect(gateway.stdout).toContain("destroy                      Delete");
+    expect(build.status).toBe(0);
+    expect(build.stdout).toContain("gardener build");
+    expect(build.stdout).toContain("TaskBundleV1");
   });
 
   it("renders a deterministic full-SHA-pinned Actions caller and enrollment", () => {

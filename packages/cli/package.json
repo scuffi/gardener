@@ -7,10 +7,15 @@
     "gardener": "dist/cli.js"
   },
   "dependencies": {
-    "@gardener/provider-github": "workspace:*"
+    "@gardener/contracts": "workspace:*",
+    "@gardener/core": "workspace:*",
+    "@gardener/provider-github": "workspace:*",
+    "@gardener/protocol": "workspace:*",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --sourcemap --outfile=dist/cli.js",
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:yaml --sourcemap --outfile=dist/cli.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "pnpm build && vitest run"
   },

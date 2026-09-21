@@ -6,8 +6,9 @@ import teamWorkspaceFoundation from "../migrations/0007_team_workspace_foundatio
 import flueNativeRuntime from "../migrations/0008_flue_native_runtime.sql?raw";
 import starterAgents from "../migrations/0009_starter_agents.sql?raw";
 import actionsTaskRuntime from "../migrations/0010_actions_task_runtime.sql?raw";
+import actionsTaskBundles from "../migrations/0011_actions_task_bundles.sql?raw";
 
-export const AGENT_SCHEMA_VERSION = 10;
+export const AGENT_SCHEMA_VERSION = 11;
 
 const initialization = new WeakMap<object, Promise<void>>();
 
@@ -74,12 +75,13 @@ async function initialize(db: D1Database): Promise<void> {
 
   if (version !== null) {
     const migrationsByVersion: Record<number, readonly string[]> = {
-      4: [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime],
-      5: [flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime],
-      6: [teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime],
-      7: [flueNativeRuntime, starterAgents, actionsTaskRuntime],
-      8: [starterAgents, actionsTaskRuntime],
-      9: [actionsTaskRuntime],
+      4: [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
+      5: [flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
+      6: [teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
+      7: [flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles],
+      8: [starterAgents, actionsTaskRuntime, actionsTaskBundles],
+      9: [actionsTaskRuntime, actionsTaskBundles],
+      10: [actionsTaskBundles],
     };
     const migrations = migrationsByVersion[version];
     if (!migrations) throw new Error(`Unsupported Gardener database schema version ${version}`);
@@ -104,7 +106,7 @@ async function initialize(db: D1Database): Promise<void> {
       // establishes the historical v4 baseline before applying later migrations.
       await db.prepare("INSERT INTO gardener_schema (singleton, version) VALUES (1, 4)").run();
     }
-    for (const migration of [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime]) {
+    for (const migration of [agentRuntimeAdmission, flueHarnessRequests, teamWorkspaceFoundation, flueNativeRuntime, starterAgents, actionsTaskRuntime, actionsTaskBundles]) {
       await apply(db, migration);
     }
   } catch (error) {

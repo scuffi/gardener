@@ -24,10 +24,10 @@ import { taskEffectPlanV1Schema, taskOutcomeV1Schema, type TaskRunRequestV1 } fr
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import type { HarnessSubmission, HarnessToolInvocation } from "../harness";
 import type { Env } from "../env";
-import { inspectRepositoryFixtureBundle } from "./fixture";
 import { createTaskHarnessRequest, translateHarnessOutcome } from "./harness-adapter";
 import { FlueTaskHarness } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
+import { loadEnabledTaskBundle } from "./task-bundles";
 
 interface Enrollment {
   repository_id: string;
@@ -221,17 +221,18 @@ export class TaskRunnerSession extends DurableObject<Env> {
     return receipt;
   }
 
-  async runFixture(eventInput?: RunnerEventV1): Promise<RunnerTerminalV1> {
+  async runTask(eventInput?: RunnerEventV1): Promise<RunnerTerminalV1> {
     const identity = this.#identity;
     if (!identity) throw new Error("Runner session is not authenticated");
     if (identity.hello.phase !== "plan" || identity.hello.eventName !== "issues") {
-      throw new Error("The v1 triage task supports only planning issues runs");
+      throw new Error("The v1 task runtime supports only planning issues runs");
     }
     const runnerEvent = runnerEventV1Schema.parse(eventInput);
-    if (!runnerEvent.issue.labels.includes("gardener-test")) throw new Error("Issue is missing the gardener-test trigger label");
-    const bundle = structuredClone(inspectRepositoryFixtureBundle());
-    const bundleHash = await canonicalSha256(bundle);
-    if (identity.hello.agentHash !== bundleHash) throw new Error("Runner workload hash does not match the canonical fixture bundle");
+    const { bundle, bundleHash } = await loadEnabledTaskBundle(
+      this.env.DB,
+      identity.enrollment.repository_id,
+      identity.hello.agentHash,
+    );
     const admittedAt = new Date().toISOString();
     const request = {
       schemaVersion: "gardener.task-run-request/v1" as const,
@@ -405,7 +406,7 @@ class PublicApi extends RpcTarget implements PublicSessionCapability {
 
 class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapability {
   constructor(readonly session: TaskRunnerSession) { super(); }
-  run(event?: RunnerEventV1): Promise<RunnerTerminalV1> { return this.session.runFixture(event); }
+  run(event?: RunnerEventV1): Promise<RunnerTerminalV1> { return this.session.runTask(event); }
   invoke(action: RunnerActionV1): Promise<RunnerActionResultV1> { return this.session.invoke(action); }
   reconcile(result: RunnerActionResultV1): Promise<RunnerActionResultV1> { return this.session.reconcile(result); }
   resume(cursor: ResumeCursorV1, runner: RpcStub<RunnerCapability>): Promise<ResumeStateV1> { return this.session.resume(cursor, runner); }

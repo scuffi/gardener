@@ -4,7 +4,7 @@ export function parse(args: string[]): {
 } {
   const positional: string[] = [];
   const flags = new Map<string, string | true>();
-  const boolean = new Set(["yes", "personal", "verbose", "qualification", "execute", "dry-run"]);
+  const boolean = new Set(["yes", "personal", "verbose", "qualification", "execute", "dry-run", "demos"]);
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index]!;
     if (!value.startsWith("--")) {

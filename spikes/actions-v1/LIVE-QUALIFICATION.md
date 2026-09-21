@@ -106,6 +106,33 @@ Runtime version `156a0257-2517-469a-9f65-d54753a6c4fc` exposes an explicit `acti
 
 Independent review found no blocking issue. Follow-up hardening made non-owner Access identities fail as unauthenticated instead of producing a server error, added direct cryptographic tests for signature/algorithm/issuer/audience/expiry enforcement, guaranteed Access logout even when the application POST fails, constrained receipt links to the exact `https://github.com` origin, and added tests for Access precedence and non-owner rejection.
 
+## Reproducible Actions CLI and two-task qualification (2026-09-21)
+
+The Actions-native CLI now scaffolds and strictly compiles `.gardener/tasks/*/TASK.md` into canonical `TaskBundleV1`, SHA-256 hashes, a committed lock, and deterministic caller workflows. Migration 11 stores immutable bundles and per-repository bundle enablement. The authenticated runtime resolves only the requested hash enabled for the numeric OIDC-authenticated repository and recomputes canonical SHA-256 before execution.
+
+A fresh isolated Cloudflare namespace was created using `gardener deploy`:
+
+- D1: `gardener-qual-actions-cli-1`;
+- private runtime: `gardener-qual-actions-cli-1-runtime` (`workers.dev` disabled);
+- public ingress: `gardener-qual-actions-cli-1-runner-ingress`;
+- ingress health: `{"ok":true,"service":"gardener-runner-ingress","runtime":true}`.
+
+The account's wildcard Access application initially intercepted the new ingress. After the exact ingress hostname was made public, rerunning the same checkpointed deploy completed without recreating resources. The CLI also supports creating that exact-host bypass with a local, narrowly scoped Access Apps/Policies API token; the token is never persisted or passed in argv.
+
+The disposable public repository <https://github.com/scuffi/gardener-actions-cli-demo> was initialized, built, connected, committed at `ad18914532d4f09bee7c9346b8c076903cafdde7`, and qualified using only CLI commands. Both independently compiled product tasks succeeded on attempt 1:
+
+- bug intake: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35593673019>, issue #1, comment `5759675995`, bundle `0c0274da931a3a1b6a4060d178d786fc93e8c64e7966c0791ab5239138d2f94e`;
+- documentation helper: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35593787842>, issue #2, comment `5759684714`, bundle `a6aef615462b99691761520e9ccc8e8e111819cb24f01757fb47e06cd04572f7`.
+
+D1 contained exactly two bundles, two enabled repository mappings, and two effect receipts. A complete `gardener up --demos` rerun completed successfully and left the generated repository byte-clean. `gardener doctor` confirmed the D1, both Workers, ingress, and private runtime binding.
+
+The stack was then destroyed through manifest-guarded `gardener down`, recreated from the same repository and private deployment intent, reconnected, and qualified again. Both recreated-stack workflows succeeded on attempt 1 with the same compiled bundle hashes:
+
+- bug intake: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35595265570>, issue #3, comment `5759879287`;
+- documentation helper: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35595330810>, issue #4, comment `5759886698`.
+
+This proves clean creation, interruption-safe resume, idempotent rerun, guarded teardown, clean recreation, two-task execution, and exact GitHub/D1 receipt verification. The account-wide Access policy required the recreated ingress Worker to be made public again; runtime and D1 remained private.
+
 ## Historical transport qualification (2026-09-17)
 
 ### Pinned Gardener components
