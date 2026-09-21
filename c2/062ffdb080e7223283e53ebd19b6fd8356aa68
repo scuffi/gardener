@@ -1,0 +1,33 @@
+apps/gardener/migrations/0011_actions_task_bundles.sql
+  s_543e0939f7a78a::t_7002a0aa32982d 1-25
+packages/cli/src/task-authoring.ts
+  s_543e0939f7a78a::t_d17c4b519b51d1 1-90
+packages/cli/test/actions-installation.test.ts
+  s_5da66bf6bc6455::t_0ffabb07356e5a 1-96
+packages/cli/test/task-project.test.ts
+  s_543e0939f7a78a::t_9862692c5239a8 1-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c2062ffdb080e7223283e53ebd19b6fd8356aa68",
+  "prompts": {},
+  "sessions": {
+    "s_543e0939f7a78a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c37b-8adc-7d6f-83fe-2f0245ec91f5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_5da66bf6bc6455": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a79b-d357-7ec9-952b-746d1a0724ea",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
