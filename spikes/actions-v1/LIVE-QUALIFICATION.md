@@ -214,7 +214,7 @@ That production runtime exported `TaskRunnerSession`, `FlueGardenerTaskHarnessAg
 
 ## Single-Worker and in-repo bridge overhaul (2026-09-22)
 
-The GitHub-hosted adapter now lives in the canonical private Gardener repository as `bridges/github/plan` and `bridges/github/apply`. The reusable workflow is `.github/workflows/gardener-task.yml`; generated workflows pin its private commit SHA and use `runtime-url` / `GARDENER_RUNTIME_URL`. The former public `scuffi/gardener-actions` repository was archived after its open v1.1 PR was closed as superseded; immutable v1.0 references remain preserved.
+The GitHub-hosted adapter now lives in the canonical private Gardener repository as `bridges/github/plan` and `bridges/github/apply`. Bridge artifact commit `01c5749c5eb05398e8488b743a10c36c1b517fc2` is pinned by reusable workflow commit `ca4533054b1f6af96fa2f4d248ccb10bcf1d1a76`; compiler commit `3eb49240de941e6c41b8a959a060120bccddf078` pins generated workflows to that reusable workflow and uses `runtime-url` / `GARDENER_RUNTIME_URL`. The former public `scuffi/gardener-actions` repository was archived after its open v1.1 PR was closed as superseded; immutable v1.0 references remain preserved.
 
 The customer deployment is now one narrow public Worker with D1, Workers AI, `TaskRunnerSession`, and `FlueGardenerTaskHarnessAgent`. It exposes only `GET /health` and the exact `/session/<id>` route; the runner-ingress Worker, Service Binding, replay probe, and active spike workflows were removed. Existing two-Worker manifests are accepted only by the manifest-bound teardown path; all other commands require a fresh v2 installation, matching the approved pre-launch hard cutover.
 

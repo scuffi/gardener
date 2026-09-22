@@ -8,3 +8,5 @@ This bridge is the GitHub-hosted execution adapter for Gardener. It is not a sep
 The reusable two-job workflow lives at `.github/workflows/gardener-task.yml` because GitHub requires reusable workflows directly under `.github/workflows`.
 
 Both bridge Actions are committed as prebuilt Node.js bundles and must be consumed at full commit SHAs.
+
+While `scuffi/gardener` is private, GitHub permits private repositories owned by `scuffi` to consume this bridge when the Gardener repository's Actions access level is set to repositories owned by that user. Public or external repositories must wait until Gardener is public.
