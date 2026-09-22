@@ -1,0 +1,39 @@
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_2ce1b0bfbd2ff0 21,56,83,92,114,127,138,152,189,284
+scripts/check-cli-package.mjs
+  s_4f86d53ceca5e7::t_de07fb204ad960 1-38
+spikes/actions-v1/LIVE-QUALIFICATION.md
+  s_75a4bc94cc152b::t_291b3af66c147d 56,184-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1927242dcc3be091bef957b493a0726701d2c355",
+  "prompts": {},
+  "sessions": {
+    "s_4f86d53ceca5e7": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c903-fa8a-7a37-b5d0-a14b39f1428c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_75a4bc94cc152b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c912-5e93-7c9d-bf0f-971937391895",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
