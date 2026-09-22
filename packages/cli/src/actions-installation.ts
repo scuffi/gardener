@@ -278,8 +278,8 @@ export async function upgradeActions(input: {
   workspace: string;
   sourceRoot: string;
 }): Promise<{ previousHash: string | null; deploymentHash: string; changed: boolean }> {
-  const prior = await requiredActionsManifest(input.workspace);
-  const previousHash = prior.deployment?.sourceHash ?? null;
+  const prior = await readActionsManifest(input.workspace);
+  const previousHash = prior?.deployment?.sourceHash ?? null;
   const manifest = await deployActions(input);
   const deploymentHash = manifest.deployment!.sourceHash;
   return { previousHash, deploymentHash, changed: previousHash !== deploymentHash };

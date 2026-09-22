@@ -85,12 +85,12 @@ Options:
 
 const UPGRADE_HELP = `gardener upgrade
 
-Upgrade the runtime and one repository's pinned GitHub bridge release, rebuild its workflows,
-re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the up command.
+Provision or upgrade the runtime and one repository's pinned GitHub bridge release, rebuild its
+workflows, re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the up command.
 
 Options:
-  --workspace <name>           Existing Gardener installation
-  --repository <owner/name>    Connected GitHub repository to upgrade
+  --workspace <name>           Stable installation name
+  --repository <owner/name>    GitHub repository to provision or upgrade
   --repository-root <path>     Customer repository (defaults to current directory)
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
@@ -224,7 +224,7 @@ async function main(argv: string[]): Promise<void> {
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown repository error";
       throw new Error(
-        `The runtime upgrade completed, but the repository bridge upgrade did not: ${detail}. Fix the repository error, then rerun the identical gardener upgrade command; every step is resumable.`,
+        `The runtime deployment completed, but the repository bridge upgrade did not: ${detail}. Fix the repository error, then rerun the identical gardener upgrade command; every step is resumable.`,
         { cause: error },
       );
     }
