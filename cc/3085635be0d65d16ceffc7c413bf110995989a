@@ -1,0 +1,39 @@
+apps/gardener/package.json
+  s_de0b486c128948::t_09fd245c44fdc6 29,44,50,54
+apps/runner-ingress/package.json
+  s_de0b486c128948::t_3a5ade8f7247c4 12
+package.json
+  s_de0b486c128948::t_9f4e270aa3b0aa 26-27
+packages/cli/package.json
+  s_de0b486c128948::t_76ec821c4b5bc7 31
+packages/protocol/package.json
+  s_de0b486c128948::t_eee5ee6d39b10f 19
+packages/runner/package.json
+  s_de0b486c128948::t_e367cc04e74d67 22
+scripts/check-versions.mjs
+  s_bb2a89d149d4bd::t_fe40416787e4d2 3-7,9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cc3085635be0d65d16ceffc7c413bf110995989a",
+  "prompts": {},
+  "sessions": {
+    "s_bb2a89d149d4bd": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c92c-76a2-76db-9f82-53eab6d95c50",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
