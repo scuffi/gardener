@@ -98,7 +98,8 @@ jobs:
     });
     expect(sql).toContain("ON CONFLICT(repository_id) DO UPDATE");
     expect(sql).toContain(`'${workflowRef}'`);
-    expect(sql).toContain("enabled=1");
+    expect(sql).toContain("enabled) VALUES");
+    expect(sql).not.toContain("oidc_audience=excluded.oidc_audience,enabled=1");
     expect(() => renderActionsCaller({ workflowRef: "gardener/actions/.github/workflows/triage.yml@main", audience, taskBundleHash }))
       .toThrow(/full-sha/i);
     expect(() => renderActionsCaller({ workflowRef, audience: `${audience}/path`, taskBundleHash }))
@@ -147,6 +148,10 @@ jobs:
       workspace: "team-one",
       yes: true,
       "owner-id": "101",
+    });
+    expect(Object.fromEntries(parse(["--drills", "--drills-only"]).flags)).toEqual({
+      drills: true,
+      "drills-only": true,
     });
     expect(() => parse(["--workspace"])).toThrow("Missing value");
     expect(() => parse(["--yes", "--yes"])).toThrow("duplicate");

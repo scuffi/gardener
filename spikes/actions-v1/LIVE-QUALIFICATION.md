@@ -150,7 +150,7 @@ The connected demo repository was rebuilt against the generic `gardener-issue-ta
 - bug intake: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35627175572>, issue #27, comment `5764086791`, bundle `865241da70fcc31e3d66378c8ec3936894e75048419e6706732ec034bb5f9cfc`;
 - documentation helper: run <https://github.com/scuffi/gardener-actions-cli-demo/actions/runs/35627279204>, issue #28, comment `5764102043`, bundle `305dcb6ddadd627bb887153c8af47d154d578b26243381bb4e753c19f78e43b6`.
 
-Each final public response contains a successful `repository_list_files`, successful `repository_read_file`, and successful `finish_task` record. Each comment includes a trusted source-at-commit link, workflow attempt, commit, full bundle hash, operation ID, and hidden reconciliation marker. D1 contains exact matching receipts. The successful runtime uses the default Flue Workers AI provider with minimal typed model-facing tool output; Gardener's former custom bounded provider remains only for historical runtime surfaces.
+Each final public response contains a successful `repository_list_files`, successful `repository_read_file`, and successful `finish_task` record. Each comment includes a trusted source-at-commit link, workflow attempt, commit, full bundle hash, operation ID, and hidden reconciliation marker. D1 contains exact matching receipts. The successful runtime now uses Gardener's `gardener-native-bounded-v3` wrapper around Flue's native Workers AI provider. The wrapper preserves Flue's native tool payload while enforcing immutable turns, cumulative output tokens, bounded input bytes, and absolute runtime deadlines before provider dispatch.
 
 The same CLI/compiler/release/runtime path was then qualified in the private repository `scuffi/gardener-actions-cli-private-demo` (repository ID `1380152255`, visibility `private`). Both tasks succeeded on attempt 1:
 
@@ -158,6 +158,28 @@ The same CLI/compiler/release/runtime path was then qualified in the private rep
 - documentation helper: run `35629060316`, issue #4, comment `5764322661`, bundle `305dcb6ddadd627bb887153c8af47d154d578b26243381bb4e753c19f78e43b6`.
 
 Private D1 rows preserve `visibility=private`, exact bundle hashes, attempt-1 plan identities, and matching GitHub receipts. No repository secret, App, PAT, webhook, or installation token was introduced.
+
+## Hard-limit and operations qualification (2026-09-22)
+
+Wave 1 added provider-level model limits, durable operation-idempotent runner-tool reservations, immutable persisted deadlines, terminal-state guards, durable Flue abort, and bounded GitHub runner cancellation settlement. The cancellation-aware public Action artifact is commit `d6bbdbe752da07b8784861b2b87b509eb46c7610`; the reusable workflow pinned to it is commit `5821904ec4e4f04f747003940157af74d5b13937`. Release CI and immutable bundle provenance are green at `35ed4665b9568850bccc574e89d20120fd1992e8`; PR <https://github.com/scuffi/gardener-actions/pull/1> remains blocked only on required review.
+
+The updated public release candidate completed both tasks with exact D1/GitHub receipts:
+
+- bug intake: run `35706647251`, issue #49, comment `5773671571`;
+- documentation helper: run `35706754330`, issue #50, comment `5773688808`.
+
+Operational drills then proved:
+
+- disabled-task admission rejection: run `35707220078`, issue #53, no marked comment or effect receipt;
+- force cancellation during planning: run `35707287785`, issue #54, durable D1 status `cancelled`, reason `GitHub Actions planning job was cancelled`, no marked comment, and no effect receipt;
+- reconciliation invariants: two recent successful runs each retained exactly one `task.settled` and one `effect.executed` audit event.
+
+The private repository passed the same release candidate on attempt 1:
+
+- bug intake: run `35707393842`, issue #7, comment `5773766974`;
+- documentation helper: run `35707484158`, issue #8, comment `5773778543`.
+
+Wave 2 also live-qualified repository/task kill switches, retired-bundle isolation across reconnect, trigger-backed immutable control auditing, portable remote `doctor`, manifest-bound 24-hour teardown intents, idempotent upgrade, and explicit-old-source rollback. The rollback drill moved from deployment hash `12a06b94e8bdd3808eb562cb5cfeb616ff5b12e29b03c92e3f6536570c21aaaf` to trusted prior hash `dded175a69d2a4f5eca21b2e002ff4026bca72feebec394cb0b06ce48ff8e554`, then restored the confirmed current hash. The real `cloudflare/computer` pilot remains blocked pending the final reviewed release; no pilot branch or persistent effect was introduced there.
 
 ## Historical transport qualification (2026-09-17)
 

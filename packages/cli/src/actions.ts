@@ -58,7 +58,7 @@ export function actionsEnrollmentSql(input: ActionsEnrollment): string {
     input.workflowRef,
     input.audience,
   ].map(sqlString).join(",");
-  return `INSERT INTO actions_repository_enrollments (repository_id,owner_id,owner_login,repository_name,visibility,plan_job_workflow_ref,effects_job_workflow_ref,oidc_audience,enabled) VALUES (${values},1) ON CONFLICT(repository_id) DO UPDATE SET owner_id=excluded.owner_id,owner_login=excluded.owner_login,repository_name=excluded.repository_name,visibility=excluded.visibility,plan_job_workflow_ref=excluded.plan_job_workflow_ref,effects_job_workflow_ref=excluded.effects_job_workflow_ref,oidc_audience=excluded.oidc_audience,enabled=1,updated_at=CURRENT_TIMESTAMP;`;
+  return `INSERT INTO actions_repository_enrollments (repository_id,owner_id,owner_login,repository_name,visibility,plan_job_workflow_ref,effects_job_workflow_ref,oidc_audience,enabled) VALUES (${values},1) ON CONFLICT(repository_id) DO UPDATE SET owner_id=excluded.owner_id,owner_login=excluded.owner_login,repository_name=excluded.repository_name,visibility=excluded.visibility,plan_job_workflow_ref=excluded.plan_job_workflow_ref,effects_job_workflow_ref=excluded.effects_job_workflow_ref,oidc_audience=excluded.oidc_audience,updated_at=CURRENT_TIMESTAMP;`;
 }
 
 export async function writeActionsCaller(options: {

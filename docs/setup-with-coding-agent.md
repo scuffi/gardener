@@ -67,10 +67,32 @@ Installation state is owner-only under:
 Rerun `gardener up` after interruption. Do not manually rewrite deployment intent, generated
 Wrangler configuration, or installation manifests.
 
-Teardown is dry-run by default and requires the exact workspace confirmation to execute:
+Inspect health and operational state with:
+
+```bash
+pnpm gardener -- doctor --workspace my-gardener --source-root "$PWD"
+pnpm gardener -- repositories --workspace my-gardener --source-root "$PWD"
+pnpm gardener -- tasks --workspace my-gardener --source-root "$PWD"
+pnpm gardener -- runs --workspace my-gardener --source-root "$PWD"
+```
+
+Use `repository enable|disable` and `task enable|disable` as admission kill switches. Repository disable also blocks effects authentication; task disable stops new plans but does not revoke an effect already planned before the toggle. `connect` preserves disabled state and never revives retired bundle hashes. `gardener qualify --drills`
+checks negative admission, force cancellation, and settlement/effect audit cardinality.
+
+Upgrade records an immutable source digest. Code rollback requires an explicit trusted prior source
+checkout and a digest already present in deployment history; database migrations remain forward-only:
+
+```bash
+pnpm gardener -- upgrade --workspace my-gardener --source-root "$PWD"
+pnpm gardener -- rollback --workspace my-gardener \
+  --source-root /trusted/prior/gardener --confirm <historical-source-digest>
+```
+
+Teardown is a two-step, manifest-bound operation. The planning invocation returns a 24-hour intent
+digest; review it, then pass that exact digest to a separate execution invocation:
 
 ```bash
 pnpm gardener -- down --workspace my-gardener --source-root "$PWD"
 pnpm gardener -- down --workspace my-gardener --source-root "$PWD" \
-  --execute --confirm my-gardener
+  --execute --confirm <intent-digest>
 ```
