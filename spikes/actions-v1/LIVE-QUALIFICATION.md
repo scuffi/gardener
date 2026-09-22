@@ -183,7 +183,7 @@ Wave 2 also live-qualified repository/task kill switches, retired-bundle isolati
 
 ## Standalone Actions-only distribution (2026-09-22)
 
-The temporary `gardener-actions-cli-demo` package identity was packed and exercised from `/tmp` without a monorepo checkout. The final local tarball was 1,348,192 bytes (22 files) and contained:
+The temporary `gardener-actions-cli-demo` package identity was packed and exercised from `/tmp` without a monorepo checkout. The final local tarball was 1,348,204 bytes (22 files) and contained:
 
 - the bundled CLI/compiler;
 - the transitive module closure for the Actions-only runtime;
@@ -210,7 +210,7 @@ The Actions-only runtime itself passed canonical positive tasks after the hard c
 
 A separate fresh tarball deployment (`qual-actions-tarball-2`) created a new D1 containing only the six `actions_*` tables plus Wrangler's `d1_migrations` table. Its final ingress health check was intentionally blocked by account-wide Cloudflare Access because no scoped Access API token was present; the manifest-bound two-step tarball teardown then removed its D1 and both Workers. This isolates the only fresh-install blocker to an external account policy credential, not a package or runtime dependency.
 
-The production Worker entry now exports only `TaskRunnerSession`, `FlueGardenerTaskHarnessAgent`, `GardenerRunnerIngressEntrypoint`, and the health handler. Legacy source remains in repository history but is excluded from the workspace's shipped production graph, deploy build, package assets, D1 baseline, and runtime import graph.
+The production Worker entry now exports only `TaskRunnerSession`, `FlueGardenerTaskHarnessAgent`, `GardenerRunnerIngressEntrypoint`, and the health handler. Legacy source remains in repository history but is excluded from the workspace's shipped production graph, deploy build, package assets, D1 baseline, and runtime import graph. The shipped workspace version gate is green; deliberately qualified Flue/pi-ai, Workers build, Agent helper, Wrangler, and package-manager pins remain explicit review signals rather than silent drift.
 
 ## Historical transport qualification (2026-09-17)
 

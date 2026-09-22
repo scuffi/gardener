@@ -1,14 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
-
 const root = new URL("../", import.meta.url);
-const manifests = ["package.json"];
+const manifests = [
+  "package.json",
+  "apps/gardener/package.json",
+  "apps/runner-ingress/package.json",
+];
 
-for (const workspace of ["apps", "packages"]) {
-  const directory = new URL(`${workspace}/`, root);
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.isDirectory()) manifests.push(`${workspace}/${entry.name}/package.json`);
-  }
+for (const entry of await readdir(new URL("packages/", root), { withFileTypes: true })) {
+  if (entry.isDirectory()) manifests.push(`packages/${entry.name}/package.json`);
 }
 
 const configured = new Map();

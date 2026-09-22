@@ -28,7 +28,7 @@
     "@gardener/core": "workspace:*",
     "@gardener/provider-github": "workspace:*",
     "@gardener/protocol": "workspace:*",
-    "@types/node": "22.20.3",
+    "@types/node": "26.6.2",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "5.0.1",
