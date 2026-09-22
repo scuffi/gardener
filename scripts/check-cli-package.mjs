@@ -12,7 +12,6 @@ const required = [
   "package/assets/gardener-distribution.json",
   "package/assets/apps/gardener/dist/gardener_actions_v1_runtime/index.js",
   "package/assets/apps/gardener/migrations-actions/0001_actions_baseline.sql",
-  "package/assets/apps/runner-ingress/src/index.ts",
 ];
 for (const path of required) {
   if (!files.includes(path)) throw new Error(`CLI tarball is missing ${path}`);
@@ -21,7 +20,7 @@ const migrations = files.filter((path) => path.includes("/migrations"));
 if (migrations.length !== 1 || migrations[0] !== required[3]) {
   throw new Error(`CLI tarball contains an unexpected migration graph: ${migrations.join(", ")}`);
 }
-for (const fragment of ["github-gateway", "0001_initial", "0004_agent_native_reset"]) {
+for (const fragment of ["github-gateway", "runner-ingress", "0001_initial", "0004_agent_native_reset"]) {
   if (files.some((path) => path.includes(fragment))) throw new Error(`CLI tarball leaked ${fragment}`);
 }
 const packageJson = JSON.parse(execFileSync("tar", ["-xOzf", archive, "package/package.json"], { encoding: "utf8" }));

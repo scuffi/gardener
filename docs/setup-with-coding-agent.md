@@ -28,7 +28,7 @@ Set up Actions-native Gardener in this repository using only the reviewed Garden
 5. Do not recreate any CLI step with direct API, Wrangler, SQL, or file-generation commands.
 6. If setup stops, rerun the identical command so the private deployment intent or installation
    manifest can resume it.
-7. Show only the generated `.gardener/` and `.github/workflows/` paths, resource names, ingress
+7. Show only the generated `.gardener/` and `.github/workflows/` paths, resource names, runtime
    origin, bundle hashes, and doctor result. Never show credentials.
 8. Do not commit or push. Ask me to review and commit the generated files.
 ```
@@ -55,10 +55,10 @@ npx --yes --package=./gardener-actions-cli-demo-0.1.0.tgz gardener up \
   --demos
 ```
 
-The tarball contains the Actions-only runtime bundle, narrow runner ingress, compiler defaults, and
+The tarball contains the single Actions-only runtime Worker, GitHub bridge compiler defaults, and
 one Actions-only D1 baseline migration. If account-wide Cloudflare Access intercepts new
 `workers.dev` hostnames, set a scoped `CLOUDFLARE_API_TOKEN` with Access Apps and Policies edit
-permission so Gardener can create the exact-host runner bypass.
+permission so Gardener can create the exact-host runtime bypass.
 
 Then review and commit in the customer repository:
 

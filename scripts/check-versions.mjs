@@ -3,7 +3,6 @@ const root = new URL("../", import.meta.url);
 const manifests = [
   "package.json",
   "apps/gardener/package.json",
-  "apps/runner-ingress/package.json",
 ];
 
 for (const entry of await readdir(new URL("packages/", root), { withFileTypes: true })) {

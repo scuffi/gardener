@@ -72,7 +72,7 @@ describe("exact issue-comment effects action", () => {
     core.inputs.set("artifact-path", artifactPath);
     core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
     core.inputs.set("github-token", "token");
-    core.inputs.set("harness-url", "https://gardener.example");
+    core.inputs.set("runtime-url", "https://gardener.example");
     process.env.GITHUB_EVENT_PATH = eventPath;
     process.env.GITHUB_REPOSITORY = "owner/repo";
     const fetchMock = vi.fn()
@@ -114,7 +114,7 @@ describe("exact issue-comment effects action", () => {
     core.inputs.set("artifact-path", artifactPath);
     core.inputs.set("expected-sha256", "0".repeat(64));
     core.inputs.set("github-token", "token");
-    core.inputs.set("harness-url", "https://gardener.example");
+    core.inputs.set("runtime-url", "https://gardener.example");
     process.env.GITHUB_EVENT_PATH = eventPath;
     process.env.GITHUB_REPOSITORY = "owner/repo";
     const fetchMock = vi.fn();
@@ -172,7 +172,7 @@ describe("exact issue-comment effects action", () => {
     core.inputs.set("artifact-path", artifactPath);
     core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
     core.inputs.set("github-token", "token");
-    core.inputs.set("harness-url", "https://gardener.example");
+    core.inputs.set("runtime-url", "https://gardener.example");
     process.env.GITHUB_EVENT_PATH = eventPath;
     process.env.GITHUB_REPOSITORY = "owner/repo";
     const fetchMock = vi.fn();
@@ -217,7 +217,7 @@ describe("exact issue-comment effects action", () => {
     core.inputs.set("artifact-path", artifactPath);
     core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
     core.inputs.set("github-token", "token");
-    core.inputs.set("harness-url", "https://gardener.example");
+    core.inputs.set("runtime-url", "https://gardener.example");
     process.env.GITHUB_EVENT_PATH = eventPath;
     process.env.GITHUB_REPOSITORY = "owner/repo";
     const fetchMock = vi.fn().mockResolvedValueOnce(Response.json([{

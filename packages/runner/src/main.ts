@@ -12,7 +12,7 @@ delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 
 async function main(): Promise<void> {
   try {
-    const harnessUrl = requiredInput("harness-url");
+    const runtimeUrl = requiredInput("runtime-url");
     const agentHash = requiredInput("task-bundle-hash");
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
     let terminal: Awaited<ReturnType<typeof runPlanningSession>>;
     try {
       terminal = await runPlanningSession({
-        harnessUrl,
+        harnessUrl: runtimeUrl,
         agentHash,
         maxReconnects,
         ...(event === undefined ? {} : { event }),

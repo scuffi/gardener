@@ -1,9 +1,9 @@
 node_modules/
 dist/
-!actions/runner/dist/
-!actions/runner/dist/index.cjs
-!actions/replay-probe/dist/
-!actions/replay-probe/dist/index.cjs
+!bridges/github/plan/dist/
+!bridges/github/plan/dist/index.cjs
+!bridges/github/apply/dist/
+!bridges/github/apply/dist/index.cjs
 .wrangler/
 .dev.vars
 .env

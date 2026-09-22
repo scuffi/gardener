@@ -14,13 +14,13 @@ exact effect receipts.
 
 One headless installation consists of:
 
-- one private **Gardener runtime Worker** with Workers AI, Durable Objects, and D1;
-- one narrow public **runner ingress Worker** connected to the runtime by Service Binding;
+- one narrow public **Gardener runtime Worker** with Workers AI, Durable Objects, and D1;
 - one **D1 database** containing repository enrollment, canonical task bundles, runs, audit events,
   and receipts;
+- the **Gardener GitHub bridge** running inside GitHub-hosted plan/apply jobs;
 - immutable, Gardener-owned reusable workflows consumed at a full commit SHA.
 
-The public ingress grants no authority by accepting a WebSocket. Each session must authenticate with
+The runtime exposes only `/health` and `/session/<id>`; every other route returns `404`. A public WebSocket grants no authority. Each session must authenticate with
 a short-lived GitHub OIDC token. Gardener verifies GitHub's signature and binds the token to the
 enrolled numeric repository and owner IDs, run and attempt, event, ref, commit SHA, GitHub-hosted
 runner, exact reusable-workflow SHA, audience, and effects environment.
@@ -85,7 +85,7 @@ a narrowly scoped local token with **Access: Apps and Policies Edit** permission
 export CLOUDFLARE_API_TOKEN=...
 ```
 
-The token is used only to create an exact-host bypass for the OIDC-authenticated runner ingress. It
+The token is used only to create an exact-host bypass for the OIDC-authenticated runtime hostname. It
 is never written to the repository, installation manifest, Worker, D1, GitHub, or command arguments.
 
 From the trusted Gardener checkout:
@@ -98,11 +98,10 @@ pnpm gardener -- deploy \
 
 `deploy` is checkpointed by an owner-only installation manifest under
 `~/.config/gardener/<workspace>/actions/`. It creates or resumes deterministic resources, applies D1
-migrations, deploys the private runtime, deploys the public ingress, and verifies the private Service
-Binding through the ingress health endpoint.
+migrations, deploys the single public runtime Worker, and verifies its narrow health endpoint.
 
-The default runtime has `workers.dev` disabled and exposes no dashboard. The only public hostname is
-the OIDC-authenticated runner ingress.
+The runtime exposes no dashboard or administrative API. Its only public routes are health and the
+OIDC-authenticated bridge session endpoint.
 
 ## Connect a repository
 
@@ -122,7 +121,7 @@ pnpm gardener -- connect \
 2. enrolls the exact repository and pinned reusable workflow in D1;
 3. uploads canonical bundles keyed by SHA-256;
 4. enables only those hashes for that repository;
-5. sets the non-secret `GARDENER_INGRESS_URL` GitHub repository variable.
+5. sets the non-secret `GARDENER_RUNTIME_URL` GitHub repository variable.
 
 Then commit the generated repository files normally:
 
@@ -164,23 +163,20 @@ pnpm gardener -- doctor \
   --workspace my-gardener \
   --source-root "$PWD"
 
-# Dry-run only.
-pnpm gardener -- down \
-  --workspace my-gardener \
-  --source-root "$PWD"
+# First create and review a 24-hour, manifest-bound teardown intent.
+pnpm gardener -- down --workspace my-gardener --source-root "$PWD"
 
-# Execute only resources whose identities match the private manifest.
+# Then execute using the exact digest returned above.
 pnpm gardener -- down \
   --workspace my-gardener \
   --source-root "$PWD" \
   --execute \
-  --confirm my-gardener
+  --confirm <intent-digest>
 ```
 
 ## Current limitations
 
-- The CLI currently deploys from a trusted Gardener source checkout. Packaging the built runtime and
-  ingress with the published CLI is required before advertising a standalone `npx gardener up`.
+- The temporary demo package identity must be replaced before public npm publication.
 - Actions V1 currently supports model-directed `repository.list_files` and `repository.read_file` tools only; `repository.exec` and non-empty network host rules fail compilation for this target.
 - The current privileged effect surface is exactly `issue.comment.create`.
 - Dashboard deployment through Cloudflare Access is optional and not yet part of the headless setup

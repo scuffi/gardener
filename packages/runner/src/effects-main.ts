@@ -11,7 +11,7 @@ async function main(): Promise<void> {
     const artifactPath = core.getInput("artifact-path", { required: true });
     const expectedSha256 = core.getInput("expected-sha256", { required: true });
     const token = core.getInput("github-token", { required: true });
-    const harnessUrl = core.getInput("harness-url", { required: true });
+    const runtimeUrl = core.getInput("runtime-url", { required: true });
     core.setSecret(token);
     if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("expected-sha256 must be a SHA-256 digest");
     const bytes = await readFile(artifactPath);
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     const body = renderGardenerComment(plan, marker);
     const existing = await findExistingComment(plan.repository.fullName, plan.issueNumber, marker, token);
     const receipt = existing ?? await createComment(plan.repository.fullName, plan.issueNumber, body, token);
-    await recordReceipt(harnessUrl, plan.bundleHash, {
+    await recordReceipt(runtimeUrl, plan.bundleHash, {
       schemaVersion: "gardener.runner.effect-receipt/v1",
       planRunId: plan.runId,
       bundleHash: plan.bundleHash,

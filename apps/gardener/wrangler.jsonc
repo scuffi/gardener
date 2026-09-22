@@ -4,6 +4,7 @@
   "main": "src/task-runtime/runtime-entrypoint.ts",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat", "experimental", "global_fetch_strictly_public"],
+  "workers_dev": true,
   "d1_databases": [
     {
       "binding": "DB",

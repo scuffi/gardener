@@ -1,9 +1,9 @@
-name: Gardener planning runner
-description: Connects an unprivileged GitHub Actions job to a customer-deployed Gardener harness.
+name: Gardener GitHub plan bridge
+description: Connects an unprivileged GitHub runner to a customer-deployed Gardener runtime.
 author: Gardener
 inputs:
-  harness-url:
-    description: HTTPS origin of the customer-deployed Gardener harness.
+  runtime-url:
+    description: HTTPS origin of the customer-deployed Gardener runtime.
     required: true
   task-bundle-hash:
     description: Lowercase SHA-256 digest of the compiled TaskBundleV1.

@@ -22,20 +22,19 @@ const intentSchema = z.strictObject({
   resources: z.strictObject({
     database: z.string().min(1),
     runtimeWorker: z.string().min(1),
-    ingressWorker: z.string().min(1),
   }),
   createdAt: z.string().datetime(),
 });
 
 const teardownIntentSchema = z.strictObject({
-  schemaVersion: z.literal("gardener.actions-teardown-intent/v1"),
+  schemaVersion: z.literal("gardener.actions-teardown-intent/v2"),
   workspace: workspaceName,
   accountId: z.string().min(1),
   manifestHash: sha256,
   resources: z.strictObject({
     database: z.strictObject({ name: z.string().min(1), id: z.string().uuid() }),
     runtimeWorker: z.string().min(1),
-    ingressWorker: z.string().min(1),
+    legacyIngressWorker: z.string().min(1).nullable(),
     runnerAccessBypassAppId: z.string().nullable(),
   }),
   createdAt: z.string().datetime(),
@@ -47,6 +46,26 @@ const deploymentRecordSchema = z.strictObject({
 });
 
 const manifestSchema = z.strictObject({
+  schemaVersion: z.literal("gardener.actions-installation/v2"),
+  workspace: workspaceName,
+  cloudflare: z.strictObject({
+    accountId: z.string().min(1),
+    database: z.strictObject({ name: z.string().min(1), id: z.string().uuid() }),
+    runtimeWorker: z.string().min(1),
+    runtimeOrigin: z.string().url(),
+    runnerAccessBypassAppId: z.string().nullable(),
+    runtimeConfig: z.string().min(1),
+  }),
+  deployment: deploymentRecordSchema.optional(),
+  deploymentHistory: z.array(deploymentRecordSchema).max(20).optional(),
+  deploymentHashVersion: z.literal("actions-v2").optional(),
+  runtimeGeneration: z.literal("actions-only").optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type ActionsInstallationManifest = z.infer<typeof manifestSchema>;
+
+const legacyManifestSchema = z.strictObject({
   schemaVersion: z.literal("gardener.actions-installation/v1"),
   workspace: workspaceName,
   cloudflare: z.strictObject({
@@ -66,20 +85,19 @@ const manifestSchema = z.strictObject({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
-export type ActionsInstallationManifest = z.infer<typeof manifestSchema>;
+type LegacyActionsInstallationManifest = z.infer<typeof legacyManifestSchema>;
+type AnyActionsInstallationManifest = ActionsInstallationManifest | LegacyActionsInstallationManifest;
 
 export interface ActionsResourceNames {
   database: string;
   runtimeWorker: string;
-  ingressWorker: string;
 }
 
 export function actionsResourceNames(workspace: string): ActionsResourceNames {
   const name = workspaceName.parse(workspace);
   return {
     database: `gardener-${name}`,
-    runtimeWorker: `gardener-${name}-runtime`,
-    ingressWorker: `gardener-${name}-runner-ingress`,
+    runtimeWorker: `gardener-${name}`,
   };
 }
 
@@ -95,14 +113,14 @@ export function renderRuntimeConfig(input: {
   databaseId: string;
   sourceRoot: string;
   workspace: string;
-  migrationMode?: "fresh" | "legacy-cutover" | "steady";
+  migrationMode?: "fresh" | "steady";
 }): string {
   return `${JSON.stringify({
     name: input.names.runtimeWorker,
     main: join(input.sourceRoot, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"),
     compatibility_date: "2026-09-02",
     compatibility_flags: ["nodejs_compat", "experimental", "global_fetch_strictly_public"],
-    workers_dev: false,
+    workers_dev: true,
     d1_databases: [{
       binding: "DB",
       database_name: input.names.database,
@@ -115,29 +133,10 @@ export function renderRuntimeConfig(input: {
       { name: "FLUE_GARDENER_TASK_HARNESS_AGENT", class_name: "FlueGardenerTaskHarnessAgent" },
     ] },
     ...(input.migrationMode === "steady" ? {} : {
-      migrations: input.migrationMode === "legacy-cutover"
-        ? [
-            {
-              tag: "agent-native-foundation-v1",
-              new_sqlite_classes: ["ComputerWorkspace", "GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness", "FlueGardenerHarnessAgent"],
-            },
-            {
-              tag: "flue-only-runtime-v1",
-              deleted_classes: ["GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness"],
-            },
-            {
-              tag: "actions-task-runtime-v1",
-              new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
-            },
-            {
-              tag: "actions-only-runtime-v1",
-              deleted_classes: ["ComputerWorkspace", "FlueGardenerHarnessAgent"],
-            },
-          ]
-        : [{
-            tag: "actions-task-runtime-v1",
-            new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
-          }],
+      migrations: [{
+        tag: "actions-task-runtime-v1",
+        new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
+      }],
     }),
     vars: {
       AI_MODEL: "@cf/moonshotai/kimi-k2.6",
@@ -145,29 +144,6 @@ export function renderRuntimeConfig(input: {
       GARDENER_DEPLOYMENT_MODE: "actions-v1",
       LOCAL_DEV_BYPASS: "false",
     },
-    observability: {
-      enabled: true,
-      logs: { enabled: true, invocation_logs: false },
-      traces: { enabled: false },
-    },
-  }, null, 2)}\n`;
-}
-
-export function renderIngressConfig(input: {
-  names: ActionsResourceNames;
-  sourceRoot: string;
-}): string {
-  return `${JSON.stringify({
-    name: input.names.ingressWorker,
-    main: join(input.sourceRoot, "apps/runner-ingress/src/index.ts"),
-    compatibility_date: "2026-09-02",
-    compatibility_flags: ["nodejs_compat", "global_fetch_strictly_public"],
-    workers_dev: true,
-    services: [{
-      binding: "GARDENER",
-      service: input.names.runtimeWorker,
-      entrypoint: "GardenerRunnerIngressEntrypoint",
-    }],
     observability: {
       enabled: true,
       logs: { enabled: true, invocation_logs: false },
@@ -204,7 +180,6 @@ export async function deployActions(input: {
   if (!prior && !intent && (
     databases.some((database) => database.name === names.database)
     || workerExists(sourceRoot, names.runtimeWorker)
-    || workerExists(sourceRoot, names.ingressWorker)
   )) {
     throw new Error("Cloudflare resources already use this workspace name; choose another workspace or restore its installation manifest");
   }
@@ -236,44 +211,20 @@ export async function deployActions(input: {
     throw new Error("Trusted rollback source does not match the confirmed historical deployment digest");
   }
   const runtimeConfig = join(directory, "runtime.wrangler.json");
-  const ingressConfig = join(directory, "ingress.wrangler.json");
   await writePrivateText(runtimeConfig, renderRuntimeConfig({
     names,
     databaseId: database.uuid,
     sourceRoot,
     workspace,
-    migrationMode: prior === null ? "fresh"
-      : prior.runtimeGeneration === "actions-only" ? "steady"
-      : "legacy-cutover",
+    migrationMode: prior === null ? "fresh" : "steady",
   }));
-  await writePrivateText(ingressConfig, renderIngressConfig({ names, sourceRoot }));
-
   wrangler(sourceRoot, "apps/gardener", [
     "d1", "migrations", "apply", names.database, "--remote", "--config", runtimeConfig,
   ], undefined, { quiet: true });
-  if (!workerExists(sourceRoot, names.runtimeWorker)) {
-    // Cloudflare cannot disable workers.dev on a Worker that has never existed.
-    // Create it with a data-less 404 handler, then immediately replace it with
-    // the private runtime and disable its public hostname.
-    const bootstrapSource = join(directory, "runtime-bootstrap.mjs");
-    const bootstrapConfig = join(directory, "runtime-bootstrap.wrangler.json");
-    await writePrivateText(
-      bootstrapSource,
-      "export default { fetch() { return new Response('Not found', { status: 404 }); } };\n",
-    );
-    await writePrivateText(bootstrapConfig, `${JSON.stringify({
-      name: names.runtimeWorker,
-      main: bootstrapSource,
-      compatibility_date: "2026-09-02",
-      workers_dev: true,
-    }, null, 2)}\n`);
-    wrangler(sourceRoot, ".", ["deploy", "--config", bootstrapConfig], undefined, { quiet: true });
-  }
-  wrangler(sourceRoot, "apps/gardener", ["deploy", "--config", runtimeConfig], undefined, { quiet: true });
-  const ingressDeploy = wrangler(sourceRoot, "apps/runner-ingress", [
-    "deploy", "--config", ingressConfig,
+  const runtimeDeploy = wrangler(sourceRoot, "apps/gardener", [
+    "deploy", "--config", runtimeConfig,
   ], undefined, { quiet: true });
-  const ingressOrigin = workerOrigin(ingressDeploy, names.ingressWorker);
+  const runtimeOrigin = workerOrigin(runtimeDeploy, names.runtimeWorker);
   const now = new Date().toISOString();
   const deploymentHistory = prior?.deploymentHashVersion !== "actions-v2"
     ? []
@@ -284,17 +235,15 @@ export async function deployActions(input: {
         .slice(0, 20)
       : prior.deploymentHistory ?? [];
   let manifest = manifestSchema.parse({
-    schemaVersion: "gardener.actions-installation/v1",
+    schemaVersion: "gardener.actions-installation/v2",
     workspace,
     cloudflare: {
       accountId,
       database: { name: names.database, id: database.uuid },
       runtimeWorker: names.runtimeWorker,
-      ingressWorker: names.ingressWorker,
-      ingressOrigin,
+      runtimeOrigin,
       runnerAccessBypassAppId: prior?.cloudflare.runnerAccessBypassAppId ?? null,
       runtimeConfig,
-      ingressConfig,
     },
     deployment: { sourceHash, deployedAt: now },
     deploymentHistory,
@@ -306,10 +255,10 @@ export async function deployActions(input: {
   await writePrivateJson(manifestPath, manifest);
   await unlink(intentPath).catch(() => undefined);
 
-  const accessAppId = await ensurePublicRunnerIngress({
+  const accessAppId = await ensurePublicRuntime({
     accountId,
     workspace,
-    ingressOrigin,
+    runtimeOrigin,
     existingAppId: manifest.cloudflare.runnerAccessBypassAppId,
   });
   if (accessAppId !== manifest.cloudflare.runnerAccessBypassAppId) {
@@ -320,7 +269,7 @@ export async function deployActions(input: {
     });
     await writePrivateJson(manifestPath, manifest);
   }
-  await requireHealthyIngress(ingressOrigin);
+  await requireHealthyRuntime(runtimeOrigin);
   return manifest;
 }
 
@@ -371,7 +320,7 @@ export async function connectActions(input: {
   repository: string;
   repositoryRoot: string;
   sourceRoot: string;
-}): Promise<{ repositoryId: string; bundles: string[]; ingressOrigin: string }> {
+}): Promise<{ repositoryId: string; bundles: string[]; runtimeOrigin: string }> {
   const repository = repositorySlug.parse(input.repository);
   const manifest = await requiredActionsManifest(input.workspace);
   const lock = await readProjectLock(input.repositoryRoot);
@@ -388,7 +337,7 @@ export async function connectActions(input: {
   const enrollmentSql = actionsEnrollmentSql({
     ...metadata,
     workflowRef: lock.release.workflowRef,
-    audience: manifest.cloudflare.ingressOrigin,
+    audience: manifest.cloudflare.runtimeOrigin,
   });
   const statements = [enrollmentSql];
   const bundles: string[] = [];
@@ -422,11 +371,13 @@ export async function connectActions(input: {
     "--remote", "--config", manifest.cloudflare.runtimeConfig,
     "--command", statements.join("\n"),
   ], undefined, { quiet: true });
-  runCommand("gh", [
-    "variable", "set", "GARDENER_INGRESS_URL", "--repo", repository,
-    "--body", manifest.cloudflare.ingressOrigin,
-  ], { cwd: input.repositoryRoot, quiet: true });
-  return { repositoryId: metadata.repositoryId, bundles, ingressOrigin: manifest.cloudflare.ingressOrigin };
+  for (const variable of ["GARDENER_RUNTIME_URL", "GARDENER_INGRESS_URL"]) {
+    runCommand("gh", [
+      "variable", "set", variable, "--repo", repository,
+      "--body", manifest.cloudflare.runtimeOrigin,
+    ], { cwd: input.repositoryRoot, quiet: true });
+  }
+  return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin: manifest.cloudflare.runtimeOrigin };
 }
 
 export async function doctorActions(workspace: string, sourceRoot: string): Promise<{
@@ -434,7 +385,6 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   account: true;
   runtime: true;
   database: true;
-  ingress: true;
   access: true;
   schema: true;
   deploymentHash: string | null;
@@ -451,9 +401,8 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   if (!database || database.uuid !== manifest.cloudflare.database.id) {
     throw new Error("Gardener D1 does not match the installation manifest");
   }
-  if (!workerExists(resolve(sourceRoot), manifest.cloudflare.runtimeWorker)
-    || !workerExists(resolve(sourceRoot), manifest.cloudflare.ingressWorker)) {
-    throw new Error("Gardener Workers do not match the installation manifest");
+  if (!workerExists(resolve(sourceRoot), manifest.cloudflare.runtimeWorker)) {
+    throw new Error("Gardener Worker does not match the installation manifest");
   }
   const requiredTables = [
     "actions_control_audit",
@@ -478,22 +427,21 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
       manifest.cloudflare.accountId,
       `/access/apps/${encodeURIComponent(manifest.cloudflare.runnerAccessBypassAppId)}`,
     ));
-    if (record.domain !== new URL(manifest.cloudflare.ingressOrigin).hostname
-      || record.name !== `Gardener ${workspace} runner ingress`) {
-      throw new Error("Runner Access bypass does not match the installation manifest");
+    if (record.domain !== new URL(manifest.cloudflare.runtimeOrigin).hostname
+      || record.name !== `Gardener ${workspace} runtime`) {
+      throw new Error("Runtime Access bypass does not match the installation manifest");
     }
   }
-  const response = await fetch(`${manifest.cloudflare.ingressOrigin}/health`);
-  const health = await response.json().catch(() => null) as { ok?: unknown; runtime?: unknown } | null;
-  if (!response.ok || health?.ok !== true || health.runtime !== true) {
-    throw new Error("Gardener ingress or private runtime binding is unhealthy");
+  const response = await fetch(`${manifest.cloudflare.runtimeOrigin}/health`);
+  const health = await response.json().catch(() => null) as { ok?: unknown } | null;
+  if (!response.ok || health?.ok !== true) {
+    throw new Error("Gardener runtime is unhealthy");
   }
   return {
     ok: true,
     account: true,
     runtime: true,
     database: true,
-    ingress: true,
     access: true,
     schema: true,
     deploymentHash: manifest.deployment?.sourceHash ?? null,
@@ -508,28 +456,41 @@ export async function destroyActions(input: {
   sourceRoot: string;
   execute: boolean;
   confirm?: string;
-}): Promise<{ destroyed: boolean; intentDigest: string; resources: ActionsResourceNames }> {
-  const manifest = await requiredActionsManifest(input.workspace);
+}): Promise<{
+  destroyed: boolean;
+  intentDigest: string;
+  resources: { database: string; runtimeWorker: string; legacyIngressWorker?: string };
+}> {
+  const manifest = await requiredAnyActionsManifest(input.workspace);
   const sourceRoot = resolve(input.sourceRoot);
-  const resources = actionsResourceNames(input.workspace);
+  const resources = {
+    database: manifest.cloudflare.database.name,
+    runtimeWorker: manifest.cloudflare.runtimeWorker,
+    ...(manifest.schemaVersion === "gardener.actions-installation/v1"
+      ? { legacyIngressWorker: manifest.cloudflare.ingressWorker }
+      : {}),
+  };
   const directory = actionsInstallationDirectory(input.workspace);
   const intentPath = join(directory, "teardown-intent.json");
   const manifestHash = await canonicalSha256(manifest);
+  const teardownResources = {
+    database: manifest.cloudflare.database,
+    runtimeWorker: manifest.cloudflare.runtimeWorker,
+    legacyIngressWorker: manifest.schemaVersion === "gardener.actions-installation/v1"
+      ? manifest.cloudflare.ingressWorker
+      : null,
+    runnerAccessBypassAppId: manifest.cloudflare.runnerAccessBypassAppId,
+  };
   let intent = await readTeardownIntent(intentPath);
 
   if (!input.execute) {
     if (!intent || intent.manifestHash !== manifestHash || teardownIntentExpired(intent.createdAt)) {
       intent = teardownIntentSchema.parse({
-        schemaVersion: "gardener.actions-teardown-intent/v1",
+        schemaVersion: "gardener.actions-teardown-intent/v2",
         workspace: input.workspace,
         accountId: manifest.cloudflare.accountId,
         manifestHash,
-        resources: {
-          database: manifest.cloudflare.database,
-          runtimeWorker: manifest.cloudflare.runtimeWorker,
-          ingressWorker: manifest.cloudflare.ingressWorker,
-          runnerAccessBypassAppId: manifest.cloudflare.runnerAccessBypassAppId,
-        },
+        resources: teardownResources,
         createdAt: new Date().toISOString(),
       });
       await writePrivateJson(intentPath, intent);
@@ -547,12 +508,7 @@ export async function destroyActions(input: {
   }
   if (intent.workspace !== input.workspace || intent.accountId !== manifest.cloudflare.accountId
     || intent.manifestHash !== manifestHash
-    || canonicalJson(intent.resources) !== canonicalJson({
-      database: manifest.cloudflare.database,
-      runtimeWorker: manifest.cloudflare.runtimeWorker,
-      ingressWorker: manifest.cloudflare.ingressWorker,
-      runnerAccessBypassAppId: manifest.cloudflare.runnerAccessBypassAppId,
-    })) {
+    || canonicalJson(intent.resources) !== canonicalJson(teardownResources)) {
     throw new Error("Teardown intent no longer matches the installation manifest");
   }
   if (selectedAccountId(sourceRoot) !== manifest.cloudflare.accountId) {
@@ -571,8 +527,10 @@ export async function destroyActions(input: {
       true,
     );
   }
-  deleteWorker(sourceRoot, "apps/runner-ingress", manifest.cloudflare.ingressWorker, manifest.cloudflare.ingressConfig);
-  deleteWorker(sourceRoot, "apps/gardener", manifest.cloudflare.runtimeWorker, manifest.cloudflare.runtimeConfig);
+  if (teardownResources.legacyIngressWorker) {
+    deleteWorker(sourceRoot, teardownResources.legacyIngressWorker);
+  }
+  deleteWorker(sourceRoot, manifest.cloudflare.runtimeWorker);
   if (database) {
     wrangler(sourceRoot, "apps/gardener", [
       "d1", "delete", manifest.cloudflare.database.name, "--skip-confirmation",
@@ -597,8 +555,6 @@ export async function actionsDeploymentHash(sourceRootInput: string): Promise<st
   const migrationNames = (await readdir(migrationRoot)).filter((name) => name.endsWith(".sql")).sort();
   return canonicalSha256({
     runtimeBundle: await readFile(join(sourceRoot, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"), "utf8"),
-    ingressSource: await readFile(join(sourceRoot, "apps/runner-ingress/src/index.ts"), "utf8"),
-    ingressPackage: await readFile(join(sourceRoot, "apps/runner-ingress/package.json"), "utf8"),
     migrations: await Promise.all(migrationNames.map(async (name) => ({
       name,
       sql: await readFile(join(migrationRoot, name), "utf8"),
@@ -607,11 +563,23 @@ export async function actionsDeploymentHash(sourceRootInput: string): Promise<st
 }
 
 export async function readActionsManifest(workspace: string): Promise<ActionsInstallationManifest | null> {
+  const manifest = await readAnyActionsManifest(workspace);
+  if (!manifest) return null;
+  if (manifest.schemaVersion === "gardener.actions-installation/v1") {
+    throw new Error("This workspace uses the retired two-Worker topology; run gardener down before creating a fresh single-Worker installation");
+  }
+  return manifest;
+}
+
+async function readAnyActionsManifest(workspace: string): Promise<AnyActionsInstallationManifest | null> {
   try {
-    return manifestSchema.parse(JSON.parse(await readFile(
+    const value = JSON.parse(await readFile(
       join(actionsInstallationDirectory(workspace), "installation.json"),
       "utf8",
-    )));
+    )) as { schemaVersion?: unknown };
+    return value.schemaVersion === "gardener.actions-installation/v1"
+      ? legacyManifestSchema.parse(value)
+      : manifestSchema.parse(value);
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
     throw error;
@@ -646,6 +614,12 @@ async function requiredActionsManifest(workspace: string): Promise<ActionsInstal
   return manifest;
 }
 
+async function requiredAnyActionsManifest(workspace: string): Promise<AnyActionsInstallationManifest> {
+  const manifest = await readAnyActionsManifest(workspace);
+  if (!manifest) throw new Error(`No Actions installation exists for workspace ${workspace}`);
+  return manifest;
+}
+
 const lockSchema = z.strictObject({
   schemaVersion: z.literal("gardener.lock/v1"),
   target: z.strictObject({
@@ -670,10 +644,10 @@ export async function readProjectLock(repositoryRoot: string) {
   )));
 }
 
-export async function ensurePublicRunnerIngress(input: {
+export async function ensurePublicRuntime(input: {
   accountId: string;
   workspace: string;
-  ingressOrigin: string;
+  runtimeOrigin: string;
   existingAppId: string | null;
 }, stabilizationMs = 5_000): Promise<string | null> {
   // A newly assigned workers.dev hostname can briefly answer before account-wide
@@ -683,24 +657,24 @@ export async function ensurePublicRunnerIngress(input: {
   }
   let accessIntercepted = false;
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const response = await fetch(`${input.ingressOrigin}/health`, { redirect: "manual" });
+    const response = await fetch(`${input.runtimeOrigin}/health`, { redirect: "manual" });
     if (isAccessRedirect(response)) {
       accessIntercepted = true;
       break;
     }
-    const body = await response.json().catch(() => null) as { ok?: unknown; runtime?: unknown } | null;
-    if (response.ok && body?.ok === true && body.runtime === true) return input.existingAppId;
+    const body = await response.json().catch(() => null) as { ok?: unknown } | null;
+    if (response.ok && body?.ok === true) return input.existingAppId;
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
   }
   if (!accessIntercepted) return input.existingAppId;
-  const expectedName = `Gardener ${input.workspace} runner ingress`;
-  const domain = new URL(input.ingressOrigin).hostname;
+  const expectedName = `Gardener ${input.workspace} runtime`;
+  const domain = new URL(input.runtimeOrigin).hostname;
 
   if (input.existingAppId) {
     const existing = await cloudflareApi(input.accountId, `/access/apps/${encodeURIComponent(input.existingAppId)}`);
     const record = objectResult(existing);
     if (record.domain !== domain || record.name !== expectedName) {
-      throw new Error("Recorded runner Access bypass does not match the deployed ingress");
+      throw new Error("Recorded runtime Access bypass does not match the deployed Worker");
     }
     return input.existingAppId;
   }
@@ -709,7 +683,7 @@ export async function ensurePublicRunnerIngress(input: {
   const exact = arrayResult(listed).filter((item) => item.domain === domain);
   if (exact.length > 0) {
     const owned = exact.find((item) => item.name === expectedName && typeof item.id === "string");
-    if (!owned) throw new Error("An unmanaged Cloudflare Access application already owns the runner ingress hostname");
+    if (!owned) throw new Error("An unmanaged Cloudflare Access application already owns the runtime hostname");
     return owned.id as string;
   }
 
@@ -721,7 +695,7 @@ export async function ensurePublicRunnerIngress(input: {
       type: "self_hosted",
       session_duration: "24h",
       policies: [{
-        name: "Allow GitHub OIDC runner sessions",
+        name: "Allow GitHub OIDC bridge sessions",
         decision: "bypass",
         precedence: 1,
         include: [{ everyone: {} }],
@@ -733,17 +707,17 @@ export async function ensurePublicRunnerIngress(input: {
   return result.id;
 }
 
-async function requireHealthyIngress(ingressOrigin: string): Promise<void> {
+async function requireHealthyRuntime(runtimeOrigin: string): Promise<void> {
   for (let attempt = 0; attempt < 15; attempt += 1) {
-    const response = await fetch(`${ingressOrigin}/health`, { redirect: "manual" });
+    const response = await fetch(`${runtimeOrigin}/health`, { redirect: "manual" });
     if (!isAccessRedirect(response)) {
-      const body = await response.json().catch(() => null) as { ok?: unknown; runtime?: unknown } | null;
-      if (response.ok && body?.ok === true && body.runtime === true) return;
-      throw new Error("Gardener ingress could not verify its private runtime binding");
+      const body = await response.json().catch(() => null) as { ok?: unknown } | null;
+      if (response.ok && body?.ok === true) return;
+      throw new Error("Gardener runtime health check failed");
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
   }
-  throw new Error("Cloudflare Access runner bypass did not become active");
+  throw new Error("Cloudflare Access runtime bypass did not become active");
 }
 
 function isAccessRedirect(response: Response): boolean {
@@ -763,7 +737,7 @@ async function cloudflareApi(
   const token = process.env.CLOUDFLARE_API_TOKEN ?? process.env.CF_API_TOKEN;
   if (!token) {
     throw new Error(
-      "Cloudflare Access protects the runner hostname. Set a scoped CLOUDFLARE_API_TOKEN with Access Apps and Policies edit permission, then rerun deploy.",
+      "Cloudflare Access protects the runtime hostname. Set a scoped CLOUDFLARE_API_TOKEN with Access Apps and Policies edit permission, then rerun deploy.",
     );
   }
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}${path}`, {
@@ -833,9 +807,9 @@ function queryDoctorD1(
   });
 }
 
-function deleteWorker(sourceRoot: string, directory: string, worker: string, config: string): void {
-  const result = wrangler(sourceRoot, directory, [
-    "delete", worker, "--force", "--config", config,
+function deleteWorker(sourceRoot: string, worker: string): void {
+  const result = wrangler(sourceRoot, ".", [
+    "delete", worker, "--force",
   ], undefined, { quiet: true, allowFailure: true });
   if (result.status !== 0 && !/not found|does not exist|10090/i.test(`${result.stdout}\n${result.stderr}`)) {
     throw new Error(`Failed to delete Gardener Worker ${worker}`);

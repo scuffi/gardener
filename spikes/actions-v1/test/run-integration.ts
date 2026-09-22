@@ -69,9 +69,9 @@ async function runBundledAction(): Promise<void> {
     oidcServer.listen(oidcPort, "127.0.0.1", resolve);
   });
   try {
-    const action = await run("node", ["../../actions/runner/dist/index.cjs"], {
+    const action = await run("node", ["../../bridges/github/plan/dist/index.cjs"], {
       ...process.env,
-      "INPUT_HARNESS-URL": `http://127.0.0.1:${port}`,
+      "INPUT_RUNTIME-URL": `http://127.0.0.1:${port}`,
       "INPUT_TASK-BUNDLE-HASH": "b".repeat(64),
       "INPUT_MAX-RECONNECTS": "1",
       ACTIONS_ID_TOKEN_REQUEST_URL: `http://127.0.0.1:${oidcPort}/token?api-version=1`,

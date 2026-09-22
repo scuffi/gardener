@@ -15,19 +15,9 @@ if (process.argv.includes("--clean")) {
 await rm(assets, { recursive: true, force: true });
 await mkdir(join(assets, "apps/gardener/dist"), { recursive: true });
 await mkdir(join(assets, "apps/gardener/migrations-actions"), { recursive: true });
-await mkdir(join(assets, "apps/runner-ingress/src"), { recursive: true });
-
 await copyRuntimeClosure(
   join(repositoryRoot, "apps/gardener/dist/gardener_actions_v1_runtime"),
   join(assets, "apps/gardener/dist/gardener_actions_v1_runtime"),
-);
-await cp(
-  join(repositoryRoot, "apps/runner-ingress/src/index.ts"),
-  join(assets, "apps/runner-ingress/src/index.ts"),
-);
-await cp(
-  join(repositoryRoot, "apps/runner-ingress/package.json"),
-  join(assets, "apps/runner-ingress/package.json"),
 );
 const migrationRoot = join(repositoryRoot, "apps/gardener/migrations-actions");
 for (const name of (await readdir(migrationRoot)).filter((value) => value.endsWith(".sql")).sort()) {

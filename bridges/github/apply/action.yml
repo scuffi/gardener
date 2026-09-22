@@ -1,4 +1,4 @@
-name: Gardener exact effects
+name: Gardener GitHub apply bridge
 description: Applies one validated Gardener effect without checking out or executing repository code.
 author: Gardener
 inputs:
@@ -11,8 +11,8 @@ inputs:
   github-token:
     description: Effects-job GitHub token.
     required: true
-  harness-url:
-    description: HTTPS origin of the Gardener runner ingress.
+  runtime-url:
+    description: HTTPS origin of the customer-deployed Gardener runtime.
     required: true
 outputs:
   comment-id:

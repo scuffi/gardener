@@ -5,12 +5,17 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(repositoryRoot, "apps/gardener/dist/gardener_actions_v1_runtime");
 const entry = await readFile(join(output, "index.js"), "utf8");
-for (const required of ["TaskRunnerSession", "FlueGardenerTaskHarnessAgent", "GardenerRunnerIngressEntrypoint"]) {
-  if (!entry.includes(required)) throw new Error(`Actions runtime is missing ${required}`);
+const exportsBlock = [...entry.matchAll(/export\s*\{([^}]+)\}/g)].at(-1)?.[1] ?? "";
+for (const required of ["TaskRunnerSession", "FlueGardenerTaskHarnessAgent"]) {
+  if (!exportsBlock.includes(required)) throw new Error(`Actions runtime does not export ${required}`);
+}
+if (!exportsBlock.includes("default") || !entry.includes('service: "gardener-runtime"')) {
+  throw new Error("Actions runtime is missing its narrow public health handler");
 }
 for (const forbidden of [
   "ComputerWorkspace",
   "GardenerGitHubEntrypoint",
+  "GardenerRunnerIngressEntrypoint",
   "GardenerFlueAgent",
   "github-gateway/v1",
   "mcp_consent_states",

@@ -13,8 +13,8 @@ var __commonJS = (cb, mod) => function __require() {
   }
 };
 var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
+  for (var name2 in all)
+    __defProp(target, name2, { get: all[name2], enumerable: true });
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -349,8 +349,8 @@ var require_errors = __commonJS({
     "use strict";
     var kUndiciError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR");
     var UndiciError = class extends Error {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "UndiciError";
         this.code = "UND_ERR";
       }
@@ -361,10 +361,10 @@ var require_errors = __commonJS({
     };
     var kConnectTimeoutError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_CONNECT_TIMEOUT");
     var ConnectTimeoutError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "ConnectTimeoutError";
-        this.message = message3 || "Connect Timeout Error";
+        this.message = message || "Connect Timeout Error";
         this.code = "UND_ERR_CONNECT_TIMEOUT";
       }
       static [Symbol.hasInstance](instance) {
@@ -374,10 +374,10 @@ var require_errors = __commonJS({
     };
     var kHeadersTimeoutError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HEADERS_TIMEOUT");
     var HeadersTimeoutError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "HeadersTimeoutError";
-        this.message = message3 || "Headers Timeout Error";
+        this.message = message || "Headers Timeout Error";
         this.code = "UND_ERR_HEADERS_TIMEOUT";
       }
       static [Symbol.hasInstance](instance) {
@@ -387,10 +387,10 @@ var require_errors = __commonJS({
     };
     var kHeadersOverflowError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HEADERS_OVERFLOW");
     var HeadersOverflowError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "HeadersOverflowError";
-        this.message = message3 || "Headers Overflow Error";
+        this.message = message || "Headers Overflow Error";
         this.code = "UND_ERR_HEADERS_OVERFLOW";
       }
       static [Symbol.hasInstance](instance) {
@@ -400,10 +400,10 @@ var require_errors = __commonJS({
     };
     var kBodyTimeoutError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_BODY_TIMEOUT");
     var BodyTimeoutError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "BodyTimeoutError";
-        this.message = message3 || "Body Timeout Error";
+        this.message = message || "Body Timeout Error";
         this.code = "UND_ERR_BODY_TIMEOUT";
       }
       static [Symbol.hasInstance](instance) {
@@ -413,12 +413,12 @@ var require_errors = __commonJS({
     };
     var kResponseStatusCodeError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RESPONSE_STATUS_CODE");
     var ResponseStatusCodeError = class extends UndiciError {
-      constructor(message3, statusCode, headers, body) {
-        super(message3);
+      constructor(message, statusCode, headers, body2) {
+        super(message);
         this.name = "ResponseStatusCodeError";
-        this.message = message3 || "Response Status Code Error";
+        this.message = message || "Response Status Code Error";
         this.code = "UND_ERR_RESPONSE_STATUS_CODE";
-        this.body = body;
+        this.body = body2;
         this.status = statusCode;
         this.statusCode = statusCode;
         this.headers = headers;
@@ -430,10 +430,10 @@ var require_errors = __commonJS({
     };
     var kInvalidArgumentError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_INVALID_ARG");
     var InvalidArgumentError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "InvalidArgumentError";
-        this.message = message3 || "Invalid Argument Error";
+        this.message = message || "Invalid Argument Error";
         this.code = "UND_ERR_INVALID_ARG";
       }
       static [Symbol.hasInstance](instance) {
@@ -443,10 +443,10 @@ var require_errors = __commonJS({
     };
     var kInvalidReturnValueError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_INVALID_RETURN_VALUE");
     var InvalidReturnValueError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "InvalidReturnValueError";
-        this.message = message3 || "Invalid Return Value Error";
+        this.message = message || "Invalid Return Value Error";
         this.code = "UND_ERR_INVALID_RETURN_VALUE";
       }
       static [Symbol.hasInstance](instance) {
@@ -456,10 +456,10 @@ var require_errors = __commonJS({
     };
     var kAbortError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_ABORT");
     var AbortError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "AbortError";
-        this.message = message3 || "The operation was aborted";
+        this.message = message || "The operation was aborted";
         this.code = "UND_ERR_ABORT";
       }
       static [Symbol.hasInstance](instance) {
@@ -469,10 +469,10 @@ var require_errors = __commonJS({
     };
     var kRequestAbortedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_ABORTED");
     var RequestAbortedError = class extends AbortError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "AbortError";
-        this.message = message3 || "Request aborted";
+        this.message = message || "Request aborted";
         this.code = "UND_ERR_ABORTED";
       }
       static [Symbol.hasInstance](instance) {
@@ -482,10 +482,10 @@ var require_errors = __commonJS({
     };
     var kInformationalError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_INFO");
     var InformationalError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "InformationalError";
-        this.message = message3 || "Request information";
+        this.message = message || "Request information";
         this.code = "UND_ERR_INFO";
       }
       static [Symbol.hasInstance](instance) {
@@ -495,10 +495,10 @@ var require_errors = __commonJS({
     };
     var kRequestContentLengthMismatchError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_REQ_CONTENT_LENGTH_MISMATCH");
     var RequestContentLengthMismatchError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "RequestContentLengthMismatchError";
-        this.message = message3 || "Request body length does not match content-length header";
+        this.message = message || "Request body length does not match content-length header";
         this.code = "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH";
       }
       static [Symbol.hasInstance](instance) {
@@ -508,10 +508,10 @@ var require_errors = __commonJS({
     };
     var kResponseContentLengthMismatchError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RES_CONTENT_LENGTH_MISMATCH");
     var ResponseContentLengthMismatchError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "ResponseContentLengthMismatchError";
-        this.message = message3 || "Response body length does not match content-length header";
+        this.message = message || "Response body length does not match content-length header";
         this.code = "UND_ERR_RES_CONTENT_LENGTH_MISMATCH";
       }
       static [Symbol.hasInstance](instance) {
@@ -521,10 +521,10 @@ var require_errors = __commonJS({
     };
     var kClientDestroyedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_DESTROYED");
     var ClientDestroyedError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "ClientDestroyedError";
-        this.message = message3 || "The client is destroyed";
+        this.message = message || "The client is destroyed";
         this.code = "UND_ERR_DESTROYED";
       }
       static [Symbol.hasInstance](instance) {
@@ -534,10 +534,10 @@ var require_errors = __commonJS({
     };
     var kClientClosedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_CLOSED");
     var ClientClosedError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "ClientClosedError";
-        this.message = message3 || "The client is closed";
+        this.message = message || "The client is closed";
         this.code = "UND_ERR_CLOSED";
       }
       static [Symbol.hasInstance](instance) {
@@ -547,10 +547,10 @@ var require_errors = __commonJS({
     };
     var kSocketError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_SOCKET");
     var SocketError = class extends UndiciError {
-      constructor(message3, socket) {
-        super(message3);
+      constructor(message, socket) {
+        super(message);
         this.name = "SocketError";
-        this.message = message3 || "Socket error";
+        this.message = message || "Socket error";
         this.code = "UND_ERR_SOCKET";
         this.socket = socket;
       }
@@ -561,10 +561,10 @@ var require_errors = __commonJS({
     };
     var kNotSupportedError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_NOT_SUPPORTED");
     var NotSupportedError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "NotSupportedError";
-        this.message = message3 || "Not supported error";
+        this.message = message || "Not supported error";
         this.code = "UND_ERR_NOT_SUPPORTED";
       }
       static [Symbol.hasInstance](instance) {
@@ -574,10 +574,10 @@ var require_errors = __commonJS({
     };
     var kBalancedPoolMissingUpstreamError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_BPL_MISSING_UPSTREAM");
     var BalancedPoolMissingUpstreamError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "MissingUpstreamError";
-        this.message = message3 || "No upstream has been added to the BalancedPool";
+        this.message = message || "No upstream has been added to the BalancedPool";
         this.code = "UND_ERR_BPL_MISSING_UPSTREAM";
       }
       static [Symbol.hasInstance](instance) {
@@ -587,8 +587,8 @@ var require_errors = __commonJS({
     };
     var kHTTPParserError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HTTP_PARSER");
     var HTTPParserError = class extends Error {
-      constructor(message3, code, data) {
-        super(message3);
+      constructor(message, code, data) {
+        super(message);
         this.name = "HTTPParserError";
         this.code = code ? `HPE_${code}` : void 0;
         this.data = data ? data.toString() : void 0;
@@ -600,10 +600,10 @@ var require_errors = __commonJS({
     };
     var kResponseExceededMaxSizeError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RES_EXCEEDED_MAX_SIZE");
     var ResponseExceededMaxSizeError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "ResponseExceededMaxSizeError";
-        this.message = message3 || "Response content exceeded max size";
+        this.message = message || "Response content exceeded max size";
         this.code = "UND_ERR_RES_EXCEEDED_MAX_SIZE";
       }
       static [Symbol.hasInstance](instance) {
@@ -613,10 +613,10 @@ var require_errors = __commonJS({
     };
     var kRequestRetryError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_REQ_RETRY");
     var RequestRetryError = class extends UndiciError {
-      constructor(message3, code, { headers, data }) {
-        super(message3);
+      constructor(message, code, { headers, data }) {
+        super(message);
         this.name = "RequestRetryError";
-        this.message = message3 || "Request retry error";
+        this.message = message || "Request retry error";
         this.code = "UND_ERR_REQ_RETRY";
         this.statusCode = code;
         this.data = data;
@@ -629,10 +629,10 @@ var require_errors = __commonJS({
     };
     var kResponseError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RESPONSE");
     var ResponseError = class extends UndiciError {
-      constructor(message3, code, { headers, data }) {
-        super(message3);
+      constructor(message, code, { headers, data }) {
+        super(message);
         this.name = "ResponseError";
-        this.message = message3 || "Response error";
+        this.message = message || "Response error";
         this.code = "UND_ERR_RESPONSE";
         this.statusCode = code;
         this.data = data;
@@ -645,10 +645,10 @@ var require_errors = __commonJS({
     };
     var kSecureProxyConnectionError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_PRX_TLS");
     var SecureProxyConnectionError = class extends UndiciError {
-      constructor(cause, message3, options) {
-        super(message3, { cause, ...options ?? {} });
+      constructor(cause, message, options) {
+        super(message, { cause, ...options ?? {} });
         this.name = "SecureProxyConnectionError";
-        this.message = message3 || "Secure Proxy Connection failed";
+        this.message = message || "Secure Proxy Connection failed";
         this.code = "UND_ERR_PRX_TLS";
         this.cause = cause;
       }
@@ -659,10 +659,10 @@ var require_errors = __commonJS({
     };
     var kMessageSizeExceededError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_WS_MESSAGE_SIZE_EXCEEDED");
     var MessageSizeExceededError = class extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         this.name = "MessageSizeExceededError";
-        this.message = message3 || "Max decompressed message size exceeded";
+        this.message = message || "Max decompressed message size exceeded";
         this.code = "UND_ERR_WS_MESSAGE_SIZE_EXCEEDED";
       }
       static [Symbol.hasInstance](instance) {
@@ -974,8 +974,8 @@ var require_util = __commonJS({
     var { tree } = require_tree();
     var [nodeMajor, nodeMinor] = process.versions.node.split(".").map((v) => Number(v));
     var BodyAsyncIterable = class {
-      constructor(body) {
-        this[kBody] = body;
+      constructor(body2) {
+        this[kBody] = body2;
         this[kBodyUsed] = false;
       }
       async *[Symbol.asyncIterator]() {
@@ -984,26 +984,26 @@ var require_util = __commonJS({
         yield* this[kBody];
       }
     };
-    function wrapRequestBody(body) {
-      if (isStream(body)) {
-        if (bodyLength(body) === 0) {
-          body.on("data", function() {
+    function wrapRequestBody(body2) {
+      if (isStream(body2)) {
+        if (bodyLength(body2) === 0) {
+          body2.on("data", function() {
             assert2(false);
           });
         }
-        if (typeof body.readableDidRead !== "boolean") {
-          body[kBodyUsed] = false;
-          EE.prototype.on.call(body, "data", function() {
+        if (typeof body2.readableDidRead !== "boolean") {
+          body2[kBodyUsed] = false;
+          EE.prototype.on.call(body2, "data", function() {
             this[kBodyUsed] = true;
           });
         }
-        return body;
-      } else if (body && typeof body.pipeTo === "function") {
-        return new BodyAsyncIterable(body);
-      } else if (body && typeof body !== "string" && !ArrayBuffer.isView(body) && isIterable(body)) {
-        return new BodyAsyncIterable(body);
+        return body2;
+      } else if (body2 && typeof body2.pipeTo === "function") {
+        return new BodyAsyncIterable(body2);
+      } else if (body2 && typeof body2 !== "string" && !ArrayBuffer.isView(body2) && isIterable(body2)) {
+        return new BodyAsyncIterable(body2);
       } else {
-        return body;
+        return body2;
       }
     }
     function nop() {
@@ -1072,14 +1072,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path3 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path3 && path3[0] !== "/") {
-          path3 = `/${path3}`;
+        if (path && path[0] !== "/") {
+          path = `/${path}`;
         }
-        return new URL(`${origin}${path3}`);
+        return new URL(`${origin}${path}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1123,21 +1123,21 @@ var require_util = __commonJS({
     function isIterable(obj) {
       return !!(obj != null && (typeof obj[Symbol.iterator] === "function" || typeof obj[Symbol.asyncIterator] === "function"));
     }
-    function bodyLength(body) {
-      if (body == null) {
+    function bodyLength(body2) {
+      if (body2 == null) {
         return 0;
-      } else if (isStream(body)) {
-        const state = body._readableState;
+      } else if (isStream(body2)) {
+        const state = body2._readableState;
         return state && state.objectMode === false && state.ended === true && Number.isFinite(state.length) ? state.length : null;
-      } else if (isBlobLike(body)) {
-        return body.size != null ? body.size : null;
-      } else if (isBuffer(body)) {
-        return body.byteLength;
+      } else if (isBlobLike(body2)) {
+        return body2.size != null ? body2.size : null;
+      } else if (isBuffer(body2)) {
+        return body2.byteLength;
       }
       return null;
     }
-    function isDestroyed(body) {
-      return body && !!(body.destroyed || body[kDestroyed] || stream.isDestroyed?.(body));
+    function isDestroyed(body2) {
+      return body2 && !!(body2.destroyed || body2[kDestroyed] || stream.isDestroyed?.(body2));
     }
     function destroy(stream2, err) {
       if (stream2 == null || !isStream(stream2) || isDestroyed(stream2)) {
@@ -1252,14 +1252,14 @@ var require_util = __commonJS({
         }
       }
     }
-    function isDisturbed(body) {
-      return !!(body && (stream.isDisturbed(body) || body[kBodyUsed]));
+    function isDisturbed(body2) {
+      return !!(body2 && (stream.isDisturbed(body2) || body2[kBodyUsed]));
     }
-    function isErrored(body) {
-      return !!(body && stream.isErrored(body));
+    function isErrored(body2) {
+      return !!(body2 && stream.isErrored(body2));
     }
-    function isReadable(body) {
-      return !!(body && stream.isReadable(body));
+    function isReadable(body2) {
+      return !!(body2 && stream.isReadable(body2));
     }
     function getSocketInfo(socket) {
       return {
@@ -1369,15 +1369,15 @@ var require_util = __commonJS({
         size: m[3] ? parseInt(m[3]) : null
       } : null;
     }
-    function addListener(obj, name, listener) {
+    function addListener(obj, name2, listener) {
       const listeners = obj[kListeners] ??= [];
-      listeners.push([name, listener]);
-      obj.on(name, listener);
+      listeners.push([name2, listener]);
+      obj.on(name2, listener);
       return obj;
     }
     function removeAllListeners(obj) {
-      for (const [name, listener] of obj[kListeners] ?? []) {
-        obj.removeListener(name, listener);
+      for (const [name2, listener] of obj[kListeners] ?? []) {
+        obj.removeListener(name2, listener);
       }
       obj[kListeners] = null;
     }
@@ -1530,39 +1530,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path3);
+        debuglog("sending request to %s %s/%s", method, origin, path);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path3,
+          path,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path3);
+        debuglog("trailers received from %s %s/%s", method, origin, path);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path, origin },
           error: error63
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path3,
+          path,
           error63.message
         );
       });
@@ -1611,9 +1611,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path3, origin }
+            request: { method, path, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path3);
+          debuglog("sending request to %s %s/%s", method, origin, path);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1676,9 +1676,9 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path: path3,
+        path,
         method,
-        body,
+        body: body2,
         headers,
         query,
         idempotent,
@@ -1691,11 +1691,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path3 !== "string") {
+        if (typeof path !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path[0] !== "/" && !(path.startsWith("http://") || path.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path3)) {
+        } else if (invalidPathRegex.test(path)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1726,10 +1726,10 @@ var require_request = __commonJS({
         this.throwOnError = throwOnError === true;
         this.method = method;
         this.abort = null;
-        if (body == null) {
+        if (body2 == null) {
           this.body = null;
-        } else if (isStream(body)) {
-          this.body = body;
+        } else if (isStream(body2)) {
+          this.body = body2;
           const rState = this.body._readableState;
           if (!rState || !rState.autoDestroy) {
             this.endHandler = function autoDestroy() {
@@ -1745,23 +1745,23 @@ var require_request = __commonJS({
             }
           };
           this.body.on("error", this.errorHandler);
-        } else if (isBuffer(body)) {
-          this.body = body.byteLength ? body : null;
-        } else if (ArrayBuffer.isView(body)) {
-          this.body = body.buffer.byteLength ? Buffer.from(body.buffer, body.byteOffset, body.byteLength) : null;
-        } else if (body instanceof ArrayBuffer) {
-          this.body = body.byteLength ? Buffer.from(body) : null;
-        } else if (typeof body === "string") {
-          this.body = body.length ? Buffer.from(body) : null;
-        } else if (isFormDataLike(body) || isIterable(body) || isBlobLike(body)) {
-          this.body = body;
+        } else if (isBuffer(body2)) {
+          this.body = body2.byteLength ? body2 : null;
+        } else if (ArrayBuffer.isView(body2)) {
+          this.body = body2.buffer.byteLength ? Buffer.from(body2.buffer, body2.byteOffset, body2.byteLength) : null;
+        } else if (body2 instanceof ArrayBuffer) {
+          this.body = body2.byteLength ? Buffer.from(body2) : null;
+        } else if (typeof body2 === "string") {
+          this.body = body2.length ? Buffer.from(body2) : null;
+        } else if (isFormDataLike(body2) || isIterable(body2) || isBlobLike(body2)) {
+          this.body = body2;
         } else {
           throw new InvalidArgumentError("body must be a string, a Buffer, a Readable stream, an iterable, or an async iterable");
         }
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path3, query) : path3;
+        this.path = query ? buildURL(path, query) : path;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -2314,9 +2314,9 @@ var require_timers = __commonJS({
        * before the specified function or code is executed.
        * @param {*} arg
        */
-      constructor(callback, delay2, arg) {
+      constructor(callback, delay, arg) {
         this._onTimeout = callback;
-        this._idleTimeout = delay2;
+        this._idleTimeout = delay;
         this._timerArg = arg;
         this.refresh();
       }
@@ -2361,8 +2361,8 @@ var require_timers = __commonJS({
        * when the timer expires.
        * @returns {NodeJS.Timeout|FastTimer}
        */
-      setTimeout(callback, delay2, arg) {
-        return delay2 <= RESOLUTION_MS ? setTimeout(callback, delay2, arg) : new FastTimer(callback, delay2, arg);
+      setTimeout(callback, delay, arg) {
+        return delay <= RESOLUTION_MS ? setTimeout(callback, delay, arg) : new FastTimer(callback, delay, arg);
       },
       /**
        * The clearTimeout method cancels an instantiated Timer previously created
@@ -2388,8 +2388,8 @@ var require_timers = __commonJS({
        * when the timer expires.
        * @returns {FastTimer}
        */
-      setFastTimeout(callback, delay2, arg) {
-        return new FastTimer(callback, delay2, arg);
+      setFastTimeout(callback, delay, arg) {
+        return new FastTimer(callback, delay, arg);
       },
       /**
        * The clearTimeout method cancels an instantiated FastTimer previously
@@ -2415,8 +2415,8 @@ var require_timers = __commonJS({
        * @deprecated
        * @param {number} [delay=0] The delay in milliseconds to add to the now value.
        */
-      tick(delay2 = 0) {
-        fastNow += delay2 - RESOLUTION_MS + 1;
+      tick(delay = 0) {
+        fastNow += delay - RESOLUTION_MS + 1;
         onTick();
         onTick();
       },
@@ -2609,14 +2609,14 @@ var require_connect = __commonJS({
       if (socket == null) {
         return;
       }
-      let message3 = "Connect Timeout Error";
+      let message = "Connect Timeout Error";
       if (Array.isArray(socket.autoSelectFamilyAttemptedAddresses)) {
-        message3 += ` (attempted addresses: ${socket.autoSelectFamilyAttemptedAddresses.join(", ")},`;
+        message += ` (attempted addresses: ${socket.autoSelectFamilyAttemptedAddresses.join(", ")},`;
       } else {
-        message3 += ` (attempted address: ${opts.hostname}:${opts.port},`;
+        message += ` (attempted address: ${opts.hostname}:${opts.port},`;
       }
-      message3 += ` timeout: ${opts.timeout}ms)`;
-      util.destroy(socket, new ConnectTimeoutError(message3));
+      message += ` timeout: ${opts.timeout}ms)`;
+      util.destroy(socket, new ConnectTimeoutError(message));
     }
     module2.exports = buildConnector;
   }
@@ -3262,11 +3262,11 @@ var require_data_url = __commonJS({
       }
       position.position++;
       const encodedBody = input2.slice(mimeTypeLength + 1);
-      let body = stringPercentDecode(encodedBody);
+      let body2 = stringPercentDecode(encodedBody);
       if (/;(\u0020){0,}base64$/i.test(mimeType)) {
-        const stringBody = isomorphicDecode(body);
-        body = forgivingBase64(stringBody);
-        if (body === "failure") {
+        const stringBody = isomorphicDecode(body2);
+        body2 = forgivingBase64(stringBody);
+        if (body2 === "failure") {
           return "failure";
         }
         mimeType = mimeType.slice(0, -6);
@@ -3280,7 +3280,7 @@ var require_data_url = __commonJS({
       if (mimeTypeRecord === "failure") {
         mimeTypeRecord = parseMIMEType("text/plain;charset=US-ASCII");
       }
-      return { mimeType: mimeTypeRecord, body };
+      return { mimeType: mimeTypeRecord, body: body2 };
     }
     function URLSerializer(url2, excludeFragment = false) {
       if (!excludeFragment) {
@@ -3481,9 +3481,9 @@ var require_data_url = __commonJS({
       assert2(mimeType !== "failure");
       const { parameters, essence } = mimeType;
       let serialization = essence;
-      for (let [name, value] of parameters.entries()) {
+      for (let [name2, value] of parameters.entries()) {
         serialization += ";";
-        serialization += name;
+        serialization += name2;
         serialization += "=";
         if (!HTTP_TOKEN_CODEPOINTS.test(value)) {
           value = value.replace(/(\\|")/g, "\\$1");
@@ -3598,15 +3598,15 @@ var require_webidl = __commonJS({
     webidl.converters = {};
     webidl.util = {};
     webidl.errors = {};
-    webidl.errors.exception = function(message3) {
-      return new TypeError(`${message3.header}: ${message3.message}`);
+    webidl.errors.exception = function(message) {
+      return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context) {
       const plural2 = context.types.length === 1 ? "" : " one of";
-      const message3 = `${context.argument} could not be converted to${plural2}: ${context.types.join(", ")}.`;
+      const message = `${context.argument} could not be converted to${plural2}: ${context.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context.prefix,
-        message: message3
+        message
       });
     };
     webidl.errors.invalidArgument = function(context) {
@@ -3931,11 +3931,11 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.TypedArray = function(V, T, prefix, name, opts) {
+    webidl.converters.TypedArray = function(V, T, prefix, name2, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isTypedArray(V) || V.constructor.name !== T.name) {
         throw webidl.errors.conversionFailed({
           prefix,
-          argument: `${name} ("${webidl.util.Stringify(V)}")`,
+          argument: `${name2} ("${webidl.util.Stringify(V)}")`,
           types: [T.name]
         });
       }
@@ -3953,11 +3953,11 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.DataView = function(V, prefix, name, opts) {
+    webidl.converters.DataView = function(V, prefix, name2, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isDataView(V)) {
         throw webidl.errors.exception({
           header: prefix,
-          message: `${name} is not a DataView.`
+          message: `${name2} is not a DataView.`
         });
       }
       if (opts?.allowShared === false && types.isSharedArrayBuffer(V.buffer)) {
@@ -3974,19 +3974,19 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.BufferSource = function(V, prefix, name, opts) {
+    webidl.converters.BufferSource = function(V, prefix, name2, opts) {
       if (types.isAnyArrayBuffer(V)) {
-        return webidl.converters.ArrayBuffer(V, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.ArrayBuffer(V, prefix, name2, { ...opts, allowShared: false });
       }
       if (types.isTypedArray(V)) {
-        return webidl.converters.TypedArray(V, V.constructor, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.TypedArray(V, V.constructor, prefix, name2, { ...opts, allowShared: false });
       }
       if (types.isDataView(V)) {
-        return webidl.converters.DataView(V, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.DataView(V, prefix, name2, { ...opts, allowShared: false });
       }
       throw webidl.errors.conversionFailed({
         prefix,
-        argument: `${name} ("${webidl.util.Stringify(V)}")`,
+        argument: `${name2} ("${webidl.util.Stringify(V)}")`,
         types: ["BufferSource"]
       });
     };
@@ -4025,7 +4025,7 @@ var require_util2 = __commonJS({
     try {
       crypto2 = require("node:crypto");
       const possibleRelevantHashes = ["sha256", "sha384", "sha512"];
-      supportedHashes = crypto2.getHashes().filter((hash2) => possibleRelevantHashes.includes(hash2));
+      supportedHashes = crypto2.getHashes().filter((hash8) => possibleRelevantHashes.includes(hash8));
     } catch {
     }
     function responseURL(response) {
@@ -4150,8 +4150,8 @@ var require_util2 = __commonJS({
         request.headersList.append("origin", serializedOrigin, true);
       }
     }
-    function coarsenTime(timestamp, crossOriginIsolatedCapability) {
-      return timestamp;
+    function coarsenTime(timestamp5, crossOriginIsolatedCapability) {
+      return timestamp5;
     }
     function clampAndCoarsenConnectionTimingInfo(connectionTimingInfo, defaultStartTime, crossOriginIsolatedCapability) {
       if (!connectionTimingInfo?.startTime || connectionTimingInfo.startTime < defaultStartTime) {
@@ -4430,7 +4430,7 @@ var require_util2 = __commonJS({
       return result;
     }
     var esIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
-    function createIterator(name, kInternalIterator, keyIndex = 0, valueIndex = 1) {
+    function createIterator(name2, kInternalIterator, keyIndex = 0, valueIndex = 1) {
       class FastIterableIterator {
         /** @type {any} */
         #target;
@@ -4451,7 +4451,7 @@ var require_util2 = __commonJS({
         next() {
           if (typeof this !== "object" || this === null || !(#target in this)) {
             throw new TypeError(
-              `'next' called on an object that does not implement interface ${name} Iterator.`
+              `'next' called on an object that does not implement interface ${name2} Iterator.`
             );
           }
           const index = this.#index;
@@ -4490,7 +4490,7 @@ var require_util2 = __commonJS({
           writable: false,
           enumerable: false,
           configurable: true,
-          value: `${name} Iterator`
+          value: `${name2} Iterator`
         },
         next: { writable: true, enumerable: true, configurable: true }
       });
@@ -4498,8 +4498,8 @@ var require_util2 = __commonJS({
         return new FastIterableIterator(target, kind);
       };
     }
-    function iteratorMixin(name, object2, kInternalIterator, keyIndex = 0, valueIndex = 1) {
-      const makeIterator = createIterator(name, kInternalIterator, keyIndex, valueIndex);
+    function iteratorMixin(name2, object2, kInternalIterator, keyIndex = 0, valueIndex = 1) {
+      const makeIterator = createIterator(name2, kInternalIterator, keyIndex, valueIndex);
       const properties = {
         keys: {
           writable: true,
@@ -4534,10 +4534,10 @@ var require_util2 = __commonJS({
           configurable: true,
           value: function forEach(callbackfn, thisArg = globalThis) {
             webidl.brandCheck(this, object2);
-            webidl.argumentLengthCheck(arguments, 1, `${name}.forEach`);
+            webidl.argumentLengthCheck(arguments, 1, `${name2}.forEach`);
             if (typeof callbackfn !== "function") {
               throw new TypeError(
-                `Failed to execute 'forEach' on '${name}': parameter 1 is not of type 'Function'.`
+                `Failed to execute 'forEach' on '${name2}': parameter 1 is not of type 'Function'.`
               );
             }
             for (const { 0: key, 1: value } of makeIterator(this, "key+value")) {
@@ -4556,12 +4556,12 @@ var require_util2 = __commonJS({
         }
       });
     }
-    async function fullyReadBody(body, processBody, processBodyError) {
+    async function fullyReadBody(body2, processBody, processBodyError) {
       const successSteps = processBody;
       const errorSteps = processBodyError;
       let reader;
       try {
-        reader = body.stream.getReader();
+        reader = body2.stream.getReader();
       } catch (e) {
         errorSteps(e);
         return;
@@ -4789,8 +4789,8 @@ var require_util2 = __commonJS({
       }
       return values;
     }
-    function getDecodeSplit(name, list) {
-      const value = list.get(name, true);
+    function getDecodeSplit(name2, list) {
+      const value = list.get(name2, true);
       if (value === null) {
         return null;
       }
@@ -4977,7 +4977,7 @@ var require_formdata = __commonJS({
         }
         this[kState] = [];
       }
-      append(name, value, filename = void 0) {
+      append(name2, value, filename = void 0) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.append";
         webidl.argumentLengthCheck(arguments, 2, prefix);
@@ -4986,45 +4986,45 @@ var require_formdata = __commonJS({
             "Failed to execute 'append' on 'FormData': parameter 2 is not of type 'Blob'"
           );
         }
-        name = webidl.converters.USVString(name, prefix, "name");
+        name2 = webidl.converters.USVString(name2, prefix, "name");
         value = isBlobLike(value) ? webidl.converters.Blob(value, prefix, "value", { strict: false }) : webidl.converters.USVString(value, prefix, "value");
         filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix, "filename") : void 0;
-        const entry = makeEntry(name, value, filename);
+        const entry = makeEntry(name2, value, filename);
         this[kState].push(entry);
       }
-      delete(name) {
+      delete(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.delete";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        this[kState] = this[kState].filter((entry) => entry.name !== name);
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        this[kState] = this[kState].filter((entry) => entry.name !== name2);
       }
-      get(name) {
+      get(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.get";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        const idx = this[kState].findIndex((entry) => entry.name === name);
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        const idx = this[kState].findIndex((entry) => entry.name === name2);
         if (idx === -1) {
           return null;
         }
         return this[kState][idx].value;
       }
-      getAll(name) {
+      getAll(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.getAll";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        return this[kState].filter((entry) => entry.name === name).map((entry) => entry.value);
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        return this[kState].filter((entry) => entry.name === name2).map((entry) => entry.value);
       }
-      has(name) {
+      has(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.has";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        return this[kState].findIndex((entry) => entry.name === name) !== -1;
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        return this[kState].findIndex((entry) => entry.name === name2) !== -1;
       }
-      set(name, value, filename = void 0) {
+      set(name2, value, filename = void 0) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.set";
         webidl.argumentLengthCheck(arguments, 2, prefix);
@@ -5033,16 +5033,16 @@ var require_formdata = __commonJS({
             "Failed to execute 'set' on 'FormData': parameter 2 is not of type 'Blob'"
           );
         }
-        name = webidl.converters.USVString(name, prefix, "name");
+        name2 = webidl.converters.USVString(name2, prefix, "name");
         value = isBlobLike(value) ? webidl.converters.Blob(value, prefix, "name", { strict: false }) : webidl.converters.USVString(value, prefix, "name");
         filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix, "name") : void 0;
-        const entry = makeEntry(name, value, filename);
-        const idx = this[kState].findIndex((entry2) => entry2.name === name);
+        const entry = makeEntry(name2, value, filename);
+        const idx = this[kState].findIndex((entry2) => entry2.name === name2);
         if (idx !== -1) {
           this[kState] = [
             ...this[kState].slice(0, idx),
             entry,
-            ...this[kState].slice(idx + 1).filter((entry2) => entry2.name !== name)
+            ...this[kState].slice(idx + 1).filter((entry2) => entry2.name !== name2)
           ];
         } else {
           this[kState].push(entry);
@@ -5080,7 +5080,7 @@ var require_formdata = __commonJS({
         configurable: true
       }
     });
-    function makeEntry(name, value, filename) {
+    function makeEntry(name2, value, filename) {
       if (typeof value === "string") {
       } else {
         if (!isFileLike(value)) {
@@ -5094,7 +5094,7 @@ var require_formdata = __commonJS({
           value = value instanceof NativeFile ? new File2([value], filename, options) : new FileLike(value, filename, options);
         }
       }
-      return { name, value };
+      return { name: name2, value };
     }
     module2.exports = { FormData, makeEntry };
   }
@@ -5173,18 +5173,18 @@ var require_formdata_parser = __commonJS({
         if (result === "failure") {
           return "failure";
         }
-        let { name, filename, contentType, encoding } = result;
+        let { name: name2, filename, contentType, encoding } = result;
         position.position += 2;
-        let body;
+        let body2;
         {
           const boundaryIndex = input2.indexOf(boundary.subarray(2), position.position);
           if (boundaryIndex === -1) {
             return "failure";
           }
-          body = input2.subarray(position.position, boundaryIndex - 4);
-          position.position += body.length;
+          body2 = input2.subarray(position.position, boundaryIndex - 4);
+          position.position += body2.length;
           if (encoding === "base64") {
-            body = Buffer.from(body.toString(), "base64");
+            body2 = Buffer.from(body2.toString(), "base64");
           }
         }
         if (input2[position.position] !== 13 || input2[position.position + 1] !== 10) {
@@ -5198,26 +5198,26 @@ var require_formdata_parser = __commonJS({
           if (!isAsciiString(contentType)) {
             contentType = "";
           }
-          value = new File2([body], filename, { type: contentType });
+          value = new File2([body2], filename, { type: contentType });
         } else {
-          value = utf8DecodeBytes(Buffer.from(body));
+          value = utf8DecodeBytes(Buffer.from(body2));
         }
-        assert2(isUSVString(name));
+        assert2(isUSVString(name2));
         assert2(typeof value === "string" && isUSVString(value) || isFileLike(value));
-        entryList.push(makeEntry(name, value, filename));
+        entryList.push(makeEntry(name2, value, filename));
       }
     }
     function parseMultipartFormDataHeaders(input2, position) {
-      let name = null;
+      let name2 = null;
       let filename = null;
       let contentType = null;
       let encoding = null;
       while (true) {
         if (input2[position.position] === 13 && input2[position.position + 1] === 10) {
-          if (name === null) {
+          if (name2 === null) {
             return "failure";
           }
-          return { name, filename, contentType, encoding };
+          return { name: name2, filename, contentType, encoding };
         }
         let headerName = collectASequenceOfBytes(
           (char) => char !== 10 && char !== 13 && char !== 58,
@@ -5239,13 +5239,13 @@ var require_formdata_parser = __commonJS({
         );
         switch (bufferToLowerCasedHeaderName(headerName)) {
           case "content-disposition": {
-            name = filename = null;
+            name2 = filename = null;
             if (!bufferStartsWith(input2, formDataNameBuffer, position)) {
               return "failure";
             }
             position.position += 17;
-            name = parseMultipartFormDataName(input2, position);
-            if (name === null) {
+            name2 = parseMultipartFormDataName(input2, position);
+            if (name2 === null) {
               return "failure";
             }
             if (bufferStartsWith(input2, filenameBuffer, position)) {
@@ -5302,7 +5302,7 @@ var require_formdata_parser = __commonJS({
     }
     function parseMultipartFormDataName(input2, position) {
       assert2(input2[position.position - 1] === 34);
-      let name = collectASequenceOfBytes(
+      let name2 = collectASequenceOfBytes(
         (char) => char !== 10 && char !== 13 && char !== 34,
         input2,
         position
@@ -5312,8 +5312,8 @@ var require_formdata_parser = __commonJS({
       } else {
         position.position++;
       }
-      name = new TextDecoder().decode(name).replace(/%0A/ig, "\n").replace(/%0D/ig, "\r").replace(/%22/g, '"');
-      return name;
+      name2 = new TextDecoder().decode(name2).replace(/%0A/ig, "\n").replace(/%0D/ig, "\r").replace(/%22/g, '"');
+      return name2;
     }
     function collectASequenceOfBytes(condition, input2, position) {
       let start = position.position;
@@ -5440,16 +5440,16 @@ Content-Disposition: form-data`;
         const rn = new Uint8Array([13, 10]);
         length = 0;
         let hasUnknownSizeValue = false;
-        for (const [name, value] of object2) {
+        for (const [name2, value] of object2) {
           if (typeof value === "string") {
-            const chunk2 = textEncoder.encode(prefix + `; name="${escape(normalizeLinefeeds(name))}"\r
+            const chunk2 = textEncoder.encode(prefix + `; name="${escape(normalizeLinefeeds(name2))}"\r
 \r
 ${normalizeLinefeeds(value)}\r
 `);
             blobParts.push(chunk2);
             length += chunk2.byteLength;
           } else {
-            const chunk2 = textEncoder.encode(`${prefix}; name="${escape(normalizeLinefeeds(name))}"` + (value.name ? `; filename="${escape(value.name)}"` : "") + `\r
+            const chunk2 = textEncoder.encode(`${prefix}; name="${escape(normalizeLinefeeds(name2))}"` + (value.name ? `; filename="${escape(value.name)}"` : "") + `\r
 Content-Type: ${value.type || "application/octet-stream"}\r
 \r
 `);
@@ -5528,8 +5528,8 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           type: "bytes"
         });
       }
-      const body = { stream, source, length };
-      return [body, type];
+      const body2 = { stream, source, length };
+      return [body2, type];
     }
     function safelyExtractBody(object2, keepalive = false) {
       if (object2 instanceof ReadableStream) {
@@ -5538,13 +5538,13 @@ Content-Type: ${value.type || "application/octet-stream"}\r
       }
       return extractBody(object2, keepalive);
     }
-    function cloneBody(instance, body) {
-      const [out1, out2] = body.stream.tee();
-      body.stream = out1;
+    function cloneBody(instance, body2) {
+      const [out1, out2] = body2.stream.tee();
+      body2.stream = out1;
       return {
         stream: out2,
-        length: body.length,
-        source: body.source
+        length: body2.length,
+        source: body2.source
       };
     }
     function throwIfAborted(state) {
@@ -5593,8 +5593,8 @@ Content-Type: ${value.type || "application/octet-stream"}\r
                 case "application/x-www-form-urlencoded": {
                   const entries = new URLSearchParams(value.toString());
                   const fd = new FormData();
-                  for (const [name, value2] of entries) {
-                    fd.append(name, value2);
+                  for (const [name2, value2] of entries) {
+                    fd.append(name2, value2);
                   }
                   return fd;
                 }
@@ -5639,8 +5639,8 @@ Content-Type: ${value.type || "application/octet-stream"}\r
       return promise2.promise;
     }
     function bodyUnusable(object2) {
-      const body = object2[kState].body;
-      return body != null && (body.stream.locked || util.isDisturbed(body.stream));
+      const body2 = object2[kState].body;
+      return body2 != null && (body2.stream.locked || util.isDisturbed(body2.stream));
     }
     function parseJSONFromBytes(bytes) {
       return JSON.parse(utf8DecodeBytes(bytes));
@@ -5815,21 +5815,21 @@ var require_client_h1 = __commonJS({
         this.connection = "";
         this.maxResponseSize = client[kMaxResponseSize];
       }
-      setTimeout(delay2, type) {
-        if (delay2 !== this.timeoutValue || type & USE_FAST_TIMER ^ this.timeoutType & USE_FAST_TIMER) {
+      setTimeout(delay, type) {
+        if (delay !== this.timeoutValue || type & USE_FAST_TIMER ^ this.timeoutType & USE_FAST_TIMER) {
           if (this.timeout) {
             timers.clearTimeout(this.timeout);
             this.timeout = null;
           }
-          if (delay2) {
+          if (delay) {
             if (type & USE_FAST_TIMER) {
-              this.timeout = timers.setFastTimeout(onParserTimeout, delay2, new WeakRef(this));
+              this.timeout = timers.setFastTimeout(onParserTimeout, delay, new WeakRef(this));
             } else {
-              this.timeout = setTimeout(onParserTimeout, delay2, new WeakRef(this));
+              this.timeout = setTimeout(onParserTimeout, delay, new WeakRef(this));
               this.timeout.unref();
             }
           }
-          this.timeoutValue = delay2;
+          this.timeoutValue = delay;
         } else if (this.timeout) {
           if (this.timeout.refresh) {
             this.timeout.refresh();
@@ -5890,14 +5890,14 @@ var require_client_h1 = __commonJS({
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
           if (ret !== constants3.ERROR.OK) {
-            const body = data.subarray(offset);
+            const body2 = data.subarray(offset);
             if (ret === constants3.ERROR.PAUSED_UPGRADE) {
-              this.onUpgrade(body);
+              this.onUpgrade(body2);
             } else if (ret === constants3.ERROR.PAUSED) {
               this.paused = true;
-              socket.unshift(body);
+              socket.unshift(body2);
             } else {
-              throw this.createError(ret, body);
+              throw this.createError(ret, body2);
             }
           }
         } catch (err) {
@@ -5931,12 +5931,12 @@ var require_client_h1 = __commonJS({
           return new ResponseContentLengthMismatchError();
         }
         const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-        let message3 = "";
+        let message = "";
         if (ptr) {
           const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-          message3 = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
         }
-        return new HTTPParserError(message3, constants3.ERROR[ret], data);
+        return new HTTPParserError(message, constants3.ERROR[ret], data);
       }
       destroy() {
         assert2(this.ptr != null);
@@ -6390,21 +6390,21 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path3, host, upgrade, blocking, reset } = request;
-      let { body, headers, contentLength } = request;
+      const { method, path, host, upgrade, blocking, reset } = request;
+      let { body: body2, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
-      if (util.isFormDataLike(body)) {
+      if (util.isFormDataLike(body2)) {
         if (!extractBody) {
           extractBody = require_body().extractBody;
         }
-        const [bodyStream, contentType] = extractBody(body);
+        const [bodyStream, contentType] = extractBody(body2);
         if (request.contentType == null) {
           headers.push("content-type", contentType);
         }
-        body = bodyStream.stream;
+        body2 = bodyStream.stream;
         contentLength = bodyStream.length;
-      } else if (util.isBlobLike(body) && request.contentType == null) {
-        const contentType = body.type;
+      } else if (util.isBlobLike(body2) && request.contentType == null) {
+        const contentType = body2.type;
         if (contentType) {
           const contentTypeValue = `${contentType}`;
           if (!util.isValidHeaderValue(contentTypeValue)) {
@@ -6414,10 +6414,10 @@ var require_client_h1 = __commonJS({
           headers.push("content-type", contentTypeValue);
         }
       }
-      if (body && typeof body.read === "function") {
-        body.read(0);
+      if (body2 && typeof body2.read === "function") {
+        body2.read(0);
       }
-      const bodyLength = util.bodyLength(body);
+      const bodyLength = util.bodyLength(body2);
       contentLength = bodyLength ?? contentLength;
       if (contentLength === null) {
         contentLength = request.contentLength;
@@ -6439,7 +6439,7 @@ var require_client_h1 = __commonJS({
           return;
         }
         util.errorRequest(client, request, err || new RequestAbortedError());
-        util.destroy(body);
+        util.destroy(body2);
         util.destroy(socket, new InformationalError("aborted"));
       };
       try {
@@ -6465,7 +6465,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path3} HTTP/1.1\r
+      let header = `${method} ${path} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6500,26 +6500,26 @@ upgrade: ${upgrade}\r
       if (channels.sendHeaders.hasSubscribers) {
         channels.sendHeaders.publish({ request, headers: header, socket });
       }
-      if (!body || bodyLength === 0) {
+      if (!body2 || bodyLength === 0) {
         writeBuffer(abort, null, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isBuffer(body)) {
-        writeBuffer(abort, body, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isBlobLike(body)) {
-        if (typeof body.stream === "function") {
-          writeIterable(abort, body.stream(), client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isBuffer(body2)) {
+        writeBuffer(abort, body2, client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isBlobLike(body2)) {
+        if (typeof body2.stream === "function") {
+          writeIterable(abort, body2.stream(), client, request, socket, contentLength, header, expectsPayload);
         } else {
-          writeBlob(abort, body, client, request, socket, contentLength, header, expectsPayload);
+          writeBlob(abort, body2, client, request, socket, contentLength, header, expectsPayload);
         }
-      } else if (util.isStream(body)) {
-        writeStream(abort, body, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isIterable(body)) {
-        writeIterable(abort, body, client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isStream(body2)) {
+        writeStream(abort, body2, client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isIterable(body2)) {
+        writeIterable(abort, body2, client, request, socket, contentLength, header, expectsPayload);
       } else {
         assert2(false);
       }
       return true;
     }
-    function writeStream(abort, body, client, request, socket, contentLength, header, expectsPayload) {
+    function writeStream(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
       let finished = false;
       const writer = new AsyncWriter({ abort, socket, request, contentLength, client, expectsPayload, header });
@@ -6539,13 +6539,13 @@ upgrade: ${upgrade}\r
         if (finished) {
           return;
         }
-        if (body.resume) {
-          body.resume();
+        if (body2.resume) {
+          body2.resume();
         }
       };
       const onClose = function() {
         queueMicrotask(() => {
-          body.removeListener("error", onFinished);
+          body2.removeListener("error", onFinished);
         });
         if (!finished) {
           const err = new RequestAbortedError();
@@ -6559,7 +6559,7 @@ upgrade: ${upgrade}\r
         finished = true;
         assert2(socket.destroyed || socket[kWriting] && client[kRunning] <= 1);
         socket.off("drain", onDrain).off("error", onFinished);
-        body.removeListener("data", onData).removeListener("end", onFinished).removeListener("close", onClose);
+        body2.removeListener("data", onData).removeListener("end", onFinished).removeListener("close", onClose);
         if (!err) {
           try {
             writer.end();
@@ -6569,28 +6569,28 @@ upgrade: ${upgrade}\r
         }
         writer.destroy(err);
         if (err && (err.code !== "UND_ERR_INFO" || err.message !== "reset")) {
-          util.destroy(body, err);
+          util.destroy(body2, err);
         } else {
-          util.destroy(body);
+          util.destroy(body2);
         }
       };
-      body.on("data", onData).on("end", onFinished).on("error", onFinished).on("close", onClose);
-      if (body.resume) {
-        body.resume();
+      body2.on("data", onData).on("end", onFinished).on("error", onFinished).on("close", onClose);
+      if (body2.resume) {
+        body2.resume();
       }
       socket.on("drain", onDrain).on("error", onFinished);
-      if (body.errorEmitted ?? body.errored) {
-        setImmediate(() => onFinished(body.errored));
-      } else if (body.endEmitted ?? body.readableEnded) {
+      if (body2.errorEmitted ?? body2.errored) {
+        setImmediate(() => onFinished(body2.errored));
+      } else if (body2.endEmitted ?? body2.readableEnded) {
         setImmediate(() => onFinished(null));
       }
-      if (body.closeEmitted ?? body.closed) {
+      if (body2.closeEmitted ?? body2.closed) {
         setImmediate(onClose);
       }
     }
-    function writeBuffer(abort, body, client, request, socket, contentLength, header, expectsPayload) {
+    function writeBuffer(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
       try {
-        if (!body) {
+        if (!body2) {
           if (contentLength === 0) {
             socket.write(`${header}content-length: 0\r
 \r
@@ -6600,15 +6600,15 @@ upgrade: ${upgrade}\r
             socket.write(`${header}\r
 `, "latin1");
           }
-        } else if (util.isBuffer(body)) {
-          assert2(contentLength === body.byteLength, "buffer body must have content length");
+        } else if (util.isBuffer(body2)) {
+          assert2(contentLength === body2.byteLength, "buffer body must have content length");
           socket.cork();
           socket.write(`${header}content-length: ${contentLength}\r
 \r
 `, "latin1");
-          socket.write(body);
+          socket.write(body2);
           socket.uncork();
-          request.onBodySent(body);
+          request.onBodySent(body2);
           if (!expectsPayload && request.reset !== false) {
             socket[kReset] = true;
           }
@@ -6619,13 +6619,13 @@ upgrade: ${upgrade}\r
         abort(err);
       }
     }
-    async function writeBlob(abort, body, client, request, socket, contentLength, header, expectsPayload) {
-      assert2(contentLength === body.size, "blob body must have content length");
+    async function writeBlob(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
+      assert2(contentLength === body2.size, "blob body must have content length");
       try {
-        if (contentLength != null && contentLength !== body.size) {
+        if (contentLength != null && contentLength !== body2.size) {
           throw new RequestContentLengthMismatchError();
         }
-        const buffer = Buffer.from(await body.arrayBuffer());
+        const buffer = Buffer.from(await body2.arrayBuffer());
         socket.cork();
         socket.write(`${header}content-length: ${contentLength}\r
 \r
@@ -6642,7 +6642,7 @@ upgrade: ${upgrade}\r
         abort(err);
       }
     }
-    async function writeIterable(abort, body, client, request, socket, contentLength, header, expectsPayload) {
+    async function writeIterable(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "iterator body cannot be pipelined");
       let callback = null;
       function onDrain() {
@@ -6663,7 +6663,7 @@ upgrade: ${upgrade}\r
       socket.on("close", onDrain).on("drain", onDrain);
       const writer = new AsyncWriter({ abort, socket, request, contentLength, client, expectsPayload, header });
       try {
-        for await (const chunk of body) {
+        for await (const chunk of body2) {
           if (socket[kError]) {
             throw socket[kError];
           }
@@ -6843,13 +6843,13 @@ var require_client_h2 = __commonJS({
     } = http2;
     function parseH2Headers(headers) {
       const result = [];
-      for (const [name, value] of Object.entries(headers)) {
+      for (const [name2, value] of Object.entries(headers)) {
         if (Array.isArray(value)) {
           for (const subvalue of value) {
-            result.push(Buffer.from(name), Buffer.from(subvalue));
+            result.push(Buffer.from(name2), Buffer.from(subvalue));
           }
         } else {
-          result.push(Buffer.from(name), Buffer.from(value));
+          result.push(Buffer.from(name2), Buffer.from(value));
         }
       }
       return result;
@@ -6954,8 +6954,8 @@ var require_client_h2 = __commonJS({
       this[kSocket][kError] = err;
       this[kClient][kOnError](err);
     }
-    function onHttp2FrameError(type, code, id) {
-      if (id === 0) {
+    function onHttp2FrameError(type, code, id8) {
+      if (id8 === 0) {
         const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
         this[kSocket][kError] = err;
         this[kClient][kOnError](err);
@@ -6991,8 +6991,8 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
-      let { body } = request;
+      const { method, path, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      let { body: body2 } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
         return false;
@@ -7026,7 +7026,7 @@ var require_client_h2 = __commonJS({
         if (stream != null) {
           util.destroy(stream, err);
         }
-        util.destroy(body, err);
+        util.destroy(body2, err);
         client[kQueue][client[kRunningIdx]++] = null;
         client[kResume]();
       };
@@ -7058,18 +7058,18 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path3;
+      headers[HTTP2_HEADER_PATH] = path;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
-      if (body && typeof body.read === "function") {
-        body.read(0);
+      if (body2 && typeof body2.read === "function") {
+        body2.read(0);
       }
-      let contentLength = util.bodyLength(body);
-      if (util.isFormDataLike(body)) {
+      let contentLength = util.bodyLength(body2);
+      if (util.isFormDataLike(body2)) {
         extractBody ??= require_body().extractBody;
-        const [bodyStream, contentType] = extractBody(body);
+        const [bodyStream, contentType] = extractBody(body2);
         headers["content-type"] = contentType;
-        body = bodyStream.stream;
+        body2 = bodyStream.stream;
         contentLength = bodyStream.length;
       }
       if (contentLength == null) {
@@ -7086,11 +7086,11 @@ var require_client_h2 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       if (contentLength != null) {
-        assert2(body, "no body must not have content length");
+        assert2(body2, "no body must not have content length");
         headers[HTTP2_HEADER_CONTENT_LENGTH] = `${contentLength}`;
       }
       session.ref();
-      const shouldEndStream = method === "GET" || method === "HEAD" || body === null;
+      const shouldEndStream = method === "GET" || method === "HEAD" || body2 === null;
       if (expectContinue) {
         headers[HTTP2_HEADER_EXPECT] = "100-continue";
         stream = session.request(headers, { endStream: shouldEndStream, signal });
@@ -7147,7 +7147,7 @@ var require_client_h2 = __commonJS({
       });
       return true;
       function writeBodyH2() {
-        if (!body || contentLength === 0) {
+        if (!body2 || contentLength === 0) {
           writeBuffer(
             abort,
             stream,
@@ -7158,23 +7158,23 @@ var require_client_h2 = __commonJS({
             contentLength,
             expectsPayload
           );
-        } else if (util.isBuffer(body)) {
+        } else if (util.isBuffer(body2)) {
           writeBuffer(
             abort,
             stream,
-            body,
+            body2,
             client,
             request,
             client[kSocket],
             contentLength,
             expectsPayload
           );
-        } else if (util.isBlobLike(body)) {
-          if (typeof body.stream === "function") {
+        } else if (util.isBlobLike(body2)) {
+          if (typeof body2.stream === "function") {
             writeIterable(
               abort,
               stream,
-              body.stream(),
+              body2.stream(),
               client,
               request,
               client[kSocket],
@@ -7185,7 +7185,7 @@ var require_client_h2 = __commonJS({
             writeBlob(
               abort,
               stream,
-              body,
+              body2,
               client,
               request,
               client[kSocket],
@@ -7193,22 +7193,22 @@ var require_client_h2 = __commonJS({
               expectsPayload
             );
           }
-        } else if (util.isStream(body)) {
+        } else if (util.isStream(body2)) {
           writeStream(
             abort,
             client[kSocket],
             expectsPayload,
             stream,
-            body,
+            body2,
             client,
             request,
             contentLength
           );
-        } else if (util.isIterable(body)) {
+        } else if (util.isIterable(body2)) {
           writeIterable(
             abort,
             stream,
-            body,
+            body2,
             client,
             request,
             client[kSocket],
@@ -7220,15 +7220,15 @@ var require_client_h2 = __commonJS({
         }
       }
     }
-    function writeBuffer(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
+    function writeBuffer(abort, h2stream, body2, client, request, socket, contentLength, expectsPayload) {
       try {
-        if (body != null && util.isBuffer(body)) {
-          assert2(contentLength === body.byteLength, "buffer body must have content length");
+        if (body2 != null && util.isBuffer(body2)) {
+          assert2(contentLength === body2.byteLength, "buffer body must have content length");
           h2stream.cork();
-          h2stream.write(body);
+          h2stream.write(body2);
           h2stream.uncork();
           h2stream.end();
-          request.onBodySent(body);
+          request.onBodySent(body2);
         }
         if (!expectsPayload) {
           socket[kReset] = true;
@@ -7239,10 +7239,10 @@ var require_client_h2 = __commonJS({
         abort(error63);
       }
     }
-    function writeStream(abort, socket, expectsPayload, h2stream, body, client, request, contentLength) {
+    function writeStream(abort, socket, expectsPayload, h2stream, body2, client, request, contentLength) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
       const pipe2 = pipeline(
-        body,
+        body2,
         h2stream,
         (err) => {
           if (err) {
@@ -7263,13 +7263,13 @@ var require_client_h2 = __commonJS({
         request.onBodySent(chunk);
       }
     }
-    async function writeBlob(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
-      assert2(contentLength === body.size, "blob body must have content length");
+    async function writeBlob(abort, h2stream, body2, client, request, socket, contentLength, expectsPayload) {
+      assert2(contentLength === body2.size, "blob body must have content length");
       try {
-        if (contentLength != null && contentLength !== body.size) {
+        if (contentLength != null && contentLength !== body2.size) {
           throw new RequestContentLengthMismatchError();
         }
-        const buffer = Buffer.from(await body.arrayBuffer());
+        const buffer = Buffer.from(await body2.arrayBuffer());
         h2stream.cork();
         h2stream.write(buffer);
         h2stream.uncork();
@@ -7284,7 +7284,7 @@ var require_client_h2 = __commonJS({
         abort(err);
       }
     }
-    async function writeIterable(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
+    async function writeIterable(abort, h2stream, body2, client, request, socket, contentLength, expectsPayload) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "iterator body cannot be pipelined");
       let callback = null;
       function onDrain() {
@@ -7304,7 +7304,7 @@ var require_client_h2 = __commonJS({
       });
       h2stream.on("close", onDrain).on("drain", onDrain);
       try {
-        for await (const chunk of body) {
+        for await (const chunk of body2) {
           if (socket[kError]) {
             throw socket[kError];
           }
@@ -7342,8 +7342,8 @@ var require_redirect_handler = __commonJS({
     var redirectableStatusCodes = [300, 301, 302, 303, 307, 308];
     var kBody = /* @__PURE__ */ Symbol("body");
     var BodyAsyncIterable = class {
-      constructor(body) {
-        this[kBody] = body;
+      constructor(body2) {
+        this[kBody] = body2;
         this[kBodyUsed] = false;
       }
       async *[Symbol.asyncIterator]() {
@@ -7411,9 +7411,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path3 = search ? `${pathname}${search}` : pathname;
+        const path = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path3;
+        this.opts.path = path;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7461,8 +7461,8 @@ var require_redirect_handler = __commonJS({
         return true;
       }
       if (unknownOrigin && (header.length === 13 || header.length === 6 || header.length === 19)) {
-        const name = util.headerNameToString(header);
-        return name === "authorization" || name === "cookie" || name === "proxy-authorization";
+        const name2 = util.headerNameToString(header);
+        return name2 === "authorization" || name2 === "cookie" || name2 === "proxy-authorization";
       }
       return false;
     }
@@ -8648,10 +8648,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path3 = "/",
+          path = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path3;
+        opts.path = origin + path;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -9582,18 +9582,18 @@ var require_readable = __commonJS({
       return buffer;
     }
     function consumeEnd(consume2) {
-      const { type, body, resolve, stream, length } = consume2;
+      const { type, body: body2, resolve, stream, length } = consume2;
       try {
         if (type === "text") {
-          resolve(chunksDecode(body, length));
+          resolve(chunksDecode(body2, length));
         } else if (type === "json") {
-          resolve(JSON.parse(chunksDecode(body, length)));
+          resolve(JSON.parse(chunksDecode(body2, length)));
         } else if (type === "arrayBuffer") {
-          resolve(chunksConcat(body, length).buffer);
+          resolve(chunksConcat(body2, length).buffer);
         } else if (type === "blob") {
-          resolve(new Blob(body, { type: stream[kContentType] }));
+          resolve(new Blob(body2, { type: stream[kContentType] }));
         } else if (type === "bytes") {
-          resolve(chunksConcat(body, length));
+          resolve(chunksConcat(body2, length));
         }
         consumeFinish(consume2);
       } catch (err) {
@@ -9633,12 +9633,12 @@ var require_util3 = __commonJS({
     } = require_errors();
     var { chunksDecode } = require_readable();
     var CHUNK_LIMIT = 128 * 1024;
-    async function getResolveErrorBodyCallback({ callback, body, contentType, statusCode, statusMessage, headers }) {
-      assert2(body);
+    async function getResolveErrorBodyCallback({ callback, body: body2, contentType, statusCode, statusMessage, headers }) {
+      assert2(body2);
       let chunks = [];
       let length = 0;
       try {
-        for await (const chunk of body) {
+        for await (const chunk of body2) {
           chunks.push(chunk);
           length += chunk.length;
           if (length > CHUNK_LIMIT) {
@@ -9651,9 +9651,9 @@ var require_util3 = __commonJS({
         chunks = [];
         length = 0;
       }
-      const message3 = `Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ""}`;
+      const message = `Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ""}`;
       if (statusCode === 204 || !contentType || !length) {
-        queueMicrotask(() => callback(new ResponseStatusCodeError(message3, statusCode, headers)));
+        queueMicrotask(() => callback(new ResponseStatusCodeError(message, statusCode, headers)));
         return;
       }
       const stackTraceLimit = Error.stackTraceLimit;
@@ -9669,7 +9669,7 @@ var require_util3 = __commonJS({
       } finally {
         Error.stackTraceLimit = stackTraceLimit;
       }
-      queueMicrotask(() => callback(new ResponseStatusCodeError(message3, statusCode, headers, payload)));
+      queueMicrotask(() => callback(new ResponseStatusCodeError(message, statusCode, headers, payload)));
     }
     var isContentTypeApplicationJson = (contentType) => {
       return contentType.length > 15 && contentType[11] === "/" && contentType[0] === "a" && contentType[1] === "p" && contentType[2] === "p" && contentType[3] === "l" && contentType[4] === "i" && contentType[5] === "c" && contentType[6] === "a" && contentType[7] === "t" && contentType[8] === "i" && contentType[9] === "o" && contentType[10] === "n" && contentType[12] === "j" && contentType[13] === "s" && contentType[14] === "o" && contentType[15] === "n";
@@ -9700,7 +9700,7 @@ var require_api_request = __commonJS({
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        const { signal, method, opaque, body, onInfo, responseHeaders, throwOnError, highWaterMark } = opts;
+        const { signal, method, opaque, body: body2, onInfo, responseHeaders, throwOnError, highWaterMark } = opts;
         try {
           if (typeof callback !== "function") {
             throw new InvalidArgumentError("invalid callback");
@@ -9719,8 +9719,8 @@ var require_api_request = __commonJS({
           }
           super("UNDICI_REQUEST");
         } catch (err) {
-          if (util.isStream(body)) {
-            util.destroy(body.on("error", util.nop), err);
+          if (util.isStream(body2)) {
+            util.destroy(body2.on("error", util.nop), err);
           }
           throw err;
         }
@@ -9730,7 +9730,7 @@ var require_api_request = __commonJS({
         this.callback = callback;
         this.res = null;
         this.abort = null;
-        this.body = body;
+        this.body = body2;
         this.trailers = {};
         this.context = null;
         this.onInfo = onInfo || null;
@@ -9739,8 +9739,8 @@ var require_api_request = __commonJS({
         this.signal = signal;
         this.reason = null;
         this.removeAbortListener = null;
-        if (util.isStream(body)) {
-          body.on("error", (err) => {
+        if (util.isStream(body2)) {
+          body2.on("error", (err) => {
             this.onError(err);
           });
         }
@@ -9824,7 +9824,7 @@ var require_api_request = __commonJS({
         this.res.push(null);
       }
       onError(err) {
-        const { res, callback, body, opaque } = this;
+        const { res, callback, body: body2, opaque } = this;
         if (callback) {
           this.callback = null;
           queueMicrotask(() => {
@@ -9837,9 +9837,9 @@ var require_api_request = __commonJS({
             util.destroy(res, err);
           });
         }
-        if (body) {
+        if (body2) {
           this.body = null;
-          util.destroy(body, err);
+          util.destroy(body2, err);
         }
         if (this.removeAbortListener) {
           res?.off("close", this.removeAbortListener);
@@ -9938,7 +9938,7 @@ var require_api_stream = __commonJS({
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        const { signal, method, opaque, body, onInfo, responseHeaders, throwOnError } = opts;
+        const { signal, method, opaque, body: body2, onInfo, responseHeaders, throwOnError } = opts;
         try {
           if (typeof callback !== "function") {
             throw new InvalidArgumentError("invalid callback");
@@ -9957,8 +9957,8 @@ var require_api_stream = __commonJS({
           }
           super("UNDICI_STREAM");
         } catch (err) {
-          if (util.isStream(body)) {
-            util.destroy(body.on("error", util.nop), err);
+          if (util.isStream(body2)) {
+            util.destroy(body2.on("error", util.nop), err);
           }
           throw err;
         }
@@ -9970,11 +9970,11 @@ var require_api_stream = __commonJS({
         this.abort = null;
         this.context = null;
         this.trailers = null;
-        this.body = body;
+        this.body = body2;
         this.onInfo = onInfo || null;
         this.throwOnError = throwOnError || false;
-        if (util.isStream(body)) {
-          body.on("error", (err) => {
+        if (util.isStream(body2)) {
+          body2.on("error", (err) => {
             this.onError(err);
           });
         }
@@ -10055,7 +10055,7 @@ var require_api_stream = __commonJS({
         res.end();
       }
       onError(err) {
-        const { res, callback, opaque, body } = this;
+        const { res, callback, opaque, body: body2 } = this;
         removeSignal(this);
         this.factory = null;
         if (res) {
@@ -10067,9 +10067,9 @@ var require_api_stream = __commonJS({
             this.runInAsyncScope(callback, null, err, { opaque });
           });
         }
-        if (body) {
+        if (body2) {
           this.body = null;
-          util.destroy(body, err);
+          util.destroy(body2, err);
         }
       }
     };
@@ -10176,9 +10176,9 @@ var require_api_pipeline = __commonJS({
           readableObjectMode: opts.objectMode,
           autoDestroy: true,
           read: () => {
-            const { body } = this;
-            if (body?.resume) {
-              body.resume();
+            const { body: body2 } = this;
+            if (body2?.resume) {
+              body2.resume();
             }
           },
           write: (chunk, encoding, callback) => {
@@ -10190,14 +10190,14 @@ var require_api_pipeline = __commonJS({
             }
           },
           destroy: (err, callback) => {
-            const { body, req, res, ret, abort } = this;
+            const { body: body2, req, res, ret, abort } = this;
             if (!err && !ret._readableState.endEmitted) {
               err = new RequestAbortedError();
             }
             if (abort && err) {
               abort();
             }
-            util.destroy(body, err);
+            util.destroy(body2, err);
             util.destroy(req, err);
             util.destroy(res, err);
             removeSignal(this);
@@ -10231,11 +10231,11 @@ var require_api_pipeline = __commonJS({
           return;
         }
         this.res = new PipelineResponse(resume);
-        let body;
+        let body2;
         try {
           this.handler = null;
           const headers = this.responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
-          body = this.runInAsyncScope(handler, null, {
+          body2 = this.runInAsyncScope(handler, null, {
             statusCode,
             headers,
             opaque,
@@ -10246,13 +10246,13 @@ var require_api_pipeline = __commonJS({
           this.res.on("error", util.nop);
           throw err;
         }
-        if (!body || typeof body.on !== "function") {
+        if (!body2 || typeof body2.on !== "function") {
           throw new InvalidReturnValueError("expected Readable");
         }
-        body.on("data", (chunk) => {
-          const { ret, body: body2 } = this;
-          if (!ret.push(chunk) && body2.pause) {
-            body2.pause();
+        body2.on("data", (chunk) => {
+          const { ret, body: body3 } = this;
+          if (!ret.push(chunk) && body3.pause) {
+            body3.pause();
           }
         }).on("error", (err) => {
           const { ret } = this;
@@ -10266,7 +10266,7 @@ var require_api_pipeline = __commonJS({
             util.destroy(ret, new RequestAbortedError());
           }
         });
-        this.body = body;
+        this.body = body2;
       }
       onData(chunk) {
         const { res } = this;
@@ -10496,11 +10496,11 @@ var require_mock_errors = __commonJS({
     var { UndiciError } = require_errors();
     var kMockNotMatchedError = /* @__PURE__ */ Symbol.for("undici.error.UND_MOCK_ERR_MOCK_NOT_MATCHED");
     var MockNotMatchedError = class _MockNotMatchedError extends UndiciError {
-      constructor(message3) {
-        super(message3);
+      constructor(message) {
+        super(message);
         Error.captureStackTrace(this, _MockNotMatchedError);
         this.name = "MockNotMatchedError";
-        this.message = message3 || "The request does not match any registered mock dispatches";
+        this.message = message || "The request does not match any registered mock dispatches";
         this.code = "UND_MOCK_ERR_MOCK_NOT_MATCHED";
       }
       static [Symbol.hasInstance](instance) {
@@ -10623,22 +10623,22 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path3) {
-      if (typeof path3 !== "string") {
-        return path3;
+    function safeUrl(path) {
+      if (typeof path !== "string") {
+        return path;
       }
-      const pathSegments = path3.split("?");
+      const pathSegments = path.split("?");
       if (pathSegments.length !== 2) {
-        return path3;
+        return path;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path3, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path3);
+    function matchKey(mockDispatch2, { path, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path);
       const methodMatch = matchValue(mockDispatch2.method, method);
-      const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
+      const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
       return pathMatch && methodMatch && bodyMatch && headersMatch;
     }
@@ -10658,7 +10658,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path }) => matchValue(safeUrl(path), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10666,7 +10666,7 @@ var require_mock_utils = __commonJS({
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for method '${key.method}' on path '${resolvedPath}'`);
       }
-      matchedMockDispatches = matchedMockDispatches.filter(({ body }) => typeof body !== "undefined" ? matchValue(body, key.body) : true);
+      matchedMockDispatches = matchedMockDispatches.filter(({ body: body2 }) => typeof body2 !== "undefined" ? matchValue(body2, key.body) : true);
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for body '${key.body}' on path '${resolvedPath}'`);
       }
@@ -10696,11 +10696,11 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path3, method, body, headers, query } = opts;
+      const { path, method, body: body2, headers, query } = opts;
       return {
-        path: path3,
+        path,
         method,
-        body,
+        body: body2,
         headers,
         query
       };
@@ -10711,13 +10711,13 @@ var require_mock_utils = __commonJS({
       for (let i = 0; i < keys.length; ++i) {
         const key = keys[i];
         const value = data[key];
-        const name = Buffer.from(`${key}`);
+        const name2 = Buffer.from(`${key}`);
         if (Array.isArray(value)) {
           for (let j = 0; j < value.length; ++j) {
-            result.push(name, Buffer.from(`${value[j]}`));
+            result.push(name2, Buffer.from(`${value[j]}`));
           }
         } else {
-          result.push(name, Buffer.from(`${value}`));
+          result.push(name2, Buffer.from(`${value}`));
         }
       }
       return result;
@@ -10725,9 +10725,9 @@ var require_mock_utils = __commonJS({
     function getStatusText(statusCode) {
       return STATUS_CODES[statusCode] || "unknown";
     }
-    async function getResponse(body) {
+    async function getResponse(body2) {
       const buffers = [];
-      for await (const data of body) {
+      for await (const data of body2) {
         buffers.push(data);
       }
       return Buffer.concat(buffers).toString("utf8");
@@ -10739,7 +10739,7 @@ var require_mock_utils = __commonJS({
       if (mockDispatch2.data.callback) {
         mockDispatch2.data = { ...mockDispatch2.data, ...mockDispatch2.data.callback(opts) };
       }
-      const { data: { statusCode, data, headers, trailers, error: error63 }, delay: delay2, persist } = mockDispatch2;
+      const { data: { statusCode, data, headers, trailers, error: error63 }, delay, persist } = mockDispatch2;
       const { timesInvoked, times } = mockDispatch2;
       mockDispatch2.consumed = !persist && timesInvoked >= times;
       mockDispatch2.pending = timesInvoked < times;
@@ -10748,21 +10748,21 @@ var require_mock_utils = __commonJS({
         handler.onError(error63);
         return true;
       }
-      if (typeof delay2 === "number" && delay2 > 0) {
+      if (typeof delay === "number" && delay > 0) {
         setTimeout(() => {
           handleReply(this[kDispatches]);
-        }, delay2);
+        }, delay);
       } else {
         handleReply(this[kDispatches]);
       }
       function handleReply(mockDispatches, _data = data) {
         const optsHeaders = Array.isArray(opts.headers) ? buildHeadersFromArray(opts.headers) : opts.headers;
-        const body = typeof _data === "function" ? _data({ ...opts, headers: optsHeaders }) : _data;
-        if (isPromise(body)) {
-          body.then((newData) => handleReply(mockDispatches, newData));
+        const body2 = typeof _data === "function" ? _data({ ...opts, headers: optsHeaders }) : _data;
+        if (isPromise(body2)) {
+          body2.then((newData) => handleReply(mockDispatches, newData));
           return;
         }
-        const responseData = getResponseData(body);
+        const responseData = getResponseData(body2);
         const responseHeaders = generateKeyValues(headers);
         const responseTrailers = generateKeyValues(trailers);
         handler.onConnect?.((err) => handler.onError(err), null);
@@ -11161,10 +11161,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path3,
+            Path: path,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -11683,10 +11683,10 @@ var require_dns = __commonJS({
         return ip;
       }
       setRecords(origin, addresses) {
-        const timestamp = Date.now();
+        const timestamp5 = Date.now();
         const records = { records: { 4: null, 6: null } };
         for (const record2 of addresses) {
-          record2.timestamp = timestamp;
+          record2.timestamp = timestamp5;
           if (typeof record2.ttl === "number") {
             record2.ttl = Math.min(record2.ttl, this.#maxTTL);
           } else {
@@ -11867,12 +11867,12 @@ var require_headers = __commonJS({
         });
       }
     }
-    function appendHeader(headers, name, value) {
+    function appendHeader(headers, name2, value) {
       value = headerValueNormalize(value);
-      if (!isValidHeaderName(name)) {
+      if (!isValidHeaderName(name2)) {
         throw webidl.errors.invalidArgument({
           prefix: "Headers.append",
-          value: name,
+          value: name2,
           type: "header name"
         });
       } else if (!isValidHeaderValue(value)) {
@@ -11885,7 +11885,7 @@ var require_headers = __commonJS({
       if (getHeadersGuard(headers) === "immutable") {
         throw new TypeError("immutable");
       }
-      return getHeadersList(headers).append(name, value, false);
+      return getHeadersList(headers).append(name2, value, false);
     }
     function compareHeaderName(a, b) {
       return a[0] < b[0] ? -1 : 1;
@@ -11908,8 +11908,8 @@ var require_headers = __commonJS({
        * @param {string} name
        * @param {boolean} isLowerCase
        */
-      contains(name, isLowerCase) {
-        return this[kHeadersMap].has(isLowerCase ? name : name.toLowerCase());
+      contains(name2, isLowerCase) {
+        return this[kHeadersMap].has(isLowerCase ? name2 : name2.toLowerCase());
       }
       clear() {
         this[kHeadersMap].clear();
@@ -11922,9 +11922,9 @@ var require_headers = __commonJS({
        * @param {string} value
        * @param {boolean} isLowerCase
        */
-      append(name, value, isLowerCase) {
+      append(name2, value, isLowerCase) {
         this[kHeadersSortedMap] = null;
-        const lowercaseName = isLowerCase ? name : name.toLowerCase();
+        const lowercaseName = isLowerCase ? name2 : name2.toLowerCase();
         const exists2 = this[kHeadersMap].get(lowercaseName);
         if (exists2) {
           const delimiter = lowercaseName === "cookie" ? "; " : ", ";
@@ -11933,7 +11933,7 @@ var require_headers = __commonJS({
             value: `${exists2.value}${delimiter}${value}`
           });
         } else {
-          this[kHeadersMap].set(lowercaseName, { name, value });
+          this[kHeadersMap].set(lowercaseName, { name: name2, value });
         }
         if (lowercaseName === "set-cookie") {
           (this.cookies ??= []).push(value);
@@ -11945,26 +11945,26 @@ var require_headers = __commonJS({
        * @param {string} value
        * @param {boolean} isLowerCase
        */
-      set(name, value, isLowerCase) {
+      set(name2, value, isLowerCase) {
         this[kHeadersSortedMap] = null;
-        const lowercaseName = isLowerCase ? name : name.toLowerCase();
+        const lowercaseName = isLowerCase ? name2 : name2.toLowerCase();
         if (lowercaseName === "set-cookie") {
           this.cookies = [value];
         }
-        this[kHeadersMap].set(lowercaseName, { name, value });
+        this[kHeadersMap].set(lowercaseName, { name: name2, value });
       }
       /**
        * @see https://fetch.spec.whatwg.org/#concept-header-list-delete
        * @param {string} name
        * @param {boolean} isLowerCase
        */
-      delete(name, isLowerCase) {
+      delete(name2, isLowerCase) {
         this[kHeadersSortedMap] = null;
-        if (!isLowerCase) name = name.toLowerCase();
-        if (name === "set-cookie") {
+        if (!isLowerCase) name2 = name2.toLowerCase();
+        if (name2 === "set-cookie") {
           this.cookies = null;
         }
-        this[kHeadersMap].delete(name);
+        this[kHeadersMap].delete(name2);
       }
       /**
        * @see https://fetch.spec.whatwg.org/#concept-header-list-get
@@ -11972,19 +11972,19 @@ var require_headers = __commonJS({
        * @param {boolean} isLowerCase
        * @returns {string | null}
        */
-      get(name, isLowerCase) {
-        return this[kHeadersMap].get(isLowerCase ? name : name.toLowerCase())?.value ?? null;
+      get(name2, isLowerCase) {
+        return this[kHeadersMap].get(isLowerCase ? name2 : name2.toLowerCase())?.value ?? null;
       }
       *[Symbol.iterator]() {
-        for (const { 0: name, 1: { value } } of this[kHeadersMap]) {
-          yield [name, value];
+        for (const { 0: name2, 1: { value } } of this[kHeadersMap]) {
+          yield [name2, value];
         }
       }
       get entries() {
         const headers = {};
         if (this[kHeadersMap].size !== 0) {
-          for (const { name, value } of this[kHeadersMap].values()) {
-            headers[name] = value;
+          for (const { name: name2, value } of this[kHeadersMap].values()) {
+            headers[name2] = value;
           }
         }
         return headers;
@@ -11995,13 +11995,13 @@ var require_headers = __commonJS({
       get entriesList() {
         const headers = [];
         if (this[kHeadersMap].size !== 0) {
-          for (const { 0: lowerName, 1: { name, value } } of this[kHeadersMap]) {
+          for (const { 0: lowerName, 1: { name: name2, value } } of this[kHeadersMap]) {
             if (lowerName === "set-cookie") {
               for (const cookie of this.cookies) {
-                headers.push([name, cookie]);
+                headers.push([name2, cookie]);
               }
             } else {
-              headers.push([name, value]);
+              headers.push([name2, value]);
             }
           }
         }
@@ -12047,8 +12047,8 @@ var require_headers = __commonJS({
           return array2;
         } else {
           let i = 0;
-          for (const { 0: name, 1: { value } } of this[kHeadersMap]) {
-            array2[i++] = [name, value];
+          for (const { 0: name2, 1: { value } } of this[kHeadersMap]) {
+            array2[i++] = [name2, value];
             assert2(value !== null);
           }
           return array2.sort(compareHeaderName);
@@ -12071,77 +12071,77 @@ var require_headers = __commonJS({
         }
       }
       // https://fetch.spec.whatwg.org/#dom-headers-append
-      append(name, value) {
+      append(name2, value) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 2, "Headers.append");
         const prefix = "Headers.append";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
         value = webidl.converters.ByteString(value, prefix, "value");
-        return appendHeader(this, name, value);
+        return appendHeader(this, name2, value);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-delete
-      delete(name) {
+      delete(name2) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.delete");
         const prefix = "Headers.delete";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        if (!isValidHeaderName(name)) {
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix: "Headers.delete",
-            value: name,
+            value: name2,
             type: "header name"
           });
         }
         if (this.#guard === "immutable") {
           throw new TypeError("immutable");
         }
-        if (!this.#headersList.contains(name, false)) {
+        if (!this.#headersList.contains(name2, false)) {
           return;
         }
-        this.#headersList.delete(name, false);
+        this.#headersList.delete(name2, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-get
-      get(name) {
+      get(name2) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.get");
         const prefix = "Headers.get";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        if (!isValidHeaderName(name)) {
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix,
-            value: name,
+            value: name2,
             type: "header name"
           });
         }
-        return this.#headersList.get(name, false);
+        return this.#headersList.get(name2, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-has
-      has(name) {
+      has(name2) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.has");
         const prefix = "Headers.has";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        if (!isValidHeaderName(name)) {
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix,
-            value: name,
+            value: name2,
             type: "header name"
           });
         }
-        return this.#headersList.contains(name, false);
+        return this.#headersList.contains(name2, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-set
-      set(name, value) {
+      set(name2, value) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 2, "Headers.set");
         const prefix = "Headers.set";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
         value = webidl.converters.ByteString(value, prefix, "value");
         value = headerValueNormalize(value);
-        if (!isValidHeaderName(name)) {
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix,
-            value: name,
+            value: name2,
             type: "header name"
           });
         } else if (!isValidHeaderValue(value)) {
@@ -12154,7 +12154,7 @@ var require_headers = __commonJS({
         if (this.#guard === "immutable") {
           throw new TypeError("immutable");
         }
-        this.#headersList.set(name, value, false);
+        this.#headersList.set(name2, value, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-getsetcookie
       getSetCookie() {
@@ -12177,13 +12177,13 @@ var require_headers = __commonJS({
           return this.#headersList[kHeadersSortedMap] = names;
         }
         for (let i = 0; i < names.length; ++i) {
-          const { 0: name, 1: value } = names[i];
-          if (name === "set-cookie") {
+          const { 0: name2, 1: value } = names[i];
+          if (name2 === "set-cookie") {
             for (let j = 0; j < cookies.length; ++j) {
-              headers.push([name, cookies[j]]);
+              headers.push([name2, cookies[j]]);
             }
           } else {
-            headers.push([name, value]);
+            headers.push([name2, value]);
           }
         }
         return this.#headersList[kHeadersSortedMap] = headers;
@@ -12306,9 +12306,9 @@ var require_response = __commonJS({
         const bytes = textEncoder.encode(
           serializeJavascriptValueToJSONString(data)
         );
-        const body = extractBody(bytes);
+        const body2 = extractBody(bytes);
         const responseObject = fromInnerResponse(makeResponse({}), "response");
-        initializeResponse(responseObject, init, { body: body[0], type: "application/json" });
+        initializeResponse(responseObject, init, { body: body2[0], type: "application/json" });
         return responseObject;
       }
       // Creates a redirect Response that redirects to url with status status.
@@ -12332,13 +12332,13 @@ var require_response = __commonJS({
         return responseObject;
       }
       // https://fetch.spec.whatwg.org/#dom-response
-      constructor(body = null, init = {}) {
+      constructor(body2 = null, init = {}) {
         webidl.util.markAsUncloneable(this);
-        if (body === kConstruct) {
+        if (body2 === kConstruct) {
           return;
         }
-        if (body !== null) {
-          body = webidl.converters.BodyInit(body);
+        if (body2 !== null) {
+          body2 = webidl.converters.BodyInit(body2);
         }
         init = webidl.converters.ResponseInit(init);
         this[kState] = makeResponse({});
@@ -12346,8 +12346,8 @@ var require_response = __commonJS({
         setHeadersGuard(this[kHeaders], "response");
         setHeadersList(this[kHeaders], this[kState].headersList);
         let bodyWithType = null;
-        if (body != null) {
-          const [extractedBody, type] = extractBody(body);
+        if (body2 != null) {
+          const [extractedBody, type] = extractBody(body2);
           bodyWithType = { body: extractedBody, type };
         }
         initializeResponse(this, init, bodyWithType);
@@ -12552,7 +12552,7 @@ var require_response = __commonJS({
       assert2(isCancelled(fetchParams));
       return isAborted(fetchParams) ? makeNetworkError(Object.assign(new DOMException("The operation was aborted.", "AbortError"), { cause: err })) : makeNetworkError(Object.assign(new DOMException("Request was cancelled."), { cause: err }));
     }
-    function initializeResponse(response, init, body) {
+    function initializeResponse(response, init, body2) {
       if (init.status !== null && (init.status < 200 || init.status > 599)) {
         throw new RangeError('init["status"] must be in the range of 200 to 599, inclusive.');
       }
@@ -12570,16 +12570,16 @@ var require_response = __commonJS({
       if ("headers" in init && init.headers != null) {
         fill(response[kHeaders], init.headers);
       }
-      if (body) {
+      if (body2) {
         if (nullBodyStatus.includes(response.status)) {
           throw webidl.errors.exception({
             header: "Response constructor",
             message: `Invalid response status code ${response.status}`
           });
         }
-        response[kState].body = body.body;
-        if (body.type != null && !response[kState].headersList.contains("content-type", true)) {
-          response[kState].headersList.append("content-type", body.type, true);
+        response[kState].body = body2.body;
+        if (body2.type != null && !response[kState].headersList.contains("content-type", true)) {
+          response[kState].headersList.append("content-type", body2.type, true);
         }
       }
     }
@@ -12603,23 +12603,23 @@ var require_response = __commonJS({
     webidl.converters.URLSearchParams = webidl.interfaceConverter(
       URLSearchParams
     );
-    webidl.converters.XMLHttpRequestBodyInit = function(V, prefix, name) {
+    webidl.converters.XMLHttpRequestBodyInit = function(V, prefix, name2) {
       if (typeof V === "string") {
-        return webidl.converters.USVString(V, prefix, name);
+        return webidl.converters.USVString(V, prefix, name2);
       }
       if (isBlobLike(V)) {
-        return webidl.converters.Blob(V, prefix, name, { strict: false });
+        return webidl.converters.Blob(V, prefix, name2, { strict: false });
       }
       if (ArrayBuffer.isView(V) || types.isArrayBuffer(V)) {
-        return webidl.converters.BufferSource(V, prefix, name);
+        return webidl.converters.BufferSource(V, prefix, name2);
       }
       if (util.isFormDataLike(V)) {
-        return webidl.converters.FormData(V, prefix, name, { strict: false });
+        return webidl.converters.FormData(V, prefix, name2, { strict: false });
       }
       if (V instanceof URLSearchParams) {
-        return webidl.converters.URLSearchParams(V, prefix, name);
+        return webidl.converters.URLSearchParams(V, prefix, name2);
       }
-      return webidl.converters.DOMString(V, prefix, name);
+      return webidl.converters.DOMString(V, prefix, name2);
     };
     webidl.converters.BodyInit = function(V, prefix, argument) {
       if (V instanceof ReadableStream) {
@@ -12990,8 +12990,8 @@ var require_request2 = __commonJS({
           const headers = init.headers !== void 0 ? init.headers : new HeadersList(headersList);
           headersList.clear();
           if (headers instanceof HeadersList) {
-            for (const { name, value } of headers.rawValues()) {
-              headersList.append(name, value, false);
+            for (const { name: name2, value } of headers.rawValues()) {
+              headersList.append(name2, value, false);
             }
             headersList.cookies = headers.cookies;
           } else {
@@ -14218,11 +14218,11 @@ var require_fetch = __commonJS({
         })();
       }
       try {
-        const { body, status, statusText, headersList, socket } = await dispatch({ body: requestBody });
+        const { body: body2, status, statusText, headersList, socket } = await dispatch({ body: requestBody });
         if (socket) {
           response = makeResponse({ status, statusText, headersList, socket });
         } else {
-          const iterator = body[Symbol.asyncIterator]();
+          const iterator = body2[Symbol.asyncIterator]();
           fetchParams.controller.next = () => iterator.next();
           response = makeResponse({ status, statusText, headersList });
         }
@@ -14317,7 +14317,7 @@ var require_fetch = __commonJS({
         fetchParams.controller.connection.destroy();
       }
       return response;
-      function dispatch({ body }) {
+      function dispatch({ body: body2 }) {
         const url2 = requestCurrentURL(request);
         const agent = fetchParams.controller.dispatcher;
         return new Promise((resolve, reject) => agent.dispatch(
@@ -14325,7 +14325,7 @@ var require_fetch = __commonJS({
             path: url2.pathname + url2.search,
             origin: url2.origin,
             method: request.method,
-            body: agent.isMockActive ? request.body && (request.body.source || request.body.stream) : body,
+            body: agent.isMockActive ? request.body && (request.body.source || request.body.stream) : body2,
             headers: request.headersList.entries,
             maxRedirections: 0,
             upgrade: request.mode === "websocket" ? "websocket" : void 0
@@ -15997,9 +15997,9 @@ var require_util6 = __commonJS({
       }
       return false;
     }
-    function validateCookieName(name) {
-      for (let i = 0; i < name.length; ++i) {
-        const code = name.charCodeAt(i);
+    function validateCookieName(name2) {
+      for (let i = 0; i < name2.length; ++i) {
+        const code = name2.charCodeAt(i);
         if (code < 33 || // exclude CTLs (0-31), SP and HT
         code > 126 || // exclude non-ascii and DEL
         code === 34 || // "
@@ -16045,9 +16045,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path3) {
-      for (let i = 0; i < path3.length; ++i) {
-        const code = path3.charCodeAt(i);
+    function validateCookiePath(path) {
+      for (let i = 0; i < path.length; ++i) {
+        const code = path.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code > 126 || // exclude DEL and non-ascii
         code === 59) {
@@ -16206,7 +16206,7 @@ var require_parse = __commonJS({
       }
       let nameValuePair = "";
       let unparsedAttributes = "";
-      let name = "";
+      let name2 = "";
       let value = "";
       if (header.includes(";")) {
         const position = { position: 0 };
@@ -16219,20 +16219,20 @@ var require_parse = __commonJS({
         value = nameValuePair;
       } else {
         const position = { position: 0 };
-        name = collectASequenceOfCodePointsFast(
+        name2 = collectASequenceOfCodePointsFast(
           "=",
           nameValuePair,
           position
         );
         value = nameValuePair.slice(position.position + 1);
       }
-      name = name.trim();
+      name2 = name2.trim();
       value = value.trim();
-      if (name.length + value.length > maxNameValuePairSize) {
+      if (name2.length + value.length > maxNameValuePairSize) {
         return null;
       }
       return {
-        name,
+        name: name2,
         value,
         ...parseUnparsedAttributes(unparsedAttributes)
       };
@@ -16345,19 +16345,19 @@ var require_cookies = __commonJS({
         return out;
       }
       for (const piece of cookie.split(";")) {
-        const [name, ...value] = piece.split("=");
-        out[name.trim()] = value.join("=");
+        const [name2, ...value] = piece.split("=");
+        out[name2.trim()] = value.join("=");
       }
       return out;
     }
-    function deleteCookie(headers, name, attributes) {
+    function deleteCookie(headers, name2, attributes) {
       webidl.brandCheck(headers, Headers3, { strict: false });
       const prefix = "deleteCookie";
       webidl.argumentLengthCheck(arguments, 2, prefix);
-      name = webidl.converters.DOMString(name, prefix, "name");
+      name2 = webidl.converters.DOMString(name2, prefix, "name");
       attributes = webidl.converters.DeleteCookieAttributes(attributes);
       setCookie(headers, {
-        name,
+        name: name2,
         value: "",
         expires: /* @__PURE__ */ new Date(0),
         ...attributes
@@ -16919,9 +16919,9 @@ var require_util7 = __commonJS({
       const extensionList = /* @__PURE__ */ new Map();
       while (position.position < extensions.length) {
         const pair = collectASequenceOfCodePointsFast(";", extensions, position);
-        const [name, value = ""] = pair.split("=");
+        const [name2, value = ""] = pair.split("=");
         extensionList.set(
-          removeHTTPWhitespace(name, true, false),
+          removeHTTPWhitespace(name2, true, false),
           removeHTTPWhitespace(value, false, true)
         );
         position.position++;
@@ -17492,13 +17492,13 @@ var require_receiver = __commonJS({
             if (this.#byteOffset < this.#info.payloadLength) {
               return callback();
             }
-            const body = this.consume(this.#info.payloadLength);
+            const body2 = this.consume(this.#info.payloadLength);
             if (isControlFrame(this.#info.opcode)) {
-              this.#loop = this.parseControlFrame(body);
+              this.#loop = this.parseControlFrame(body2);
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                if (!this.writeFragments(body)) {
+                if (!this.writeFragments(body2)) {
                   return;
                 }
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
@@ -17511,7 +17511,7 @@ var require_receiver = __commonJS({
                 this.#state = parserStates.INFO;
               } else {
                 this.#extensions.get("permessage-deflate").decompress(
-                  body,
+                  body2,
                   this.#info.fin,
                   (error63, data) => {
                     if (error63) {
@@ -17624,14 +17624,14 @@ var require_receiver = __commonJS({
        * Parses control frames.
        * @param {Buffer} body
        */
-      parseControlFrame(body) {
+      parseControlFrame(body2) {
         const { opcode, payloadLength } = this.#info;
         if (opcode === opcodes.CLOSE) {
           if (payloadLength === 1) {
             failWebsocketConnection(this.ws, "Received close frame with a 1-byte body.");
             return false;
           }
-          this.#info.closeInfo = this.parseCloseBody(body);
+          this.#info.closeInfo = this.parseCloseBody(body2);
           if (this.#info.closeInfo.error) {
             const { code, reason } = this.#info.closeInfo;
             closeWebSocketConnection(this.ws, code, reason, reason.length);
@@ -17639,12 +17639,12 @@ var require_receiver = __commonJS({
             return false;
           }
           if (this.ws[kSentClose] !== sentCloseFrameState.SENT) {
-            let body2 = emptyBuffer;
+            let body3 = emptyBuffer;
             if (this.#info.closeInfo.code) {
-              body2 = Buffer.allocUnsafe(2);
-              body2.writeUInt16BE(this.#info.closeInfo.code, 0);
+              body3 = Buffer.allocUnsafe(2);
+              body3.writeUInt16BE(this.#info.closeInfo.code, 0);
             }
-            const closeFrame = new WebsocketFrameSend(body2);
+            const closeFrame = new WebsocketFrameSend(body3);
             this.ws[kResponse].socket.write(
               closeFrame.createFrame(opcodes.CLOSE),
               (err) => {
@@ -17659,18 +17659,18 @@ var require_receiver = __commonJS({
           return false;
         } else if (opcode === opcodes.PING) {
           if (!this.ws[kReceivedClose]) {
-            const frame = new WebsocketFrameSend(body);
+            const frame = new WebsocketFrameSend(body2);
             this.ws[kResponse].socket.write(frame.createFrame(opcodes.PONG));
             if (channels.ping.hasSubscribers) {
               channels.ping.publish({
-                payload: body
+                payload: body2
               });
             }
           }
         } else if (opcode === opcodes.PONG) {
           if (channels.pong.hasSubscribers) {
             channels.pong.publish({
-              payload: body
+              payload: body2
             });
           }
         }
@@ -18141,15 +18141,15 @@ var require_websocket = __commonJS({
       this.ws[kResponse].socket.resume();
     }
     function onParserError(err) {
-      let message3;
+      let message;
       let code;
       if (err instanceof CloseEvent) {
-        message3 = err.reason;
+        message = err.reason;
         code = err.code;
       } else {
-        message3 = err.message;
+        message = err.message;
       }
-      fireEvent("error", this, () => new ErrorEvent("error", { error: err, message: message3 }));
+      fireEvent("error", this, () => new ErrorEvent("error", { error: err, message }));
       closeWebSocketConnection(this, code);
     }
     module2.exports = {
@@ -18172,7 +18172,7 @@ var require_util8 = __commonJS({
       }
       return true;
     }
-    function delay2(ms) {
+    function delay(ms) {
       return new Promise((resolve) => {
         setTimeout(resolve, ms).unref();
       });
@@ -18180,7 +18180,7 @@ var require_util8 = __commonJS({
     module2.exports = {
       isValidLastEventId,
       isASCIINumber,
-      delay: delay2
+      delay
     };
   }
 });
@@ -18537,7 +18537,7 @@ var require_eventsource = __commonJS({
     var { parseMIMEType } = require_data_url();
     var { createFastMessageEvent } = require_events();
     var { isNetworkError } = require_response();
-    var { delay: delay2 } = require_util8();
+    var { delay } = require_util8();
     var { kEnumerableProperty } = require_util();
     var { environmentSettingsObject } = require_util2();
     var experimentalWarned = false;
@@ -18708,7 +18708,7 @@ var require_eventsource = __commonJS({
         if (this.#readyState === CLOSED) return;
         this.#readyState = CONNECTING;
         this.dispatchEvent(new Event("error"));
-        await delay2(this.#state.reconnectionTime);
+        await delay(this.#state.reconnectionTime);
         if (this.#readyState !== CONNECTING) return;
         if (this.#state.lastEventId.length) {
           this.#request.headersList.set("last-event-id", this.#state.lastEventId, true);
@@ -18889,11 +18889,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path3 = opts.path;
+          let path = opts.path;
           if (!opts.path.startsWith("/")) {
-            path3 = `/${path3}`;
+            path = `/${path}`;
           }
-          url2 = new URL(util.parseOrigin(url2).origin + path3);
+          url2 = new URL(util.parseOrigin(url2).origin + path);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -18991,19 +18991,19 @@ function toCommandProperties(annotationProperties) {
 }
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
-function issueCommand(command, properties, message3) {
-  const cmd = new Command(command, properties, message3);
+function issueCommand(command, properties, message) {
+  const cmd = new Command(command, properties, message);
   process.stdout.write(cmd.toString() + os.EOL);
 }
 var CMD_STRING = "::";
 var Command = class {
-  constructor(command, properties, message3) {
+  constructor(command, properties, message) {
     if (!command) {
       command = "missing.command";
     }
     this.command = command;
     this.properties = properties;
-    this.message = message3;
+    this.message = message;
   }
   toString() {
     let cmdStr = CMD_STRING + this.command;
@@ -19039,7 +19039,7 @@ function escapeProperty(s) {
 var crypto = __toESM(require("crypto"), 1);
 var fs = __toESM(require("fs"), 1);
 var os2 = __toESM(require("os"), 1);
-function issueFileCommand(command, message3) {
+function issueFileCommand(command, message) {
   const filePath = process.env[`GITHUB_${command}`];
   if (!filePath) {
     throw new Error(`Unable to find environment variable for file command ${command}`);
@@ -19047,7 +19047,7 @@ function issueFileCommand(command, message3) {
   if (!fs.existsSync(filePath)) {
     throw new Error(`Missing file at path: ${filePath}`);
   }
-  fs.appendFileSync(filePath, `${toCommandValue(message3)}${os2.EOL}`, {
+  fs.appendFileSync(filePath, `${toCommandValue(message)}${os2.EOL}`, {
     encoding: "utf8"
   });
 }
@@ -19228,16 +19228,16 @@ var RetryableHttpVerbs = ["OPTIONS", "GET", "DELETE", "HEAD"];
 var ExponentialBackoffCeiling = 10;
 var ExponentialBackoffTimeSlice = 5;
 var HttpClientError = class _HttpClientError extends Error {
-  constructor(message3, statusCode) {
-    super(message3);
+  constructor(message, statusCode) {
+    super(message);
     this.name = "HttpClientError";
     this.statusCode = statusCode;
     Object.setPrototypeOf(this, _HttpClientError.prototype);
   }
 };
 var HttpClientResponse = class {
-  constructor(message3) {
-    this.message = message3;
+  constructor(message) {
+    this.message = message;
   }
   readBody() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -20047,8 +20047,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addRaw(text, addEOL = false) {
-    this._buffer += text;
+  addRaw(text2, addEOL = false) {
+    this._buffer += text2;
     return addEOL ? this.addEOL() : this;
   }
   /**
@@ -20144,10 +20144,10 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addHeading(text, level) {
+  addHeading(text2, level) {
     const tag = `h${level}`;
     const allowedTag = ["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag) ? tag : "h1";
-    const element = this.wrap(allowedTag, text);
+    const element = this.wrap(allowedTag, text2);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -20176,9 +20176,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addQuote(text, cite) {
+  addQuote(text2, cite) {
     const attrs = Object.assign({}, cite && { cite });
-    const element = this.wrap("blockquote", text, attrs);
+    const element = this.wrap("blockquote", text2, attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -20189,8 +20189,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addLink(text, href) {
-    const element = this.wrap("a", text, { href });
+  addLink(text2, href) {
+    const element = this.wrap("a", text2, { href });
     return this.addRaw(element).addEOL();
   }
 };
@@ -20248,36 +20248,33 @@ var ExitCode;
 function setSecret(secret) {
   issueCommand("add-mask", {}, secret);
 }
-function getInput(name, options) {
-  const val = process.env[`INPUT_${name.replace(/ /g, "_").toUpperCase()}`] || "";
+function getInput(name2, options) {
+  const val = process.env[`INPUT_${name2.replace(/ /g, "_").toUpperCase()}`] || "";
   if (options && options.required && !val) {
-    throw new Error(`Input required and not supplied: ${name}`);
+    throw new Error(`Input required and not supplied: ${name2}`);
   }
   if (options && options.trimWhitespace === false) {
     return val;
   }
   return val.trim();
 }
-function setOutput(name, value) {
+function setOutput(name2, value) {
   const filePath = process.env["GITHUB_OUTPUT"] || "";
   if (filePath) {
-    return issueFileCommand("OUTPUT", prepareKeyValueMessage(name, value));
+    return issueFileCommand("OUTPUT", prepareKeyValueMessage(name2, value));
   }
   process.stdout.write(os4.EOL);
-  issueCommand("set-output", { name }, toCommandValue(value));
+  issueCommand("set-output", { name: name2 }, toCommandValue(value));
 }
-function setFailed(message3) {
+function setFailed(message) {
   process.exitCode = ExitCode.Failure;
-  error(message3);
+  error(message);
 }
-function debug(message3) {
-  issueCommand("debug", {}, message3);
+function debug(message) {
+  issueCommand("debug", {}, message);
 }
-function error(message3, properties = {}) {
-  issueCommand("error", toCommandProperties(properties), message3 instanceof Error ? message3.toString() : message3);
-}
-function warning(message3, properties = {}) {
-  issueCommand("warning", toCommandProperties(properties), message3 instanceof Error ? message3.toString() : message3);
+function error(message, properties = {}) {
+  issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 function getIDToken(aud) {
   return __awaiter5(this, void 0, void 0, function* () {
@@ -20285,10 +20282,9 @@ function getIDToken(aud) {
   });
 }
 
-// src/main.ts
+// src/effects-main.ts
 var import_node_crypto = require("node:crypto");
-var import_promises2 = require("node:fs/promises");
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_promises = require("node:fs/promises");
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -21106,10 +21102,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path) {
+  if (!path)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -21408,12 +21404,12 @@ function merge(a, b) {
   });
   return clone(a, def);
 }
-function partial(Class2, schema, mask, name = "partial") {
+function partial(Class2, schema, mask, name2 = "partial") {
   const currDef = schema._zod.def;
   const checks = currDef.checks;
   const hasChecks = checks && checks.length > 0;
   if (hasChecks) {
-    throw new Error(`.${name}() cannot be used on object schemas containing refinements`);
+    throw new Error(`.${name2}() cannot be used on object schemas containing refinements`);
   }
   const selected = mask ? new Set(maskedKeys(schema, mask)) : void 0;
   const newShape = {};
@@ -21449,16 +21445,16 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path);
     return iss;
   });
 }
-function unwrapMessage(message3) {
-  return typeof message3 === "string" ? message3 : message3?.message;
+function unwrapMessage(message) {
+  return typeof message === "string" ? message : message?.message;
 }
 function attachSchema(issues, start, inst) {
   var _a3;
@@ -21476,7 +21472,7 @@ function finalizeIssue(iss, ctx, config2) {
       iss.schema = iss.inst;
   }
   const schemaError = iss.schema !== iss.inst ? iss.schema?._zod.def?.error : void 0;
-  const message3 = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
+  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
   const full = {};
   for (const k of Object.keys(iss)) {
     if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__")
@@ -21484,7 +21480,7 @@ function finalizeIssue(iss, ctx, config2) {
     full[k] = iss[k];
   }
   full.path ?? (full.path = []);
-  full.message = message3;
+  full.message = message;
   if (ctx?.reportInput) {
     full.input = iss.input;
   }
@@ -21558,8 +21554,8 @@ function cleanEnum(obj) {
     return Number.isNaN(Number.parseInt(k, 10));
   }).map((el) => el[1]);
 }
-function base64ToUint8Array(base643) {
-  const binaryString = atob(base643);
+function base64ToUint8Array(base644) {
+  const binaryString = atob(base644);
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
@@ -21574,9 +21570,9 @@ function uint8ArrayToBase64(bytes) {
   return btoa(binaryString);
 }
 function base64urlToUint8Array(base64url3) {
-  const base643 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - base643.length % 4) % 4);
-  return base64ToUint8Array(base643 + padding);
+  const base644 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - base644.length % 4) % 4);
+  return base64ToUint8Array(base644 + padding);
 }
 function uint8ArrayToBase64url(bytes) {
   return uint8ArrayToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
@@ -21741,7 +21737,7 @@ function newError(Definition) {
   return new Definition();
 }
 // @__NO_SIDE_EFFECTS__
-function $constructor(name, initializer3, proto, params) {
+function $constructor(name2, initializer3, proto, params) {
   const zodProto = {};
   function Internals(def) {
     this.def = def;
@@ -21759,10 +21755,10 @@ function $constructor(name, initializer3, proto, params) {
       } finally {
         _zodDesc.value = void 0;
       }
-    } else if (inst._zod.traits.has(name)) {
+    } else if (inst._zod.traits.has(name2)) {
       return;
     }
-    inst._zod.traits.add(name);
+    inst._zod.traits.add(name2);
     initializer3(inst, def);
     if (initialized) {
       const own2 = Object.getPrototypeOf(inst);
@@ -21788,7 +21784,7 @@ function $constructor(name, initializer3, proto, params) {
   const Parent = params?.Parent ?? Object;
   class Definition extends Parent {
   }
-  Object.defineProperty(Definition, "name", { value: name });
+  Object.defineProperty(Definition, "name", { value: name2 });
   function _(def) {
     const inst = params?.Parent ? newError(Definition) : this;
     init(inst, def);
@@ -21809,10 +21805,10 @@ function $constructor(name, initializer3, proto, params) {
     value: (inst) => {
       if (params?.Parent && inst instanceof params.Parent)
         return true;
-      return inst?._zod?.traits?.has(name);
+      return inst?._zod?.traits?.has(name2);
     }
   });
-  Object.defineProperty(_, "name", { value: name });
+  Object.defineProperty(_, "name", { value: name2 });
   return _;
 }
 var $brand = /* @__PURE__ */ Symbol("zod_brand");
@@ -21822,8 +21818,8 @@ var $ZodAsyncError = class extends Error {
   }
 };
 var $ZodEncodeError = class extends Error {
-  constructor(name) {
-    super(`Encountered unidirectional transform during encode: ${name}`);
+  constructor(name2) {
+    super(`Encountered unidirectional transform during encode: ${name2}`);
     this.name = "ZodEncodeError";
   }
 };
@@ -21903,16 +21899,16 @@ function flattenError(error63, mapper = (issue3) => issue3.message) {
 }
 function formatError(error63, mapper = (issue3) => issue3.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error64, path3 = []) => {
+  const processError = (error64, path = []) => {
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
       } else {
-        const fullpath = [...path3, ...issue3.path];
+        const fullpath = [...path, ...issue3.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue3));
         } else {
@@ -21951,17 +21947,17 @@ function formatError(error63, mapper = (issue3) => issue3.message) {
 }
 function treeifyError(error63, mapper = (issue3) => issue3.message) {
   const result = { errors: [] };
-  const processError = (error64, path3 = []) => {
+  const processError = (error64, path = []) => {
     var _a3;
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
       } else {
-        const fullpath = [...path3, ...issue3.path];
+        const fullpath = [...path, ...issue3.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue3));
           continue;
@@ -22000,8 +21996,8 @@ function treeifyError(error63, mapper = (issue3) => issue3.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path3) {
+  const path = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -23319,8 +23315,8 @@ var base64urlCharset = /^[A-Za-z0-9_-]*$/;
 function isValidBase64URL(data) {
   if (!base64urlCharset.test(data))
     return false;
-  const base643 = data.replace(/[-_]/g, (c) => c === "-" ? "+" : "/");
-  const padded = base643.padEnd(Math.ceil(base643.length / 4) * 4, "=");
+  const base644 = data.replace(/[-_]/g, (c) => c === "-" ? "+" : "/");
+  const padded = base644.padEnd(Math.ceil(base644.length / 4) * 4, "=");
   return isValidBase64(padded);
 }
 var $ZodBase64URL = /* @__PURE__ */ $constructor("$ZodBase64URL", (inst, def) => {
@@ -23869,15 +23865,15 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     const syms = normalized.symbolKeys;
     const doc = new Doc(["payload", "ctx"], { shape, inst, memo: memo2, syms });
     const parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
-    const prefixStr = (id, k) => `
-          let ${id}_ab = false;
-          for (let i = 0; i < ${id}.issues.length; i++) {
-            const iss = ${id}.issues[i];
+    const prefixStr = (id8, k) => `
+          let ${id8}_ab = false;
+          for (let i = 0; i < ${id8}.issues.length; i++) {
+            const iss = ${id8}.issues[i];
             iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
-            if (iss.continue !== true) ${id}_ab = true;
+            if (iss.continue !== true) ${id8}_ab = true;
           }
-          if (${id}_ab && ctx && ctx.abortEarly) {
+          if (${id8}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
             return payload;
           }`;
@@ -23891,34 +23887,34 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     for (const key of normalized.allKeys) {
       if (key === "__proto__")
         continue;
-      const id = ids[key];
+      const id8 = ids[key];
       const k = typeof key === "symbol" ? `syms[${syms.indexOf(key)}]` : esc(key);
       const isPresent = `${k} in input`;
       const schema = shape[key];
       const optin = schema?._zod?.optin;
       const isOptionalIn = optin !== void 0;
       const isOptionalOut = schema?._zod?.optout === "optional";
-      doc.write(`const ${id} = ${parseStr(k)};`);
+      doc.write(`const ${id8} = ${parseStr(k)};`);
       if (isOptionalIn && isOptionalOut) {
-        const assign = optin === "optional" ? `${id}_present` : `${id}.value !== undefined || ${id}_present`;
+        const assign = optin === "optional" ? `${id8}_present` : `${id8}.value !== undefined || ${id8}_present`;
         doc.write(`
-        const ${id}_present = ${isPresent};
-        if (!${id}.issues.length || ${id}_present) {
-          if (${id}.issues.length) {${prefixStr(id, k)}
+        const ${id8}_present = ${isPresent};
+        if (!${id8}.issues.length || ${id8}_present) {
+          if (${id8}.issues.length) {${prefixStr(id8, k)}
           }
 
           if (${assign}) {
-            newResult[${k}] = ${id}.value;
+            newResult[${k}] = ${id8}.value;
           }
         }
 
       `);
       } else if (!isOptionalIn) {
         doc.write(`
-        const ${id}_present = ${isPresent};
-        if (${id}.issues.length) {${prefixStr(id, k)}
+        const ${id8}_present = ${isPresent};
+        if (${id8}.issues.length) {${prefixStr(id8, k)}
         }
-        if (!${id}_present && !${id}.issues.length) {
+        if (!${id8}_present && !${id8}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
@@ -23931,22 +23927,22 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
           }
         }
 
-        if (${id}_present) {
-          newResult[${k}] = ${id}.value;
+        if (${id8}_present) {
+          newResult[${k}] = ${id8}.value;
         }
 
       `);
       } else {
         doc.write(`
-        if (${id}.issues.length) {${prefixStr(id, k)}
+        if (${id8}.issues.length) {${prefixStr(id8, k)}
         }
       `);
         if (optin === "defaulted") {
-          doc.write(`newResult[${k}] = ${id}.value;`);
+          doc.write(`newResult[${k}] = ${id8}.value;`);
         } else {
           doc.write(`
-        if (${id}.value !== undefined || ${isPresent}) {
-          newResult[${k}] = ${id}.value;
+        if (${id8}.value !== undefined || ${isPresent}) {
+          newResult[${k}] = ${id8}.value;
         }
       `);
         }
@@ -29599,8 +29595,8 @@ function ko_default() {
 }
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/lt.js
-var capitalizeFirstCharacter = (text) => {
-  return text.charAt(0).toUpperCase() + text.slice(1);
+var capitalizeFirstCharacter = (text2) => {
+  return text2.charAt(0).toUpperCase() + text2.slice(1);
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
@@ -33195,8 +33191,8 @@ var globalRegistry = globalThis.__zod_globalRegistry;
 var INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var FALLBACK_FLAG = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var ZodCompileAsyncError = class extends Error {
-  constructor(message3 = "z.compile does not support async refinements, transforms, or checks") {
-    super(message3);
+  constructor(message = "z.compile does not support async refinements, transforms, or checks") {
+    super(message);
     this.name = "ZodCompileAsyncError";
   }
 };
@@ -33322,13 +33318,13 @@ ${code}
   return fn;
 }
 function addConstant(ctx, value) {
-  for (const [name2, v] of ctx.constants) {
+  for (const [name3, v] of ctx.constants) {
     if (v === value)
-      return name2;
+      return name3;
   }
-  const name = `c${ctx.constantCounter++}`;
-  ctx.constants.set(name, value);
-  return name;
+  const name2 = `c${ctx.constantCounter++}`;
+  ctx.constants.set(name2, value);
+  return name2;
 }
 function addUserConstant(ctx, fn) {
   ctx.definite = false;
@@ -34600,7 +34596,7 @@ function generateRecordCheck(doc, ctx, schema, accessor) {
   }, `return INVALID;`);
   return outputVar;
 }
-function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
+function emitOwnKeys(doc, ctx, accessor, kVar, body2, onSymbol) {
   const propIsEnumerableConst = addConstant(ctx, Object.prototype.propertyIsEnumerable);
   const symsVar = newVar(ctx);
   const keysVar = newVar(ctx);
@@ -34611,7 +34607,7 @@ function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
   doc.indented((d) => {
     d.write(`const ${kVar} = ${keysVar}[${iVar}];`);
     d.write(`if (${kVar} === "__proto__" || !${propIsEnumerableConst}.call(${accessor}, ${kVar})) continue;`);
-    body(d);
+    body2(d);
   });
   doc.write(`}`);
   doc.write(`for (let ${iVar} = 0; ${iVar} < ${symsVar}.length; ${iVar}++) {`);
@@ -34621,7 +34617,7 @@ function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
     if (onSymbol)
       d.write(onSymbol);
     else
-      body(d);
+      body2(d);
   });
   doc.write(`}`);
 }
@@ -35888,12 +35884,12 @@ function initializeContext(params) {
     external: params?.external ?? void 0
   };
 }
-function handleUnrepresentable(schema, ctx, json2, params, message3) {
-  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message: message3 }) : ctx.unrepresentable;
+function handleUnrepresentable(schema, ctx, json2, params, message) {
+  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message }) : ctx.unrepresentable;
   if (result === "any")
     return false;
   if (result === void 0 || result === "throw")
-    throw new Error(message3);
+    throw new Error(message);
   Object.assign(json2, result);
   return true;
 }
@@ -35964,26 +35960,26 @@ function extractDefs(ctx, schema) {
     return;
   const idToSchema = /* @__PURE__ */ new Map();
   for (const entry of ctx.seen.entries()) {
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
-      const existing = idToSchema.get(id);
+    const id8 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id8) {
+      const existing = idToSchema.get(id8);
       if (existing && existing !== entry[0]) {
-        throw new Error(`Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
+        throw new Error(`Duplicate schema id "${id8}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
       }
-      idToSchema.set(id, entry[0]);
+      idToSchema.set(id8, entry[0]);
     }
   }
   const makeURI = (entry) => {
     const defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
     if (ctx.external) {
       const externalId = ctx.external.registry.get(entry[0])?.id;
-      const uriGenerator = ctx.external.uri ?? ((id2) => id2);
+      const uriGenerator = ctx.external.uri ?? ((id9) => id9);
       if (externalId) {
         return { ref: uriGenerator(externalId) };
       }
-      const id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
-      entry[1].defId = id;
-      return { defId: id, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id)}` };
+      const id8 = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+      entry[1].defId = id8;
+      return { defId: id8, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id8)}` };
     }
     const uriPrefix = `#`;
     const defUriPrefix = `${uriPrefix}/${defsSegment}/`;
@@ -36031,8 +36027,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         continue;
       }
     }
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
+    const id8 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id8) {
       extractToDef(entry);
       continue;
     }
@@ -36265,10 +36261,10 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id = ctx.external.registry.get(schema)?.id;
-    if (!id)
+    const id8 = ctx.external.registry.get(schema)?.id;
+    if (!id8)
       throw new Error("Schema is missing an `id` property");
-    result.$id = ctx.external.uri(id);
+    result.$id = ctx.external.uri(id8);
   }
   assignProps(result, root.defId ? root.schema : root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
@@ -36874,7 +36870,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json2;
+  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id: id8, ...rest } = json2;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -39103,13 +39099,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path3 = ref.slice(1).split("/").filter(Boolean);
-  if (path3.length === 0) {
+  const path = ref.slice(1).split("/").filter(Boolean);
+  if (path.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path3[0] === defsKey) {
-    const key = path3[1] === void 0 ? void 0 : decodeJSONPointerSegment(path3[1]);
+  if (path[0] === defsKey) {
+    const key = path[1] === void 0 ? void 0 : decodeJSONPointerSegment(path[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -39958,105 +39954,1413 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// ../protocol/src/schema.ts
-var identifier = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
-var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var runnerHelloV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
-  protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
-  phase: external_exports.enum(["plan", "effects"]),
-  repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+// ../contracts/src/identity.ts
+var githubNumericIdSchema = external_exports.string().regex(/^[1-9][0-9]{0,31}$/, "expected a numeric GitHub id");
+var githubAccountTypeSchema = external_exports.enum(["User", "Organization", "Bot", "Mannequin"]);
+var githubIdentitySchema = external_exports.object({
+  id: githubNumericIdSchema,
+  login: external_exports.string().trim().min(1).max(255),
+  accountType: githubAccountTypeSchema
+}).strict();
+var gardenerPrincipalSchema = external_exports.object({
+  kind: external_exports.enum(["owner", "member", "publisher", "system", "channel"]),
+  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
+  displayName: external_exports.string().trim().min(1).max(255).optional()
+}).strict();
+var authoringPrincipalSchema = external_exports.discriminatedUnion("provider", [
+  external_exports.object({ provider: external_exports.literal("github"), identity: githubIdentitySchema }).strict(),
+  external_exports.object({ provider: external_exports.literal("gardener"), principal: gardenerPrincipalSchema }).strict(),
+  external_exports.object({ provider: external_exports.literal("oauth_client"), clientId: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/) }).strict()
+]);
+
+// ../contracts/src/repository.ts
+var name = external_exports.string().trim().min(1).max(255).regex(/^[A-Za-z0-9_.-]+$/);
+var repositoryRefSchema = external_exports.object({
+  provider: external_exports.literal("github"),
+  id: githubNumericIdSchema,
+  installationId: githubNumericIdSchema,
+  owner: name,
+  name,
+  defaultBranch: external_exports.string().trim().min(1).max(255)
+}).strict();
+var issueRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
+var pullRequestRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
+var discussionRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
+
+// ../contracts/src/events.ts
+var id = external_exports.string().min(1).max(255);
+var text = external_exports.string().max(65536);
+var sha = external_exports.string().regex(/^[a-fA-F0-9]{40}$/);
+var labels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100).default([]);
+var repositoryEventKindValues = [
+  "github.issue",
+  "github.pull_request",
+  "github.issue_comment",
+  "github.pull_request_comment",
+  "github.pull_request_review",
+  "github.pull_request_review_comment",
+  "github.discussion",
+  "github.discussion_comment",
+  "github.check_run",
+  "github.check_suite",
+  "github.push",
+  "github.release",
+  "gardener.manual",
+  "gardener.scheduled"
+];
+var repositoryEventKindSchema = external_exports.enum(repositoryEventKindValues);
+var issueEventActions = ["opened", "edited", "reopened", "closed", "labeled", "unlabeled", "assigned", "unassigned", "milestoned", "demilestoned", "locked", "unlocked", "typed", "untyped", "transferred", "deleted", "pinned", "unpinned"];
+var pullRequestEventActions = ["opened", "edited", "reopened", "closed", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "assigned", "unassigned", "milestoned", "demilestoned", "locked", "unlocked", "enqueued", "dequeued", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled"];
+var commentEventActions = ["created", "edited", "deleted"];
+var reviewEventActions = ["submitted", "edited", "dismissed"];
+var discussionEventActions = ["created", "edited", "deleted", "transferred", "pinned", "unpinned", "locked", "unlocked", "category_changed", "labeled", "unlabeled", "answered", "unanswered"];
+var checkRunEventActions = ["created", "rerequested", "completed", "requested_action"];
+var checkSuiteEventActions = ["requested", "rerequested", "completed"];
+var releaseEventActions = ["created", "edited", "deleted", "published", "unpublished", "prereleased", "released"];
+var issueEventActionSchema = external_exports.enum(issueEventActions);
+var pullRequestEventActionSchema = external_exports.enum(pullRequestEventActions);
+var commentEventActionSchema = external_exports.enum(commentEventActions);
+var reviewEventActionSchema = external_exports.enum(reviewEventActions);
+var discussionEventActionSchema = external_exports.enum(discussionEventActions);
+var checkRunEventActionSchema = external_exports.enum(checkRunEventActions);
+var checkSuiteEventActionSchema = external_exports.enum(checkSuiteEventActions);
+var releaseEventActionSchema = external_exports.enum(releaseEventActions);
+var issueResourceV2Schema = external_exports.object({
+  id,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: text.nullable(),
+  state: external_exports.enum(["open", "closed"]),
+  labels,
+  locked: external_exports.boolean(),
+  updatedAt: external_exports.iso.datetime(),
+  htmlUrl: external_exports.url()
+}).strict();
+var pullRequestResourceV2Schema = external_exports.object({
+  id,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: text.nullable(),
+  state: external_exports.enum(["open", "closed"]),
+  draft: external_exports.boolean(),
+  merged: external_exports.boolean(),
+  labels,
+  head: external_exports.object({ ref: external_exports.string().min(1).max(255), sha }).strict(),
+  base: external_exports.object({ ref: external_exports.string().min(1).max(255), sha }).strict(),
+  updatedAt: external_exports.iso.datetime(),
+  htmlUrl: external_exports.url()
+}).strict();
+var commentResourceV2Schema = external_exports.object({ id, body: text, updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
+var reviewResourceV2Schema = external_exports.object({ id, state: external_exports.enum(["pending", "commented", "approved", "changes_requested", "dismissed"]), body: text, submittedAt: external_exports.iso.datetime().nullable(), commitSha: sha }).strict();
+var reviewCommentResourceV2Schema = commentResourceV2Schema.extend({ path: external_exports.string().min(1).max(1024), line: external_exports.number().int().positive().nullable(), commitSha: sha }).strict();
+var discussionResourceV2Schema = external_exports.object({ id, number: external_exports.number().int().positive(), title: external_exports.string().max(1024), body: text, state: external_exports.enum(["open", "closed"]), answered: external_exports.boolean(), labels, updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
+var checkRunResourceV2Schema = external_exports.object({ id, name: external_exports.string().min(1).max(255), headSha: sha, status: external_exports.enum(["queued", "in_progress", "completed", "waiting", "pending"]), conclusion: external_exports.enum(["action_required", "cancelled", "failure", "neutral", "skipped", "stale", "startup_failure", "success", "timed_out"]).nullable(), detailsUrl: external_exports.url().nullable() }).strict();
+var checkSuiteResourceV2Schema = external_exports.object({ id, headSha: sha, status: external_exports.enum(["queued", "in_progress", "completed", "waiting", "pending"]), conclusion: external_exports.string().min(1).max(100).nullable() }).strict();
+var pushResourceV2Schema = external_exports.object({ ref: external_exports.string().min(1).max(255), before: sha, after: sha, forced: external_exports.boolean(), created: external_exports.boolean(), deleted: external_exports.boolean(), commitCount: external_exports.number().int().nonnegative().max(1e4) }).strict();
+var releaseResourceV2Schema = external_exports.object({ id, tagName: external_exports.string().min(1).max(255), targetCommitish: external_exports.string().min(1).max(255), name: external_exports.string().max(255).nullable(), body: text.nullable(), draft: external_exports.boolean(), prerelease: external_exports.boolean(), publishedAt: external_exports.iso.datetime().nullable(), updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
+var githubEventBaseSchema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  id,
+  deliveryId: id,
+  instanceId: id,
+  occurredAt: external_exports.iso.datetime(),
+  repository: repositoryRefSchema,
+  actor: githubIdentitySchema,
+  resourceAuthor: githubIdentitySchema.nullable()
+});
+var githubEventSchemas = [
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.issue"), action: issueEventActionSchema, issue: issueResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request"), action: pullRequestEventActionSchema, pullRequest: pullRequestResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.issue_comment"), action: commentEventActionSchema, issue: issueResourceV2Schema, comment: commentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_comment"), action: commentEventActionSchema, pullRequest: pullRequestResourceV2Schema, comment: commentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_review"), action: reviewEventActionSchema, pullRequest: pullRequestResourceV2Schema, review: reviewResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_review_comment"), action: commentEventActionSchema, pullRequest: pullRequestResourceV2Schema, comment: reviewCommentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.discussion"), action: discussionEventActionSchema, discussion: discussionResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.discussion_comment"), action: commentEventActionSchema, discussion: discussionResourceV2Schema, comment: commentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.check_run"), action: checkRunEventActionSchema, checkRun: checkRunResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.check_suite"), action: checkSuiteEventActionSchema, checkSuite: checkSuiteResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.push"), action: external_exports.literal("pushed"), push: pushResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.release"), action: releaseEventActionSchema, release: releaseResourceV2Schema }).strict()
+];
+var gardenerEventBaseSchema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  id,
+  instanceId: id,
+  occurredAt: external_exports.iso.datetime(),
+  repository: repositoryRefSchema,
+  actor: gardenerPrincipalSchema,
+  resourceAuthor: external_exports.null()
+});
+var manualEventSchema = gardenerEventBaseSchema.extend({ kind: external_exports.literal("gardener.manual"), action: external_exports.literal("requested"), requestId: id, prompt: external_exports.string().trim().min(1).max(2e4) }).strict();
+var scheduledEventSchema = gardenerEventBaseSchema.extend({ kind: external_exports.literal("gardener.scheduled"), action: external_exports.literal("triggered"), scheduleId: id, scheduledFor: external_exports.iso.datetime() }).strict();
+var repositoryEventV2Schema = external_exports.discriminatedUnion("kind", [...githubEventSchemas, manualEventSchema, scheduledEventSchema]);
+var triggerSelectors = [
+  ...issueEventActions.map((action) => `github.issue.${action}`),
+  ...pullRequestEventActions.map((action) => `github.pull_request.${action}`),
+  ...commentEventActions.flatMap((action) => [`github.issue_comment.${action}`, `github.pull_request_comment.${action}`, `github.pull_request_review_comment.${action}`, `github.discussion_comment.${action}`]),
+  ...reviewEventActions.map((action) => `github.pull_request_review.${action}`),
+  ...discussionEventActions.map((action) => `github.discussion.${action}`),
+  ...checkRunEventActions.map((action) => `github.check_run.${action}`),
+  ...checkSuiteEventActions.map((action) => `github.check_suite.${action}`),
+  "github.push.pushed",
+  ...releaseEventActions.map((action) => `github.release.${action}`),
+  "gardener.manual.requested",
+  "gardener.scheduled.triggered"
+];
+var repositoryEventTriggerValues = triggerSelectors;
+var repositoryEventTriggerSchema = external_exports.enum(repositoryEventTriggerValues);
+
+// ../contracts/src/operations.ts
+var operationKindValues = [
+  "issue.label.add",
+  "issue.label.remove",
+  "issue.comment.create",
+  "issue.comment.update",
+  "issue.close",
+  "issue.reopen",
+  "issue.assignee.add",
+  "issue.assignee.remove",
+  "pull_request.comment.create",
+  "pull_request.comment.update",
+  "pull_request.review.submit",
+  "pull_request.reviewer.request",
+  "pull_request.reviewer.remove",
+  "pull_request.update",
+  "branch.create",
+  "commit.create",
+  "pull_request.open_draft",
+  "pull_request.merge",
+  "discussion.comment.create",
+  "discussion.comment.update",
+  "discussion.answer.mark",
+  "discussion.answer.unmark",
+  "discussion.close",
+  "discussion.reopen",
+  "check.rerun",
+  "release.create",
+  "release.update",
+  "release.publish",
+  "release.delete"
+];
+var operationKindSchema = external_exports.enum(operationKindValues);
+var operationFamilySchema = external_exports.enum(["issue", "pull_request", "git", "discussion", "check", "release"]);
+var operationCatalogEntrySchema = external_exports.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: external_exports.literal(true), highImpact: external_exports.boolean() }).strict();
+var operationCatalog = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
+  kind,
+  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind === "commit.create" ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
+  persistent: true,
+  highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete"
+})));
+var shaSchema = external_exports.string().regex(/^[a-fA-F0-9]{40}$/);
+function isValidGitBranchName(value) {
+  const components = value.split("/");
+  return value !== "@" && !value.startsWith("/") && !value.endsWith("/") && !value.endsWith(".") && !value.includes("..") && !value.includes("//") && !value.includes("@{") && !/[~^:?*[\\\x00-\x20\x7f]/.test(value) && components.every((component) => component.length > 0 && !component.startsWith(".") && !component.endsWith(".") && !component.endsWith(".lock"));
+}
+var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(isValidGitBranchName, "invalid Git branch name");
+var gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
+var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
+var canonicalBase64Schema = external_exports.string().regex(
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
+  "expected canonical base64 content"
+);
+var operationBase = external_exports.object({ schemaVersion: external_exports.literal("v2"), id: operationIdSchema, repository: repositoryRefSchema });
+var expectedTimestamp = external_exports.iso.datetime();
+var body = external_exports.string().min(1).max(65536);
+var issueBase = operationBase.extend({ issueNumber: external_exports.number().int().positive(), expectedIssueState: external_exports.enum(["open", "closed"]), expectedIssueUpdatedAt: expectedTimestamp });
+var pullBase = operationBase.extend({
+  pullNumber: external_exports.number().int().positive(),
+  expectedHeadSha: shaSchema,
+  expectedBaseRef: branchNameSchema,
+  expectedBaseSha: shaSchema,
+  expectedState: external_exports.enum(["open", "closed"]),
+  expectedDraft: external_exports.boolean(),
+  expectedPullUpdatedAt: expectedTimestamp
+});
+var discussionBase = operationBase.extend({ discussionNumber: external_exports.number().int().positive(), expectedDiscussionState: external_exports.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
+var commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body };
+var requiredCheckSchema = external_exports.object({ context: external_exports.string().trim().min(1).max(255), appId: external_exports.number().int().positive() }).strict();
+var operationOptions = [
+  issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: external_exports.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: external_exports.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.comment.create"), body }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.comment.update"), ...commentUpdate }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.close"), expectedIssueState: external_exports.literal("open") }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.reopen"), expectedIssueState: external_exports.literal("closed") }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.comment.create"), body }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.comment.update"), ...commentUpdate }).strict(),
+  pullBase.extend({
+    kind: external_exports.literal("pull_request.review.submit"),
+    expectedState: external_exports.literal("open"),
+    event: external_exports.enum(["comment", "approve", "request_changes"]),
+    body: external_exports.string().max(65536),
+    comments: external_exports.array(external_exports.object({ path: external_exports.string().min(1).max(1024), line: external_exports.number().int().positive(), side: external_exports.enum(["LEFT", "RIGHT"]), body }).strict()).max(100)
+  }).strict().superRefine((value, context) => {
+    if (value.event !== "approve" && !value.body.trim() && value.comments.length === 0) context.addIssue({ code: "custom", path: ["body"], message: "comment and request-changes reviews require content" });
+  }),
+  pullBase.extend({ kind: external_exports.literal("pull_request.reviewer.request"), reviewerIds: external_exports.array(githubNumericIdSchema).min(1).max(15) }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.reviewer.remove"), reviewerIds: external_exports.array(githubNumericIdSchema).min(1).max(15) }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.update"), title: external_exports.string().trim().min(1).max(256).optional(), body: external_exports.string().max(65536).optional(), draft: external_exports.boolean().optional(), state: external_exports.enum(["open", "closed"]).optional() }).strict().superRefine((value, context) => {
+    if (value.title === void 0 && value.body === void 0 && value.draft === void 0 && value.state === void 0) context.addIssue({ code: "custom", message: "pull request update requires at least one change" });
+    if (value.draft !== void 0 && (value.title !== void 0 || value.body !== void 0 || value.state !== void 0)) {
+      context.addIssue({ code: "custom", message: "draft state must be updated in a separate exact operation" });
+    }
+  }),
+  operationBase.extend({ kind: external_exports.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
+  operationBase.extend({
+    kind: external_exports.literal("commit.create"),
+    branch: gardenerBranchNameSchema,
+    expectedHeadSha: shaSchema,
+    message: external_exports.string().trim().min(1).max(1e3),
+    files: external_exports.array(external_exports.object({ path: external_exports.string().min(1).max(1024).refine((path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "invalid repository path"), contentBase64: canonicalBase64Schema.max(14e5).nullable() }).strict()).min(1).max(100)
+  }).strict().superRefine((value, context) => {
+    const paths = /* @__PURE__ */ new Set();
+    let encodedBytes = 0;
+    value.files.forEach((file2, index) => {
+      if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file2.path);
+      encodedBytes += file2.contentBase64?.length ?? 0;
+    });
+    if (encodedBytes > 7e6) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
+  }),
+  operationBase.extend({
+    kind: external_exports.literal("pull_request.open_draft"),
+    head: gardenerBranchNameSchema,
+    base: branchNameSchema,
+    expectedHeadSha: shaSchema,
+    expectedBaseSha: shaSchema,
+    title: external_exports.string().trim().min(1).max(256),
+    body: external_exports.string().max(65536),
+    draft: external_exports.literal(true)
+  }).strict(),
+  pullBase.extend({
+    kind: external_exports.literal("pull_request.merge"),
+    expectedState: external_exports.literal("open"),
+    expectedDraft: external_exports.literal(false),
+    method: external_exports.enum(["merge", "squash", "rebase"]),
+    requiredChecks: external_exports.array(requiredCheckSchema).min(1).max(100),
+    expectedBranchProtectionHash: external_exports.string().regex(/^[a-f0-9]{64}$/)
+  }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.comment.create"), body }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.comment.update"), ...commentUpdate }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.answer.mark"), answerCommentId: githubNumericIdSchema, expectedAnswerCommentId: githubNumericIdSchema.nullable() }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.answer.unmark"), expectedAnswerCommentId: githubNumericIdSchema }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.close"), expectedDiscussionState: external_exports.literal("open") }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.reopen"), expectedDiscussionState: external_exports.literal("closed") }).strict(),
+  operationBase.extend({ kind: external_exports.literal("check.rerun"), checkRunId: githubNumericIdSchema, expectedHeadSha: shaSchema, expectedStatus: external_exports.literal("completed"), expectedConclusion: external_exports.string().trim().min(1).max(100).nullable() }).strict(),
+  operationBase.extend({
+    kind: external_exports.literal("release.create"),
+    tagName: external_exports.string().trim().min(1).max(255),
+    targetCommitSha: shaSchema,
+    expectedTagAbsent: external_exports.literal(true),
+    name: external_exports.string().trim().min(1).max(255),
+    body: external_exports.string().max(65536),
+    draft: external_exports.literal(true),
+    prerelease: external_exports.boolean()
+  }).strict(),
+  operationBase.extend({
+    kind: external_exports.literal("release.update"),
+    releaseId: githubNumericIdSchema,
+    expectedTagName: external_exports.string().min(1).max(255),
+    expectedTargetCommitSha: shaSchema,
+    expectedDraft: external_exports.boolean(),
+    expectedPrerelease: external_exports.boolean(),
+    expectedReleaseUpdatedAt: expectedTimestamp,
+    name: external_exports.string().trim().min(1).max(255).optional(),
+    body: external_exports.string().max(65536).optional(),
+    prerelease: external_exports.boolean().optional()
+  }).strict().superRefine((value, context) => {
+    if (value.name === void 0 && value.body === void 0 && value.prerelease === void 0) context.addIssue({ code: "custom", message: "release update requires at least one change" });
+  }),
+  operationBase.extend({ kind: external_exports.literal("release.publish"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.literal(true), expectedPrerelease: external_exports.boolean(), expectedPublished: external_exports.literal(false), expectedReleaseUpdatedAt: expectedTimestamp }).strict(),
+  operationBase.extend({ kind: external_exports.literal("release.delete"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.boolean(), expectedPublished: external_exports.boolean(), expectedReleaseUpdatedAt: expectedTimestamp }).strict()
+];
+var reservedMarker = /(?:<!--\s*gardener-operation:|gardener-operation:|gardener-idempotency:)/i;
+function collectStrings(value, output2) {
+  if (typeof value === "string") output2.push(value);
+  else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStrings(item, output2));
+}
+var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
+  const strings = [];
+  if (operation.kind === "issue.comment.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
+    const marker = `<!-- gardener-operation:${operation.id} -->`;
+    const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
+${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
+    collectStrings({ ...operation, body: bodyWithoutExactMarker }, strings);
+  } else {
+    collectStrings(operation, strings);
+  }
+  if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
+  if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
+  if (operation.kind === "pull_request.merge") {
+    const checks = operation.requiredChecks.map((check2) => `${check2.appId}:${check2.context}`);
+    if (new Set(checks).size !== checks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
+  }
+});
+var operationReceiptSchema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  operationId: operationIdSchema,
+  operationHash: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  kind: operationKindSchema,
+  status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
+  attempt: external_exports.number().int().positive().max(20),
+  attemptedAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime(),
+  providerRequestId: external_exports.string().min(1).max(255).optional(),
+  resourceUrl: external_exports.url().optional(),
+  error: external_exports.object({ code: external_exports.string().min(1).max(100), message: external_exports.string().min(1).max(2e3), retryable: external_exports.boolean() }).strict().optional()
+}).strict().superRefine((receipt, context) => {
+  if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
+  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
+  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
+});
+
+// ../contracts/src/capabilities.ts
+var observationCapabilityValues = [
+  "github.repository.metadata.read",
+  "github.issue.read",
+  "github.pull_request.read",
+  "github.comment.read",
+  "github.review.read",
+  "github.discussion.read",
+  "github.check.read",
+  "github.contents.read",
+  "github.commit.read",
+  "github.release.read"
+];
+var observationCapabilitySchema = external_exports.enum(observationCapabilityValues);
+var workspaceCapabilityValues = [
+  "workspace.fs.read",
+  "workspace.fs.write",
+  "workspace.git.read",
+  "workspace.git.write-local",
+  "workspace.exec.shell",
+  "workspace.exec.javascript",
+  "workspace.exec.container",
+  "workspace.network.connect",
+  "workspace.dependencies.install",
+  "workspace.artifacts.publish"
+];
+var workspaceCapabilitySchema = external_exports.enum(workspaceCapabilityValues);
+var effectCapabilitySchema = operationKindSchema;
+function uniqueValues(values, context, path) {
+  if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path, message: "capabilities must be unique" });
+}
+var requestedCapabilitySetSchema = external_exports.object({
+  observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length).default([]),
+  workspace: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilityValues.length).default([]),
+  effects: external_exports.array(effectCapabilitySchema).max(operationKindSchema.options.length).default([])
+}).strict().superRefine((value, context) => {
+  uniqueValues(value.observation, context, ["observation"]);
+  uniqueValues(value.workspace, context, ["workspace"]);
+  uniqueValues(value.effects, context, ["effects"]);
+});
+var capabilityPolicyModeSchema = external_exports.enum(["disabled", "approval", "automatic"]);
+var effectiveCapabilitySetSchema = external_exports.object({
+  observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length),
+  workspace: external_exports.array(external_exports.object({
+    capability: workspaceCapabilitySchema,
+    mode: capabilityPolicyModeSchema
+  }).strict()).max(workspaceCapabilityValues.length),
+  effects: external_exports.array(external_exports.object({
+    capability: effectCapabilitySchema,
+    mode: capabilityPolicyModeSchema
+  }).strict()).max(operationKindSchema.options.length)
+}).strict().superRefine((value, context) => {
+  uniqueValues(value.observation, context, ["observation"]);
+  uniqueValues(value.workspace.map((item) => item.capability), context, ["workspace"]);
+  uniqueValues(value.effects.map((item) => item.capability), context, ["effects"]);
+});
+var capabilityCatalogEntrySchema = external_exports.object({
+  id: external_exports.union([observationCapabilitySchema, workspaceCapabilitySchema, effectCapabilitySchema]),
+  category: external_exports.enum(["observation", "workspace", "effect"]),
+  description: external_exports.string().min(1).max(500),
+  runtimeGrant: external_exports.enum(["safe_one_run", "revision_required", "never"])
+}).strict();
+var capabilityCatalog = Object.freeze([
+  ...observationCapabilityValues.map((id8) => ({ id: id8, category: "observation", description: `Observe ${id8}.`, runtimeGrant: "safe_one_run" })),
+  ...workspaceCapabilityValues.map((id8) => ({
+    id: id8,
+    category: "workspace",
+    description: `Use ${id8} in the run-scoped Cloudflare Computer workspace.`,
+    runtimeGrant: "safe_one_run"
+  })),
+  ...operationKindSchema.options.map((id8) => ({
+    id: id8,
+    category: "effect",
+    description: `Propose the persistent effect ${id8}.`,
+    runtimeGrant: "revision_required"
+  }))
+]);
+var publicNetworkHostnameSchema = external_exports.hostname().transform((value) => value.toLowerCase()).refine((value) => {
+  if (value === "localhost" || value.endsWith(".localhost") || value.endsWith(".local") || value.endsWith(".internal") || value.endsWith(".home.arpa")) return false;
+  if (value === "metadata.google.internal" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value) || value.includes(":")) return false;
+  return true;
+}, "network host must be a public DNS hostname; resolved addresses must also be checked at execution time");
+var capabilityRequestBaseSchema = external_exports.object({
+  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
+  reason: external_exports.string().trim().min(1).max(2e3),
+  requestedAt: external_exports.iso.datetime()
+});
+var runtimeCapabilityRequestSchema = external_exports.discriminatedUnion("kind", [
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("observation"), capability: observationCapabilitySchema }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("workspace"), capability: workspaceCapabilitySchema.exclude(["workspace.exec.container", "workspace.network.connect"]) }).strict(),
+  capabilityRequestBaseSchema.extend({
+    kind: external_exports.literal("container"),
+    capability: external_exports.literal("workspace.exec.container"),
+    imageProfile: external_exports.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
+    maxRuntimeSeconds: external_exports.number().int().positive().max(3600)
+  }).strict(),
+  capabilityRequestBaseSchema.extend({
+    kind: external_exports.literal("network"),
+    capability: external_exports.literal("workspace.network.connect"),
+    hosts: external_exports.array(publicNetworkHostnameSchema).min(1).max(20)
+  }).strict().superRefine((request, context) => {
+    if (new Set(request.hosts).size !== request.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
+  }),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("persistent_effect"), capabilities: external_exports.array(effectCapabilitySchema).min(1).max(operationKindSchema.options.length) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("actor_broadening"), actorIds: external_exports.array(githubNumericIdSchema).min(1).max(100) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("authority_increase"), requestedMode: external_exports.enum(["approval", "automatic"]) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("credentials"), credentialKind: external_exports.string().trim().min(1).max(100) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("policy_edit"), policyId: external_exports.string().min(1).max(255) }).strict()
+]);
+var runtimeGrantClassificationSchema = external_exports.enum(["safe_one_run", "revision_required", "never"]);
+
+// ../contracts/src/eligibility.ts
+var agentEligibilitySchema = external_exports.object({
+  actorIds: external_exports.array(githubNumericIdSchema).max(100).default([]),
+  resourceAuthorIds: external_exports.array(githubNumericIdSchema).max(100).default([]),
+  labelsAny: external_exports.array(external_exports.string().trim().min(1).max(100)).max(50).default([]),
+  labelsAll: external_exports.array(external_exports.string().trim().min(1).max(100)).max(50).default([]),
+  baseBranches: external_exports.array(external_exports.string().trim().min(1).max(255)).max(50).default([]),
+  includeDraftPullRequests: external_exports.boolean().default(true)
+}).strict().superRefine((value, context) => {
+  for (const key of ["actorIds", "resourceAuthorIds", "labelsAny", "labelsAll", "baseBranches"]) {
+    if (new Set(value[key]).size !== value[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+  }
+});
+var eventEligibilityDecisionSchema = external_exports.object({
+  eligible: external_exports.boolean(),
+  reasons: external_exports.array(external_exports.string().min(1).max(500)).max(100),
+  matchedTrigger: external_exports.string().min(1).max(255).nullable()
+}).strict();
+
+// ../contracts/src/policies.ts
+var policyModeSchema = external_exports.enum(["disabled", "approval", "automatic"]);
+var instancePolicyV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
+  version: external_exports.number().int().positive(),
+  policyHash: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  operationModes: external_exports.record(operationKindSchema, policyModeSchema),
+  allowedObservations: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+  workspaceModes: external_exports.partialRecord(workspaceCapabilitySchema, policyModeSchema),
+  allowedMergeMethods: external_exports.array(external_exports.enum(["merge", "squash", "rebase"])).min(1).max(3),
+  requiredChecks: external_exports.array(external_exports.string().trim().min(1).max(255)).max(100),
+  maxCommentLength: external_exports.number().int().positive().max(65536),
+  maxChangedFiles: external_exports.number().int().positive().max(100),
+  deniedPathPrefixes: external_exports.array(external_exports.string().min(1).max(1024)).max(100)
+}).strict().superRefine((policy, context) => {
+  if (new Set(policy.allowedObservations).size !== policy.allowedObservations.length) context.addIssue({ code: "custom", path: ["allowedObservations"], message: "observation capabilities must be unique" });
+  if (new Set(policy.requiredChecks).size !== policy.requiredChecks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
+});
+var policyDecisionSchema = external_exports.object({
+  outcome: external_exports.enum(["denied", "approval_required", "authorized"]),
+  operationId: external_exports.string().min(1).max(255),
+  mode: policyModeSchema,
+  reasons: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100)
+}).strict();
+
+// ../contracts/src/workspace.ts
+var id2 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var timestamp = external_exports.iso.datetime();
+var workspaceRoleValues = ["owner", "member"];
+var workspaceRoleSchema = external_exports.enum(workspaceRoleValues);
+var workspacePermissionValues = [
+  "workspace.view",
+  "agent.draft.save",
+  "agent.validate",
+  "agent.simulate",
+  "agent.revision.publish_paused",
+  "agent.revision.activate",
+  "inbox.dismiss",
+  "run.cancel",
+  "run.approve",
+  "assignment.add",
+  "assignment.expand",
+  "assignment.enable",
+  "assignment.pause",
+  "assignment.resume",
+  "assignment.disable",
+  "assignment.remove",
+  "policy.narrow",
+  "policy.widen",
+  "member.manage",
+  "repository.sync",
+  "installation.manage"
+];
+var workspacePermissionSchema = external_exports.enum(workspacePermissionValues);
+var memberPermissions = [
+  "workspace.view",
+  "agent.draft.save",
+  "agent.validate",
+  "agent.simulate",
+  "agent.revision.publish_paused",
+  "inbox.dismiss",
+  "run.cancel",
+  "assignment.pause",
+  "assignment.disable",
+  "assignment.remove",
+  "policy.narrow"
+];
+var workspaceRolePermissions = Object.freeze({
+  member: Object.freeze(memberPermissions),
+  owner: Object.freeze(workspacePermissionValues)
+});
+var principalKindSchema = external_exports.enum(["dashboard-session", "cloudflare-access", "mcp-token", "local-dev"]);
+var internalUserV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  displayName: external_exports.string().trim().min(1).max(255),
+  createdAt: timestamp,
+  disabledAt: timestamp.nullable()
+}).strict();
+var externalIdentityV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  userId: id2,
+  provider: external_exports.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  providerSubject: external_exports.string().trim().min(1).max(255),
+  login: external_exports.string().trim().min(1).max(255),
+  createdAt: timestamp
+}).strict();
+var workspaceMembershipV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  userId: id2,
+  role: workspaceRoleSchema,
+  createdAt: timestamp,
+  revokedAt: timestamp.nullable()
+}).strict();
+var workspaceInvitationV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  provider: external_exports.literal("github"),
+  providerSubject: githubNumericIdSchema,
+  login: external_exports.string().trim().min(1).max(255),
+  role: workspaceRoleSchema,
+  invitedByUserId: id2,
+  createdAt: timestamp,
+  expiresAt: timestamp,
+  acceptedAt: timestamp.nullable(),
+  revokedAt: timestamp.nullable()
+}).strict().superRefine((invitation, context) => {
+  if (Date.parse(invitation.expiresAt) <= Date.parse(invitation.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "invitation expiry must follow creation" });
+  if (invitation.acceptedAt !== null && invitation.revokedAt !== null) context.addIssue({ code: "custom", message: "invitation cannot be both accepted and revoked" });
+});
+
+// ../contracts/src/assignments.ts
+var id3 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var agentId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
+var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var timestamp2 = external_exports.iso.datetime();
+var displayName = external_exports.string().trim().min(1).max(255);
+var agentRepositoryAssignmentV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id3,
+  version: external_exports.number().int().positive(),
+  configHash: hash2,
+  agentId,
+  agentDisplayName: displayName.optional(),
+  repositoryId: githubNumericIdSchema,
+  repositoryDisplayName: displayName.optional(),
+  enabled: external_exports.boolean(),
+  authorityCeiling: policyModeSchema,
+  createdAt: timestamp2,
+  updatedAt: timestamp2,
+  removedAt: timestamp2.nullable()
+}).strict().superRefine((assignment, context) => {
+  if (Date.parse(assignment.updatedAt) < Date.parse(assignment.createdAt)) context.addIssue({ code: "custom", path: ["updatedAt"], message: "assignment update cannot precede creation" });
+});
+var assignmentHistoryBase = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id3,
+  assignmentId: id3,
+  assignmentVersion: external_exports.number().int().positive(),
+  actorUserId: id3,
+  createdAt: timestamp2
+});
+var assignmentHistoryDetailsSchema = external_exports.discriminatedUnion("action", [
+  external_exports.object({ action: external_exports.literal("added"), repositoryId: githubNumericIdSchema, agentId }).strict(),
+  external_exports.object({ action: external_exports.literal("enabled") }).strict(),
+  external_exports.object({ action: external_exports.literal("paused") }).strict(),
+  external_exports.object({ action: external_exports.literal("resumed") }).strict(),
+  external_exports.object({ action: external_exports.literal("disabled") }).strict(),
+  external_exports.object({ action: external_exports.literal("removed") }).strict(),
+  external_exports.object({ action: external_exports.literal("authority_narrowed"), from: policyModeSchema, to: policyModeSchema }).strict(),
+  external_exports.object({ action: external_exports.literal("authority_widened"), from: policyModeSchema, to: policyModeSchema }).strict()
+]);
+var agentRepositoryAssignmentHistoryV1Schema = assignmentHistoryBase.extend({ details: assignmentHistoryDetailsSchema }).strict();
+var repositoryPolicyV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  repositoryId: githubNumericIdSchema,
+  repositoryDisplayName: displayName.optional(),
+  version: external_exports.number().int().positive(),
+  policyHash: hash2,
+  operationModes: external_exports.partialRecord(operationKindSchema, policyModeSchema),
+  allowedObservations: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+  workspaceModes: external_exports.partialRecord(workspaceCapabilitySchema, policyModeSchema)
+}).strict().superRefine((policy, context) => {
+  if (new Set(policy.allowedObservations).size !== policy.allowedObservations.length) context.addIssue({ code: "custom", path: ["allowedObservations"], message: "observation capabilities must be unique" });
+});
+var modeRank = { disabled: 0, approval: 1, automatic: 2 };
+var effectiveAuthorityLayersV1Schema = external_exports.object({
+  workspace: policyModeSchema,
+  repository: policyModeSchema,
+  agent: policyModeSchema,
+  assignment: policyModeSchema,
+  effective: policyModeSchema
+}).strict().superRefine((layers, context) => {
+  const expected = [layers.workspace, layers.repository, layers.agent, layers.assignment].reduce((narrowest, mode) => modeRank[mode] < modeRank[narrowest] ? mode : narrowest, "automatic");
+  if (layers.effective !== expected) context.addIssue({ code: "custom", path: ["effective"], message: "effective authority must be the most restrictive layer" });
+});
+var effectiveEffectAuthorityV1Schema = external_exports.object({
+  capability: operationKindSchema,
+  layers: effectiveAuthorityLayersV1Schema
+}).strict();
+var effectiveAssignmentPolicyV1Schema = external_exports.object({
+  authority: external_exports.array(effectiveEffectAuthorityV1Schema).max(operationKindSchema.options.length),
+  capabilities: effectiveCapabilitySetSchema
+}).strict();
+var assignmentOverlapConflictV1Schema = external_exports.object({
+  assignmentId: id3,
+  assignmentVersion: external_exports.number().int().positive(),
+  agentId,
+  agentDisplayName: displayName.optional(),
+  activeRevisionId: id3,
+  /** Canonical 64-hex hash of compiled revision content, never the agent_<hash> compiled revision ID. */
+  activeRevisionCompiledHash: hash2,
+  sharedTriggers: external_exports.array(repositoryEventTriggerSchema).min(1).max(repositoryEventTriggerSchema.options.length),
+  sharedEffects: external_exports.array(operationKindSchema).min(1).max(operationKindSchema.options.length)
+}).strict();
+var assignmentOverlapWarningV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  assignmentEpoch: external_exports.number().int().nonnegative(),
+  repositoryId: githubNumericIdSchema,
+  candidate: external_exports.object({ agentId, revisionId: id3, revisionCompiledHash: hash2, assignmentId: id3, assignmentVersion: external_exports.number().int().positive() }).strict(),
+  conflicts: external_exports.array(assignmentOverlapConflictV1Schema).min(1),
+  fingerprint: hash2
+}).strict();
+
+// ../contracts/src/grants.ts
+var id4 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash3 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var unparameterizedWorkspaceCapabilitySchema = workspaceCapabilitySchema.exclude(["workspace.exec.container", "workspace.network.connect"]);
+var runGrantScopeSchema = external_exports.discriminatedUnion("kind", [
+  external_exports.object({ kind: external_exports.literal("observation"), capabilities: external_exports.array(observationCapabilitySchema).min(1).max(observationCapabilitySchema.options.length) }).strict(),
+  external_exports.object({ kind: external_exports.literal("workspace"), capabilities: external_exports.array(unparameterizedWorkspaceCapabilitySchema).min(1).max(unparameterizedWorkspaceCapabilitySchema.options.length) }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("container"),
+    capability: external_exports.literal("workspace.exec.container"),
+    capabilityRequestId: id4,
+    interruptionId: id4,
+    imageProfile: external_exports.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
+    maxRuntimeSeconds: external_exports.number().int().positive().max(3600)
+  }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("network"),
+    capability: external_exports.literal("workspace.network.connect"),
+    capabilityRequestId: id4,
+    interruptionId: id4,
+    hosts: external_exports.array(publicNetworkHostnameSchema).min(1).max(20)
+  }).strict().superRefine((scope, context) => {
+    if (new Set(scope.hosts).size !== scope.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
+  }),
+  external_exports.object({ kind: external_exports.literal("operation.execute"), operationId: id4, operationKind: operationKindSchema, operationHash: hash3, interruptionId: id4.nullable() }).strict()
+]);
+var runGrantV2Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  id: id4,
+  instanceId: id4,
+  runId: id4,
+  eventId: id4,
+  repository: repositoryRefSchema,
+  scopes: external_exports.array(runGrantScopeSchema).min(1).max(50),
+  issuedAt: external_exports.iso.datetime(),
+  expiresAt: external_exports.iso.datetime(),
+  nonce: external_exports.string().min(32).max(512)
+}).strict().superRefine((grant, context) => {
+  if (Date.parse(grant.expiresAt) <= Date.parse(grant.issuedAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "grant must expire after it is issued" });
+});
+
+// ../contracts/src/agent.ts
+var hash4 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var identifier = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
+var entityId = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var relativePath = external_exports.string().min(1).max(1024).refine((path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "package paths must be normalized POSIX-relative paths");
+var base643 = external_exports.string().max(28e5).regex(
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
+  "expected canonical base64 bytes"
+);
+var agentPackageFileV1Schema = external_exports.object({
+  path: relativePath,
+  mediaType: external_exports.string().regex(/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/).max(100),
+  bytesBase64: base643
+}).strict();
+var agentSourceV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  agentMd: external_exports.object({ path: external_exports.literal("AGENT.md"), mediaType: external_exports.literal("text/markdown"), bytesBase64: base643 }).strict(),
+  files: external_exports.array(agentPackageFileV1Schema).max(100).default([])
+}).strict().superRefine((source, context) => {
+  const paths = /* @__PURE__ */ new Set(["AGENT.md"]);
+  let encodedSize = source.agentMd.bytesBase64.length;
+  source.files.forEach((file2, index) => {
+    if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "package paths must be unique" });
+    paths.add(file2.path);
+    encodedSize += file2.bytesBase64.length;
+  });
+  if (encodedSize > 14e6) context.addIssue({ code: "custom", message: "agent package exceeds the 10 MiB encoded-size budget" });
+});
+var agentLimitsV1Schema = external_exports.object({
+  runtimeSeconds: external_exports.number().int().positive().max(86400).default(900),
+  maxTurns: external_exports.number().int().positive().max(128).default(24),
+  maxToolCalls: external_exports.number().int().positive().max(1024).default(80),
+  maxTasks: external_exports.number().int().positive().max(256).default(32),
+  maxParallelTasks: external_exports.number().int().positive().max(64).default(8),
+  inputTokens: external_exports.number().int().positive().max(2e6).default(64e3),
+  outputTokens: external_exports.number().int().positive().max(1e6).default(16e3),
+  costUsd: external_exports.number().nonnegative().max(1e3).default(2),
+  operations: external_exports.number().int().positive().max(100).default(10),
+  artifactBytes: external_exports.number().int().positive().max(1e9).default(5e7),
+  retriesPerStep: external_exports.number().int().nonnegative().max(10).default(2)
+}).strict();
+var agentSpecShape = {
+  schemaVersion: external_exports.literal("gardener.agent/v1"),
+  name: external_exports.string().trim().min(1).max(100),
+  description: external_exports.string().trim().min(1).max(1e3),
+  triggers: external_exports.array(repositoryEventTriggerSchema).min(1).max(100),
+  requestedCapabilities: requestedCapabilitySetSchema.default({ observation: [], workspace: [], effects: [] }),
+  behavior: external_exports.string().trim().min(1).max(1e5),
+  authorityCeiling: policyModeSchema.default("approval"),
+  limits: agentLimitsV1Schema.default({ runtimeSeconds: 900, maxTurns: 24, maxToolCalls: 80, maxTasks: 32, maxParallelTasks: 8, inputTokens: 64e3, outputTokens: 16e3, costUsd: 2, operations: 10, artifactBytes: 5e7, retriesPerStep: 2 }),
+  skills: external_exports.array(relativePath).max(50).default([]),
+  evals: external_exports.array(relativePath).max(100).default([]),
+  eligibility: agentEligibilitySchema.default({ actorIds: [], resourceAuthorIds: [], labelsAny: [], labelsAll: [], baseBranches: [], includeDraftPullRequests: true })
+};
+function validatePortableAgentProse(value) {
+  const lines = value.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trim());
+  if (/\b(?:(?:https?:\/\/)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\b/i.test(value)) return "must not bind a GitHub repository URL";
+  if (lines.some((line) => {
+    const match = /^(?:[-*]\s*)?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(line);
+    return match !== null && !/\.[A-Za-z0-9]{1,10}$/.test(match[2]);
+  })) return "must not contain a bare owner/repository binding";
+  if (/\b(?:repository|repo)[-_ ]?(?:id|name|path)?\s*[:=]\s*\S+/i.test(value)) return "must not contain a labelled repository binding";
+  if (lines.some((line) => /^(?:[-*]\s*)?(?:(?:commit[-_ ]?)?sha\s*[:=]\s*)?[0-9a-f]{7,40}$/i.test(line))) return "must not bind a commit SHA";
+  if (/\b(?:token|password|secret|credential)\s*[:=]\s*\S+/i.test(value)) return "must not contain a credential assignment";
+  if (/\b(?:runtime|compiler|harness)[-_ ]version\s*[:=]\s*\S+/i.test(value)) return "must not contain a runtime-version binding";
+  return void 0;
+}
+function refineAgentSpec(spec, context) {
+  for (const key of ["triggers", "skills", "evals"]) {
+    if (new Set(spec[key]).size !== spec[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+  }
+  for (const key of ["name", "description", "behavior"]) {
+    const message = validatePortableAgentProse(spec[key]);
+    if (message) context.addIssue({ code: "custom", path: [key], message: `Agent ${key} ${message}` });
+  }
+}
+var agentSpecV1Schema = external_exports.object(agentSpecShape).strict().superRefine(refineAgentSpec);
+var compiledAgentSpecV1Schema = external_exports.object(agentSpecShape).strict().superRefine(refineAgentSpec);
+var agentProvenanceV1Schema = external_exports.object({
+  source: external_exports.enum(["dashboard", "git", "mcp", "api", "migration"]),
+  authoredBy: authoringPrincipalSchema,
+  publishedBy: authoringPrincipalSchema,
+  authoredAt: external_exports.iso.datetime(),
+  publishedAt: external_exports.iso.datetime(),
+  git: external_exports.object({ repositoryId: githubNumericIdSchema, commitSha: external_exports.string().regex(/^[a-fA-F0-9]{40}$/), path: relativePath }).strict().optional()
+}).strict().superRefine((provenance, context) => {
+  if (Date.parse(provenance.publishedAt) < Date.parse(provenance.authoredAt)) context.addIssue({ code: "custom", path: ["publishedAt"], message: "publication cannot precede authorship" });
+  if (provenance.source === "git" && !provenance.git) context.addIssue({ code: "custom", path: ["git"], message: "Git provenance requires a commit binding" });
+});
+var agentDraftV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  draftId: identifier,
+  agentId: identifier.nullable(),
+  status: external_exports.literal("paused"),
+  source: agentSourceV1Schema,
+  provenance: agentProvenanceV1Schema,
+  createdAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime()
+}).strict().superRefine((draft, context) => {
+  if (Date.parse(draft.updatedAt) < Date.parse(draft.createdAt)) context.addIssue({ code: "custom", path: ["updatedAt"], message: "draft update cannot precede creation" });
+});
+var agentRevisionV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  agentId: identifier,
+  revision: external_exports.number().int().positive(),
+  revisionId: identifier,
+  source: agentSourceV1Schema,
+  spec: agentSpecV1Schema,
+  sourceHash: hash4,
+  semanticHash: hash4,
+  provenance: agentProvenanceV1Schema,
+  createdAt: external_exports.iso.datetime()
+}).strict();
+var compiledAgentRevisionV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  compiledRevisionId: external_exports.string().regex(/^agent_[a-f0-9]{64}$/),
+  agentId: identifier,
+  revision: external_exports.number().int().positive(),
+  revisionId: identifier,
+  sourceHash: hash4,
+  semanticHash: hash4,
+  spec: compiledAgentSpecV1Schema,
+  referencedFiles: external_exports.array(external_exports.object({ path: relativePath, hash: hash4, kind: external_exports.enum(["skill", "eval"]) }).strict()).max(150),
+  compiler: external_exports.object({ id: external_exports.literal("gardener-agent-compiler"), version: external_exports.string().min(1).max(100) }).strict(),
+  capabilityCatalogVersion: external_exports.string().min(1).max(100),
+  runtimeVersion: external_exports.string().min(1).max(100),
+  compiledAt: external_exports.iso.datetime()
+}).strict();
+var agentRunSnapshotV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
   runId: identifier,
+  createdAt: external_exports.iso.datetime(),
+  revision: compiledAgentRevisionV1Schema,
+  assignment: external_exports.object({ id: entityId, version: external_exports.number().int().positive(), configHash: hash4 }).strict(),
+  repository: external_exports.object({ id: githubNumericIdSchema, policyHash: hash4, policyVersion: external_exports.number().int().positive() }).strict(),
+  workspace: external_exports.object({ policyHash: hash4, policyVersion: external_exports.number().int().positive() }).strict(),
+  effectiveConstraints: external_exports.object({
+    allowedMergeMethods: external_exports.array(external_exports.enum(["merge", "squash", "rebase"])).min(1).max(3),
+    requiredChecks: external_exports.array(external_exports.string().trim().min(1).max(255)).max(100),
+    maxCommentLength: external_exports.number().int().positive().max(65536),
+    maxChangedFiles: external_exports.number().int().positive().max(100),
+    deniedPathPrefixes: external_exports.array(external_exports.string().min(1).max(1024)).max(100)
+  }).strict(),
+  effectiveAuthority: external_exports.array(effectiveEffectAuthorityV1Schema).max(effectCapabilitySchema.options.length),
+  effectiveCapabilities: effectiveCapabilitySetSchema,
+  harness: external_exports.object({ id: external_exports.string().min(1).max(255), version: external_exports.string().min(1).max(100) }).strict(),
+  versions: external_exports.object({ runtime: external_exports.string().min(1).max(100), capabilityCatalog: external_exports.string().min(1).max(100), compiler: external_exports.string().min(1).max(100) }).strict(),
+  snapshotHash: hash4
+}).strict();
+var agentSemanticDiffV1Schema = external_exports.object({
+  fromRevisionId: identifier.nullable(),
+  toRevisionId: identifier,
+  triggers: external_exports.object({ added: external_exports.array(repositoryEventTriggerSchema).max(100), removed: external_exports.array(repositoryEventTriggerSchema).max(100) }).strict(),
+  capabilities: external_exports.object({
+    observationAdded: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+    observationRemoved: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+    workspaceAdded: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
+    workspaceRemoved: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
+    effectsAdded: external_exports.array(effectCapabilitySchema).max(effectCapabilitySchema.options.length),
+    effectsRemoved: external_exports.array(effectCapabilitySchema).max(effectCapabilitySchema.options.length)
+  }).strict(),
+  authority: external_exports.object({ from: policyModeSchema.nullable(), to: policyModeSchema, increased: external_exports.boolean() }).strict(),
+  metadata: external_exports.object({
+    name: external_exports.object({ from: external_exports.string().max(100).nullable(), to: external_exports.string().max(100), changed: external_exports.boolean() }).strict(),
+    description: external_exports.object({ from: external_exports.string().max(1e3).nullable(), to: external_exports.string().max(1e3), changed: external_exports.boolean() }).strict()
+  }).strict(),
+  limitsChanged: external_exports.boolean(),
+  behaviorChanged: external_exports.boolean(),
+  eligibilityChanged: external_exports.boolean(),
+  skillsChanged: external_exports.boolean(),
+  evalsChanged: external_exports.boolean()
+}).strict();
+
+// ../contracts/src/runs.ts
+var id5 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash5 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var timestamp3 = external_exports.iso.datetime();
+function precedesOrEquals(left, right) {
+  return Date.parse(left) <= Date.parse(right);
+}
+var runStateSchema = external_exports.enum(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
+var taskStateSchema = external_exports.enum(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
+var stepStateSchema = external_exports.enum(["pending", "running", "waiting", "succeeded", "failed", "cancelled", "skipped"]);
+var stepKindSchema = external_exports.enum(["resolve", "model", "tool", "child_agent", "interruption", "proposal", "effect", "checkpoint", "cleanup"]);
+var runBudgetUsageV1Schema = external_exports.object({
+  turns: external_exports.number().int().nonnegative(),
+  toolCalls: external_exports.number().int().nonnegative(),
+  tasksCreated: external_exports.number().int().nonnegative(),
+  activeParallelTasks: external_exports.number().int().nonnegative(),
+  inputTokens: external_exports.number().int().nonnegative(),
+  outputTokens: external_exports.number().int().nonnegative(),
+  costUsd: external_exports.number().nonnegative(),
+  operations: external_exports.number().int().nonnegative(),
+  artifactBytes: external_exports.number().int().nonnegative(),
+  runtimeSeconds: external_exports.number().nonnegative()
+}).strict();
+var agentRunV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  instanceId: id5,
+  eventId: id5,
+  agentId: id5,
+  revisionId: id5,
+  snapshotHash: hash5,
+  orchestrationInstanceId: id5,
+  state: runStateSchema,
+  createdAt: timestamp3,
+  startedAt: timestamp3.nullable(),
+  completedAt: timestamp3.nullable(),
+  budgetUsage: runBudgetUsageV1Schema,
+  terminationReason: external_exports.string().max(1e3).nullable(),
+  traceId: id5
+}).strict().superRefine((run, context) => {
+  if (run.state === "queued" && (run.startedAt !== null || run.completedAt !== null)) context.addIssue({ code: "custom", message: "queued run cannot have lifecycle timestamps" });
+  if ((run.state === "running" || run.state === "waiting") && (run.startedAt === null || run.completedAt !== null)) context.addIssue({ code: "custom", message: "active run requires startedAt and no completedAt" });
+  if (["succeeded", "failed", "cancelled"].includes(run.state) && run.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal run requires completedAt" });
+  if ((run.state === "succeeded" || run.state === "failed") && run.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
+  if (["succeeded", "failed", "cancelled"].includes(run.state) && run.budgetUsage.activeParallelTasks !== 0) context.addIssue({ code: "custom", path: ["budgetUsage", "activeParallelTasks"], message: "terminal run cannot retain active parallel tasks" });
+  if (run.startedAt !== null && !precedesOrEquals(run.createdAt, run.startedAt)) context.addIssue({ code: "custom", path: ["startedAt"], message: "run cannot start before creation" });
+  if (run.completedAt !== null && (!precedesOrEquals(run.createdAt, run.completedAt) || run.startedAt !== null && !precedesOrEquals(run.startedAt, run.completedAt))) context.addIssue({ code: "custom", path: ["completedAt"], message: "run completion chronology is invalid" });
+});
+var agentTaskV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  parentTaskId: id5.nullable(),
+  kind: external_exports.enum(["main", "subagent", "evaluation", "workspace"]),
+  state: taskStateSchema,
+  ordinal: external_exports.number().int().nonnegative(),
+  assignedCapabilitiesHash: hash5,
+  workspaceId: id5.nullable(),
+  createdAt: timestamp3,
+  startedAt: timestamp3.nullable(),
+  completedAt: timestamp3.nullable(),
+  errorCode: external_exports.string().max(100).nullable()
+}).strict().superRefine((task, context) => {
+  if (task.state === "queued" && (task.startedAt !== null || task.completedAt !== null)) context.addIssue({ code: "custom", message: "queued task cannot have lifecycle timestamps" });
+  if ((task.state === "running" || task.state === "waiting") && (task.startedAt === null || task.completedAt !== null)) context.addIssue({ code: "custom", message: "active task requires startedAt and no completedAt" });
+  if (["succeeded", "failed", "cancelled"].includes(task.state) && task.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal task requires completedAt" });
+  if ((task.state === "succeeded" || task.state === "failed") && task.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
+  if (task.startedAt !== null && !precedesOrEquals(task.createdAt, task.startedAt)) context.addIssue({ code: "custom", path: ["startedAt"], message: "task cannot start before creation" });
+  if (task.completedAt !== null && (!precedesOrEquals(task.createdAt, task.completedAt) || task.startedAt !== null && !precedesOrEquals(task.startedAt, task.completedAt))) context.addIssue({ code: "custom", path: ["completedAt"], message: "task completion chronology is invalid" });
+});
+var agentStepV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  taskId: id5,
+  parentStepId: id5.nullable(),
+  kind: stepKindSchema,
+  state: stepStateSchema,
+  ordinal: external_exports.number().int().nonnegative(),
+  attempt: external_exports.number().int().positive().max(20),
+  inputHash: hash5,
+  outputHash: hash5.nullable(),
+  artifactIds: external_exports.array(id5).max(100),
+  startedAt: timestamp3.nullable(),
+  completedAt: timestamp3.nullable(),
+  retryable: external_exports.boolean().nullable(),
+  errorCode: external_exports.string().max(100).nullable()
+}).strict().superRefine((step, context) => {
+  if (step.state === "pending" && (step.startedAt !== null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "pending step cannot have lifecycle timestamps" });
+  if ((step.state === "running" || step.state === "waiting") && (step.startedAt === null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "active step requires startedAt and no completedAt" });
+  if (["succeeded", "failed", "cancelled", "skipped"].includes(step.state) && step.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal step requires completedAt" });
+  if ((step.state === "succeeded" || step.state === "failed") && step.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
+  if (step.startedAt !== null && step.completedAt !== null && !precedesOrEquals(step.startedAt, step.completedAt)) context.addIssue({ code: "custom", path: ["completedAt"], message: "step completion cannot precede start" });
+});
+var agentArtifactV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  taskId: id5.nullable(),
+  stepId: id5.nullable(),
+  kind: external_exports.enum(["repository_snapshot", "patch", "log", "report", "trace", "model_input", "model_output", "tool_output", "test_result", "eval_result"]),
+  name: external_exports.string().min(1).max(255),
+  mediaType: external_exports.string().min(1).max(100),
+  sizeBytes: external_exports.number().int().nonnegative().max(1e9),
+  hash: hash5,
+  storage: external_exports.object({ provider: external_exports.enum(["r2", "d1", "computer", "inline"]), key: external_exports.string().min(1).max(1024) }).strict(),
+  trust: external_exports.enum(["trusted_system", "untrusted_repository", "untrusted_model", "untrusted_tool", "human_authored"]),
+  createdAt: timestamp3,
+  expiresAt: timestamp3.nullable()
+}).strict().superRefine((artifact, context) => {
+  if (artifact.expiresAt !== null && Date.parse(artifact.expiresAt) <= Date.parse(artifact.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "artifact expiry must follow creation" });
+});
+var agentEffectProposalV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  stepId: id5,
+  operation: operationSchema,
+  operationHash: hash5,
+  rationale: external_exports.string().trim().min(1).max(5e3),
+  evidenceArtifactIds: external_exports.array(id5).max(100),
+  createdAt: timestamp3
+}).strict();
+var agentEffectResultV1Schema = external_exports.object({ proposalId: id5, receipt: operationReceiptSchema }).strict();
+
+// ../contracts/src/interruptions.ts
+var id6 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash6 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var timestamp4 = external_exports.iso.datetime();
+var interruptionBase = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id6,
+  runId: id6,
+  taskId: id6,
+  stepId: id6,
+  state: external_exports.enum(["pending", "approved", "rejected", "expired", "cancelled"]),
+  eligibleResponders: external_exports.array(gardenerPrincipalSchema).min(1).max(100),
+  nonceHash: hash6,
+  createdAt: timestamp4,
+  expiresAt: timestamp4,
+  resolvedAt: timestamp4.nullable()
+});
+var interruptionSchema = external_exports.discriminatedUnion("kind", [
+  interruptionBase.extend({ kind: external_exports.literal("clarification"), question: external_exports.string().trim().min(1).max(5e3), choices: external_exports.array(external_exports.object({ id: id6, label: external_exports.string().min(1).max(200) }).strict()).max(20), response: external_exports.object({ text: external_exports.string().max(1e4), choiceId: id6.nullable() }).strict().nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("capability_request"), request: runtimeCapabilityRequestSchema, decision: external_exports.enum(["allow_once", "reject", "revision_required", "never_allowed"]).nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("effect_approval"), operation: operationSchema, operationHash: hash6, decision: external_exports.enum(["approve_exact", "reject"]).nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("patch_review"), patchArtifactId: id6, patchHash: hash6, decision: external_exports.enum(["approve", "reject", "request_changes"]).nullable(), response: external_exports.string().max(1e4).nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("budget_request"), budget: external_exports.enum(["turns", "tool_calls", "runtime", "tokens", "cost", "artifact_bytes"]), requestedAdditional: external_exports.number().positive(), decision: external_exports.enum(["allow_once", "reject"]).nullable() }).strict()
+]).superRefine((interruption, context) => {
+  if (Date.parse(interruption.expiresAt) <= Date.parse(interruption.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "interruption must expire after creation" });
+  const resolution = interruption.kind === "clarification" ? interruption.response : interruption.decision;
+  if (interruption.state === "pending") {
+    if (resolution !== null) context.addIssue({ code: "custom", message: "pending interruption cannot have a resolution" });
+    if (interruption.resolvedAt !== null) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "pending interruption cannot have a resolution timestamp" });
+    return;
+  }
+  if (interruption.resolvedAt === null) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "resolved interruption requires a resolution timestamp" });
+  if (interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) < Date.parse(interruption.createdAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "interruption cannot resolve before creation" });
+  if ((interruption.state === "approved" || interruption.state === "rejected") && interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) > Date.parse(interruption.expiresAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "approval or rejection cannot occur after expiration" });
+  if (interruption.state === "expired" && interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) < Date.parse(interruption.expiresAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "expiration cannot resolve before its deadline" });
+  if (interruption.state === "expired" || interruption.state === "cancelled") {
+    if (resolution !== null) context.addIssue({ code: "custom", message: "expired or cancelled interruption cannot contain a decision" });
+    return;
+  }
+  if (interruption.kind !== "clarification" && resolution === null) context.addIssue({ code: "custom", path: ["decision"], message: "approved or rejected interruption requires a decision" });
+  if (interruption.kind === "clarification") {
+    if (interruption.state === "approved" && interruption.response === null) context.addIssue({ code: "custom", path: ["response"], message: "approved clarification requires a response" });
+    if (interruption.state === "rejected" && interruption.response !== null) context.addIssue({ code: "custom", path: ["response"], message: "rejected clarification cannot contain a response" });
+  } else if (interruption.kind === "capability_request") {
+    const approved = interruption.decision === "allow_once";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "capability decision is incompatible with interruption state" });
+  } else if (interruption.kind === "effect_approval") {
+    const approved = interruption.decision === "approve_exact";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "effect decision is incompatible with interruption state" });
+  } else if (interruption.kind === "patch_review") {
+    const approved = interruption.decision === "approve";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "patch decision is incompatible with interruption state" });
+  } else {
+    const approved = interruption.decision === "allow_once";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "budget decision is incompatible with interruption state" });
+  }
+});
+var interruptionResponseV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  interruptionId: id6,
+  nonce: external_exports.string().min(32).max(512),
+  responder: gardenerPrincipalSchema,
+  responseHash: hash6,
+  respondedAt: timestamp4,
+  payload: external_exports.union([
+    external_exports.object({ kind: external_exports.literal("clarification"), text: external_exports.string().max(1e4), choiceId: id6.nullable() }).strict(),
+    external_exports.object({ kind: external_exports.literal("capability_request"), decision: external_exports.enum(["allow_once", "reject", "revision_required", "never_allowed"]) }).strict(),
+    external_exports.object({ kind: external_exports.literal("effect_approval"), decision: external_exports.enum(["approve_exact", "reject"]), operationHash: hash6 }).strict(),
+    external_exports.object({ kind: external_exports.literal("patch_review"), decision: external_exports.enum(["approve", "reject", "request_changes"]), response: external_exports.string().max(1e4).nullable() }).strict(),
+    external_exports.object({ kind: external_exports.literal("budget_request"), decision: external_exports.enum(["allow_once", "reject"]) }).strict()
+  ])
+}).strict();
+var inboxBase = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id6,
+  instanceId: id6,
+  runId: id6.nullable(),
+  createdAt: timestamp4,
+  updatedAt: timestamp4,
+  status: external_exports.enum(["unread", "open", "resolved", "dismissed"]),
+  severity: external_exports.enum(["info", "attention", "warning", "critical"]),
+  title: external_exports.string().trim().min(1).max(255),
+  summary: external_exports.string().trim().min(1).max(2e3)
+});
+var inboxItemSchema = external_exports.discriminatedUnion("kind", [
+  inboxBase.extend({ kind: external_exports.literal("interruption"), interruptionId: id6 }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("run_failure"), errorCode: external_exports.string().min(1).max(100), retryable: external_exports.boolean() }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("draft_activation"), draftId: id6 }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("eval_regression"), revisionId: id6, evalArtifactId: id6 }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("temporary_grant_expiring"), grantId: id6, expiresAt: timestamp4 }).strict()
+]);
+
+// ../contracts/src/simulations.ts
+var id7 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash7 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var agentSimulationRequestV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  simulationId: id7,
+  revisionId: id7,
+  event: repositoryEventV2Schema,
+  mode: external_exports.enum(["validate", "shadow"]),
+  fixtureId: id7.nullable()
+}).strict();
+var agentSimulationResultV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  simulationId: id7,
+  revisionId: id7,
+  eventId: id7,
+  status: external_exports.enum(["eligible", "ineligible", "completed", "failed", "blocked"]),
+  traceHash: hash7,
+  effectiveCapabilities: effectiveCapabilitySetSchema,
+  proposals: external_exports.array(agentEffectProposalV1Schema).max(100),
+  deniedRequests: external_exports.array(external_exports.object({ capability: external_exports.union([observationCapabilitySchema, workspaceCapabilitySchema, effectCapabilitySchema]), reason: external_exports.string().min(1).max(1e3) }).strict()).max(100),
+  usage: runBudgetUsageV1Schema,
+  summary: external_exports.string().max(1e4),
+  createdAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime()
+}).strict();
+
+// ../contracts/src/task.ts
+var identifier2 = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
+var boundIdentifier = external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
+var githubNumericId = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
+var sha1 = external_exports.string().regex(/^[a-f0-9]{40}$/);
+var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var repositoryFullName = external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201);
+var relativePath2 = external_exports.string().min(1).max(1024).refine(
+  (path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  "expected a normalized repository-relative POSIX path"
+);
+var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({
+    kind: external_exports.literal("github.issue.opened"),
+    labelsAll: external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([])
+  }),
+  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") })
+]);
+var taskToolV1Schema = external_exports.enum([
+  "repository.read_file",
+  "repository.list_files",
+  "repository.exec"
+]);
+var taskEffectKindV1Schema = external_exports.enum([
+  "issue.comment.create",
+  "issue.labels.update",
+  "repository.draft_pr.create"
+]);
+var networkHostPattern = external_exports.string().regex(
+  /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+  "expected a lowercase DNS hostname or leading-wildcard hostname"
+);
+var taskNetworkPolicyV1Schema = external_exports.strictObject({
+  default: external_exports.enum(["deny", "allow"]),
+  allow: external_exports.array(networkHostPattern).max(64),
+  deny: external_exports.array(networkHostPattern).max(64)
+}).superRefine((policy, context) => {
+  for (const key of ["allow", "deny"]) {
+    if (new Set(policy[key]).size !== policy[key].length) {
+      context.addIssue({ code: "custom", path: [key], message: `${key} hosts must be unique` });
+    }
+  }
+});
+var taskLimitsV1Schema = external_exports.strictObject({
+  runtimeSeconds: external_exports.number().int().positive().max(3600),
+  maxTurns: external_exports.number().int().positive().max(32),
+  maxToolCalls: external_exports.number().int().positive().max(256),
+  inputTokens: external_exports.number().int().positive().max(1e6),
+  outputTokens: external_exports.number().int().positive().max(25e4)
+});
+var taskBundleV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-bundle/v1"),
+  taskId: identifier2,
+  name: external_exports.string().trim().min(1).max(100),
+  description: external_exports.string().trim().min(1).max(1e3),
+  instructions: external_exports.string().trim().min(1).max(1e5),
+  triggers: external_exports.array(taskTriggerV1Schema).min(1).max(20),
+  tools: external_exports.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
+  effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
+  network: taskNetworkPolicyV1Schema,
+  limits: taskLimitsV1Schema
+}).superRefine((bundle, context) => {
+  for (const key of ["tools", "effects"]) {
+    if (new Set(bundle[key]).size !== bundle[key].length) {
+      context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+    }
+  }
+  const triggers = bundle.triggers.map((trigger) => JSON.stringify(trigger));
+  if (new Set(triggers).size !== triggers.length) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must be unique" });
+  }
+  if (bundle.limits.outputTokens < bundle.limits.maxTurns * 16) {
+    context.addIssue({ code: "custom", path: ["limits", "outputTokens"], message: "outputTokens must permit at least 16 tokens per model turn" });
+  }
+});
+var normalizedRepositoryV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  ownerId: githubNumericId,
+  owner: external_exports.string().min(1).max(100),
+  name: external_exports.string().min(1).max(100),
+  fullName: repositoryFullName,
+  visibility: external_exports.enum(["public", "private", "internal"]),
+  commitSha: sha1,
+  ref: external_exports.string().min(1).max(1024)
+});
+var normalizedWorkflowV1Schema = external_exports.strictObject({
+  runId: githubNumericId,
   runAttempt: external_exports.number().int().positive().max(1e3),
+  eventName: external_exports.enum(["issues", "workflow_dispatch"]),
   workflowRef: external_exports.string().min(1).max(1024),
   jobWorkflowRef: external_exports.string().min(1).max(1024),
-  eventName: external_exports.enum(["issues", "workflow_dispatch"]),
-  ref: external_exports.string().min(1).max(1024),
-  runnerEnvironment: external_exports.literal("github-hosted"),
-  commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
-  agentHash: sha256
+  runnerEnvironment: external_exports.literal("github-hosted")
 });
-var runnerActionV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.action/v1"),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier,
-  kind: external_exports.literal("shell.exec"),
-  command: external_exports.string().min(1).max(64 * 1024),
-  cwd: external_exports.string().min(1).max(4096),
-  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3),
-  maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
+var normalizedActorV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  login: external_exports.string().min(1).max(100)
 });
-var runnerActionResultV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier,
+var normalizedEventBase = {
+  schemaVersion: external_exports.literal("gardener.normalized-event/v1"),
+  eventId: boundIdentifier,
+  occurredAt: external_exports.iso.datetime(),
+  repository: normalizedRepositoryV1Schema,
+  workflow: normalizedWorkflowV1Schema,
+  actor: normalizedActorV1Schema
+};
+var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({
+    ...normalizedEventBase,
+    kind: external_exports.literal("github.issue.opened"),
+    issue: external_exports.strictObject({
+      id: githubNumericId,
+      number: external_exports.number().int().positive(),
+      title: external_exports.string().max(1024),
+      body: external_exports.string().max(65536).nullable(),
+      labels: external_exports.array(external_exports.string().trim().min(1).max(100)).max(100),
+      author: normalizedActorV1Schema
+    })
+  }),
+  external_exports.strictObject({
+    ...normalizedEventBase,
+    kind: external_exports.literal("github.workflow_dispatch"),
+    prompt: external_exports.string().trim().min(1).max(2e4)
+  })
+]).superRefine((event, context) => {
+  if (event.repository.fullName !== `${event.repository.owner}/${event.repository.name}`) {
+    context.addIssue({ code: "custom", path: ["repository", "fullName"], message: "fullName must match repository owner and name" });
+  }
+  const expectedEventName = event.kind === "github.issue.opened" ? "issues" : "workflow_dispatch";
+  if (event.workflow.eventName !== expectedEventName) {
+    context.addIssue({ code: "custom", path: ["workflow", "eventName"], message: "workflow eventName does not match normalized event kind" });
+  }
+});
+var taskRunRequestV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-run-request/v1"),
+  runId: boundIdentifier,
+  bundle: taskBundleV1Schema,
+  bundleHash: sha256,
+  sourcePath: relativePath2,
+  policySnapshotHash: sha256,
+  event: normalizedEventV1Schema,
+  model: external_exports.strictObject({ id: external_exports.string().min(1).max(256) }),
+  admittedAt: external_exports.iso.datetime(),
+  deadlineAt: external_exports.iso.datetime()
+}).superRefine((request, context) => {
+  if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
+    context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
+  }
+  if (request.event.repository.commitSha.length !== 40) {
+    context.addIssue({ code: "custom", path: ["event", "repository", "commitSha"], message: "invalid commit binding" });
+  }
+});
+var taskToolResultV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-tool-result/v1"),
+  operationId: boundIdentifier,
+  tool: taskToolV1Schema,
   status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
   exitCode: external_exports.number().int().min(0).max(255).nullable(),
   stdout: external_exports.string().max(4 * 1024 * 1024),
   stderr: external_exports.string().max(4 * 1024 * 1024),
   outputTruncated: external_exports.boolean()
 }).superRefine((result, context) => {
-  const processExited = result.status === "completed" || result.status === "failed";
-  if (processExited !== (result.exitCode !== null)) {
-    context.addIssue({
-      code: "custom",
-      path: ["exitCode"],
-      message: processExited ? "Completed and failed commands require an exit code" : "Cancelled and timed-out commands cannot have an exit code"
-    });
+  const exited = result.status === "completed" || result.status === "failed";
+  if (exited !== (result.exitCode !== null)) {
+    context.addIssue({ code: "custom", path: ["exitCode"], message: "exitCode must match process completion status" });
   }
 });
-var runnerEventV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.event/v1"),
-  kind: external_exports.literal("github.issue.opened"),
-  issue: external_exports.strictObject({
-    id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-    number: external_exports.number().int().positive(),
-    title: external_exports.string().max(1024),
-    body: external_exports.string().max(65536).nullable(),
-    labels: external_exports.array(external_exports.string().trim().min(1).max(100)).max(100),
-    author: external_exports.strictObject({
-      id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-      login: external_exports.string().min(1).max(100)
-    })
-  })
-});
-var runnerEffectReceiptV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
-  planRunId: identifier,
-  bundleHash: sha256,
-  artifactSha256: sha256,
-  operationId: identifier,
-  kind: external_exports.literal("issue.comment.create"),
-  commentId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  commentUrl: external_exports.url().refine(
-    (value) => new URL(value).origin === "https://github.com",
-    "Expected an HTTPS github.com comment URL"
-  )
-});
-var runnerEffectArtifactV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
+var gitChangeArtifactRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.git-change-artifact/v1"),
   sha256,
-  bytesBase64: external_exports.string().min(1).max(128 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
+  manifestSha256: sha256,
+  sizeBytes: external_exports.number().int().nonnegative().max(1e9)
 });
-var runnerTerminalV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
-  status: external_exports.enum(["completed", "failed", "cancelled"]),
-  summary: external_exports.string().min(1).max(16 * 1024),
-  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  effectArtifact: runnerEffectArtifactV1Schema.optional()
+var proposedEffectV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({
+    operationId: boundIdentifier,
+    kind: external_exports.literal("issue.comment.create"),
+    issueNumber: external_exports.number().int().positive(),
+    body: external_exports.string().min(1).max(65536),
+    rationale: external_exports.string().min(1).max(5e3)
+  }),
+  external_exports.strictObject({
+    operationId: boundIdentifier,
+    kind: external_exports.literal("issue.labels.update"),
+    issueNumber: external_exports.number().int().positive(),
+    add: external_exports.array(external_exports.string().trim().min(1).max(100)).max(20),
+    remove: external_exports.array(external_exports.string().trim().min(1).max(100)).max(20),
+    rationale: external_exports.string().min(1).max(5e3)
+  }),
+  external_exports.strictObject({
+    operationId: boundIdentifier,
+    kind: external_exports.literal("repository.draft_pr.create"),
+    artifact: gitChangeArtifactRefV1Schema,
+    branch: external_exports.string().min(1).max(255),
+    base: external_exports.string().min(1).max(255),
+    commitMessage: external_exports.string().min(1).max(1e3),
+    title: external_exports.string().min(1).max(1024),
+    body: external_exports.string().max(65536),
+    draft: external_exports.literal(true),
+    rationale: external_exports.string().min(1).max(5e3)
+  })
+]);
+var taskEffectPlanV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-effect-plan/v1"),
+  runId: boundIdentifier,
+  taskId: identifier2,
+  taskName: external_exports.string().trim().min(1).max(100),
+  bundleHash: sha256,
+  repository: external_exports.strictObject({ id: githubNumericId, fullName: repositoryFullName }),
+  provenance: external_exports.strictObject({
+    sourcePath: relativePath2,
+    commitSha: sha1,
+    workflowRunId: githubNumericId,
+    workflowRunAttempt: external_exports.number().int().positive()
+  }),
+  issueNumber: external_exports.number().int().positive(),
+  operationId: boundIdentifier,
+  kind: external_exports.literal("issue.comment.create"),
+  body: external_exports.string().min(1).max(65536)
 });
-var resumeCursorV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.cursor/v1"),
-  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+var taskObservationV1Schema = external_exports.strictObject({
+  kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
+  summary: external_exports.string().trim().min(1).max(8e3),
+  paths: external_exports.array(relativePath2).max(100).default([])
 });
-
-// ../protocol/src/session-id.ts
-function runnerSessionId(hello) {
-  return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
-}
+var taskOutcomeBase = {
+  schemaVersion: external_exports.literal("gardener.task-outcome/v1"),
+  runId: boundIdentifier,
+  taskId: identifier2,
+  bundleHash: sha256
+};
+var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    ...taskOutcomeBase,
+    status: external_exports.literal("completed"),
+    summary: external_exports.string().trim().min(1).max(32e3),
+    observations: external_exports.array(taskObservationV1Schema).max(200),
+    proposedEffects: external_exports.array(proposedEffectV1Schema).max(100)
+  }),
+  external_exports.strictObject({
+    ...taskOutcomeBase,
+    status: external_exports.literal("failed"),
+    error: external_exports.strictObject({ code: identifier2, message: external_exports.string().min(1).max(8e3), retryable: external_exports.boolean() })
+  }),
+  external_exports.strictObject({
+    ...taskOutcomeBase,
+    status: external_exports.literal("cancelled"),
+    reason: external_exports.string().min(1).max(8e3)
+  })
+]);
 
 // ../../node_modules/.pnpm/capnweb@0.12.0/node_modules/capnweb/dist/index.js
 var WORKERS_MODULE_SYMBOL = /* @__PURE__ */ Symbol("workers-module");
@@ -40167,8 +41471,8 @@ var streamImpl = {
   createReadableStreamHook: streamNotLoaded
 };
 var StubHook = class {
-  stream(path3, args) {
-    let hook = this.call(path3, args);
+  stream(path, args) {
+    let hook = this.call(path, args);
     let pulled;
     try {
       pulled = hook.pull();
@@ -40193,15 +41497,15 @@ var ErrorStubHook = class extends StubHook {
     super();
     this.error = error63;
   }
-  call(path3, args) {
+  call(path, args) {
     args.dispose();
     return this;
   }
-  map(path3, captures, instructions) {
+  map(path, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return this;
   }
-  get(path3) {
+  get(path) {
     return this;
   }
   dup() {
@@ -40223,8 +41527,8 @@ var ErrorStubHook = class extends StubHook {
   }
 };
 var DISPOSED_HOOK = new ErrorStubHook(/* @__PURE__ */ new Error("Attempted to use RPC stub after it has been disposed."));
-var doCall = (hook, path3, params) => {
-  return hook.call(path3, params);
+var doCall = (hook, path, params) => {
+  return hook.call(path, params);
 };
 function withCallInterceptor(interceptor, callback) {
   let oldValue = doCall;
@@ -40819,10 +42123,10 @@ var RpcPayload = class RpcPayload2 {
     }
   }
 };
-function followPath(value, parent, path3, owner) {
-  for (let i = 0; i < path3.length; i++) {
+function followPath(value, parent, path, owner) {
+  for (let i = 0; i < path.length; i++) {
     parent = value;
-    let part = path3[i];
+    let part = path[i];
     if (part in Object.prototype) {
       value = void 0;
       continue;
@@ -40848,7 +42152,7 @@ function followPath(value, parent, path3, owner) {
         let { hook, pathIfPromise } = unwrapStubAndPath(value);
         return {
           hook,
-          remainingPath: pathIfPromise ? pathIfPromise.concat(path3.slice(i)) : path3.slice(i)
+          remainingPath: pathIfPromise ? pathIfPromise.concat(path.slice(i)) : path.slice(i)
         };
       }
       case "writable":
@@ -40875,8 +42179,8 @@ function followPath(value, parent, path3, owner) {
       case "unsupported":
         if (i === 0) throw new TypeError(`RPC stub points at a non-serializable type.`);
         else {
-          let prefix = path3.slice(0, i).join(".");
-          let remainder = path3.slice(0, i).join(".");
+          let prefix = path.slice(0, i).join(".");
+          let remainder = path.slice(0, i).join(".");
           throw new TypeError(`'${prefix}' is not a serializable type, so property ${remainder} cannot be accessed.`);
         }
       default:
@@ -40897,11 +42201,11 @@ function followPath(value, parent, path3, owner) {
   };
 }
 var ValueStubHook = class extends StubHook {
-  call(path3, args) {
+  call(path, args) {
     let followResult;
     try {
       let { value, owner } = this.getValue();
-      followResult = followPath(value, void 0, path3, owner);
+      followResult = followPath(value, void 0, path, owner);
     } catch (err) {
       args.dispose();
       return new ErrorStubHook(err);
@@ -40909,18 +42213,18 @@ var ValueStubHook = class extends StubHook {
     if (followResult.hook) return followResult.hook.call(followResult.remainingPath, args);
     if (typeof followResult.value != "function") {
       args.dispose();
-      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path3.join(".")}' is not a function.`));
+      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path.join(".")}' is not a function.`));
     }
     return new PromiseStubHook(args.deliverCall(followResult.value, followResult.parent).then((payload) => {
       return new PayloadStubHook(payload);
     }));
   }
-  map(path3, captures, instructions) {
+  map(path, captures, instructions) {
     try {
       let followResult;
       try {
         let { value, owner } = this.getValue();
-        followResult = followPath(value, void 0, path3, owner);
+        followResult = followPath(value, void 0, path, owner);
       } catch (err) {
         for (let cap of captures) cap.dispose();
         throw err;
@@ -40931,14 +42235,14 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  get(path3) {
+  get(path) {
     try {
       let { value, owner } = this.getValue();
-      if (path3.length === 0 && owner === null) {
+      if (path.length === 0 && owner === null) {
         if (value instanceof Object && "then" in value) return this.dup();
         throw new Error("Can't dup an RpcTarget stub as a promise.");
       }
-      let followResult = followPath(value, void 0, path3, owner);
+      let followResult = followPath(value, void 0, path, owner);
       if (followResult.hook) return followResult.hook.get(followResult.remainingPath);
       return new PayloadStubHook(RpcPayload.deepCopyFrom(followResult.value, followResult.parent, followResult.owner));
     } catch (err) {
@@ -41057,28 +42361,28 @@ var PromiseStubHook = class PromiseStubHook2 extends StubHook {
       return res;
     });
   }
-  call(path3, args) {
+  call(path, args) {
     args.ensureDeepCopied();
-    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path3, args), (err) => {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path, args), (err) => {
       args.dispose();
       throw err;
     }));
   }
-  stream(path3, args) {
+  stream(path, args) {
     args.ensureDeepCopied();
-    return { promise: this.promise.then((hook) => hook.stream(path3, args).promise, (err) => {
+    return { promise: this.promise.then((hook) => hook.stream(path, args).promise, (err) => {
       args.dispose();
       throw err;
     }) };
   }
-  map(path3, captures, instructions) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path3, captures, instructions), (err) => {
+  map(path, captures, instructions) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path, captures, instructions), (err) => {
       for (let cap of captures) cap.dispose();
       throw err;
     }));
   }
-  get(path3) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path3)));
+  get(path) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path)));
   }
   dup() {
     if (this.resolution) return this.resolution.dup();
@@ -41357,7 +42661,7 @@ var Devaluator = class Devaluator2 {
       }
       case "response": {
         let resp = value;
-        let body = this.devaluateImpl(resp.body, resp, depth + 1);
+        let body2 = this.devaluateImpl(resp.body, resp, depth + 1);
         let init = {};
         if (resp.status !== 200) init.status = resp.status;
         if (resp.statusText) init.statusText = resp.statusText;
@@ -41369,7 +42673,7 @@ var Devaluator = class Devaluator2 {
         if (cfResp.webSocket) throw new TypeError("Can't serialize a Response containing a webSocket.");
         return [
           "response",
-          body,
+          body2,
           init
         ];
       }
@@ -41492,8 +42796,8 @@ var NullImporter = class {
   }
 };
 var NULL_IMPORTER = new NullImporter();
-function fixBrokenRequestBody(request, body) {
-  return new RpcPromise$1(new PromiseStubHook(new Response(body).arrayBuffer().then((arrayBuffer) => {
+function fixBrokenRequestBody(request, body2) {
+  return new RpcPromise$1(new PromiseStubHook(new Response(body2).arrayBuffer().then((arrayBuffer) => {
     let bytes = new Uint8Array(arrayBuffer);
     let result = new Request(request, { body: bytes });
     return new PayloadStubHook(RpcPayload.fromAppReturn(result));
@@ -41673,14 +42977,14 @@ var Evaluator = class Evaluator2 {
         }
         case "response": {
           if (value.length !== 3) break;
-          let body = this.evaluateImpl(value[1], parent, property, depth + 1);
-          if (body === null || typeof body === "string" || body instanceof Uint8Array || body instanceof ReadableStream) {
+          let body2 = this.evaluateImpl(value[1], parent, property, depth + 1);
+          if (body2 === null || typeof body2 === "string" || body2 instanceof Uint8Array || body2 instanceof ReadableStream) {
           } else throw new TypeError("Response body must be of type ReadableStream.");
           let init = value[2];
           if (typeof init !== "object" || init === null) break;
           if (init.webSocket) throw new TypeError("Can't deserialize a Response containing a webSocket.");
           if (init.headers && !(init.headers instanceof Array)) throw new TypeError("Request headers must be serialized as an array of pairs.");
-          return new Response(body, init);
+          return new Response(body2, init);
         }
         case "blob": {
           if (value.length !== 3 || typeof value[1] !== "string") break;
@@ -41718,23 +43022,23 @@ var Evaluator = class Evaluator2 {
           };
           if (value.length == 2) if (isPromise) return addStub(hook.get([]));
           else return addStub(hook.dup());
-          let path3 = value[2];
-          if (!(path3 instanceof Array)) break;
-          if (!path3.every((part) => {
+          let path = value[2];
+          if (!(path instanceof Array)) break;
+          if (!path.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
-          if (value.length == 3) return addStub(hook.get(path3));
+          if (value.length == 3) return addStub(hook.get(path));
           let args = value[3];
           if (!(args instanceof Array)) break;
           args = new Evaluator2(this.importer).evaluateWithDepth([args], depth);
-          return addStub(hook.call(path3, args));
+          return addStub(hook.call(path, args));
         }
         case "remap": {
           if (value.length !== 5 || typeof value[1] !== "number" || !(value[2] instanceof Array) || !(value[3] instanceof Array) || !(value[4] instanceof Array)) break;
           let hook = this.importer.getExport(value[1]);
           if (!hook) throw new Error(`no such entry on exports table: ${value[1]}`);
-          let path3 = value[2];
-          if (!path3.every((part) => {
+          let path = value[2];
+          if (!path.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
           let captures = value[3].map((cap) => {
@@ -41747,7 +43051,7 @@ var Evaluator = class Evaluator2 {
             }
           });
           let instructions = value[4];
-          let promise2 = new RpcPromise$1(hook.map(path3, captures, instructions), []);
+          let promise2 = new RpcPromise$1(hook.map(path, captures, instructions), []);
           this.promises.push({
             promise: promise2,
             parent,
@@ -41931,7 +43235,7 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
     ++entry.localRefcount;
     this.entry = entry;
   }
-  collectPath(path3) {
+  collectPath(path) {
     return this;
   }
   getEntry() {
@@ -41946,27 +43250,27 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
       throw err;
     }
   }
-  call(path3, args) {
+  call(path, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.call(path3, args);
-    else return entry.session.sendCall(entry.importId, path3, args);
+    if (entry.resolution) return entry.resolution.call(path, args);
+    else return entry.session.sendCall(entry.importId, path, args);
   }
-  stream(path3, args) {
+  stream(path, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.stream(path3, args);
-    else return entry.session.sendStream(entry.importId, path3, args);
+    if (entry.resolution) return entry.resolution.stream(path, args);
+    else return entry.session.sendStream(entry.importId, path, args);
   }
-  map(path3, captures, instructions) {
+  map(path, captures, instructions) {
     let entry = this.getEntryTakingOwnership(() => {
       for (let cap of captures) cap.dispose();
     });
-    if (entry.resolution) return entry.resolution.map(path3, captures, instructions);
-    else return entry.session.sendMap(entry.importId, path3, captures, instructions);
+    if (entry.resolution) return entry.resolution.map(path, captures, instructions);
+    else return entry.session.sendMap(entry.importId, path, captures, instructions);
   }
-  get(path3) {
+  get(path) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.get(path3);
-    else return entry.session.sendCall(entry.importId, path3);
+    if (entry.resolution) return entry.resolution.get(path);
+    else return entry.session.sendCall(entry.importId, path);
   }
   dup() {
     return new RpcImportHook2(false, this.getEntry());
@@ -42075,7 +43379,7 @@ var RpcSessionImpl = class {
     return exportId;
   }
   unexport(ids) {
-    for (let id of ids) this.releaseExport(id, 1);
+    for (let id8 of ids) this.releaseExport(id8, 1);
   }
   releaseExport(exportId, refcount) {
     let entry = this.exports[exportId];
@@ -42222,15 +43526,15 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id, path3, args) {
+  sendCall(id8, path, args) {
     if (this.abortReason) {
       args?.dispose();
       throw this.abortReason;
     }
     let value = [
       "pipeline",
-      id,
-      path3
+      id8,
+      path
     ];
     if (args) {
       let devalue;
@@ -42247,15 +43551,15 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id, path3, args) {
+  sendStream(id8, path, args) {
     if (this.abortReason) {
       args.dispose();
       throw this.abortReason;
     }
     let value = [
       "pipeline",
-      id,
-      path3
+      id8,
+      path
     ];
     let devalue;
     try {
@@ -42284,15 +43588,15 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id, path3, captures, instructions) {
+  sendMap(id8, path, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
     }
     let value = [
       "remap",
-      id,
-      path3,
+      id8,
+      path,
       captures.map((hook) => {
         let importId = this.getImport(hook);
         if (importId !== void 0) return ["import", importId];
@@ -42305,18 +43609,18 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendPull(id) {
+  sendPull(id8) {
     if (this.abortReason) throw this.abortReason;
-    this.send(["pull", id]);
+    this.send(["pull", id8]);
   }
-  sendRelease(id, remoteRefcount) {
+  sendRelease(id8, remoteRefcount) {
     if (this.abortReason) return;
     this.send([
       "release",
-      id,
+      id8,
       remoteRefcount
     ]);
-    delete this.imports[id];
+    delete this.imports[id8];
   }
   abort(error63, trySendAbortMessage = true) {
     if (this.abortReason !== void 0) return;
@@ -42496,7 +43800,7 @@ var WebSocketTransport = class {
       this.#sendQueue = [];
       webSocket.addEventListener("open", (event) => {
         try {
-          for (let message3 of this.#sendQueue) webSocket.send(message3);
+          for (let message of this.#sendQueue) webSocket.send(message);
         } catch (err) {
           this.#receivedError(err);
         }
@@ -42525,9 +43829,9 @@ var WebSocketTransport = class {
   #receiveRejecter;
   #receiveQueue = [];
   #error;
-  send(message3) {
-    if (this.#sendQueue === void 0) this.#webSocket.send(message3);
-    else this.#sendQueue.push(message3);
+  send(message) {
+    if (this.#sendQueue === void 0) this.#webSocket.send(message);
+    else this.#sendQueue.push(message);
   }
   receive() {
     if (this.#receiveQueue.length > 0) return Promise.resolve(this.#receiveQueue.shift());
@@ -42538,12 +43842,12 @@ var WebSocketTransport = class {
     });
   }
   abort(reason) {
-    let message3;
-    if (reason instanceof Error) message3 = reason.message;
-    else message3 = `${reason}`;
-    let reasonBytes = new TextEncoder().encode(message3);
-    if (reasonBytes.length > 123) message3 = new TextDecoder().decode(reasonBytes.subarray(0, 123), { stream: true });
-    this.#webSocket.close(3e3, message3);
+    let message;
+    if (reason instanceof Error) message = reason.message;
+    else message = `${reason}`;
+    let reasonBytes = new TextEncoder().encode(message);
+    if (reasonBytes.length > 123) message = new TextDecoder().decode(reasonBytes.subarray(0, 123), { stream: true });
+    this.#webSocket.close(3e3, message);
     if (!this.#error) this.#error = reason;
   }
   #receivedError(reason) {
@@ -42562,18 +43866,18 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject, path3) {
+  constructor(subject, path) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
       subject: currentMapBuilder.capture(subject),
-      path: path3
+      path
     };
     else this.context = {
       parent: void 0,
       captures: [],
       subject,
-      path: path3
+      path
     };
     currentMapBuilder = this;
   }
@@ -42602,24 +43906,24 @@ var MapBuilder = class {
       return new MapVariableHook(this.context.parent, this.context.parent.instructions.length);
     } else return this.context.subject.map(this.context.path, this.context.captures, this.instructions);
   }
-  pushCall(hook, path3, params) {
+  pushCall(hook, path, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path3,
+      path,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
-  pushGet(hook, path3) {
+  pushGet(hook, path) {
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path3
+      path
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
@@ -42653,8 +43957,8 @@ var MapBuilder = class {
   onSendError(error63) {
   }
 };
-mapImpl.sendMap = (hook, path3, func) => {
-  let builder = new MapBuilder(hook, path3);
+mapImpl.sendMap = (hook, path, func) => {
+  let builder = new MapBuilder(hook, path);
   let result;
   try {
     result = RpcPayload.fromAppReturn(withCallInterceptor(builder.pushCall.bind(builder), () => {
@@ -42686,16 +43990,16 @@ var MapVariableHook = class extends StubHook {
   }
   dispose() {
   }
-  get(path3) {
-    if (path3.length == 0) return this;
-    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path3);
+  get(path) {
+    if (path.length == 0) return this;
+    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path);
     else throwMapperBuilderUseError();
   }
-  call(path3, args) {
+  call(path, args) {
     args.dispose();
     throwMapperBuilderUseError();
   }
-  map(path3, captures, instructions) {
+  map(path, captures, instructions) {
     for (let cap of captures) cap.dispose();
     throwMapperBuilderUseError();
   }
@@ -42800,11 +44104,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
     if (this.state) return this.state;
     else throw new Error("Attempted to use a WritableStreamStubHook after it was disposed.");
   }
-  call(path3, args) {
+  call(path, args) {
     try {
       let state = this.getState();
-      if (path3.length !== 1 || typeof path3[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
-      const method = path3[0];
+      if (path.length !== 1 || typeof path[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
+      const method = path[0];
       if (method !== "write" && method !== "close" && method !== "abort") throw new Error(`Unknown WritableStream method: ${method}`);
       if (method === "close" || method === "abort") state.closed = true;
       return new PromiseStubHook((method === "write" ? args.deliverStreamWrite(state.writer) : args.deliverCall(state.writer[method], state.writer)).then((payload) => new PayloadStubHook(payload)));
@@ -42813,11 +44117,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path3, captures, instructions) {
+  map(path, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a WritableStream"));
   }
-  get(path3) {
+  get(path) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a WritableStream stub"));
   }
   dup() {
@@ -43010,15 +44314,15 @@ var ReadableStreamStubHook = class ReadableStreamStubHook2 extends StubHook {
     this.state = state;
     if (dupFrom) ++state.refcount;
   }
-  call(path3, args) {
+  call(path, args) {
     args.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot call methods on a ReadableStream stub"));
   }
-  map(path3, captures, instructions) {
+  map(path, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a ReadableStream"));
   }
-  get(path3) {
+  get(path) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a ReadableStream stub"));
   }
   dup() {
@@ -43052,6 +44356,106 @@ streamImpl.createWritableStreamFromHook = createWritableStreamFromHook;
 streamImpl.createReadableStreamHook = ReadableStreamStubHook.create;
 var RpcTarget = RpcTarget$1;
 var newWebSocketRpcSession = newWebSocketRpcSession$1;
+
+// ../protocol/src/schema.ts
+var identifier3 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var runnerHelloV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
+  protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
+  phase: external_exports.enum(["plan", "effects"]),
+  repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  runId: identifier3,
+  runAttempt: external_exports.number().int().positive().max(1e3),
+  workflowRef: external_exports.string().min(1).max(1024),
+  jobWorkflowRef: external_exports.string().min(1).max(1024),
+  eventName: external_exports.enum(["issues", "workflow_dispatch"]),
+  ref: external_exports.string().min(1).max(1024),
+  runnerEnvironment: external_exports.literal("github-hosted"),
+  commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
+  agentHash: sha2562
+});
+var runnerActionV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.action/v1"),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  operationId: identifier3,
+  kind: external_exports.literal("shell.exec"),
+  command: external_exports.string().min(1).max(64 * 1024),
+  cwd: external_exports.string().min(1).max(4096),
+  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3),
+  maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
+});
+var runnerActionResultV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  operationId: identifier3,
+  status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
+  exitCode: external_exports.number().int().min(0).max(255).nullable(),
+  stdout: external_exports.string().max(4 * 1024 * 1024),
+  stderr: external_exports.string().max(4 * 1024 * 1024),
+  outputTruncated: external_exports.boolean()
+}).superRefine((result, context) => {
+  const processExited = result.status === "completed" || result.status === "failed";
+  if (processExited !== (result.exitCode !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["exitCode"],
+      message: processExited ? "Completed and failed commands require an exit code" : "Cancelled and timed-out commands cannot have an exit code"
+    });
+  }
+});
+var runnerEventV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.event/v1"),
+  kind: external_exports.literal("github.issue.opened"),
+  issue: external_exports.strictObject({
+    id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+    number: external_exports.number().int().positive(),
+    title: external_exports.string().max(1024),
+    body: external_exports.string().max(65536).nullable(),
+    labels: external_exports.array(external_exports.string().trim().min(1).max(100)).max(100),
+    author: external_exports.strictObject({
+      id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+      login: external_exports.string().min(1).max(100)
+    })
+  })
+});
+var runnerEffectReceiptV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
+  planRunId: identifier3,
+  bundleHash: sha2562,
+  artifactSha256: sha2562,
+  operationId: identifier3,
+  kind: external_exports.literal("issue.comment.create"),
+  commentId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  commentUrl: external_exports.url().refine(
+    (value) => new URL(value).origin === "https://github.com",
+    "Expected an HTTPS github.com comment URL"
+  )
+});
+var runnerEffectArtifactV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
+  sha256: sha2562,
+  bytesBase64: external_exports.string().min(1).max(128 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
+});
+var runnerTerminalV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
+  status: external_exports.enum(["completed", "failed", "cancelled"]),
+  summary: external_exports.string().min(1).max(16 * 1024),
+  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  effectArtifact: runnerEffectArtifactV1Schema.optional()
+});
+var resumeCursorV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.cursor/v1"),
+  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+});
+
+// ../protocol/src/session-id.ts
+function runnerSessionId(hello) {
+  return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
+}
 
 // src/context.ts
 function helloFromOidcToken(token, agentHash, phase) {
@@ -43094,367 +44498,138 @@ function sessionSocketUrl(harnessUrl, hello, phase) {
   origin.hash = "";
   return origin.href;
 }
-function claim2(claims, name) {
-  const value = claims[name];
+function claim2(claims, name2) {
+  const value = claims[name2];
   if (typeof value !== "string" && typeof value !== "number" || String(value).length === 0) {
-    throw new Error(`GitHub OIDC token has no usable ${name} claim`);
+    throw new Error(`GitHub OIDC token has no usable ${name2} claim`);
   }
   return String(value);
 }
 
-// src/executor.ts
-var import_node_child_process = require("node:child_process");
-var import_promises = require("node:fs/promises");
-var import_node_path = __toESM(require("node:path"), 1);
-var PlanningShellExecutor = class {
-  #workspace;
-  #records = /* @__PURE__ */ new Map();
-  #active = /* @__PURE__ */ new Map();
-  #cancelled = /* @__PURE__ */ new Set();
-  constructor(workspace = requiredEnvironment("GITHUB_WORKSPACE")) {
-    this.#workspace = import_node_path.default.resolve(workspace);
-  }
-  async execute(input2) {
-    const action = runnerActionV1Schema.parse(input2);
-    const canonicalAction = canonicalValue(action);
-    const existing = this.#records.get(action.operationId);
-    if (existing) {
-      if (existing.canonicalAction !== canonicalAction) throw new Error("Operation ID was reused for different shell input");
-      if (existing.result) return existing.result;
-      if (existing.promise) return existing.promise;
-    }
-    const record2 = { canonicalAction };
-    const promise2 = this.#run(action).then((result) => {
-      record2.result = result;
-      delete record2.promise;
-      return result;
-    }).catch((error63) => {
-      this.#records.delete(action.operationId);
-      throw error63;
-    });
-    record2.promise = promise2;
-    this.#records.set(action.operationId, record2);
-    return promise2;
-  }
-  async cancel(operationId) {
-    const child = this.#active.get(operationId);
-    if (!child?.pid) return;
-    this.#cancelled.add(operationId);
-    killProcessGroup(child.pid, "SIGTERM");
-    const timer = setTimeout(() => {
-      if (this.#active.has(operationId)) killProcessGroup(child.pid, "SIGKILL");
-    }, 2e3);
-    timer.unref();
-  }
-  async result(operationId) {
-    const record2 = this.#records.get(operationId);
-    if (record2?.result) return record2.result;
-    return record2?.promise;
-  }
-  cursor() {
-    const completed = [...this.#records.values()].map((record2) => record2.result?.sequence ?? 0);
-    const sequence = Math.max(0, ...completed);
-    return { lastServerSequence: sequence, lastCompletedSequence: sequence };
-  }
-  async #run(action) {
-    const cwd = localWorkspacePath(this.#workspace, action.cwd);
-    const home = import_node_path.default.join(this.#workspace, ".gardener", "runner-home");
-    await (0, import_promises.mkdir)(home, { recursive: true, mode: 448 });
-    const child = (0, import_node_child_process.spawn)("/bin/bash", ["--noprofile", "--norc", "-o", "pipefail", "-c", action.command], {
-      cwd,
-      detached: true,
-      env: safePlannerEnvironment(this.#workspace, home),
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    this.#active.set(action.operationId, child);
-    const stdout = [];
-    const stderr = [];
-    let capturedBytes = 0;
-    let outputTruncated = false;
-    const capture = (target) => (chunk) => {
-      const remaining = action.maxOutputBytes - capturedBytes;
-      if (remaining > 0) {
-        const accepted = chunk.subarray(0, remaining);
-        target.push(accepted);
-        capturedBytes += accepted.byteLength;
-      }
-      if (chunk.byteLength > remaining) outputTruncated = true;
-    };
-    child.stdout.on("data", capture(stdout));
-    child.stderr.on("data", capture(stderr));
-    let timedOut = false;
-    let forceKill;
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      if (child.pid) {
-        killProcessGroup(child.pid, "SIGTERM");
-        forceKill = setTimeout(() => killProcessGroup(child.pid, "SIGKILL"), 2e3);
-        forceKill.unref();
-      }
-    }, action.timeoutMs);
-    timeout.unref();
-    const exit = await new Promise((resolve) => {
-      child.once("error", (error63) => resolve({ code: null, error: error63 }));
-      child.once("close", (code) => resolve({ code }));
-    });
-    clearTimeout(timeout);
-    if (forceKill) clearTimeout(forceKill);
-    this.#active.delete(action.operationId);
-    const cancelled = this.#cancelled.delete(action.operationId);
-    const status = timedOut ? "timed_out" : cancelled ? "cancelled" : exit.code === 0 ? "completed" : "failed";
-    return {
-      schemaVersion: "gardener.runner.action-result/v1",
-      sequence: action.sequence,
-      operationId: action.operationId,
-      status,
-      exitCode: status === "completed" || status === "failed" ? exit.code ?? 1 : null,
-      stdout: Buffer.concat(stdout).toString("utf8"),
-      stderr: Buffer.concat(stderr).toString("utf8") || exit.error?.message || "",
-      outputTruncated
-    };
-  }
-};
-function localWorkspacePath(workspace, virtualPath) {
-  const relative = import_node_path.default.posix.relative("/workspace", import_node_path.default.posix.normalize(virtualPath));
-  if (relative.startsWith("..") || import_node_path.default.posix.isAbsolute(relative)) throw new Error("Shell cwd escapes /workspace");
-  const resolved = import_node_path.default.resolve(workspace, relative);
-  if (resolved !== workspace && !resolved.startsWith(`${workspace}${import_node_path.default.sep}`)) throw new Error("Shell cwd escapes the Actions workspace");
-  return resolved;
-}
-function safePlannerEnvironment(workspace, home) {
-  const allowed = [
-    "PATH",
-    "LANG",
-    "LC_ALL",
-    "CI",
-    "RUNNER_OS",
-    "RUNNER_ARCH",
-    "GITHUB_REPOSITORY",
-    "GITHUB_SHA",
-    "GITHUB_REF",
-    "GITHUB_EVENT_NAME"
-  ];
-  const environment = { GITHUB_WORKSPACE: workspace, HOME: home };
-  for (const name of allowed) if (process.env[name] !== void 0) environment[name] = process.env[name];
-  return environment;
-}
-function killProcessGroup(pid, signal) {
-  try {
-    process.kill(-pid, signal);
-  } catch (error63) {
-    const code = error63.code;
-    if (code !== "ESRCH") throw error63;
-  }
-}
-function requiredEnvironment(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
-function canonicalValue(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(",")}]`;
-  const record2 = value;
-  return `{${Object.keys(record2).sort().map((key) => `${JSON.stringify(key)}:${canonicalValue(record2[key])}`).join(",")}}`;
-}
-
-// src/session.ts
-var RunnerApi = class extends RpcTarget {
-  constructor(executor) {
-    super();
-    this.executor = executor;
-  }
-  executor;
-  execute(action) {
-    return this.executor.execute(action);
-  }
-  async result(operationId) {
-    return await this.executor.result(operationId) ?? null;
-  }
-  cancel(operationId) {
-    return this.executor.cancel(operationId);
-  }
-};
-async function runPlanningSession(options) {
-  const audience = new URL(options.harnessUrl).origin;
-  const executor = options.executor ?? new PlanningShellExecutor();
-  const runner = new RunnerApi(executor);
-  let attempt = 0;
-  let lastError;
-  while (attempt <= options.maxReconnects) {
-    if (options.signal?.aborted) throw new Error("Gardener planning was cancelled");
-    let root;
-    try {
-      const oidcToken = await options.getOidcToken(audience);
-      const hello = helloFromOidcToken(oidcToken, options.agentHash, "plan");
-      root = newWebSocketRpcSession(sessionSocketUrl(options.harnessUrl, hello, "plan"));
-      const session = root.authenticate(hello, oidcToken, runner);
-      const cursor = executor.cursor();
-      await session.resume({ schemaVersion: "gardener.runner.cursor/v1", ...cursor }, runner);
-      if (options.signal?.aborted) throw new Error("Gardener planning was cancelled before execution");
-      let cancellationTimer;
-      let cancelListener;
-      const cancelled = options.signal ? new Promise((_, reject) => {
-        cancelListener = () => {
-          try {
-            Promise.resolve(session.cancelRun("GitHub Actions planning job was cancelled")).catch((error63) => options.onWarning?.(`Gardener cancellation RPC failed: ${message(error63)}`));
-          } catch (error63) {
-            options.onWarning?.(`Gardener cancellation RPC failed: ${message(error63)}`);
-          }
-          cancellationTimer = setTimeout(
-            () => reject(new Error("Gardener cancellation did not settle within 5 seconds")),
-            5e3
-          );
-          cancellationTimer.unref?.();
-        };
-        options.signal.addEventListener("abort", cancelListener, { once: true });
-      }) : new Promise(() => void 0);
-      try {
-        const terminal = await Promise.race([session.run(options.event), cancelled]);
-        return runnerTerminalV1Schema.parse(terminal);
-      } finally {
-        if (cancellationTimer) clearTimeout(cancellationTimer);
-        if (cancelListener) options.signal?.removeEventListener("abort", cancelListener);
-      }
-    } catch (error63) {
-      lastError = error63;
-      if (options.signal?.aborted || attempt >= options.maxReconnects) break;
-      attempt += 1;
-      options.onReconnect?.(attempt, error63);
-      await delay(Math.min(5e3, 250 * 2 ** (attempt - 1)), options.signal);
-    } finally {
-      root?.[Symbol.dispose]();
-    }
-  }
-  if (options.signal?.aborted) throw new Error("Gardener planning was cancelled", { cause: lastError });
-  throw new Error(`Gardener session failed after ${attempt + 1} connection attempts`, { cause: lastError });
-}
-function delay(milliseconds, signal) {
-  if (signal?.aborted) return Promise.reject(new Error("Gardener planning was cancelled"));
-  return new Promise((resolve, reject) => {
-    const cancel = () => {
-      clearTimeout(timer);
-      reject(new Error("Gardener planning was cancelled"));
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", cancel);
-      resolve();
-    }, milliseconds);
-    signal?.addEventListener("abort", cancel, { once: true });
-  });
-}
-function message(error63) {
-  return error63 instanceof Error ? error63.message : String(error63);
-}
-
-// src/main.ts
-var oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
-var oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
-delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
-delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+// src/effects-main.ts
 async function main() {
   try {
-    const harnessUrl = requiredInput("harness-url");
-    const agentHash = requiredInput("task-bundle-hash");
-    if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
-    const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
-    const event = await githubEvent();
-    const cancellation = new AbortController();
-    const cancel = () => cancellation.abort();
-    process.once("SIGINT", cancel);
-    process.once("SIGTERM", cancel);
-    let terminal;
-    try {
-      terminal = await runPlanningSession({
-        harnessUrl,
-        agentHash,
-        maxReconnects,
-        ...event === void 0 ? {} : { event },
-        signal: cancellation.signal,
-        getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
-        onReconnect: (attempt, error63) => {
-          warning(`Gardener session disconnected; reconnecting (${attempt}/${maxReconnects}): ${message2(error63)}`);
-        },
-        onWarning: (warning2) => warning(warning2)
-      });
-    } finally {
-      process.removeListener("SIGINT", cancel);
-      process.removeListener("SIGTERM", cancel);
+    const artifactPath = getInput("artifact-path", { required: true });
+    const expectedSha256 = getInput("expected-sha256", { required: true });
+    const token = getInput("github-token", { required: true });
+    const runtimeUrl = getInput("runtime-url", { required: true });
+    setSecret(token);
+    if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("expected-sha256 must be a SHA-256 digest");
+    const bytes = await (0, import_promises.readFile)(artifactPath);
+    if (bytes.byteLength > 128 * 1024) throw new Error("Effect artifact is too large");
+    const actualSha256 = (0, import_node_crypto.createHash)("sha256").update(bytes).digest("hex");
+    if (actualSha256 !== expectedSha256) throw new Error("Effect artifact digest mismatch");
+    const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
+    const event = JSON.parse(await (0, import_promises.readFile)(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
+    if (requiredEnvironment("GITHUB_REPOSITORY") !== plan.repository.fullName) throw new Error("Effect repository binding mismatch");
+    if (String(event.repository?.id ?? "") !== plan.repository.id) throw new Error("Effect repository identity mismatch");
+    if (requiredEnvironment("GITHUB_SHA") !== plan.provenance.commitSha) throw new Error("Effect commit binding mismatch");
+    if (requiredEnvironment("GITHUB_RUN_ID") !== plan.provenance.workflowRunId || Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")) !== plan.provenance.workflowRunAttempt) {
+      throw new Error("Effect workflow run binding mismatch");
     }
-    setOutput("status", terminal.status);
-    setOutput("summary", terminal.summary);
-    setOutput("last-server-sequence", String(terminal.lastServerSequence));
-    setOutput("last-completed-sequence", String(terminal.lastCompletedSequence));
-    if (terminal.effectArtifact) {
-      const bytes = Buffer.from(terminal.effectArtifact.bytesBase64, "base64");
-      const digest = (0, import_node_crypto.createHash)("sha256").update(bytes).digest("hex");
-      if (digest !== terminal.effectArtifact.sha256) throw new Error("Gardener effect artifact digest mismatch");
-      const directory = import_node_path2.default.join(requiredEnvironment2("RUNNER_TEMP"), "gardener-effects");
-      await (0, import_promises2.mkdir)(directory, { recursive: true, mode: 448 });
-      const artifactPath = import_node_path2.default.join(directory, `${digest}.json`);
-      await (0, import_promises2.writeFile)(artifactPath, bytes, { mode: 384 });
-      setOutput("effect-artifact-path", artifactPath);
-      setOutput("effect-artifact-sha256", digest);
-    }
-    if (terminal.status !== "completed") setFailed(terminal.summary);
+    if (event.action !== "opened" || Number(event.issue?.number) !== plan.issueNumber) throw new Error("Effect issue binding mismatch");
+    const marker = `<!-- gardener-operation:${plan.operationId} -->`;
+    const body2 = renderGardenerComment(plan, marker);
+    const existing = await findExistingComment(plan.repository.fullName, plan.issueNumber, marker, token);
+    const receipt = existing ?? await createComment(plan.repository.fullName, plan.issueNumber, body2, token);
+    await recordReceipt(runtimeUrl, plan.bundleHash, {
+      schemaVersion: "gardener.runner.effect-receipt/v1",
+      planRunId: plan.runId,
+      bundleHash: plan.bundleHash,
+      artifactSha256: actualSha256,
+      operationId: plan.operationId,
+      kind: plan.kind,
+      commentId: String(receipt.id),
+      commentUrl: receipt.html_url
+    });
+    setOutput("comment-id", String(receipt.id));
+    setOutput("comment-url", receipt.html_url);
+    setOutput("operation-id", plan.operationId);
   } catch (error63) {
-    setFailed(message2(error63));
+    setFailed(error63 instanceof Error ? error63.message : "Gardener effect failed");
   }
 }
-async function githubEvent() {
-  if (process.env.GITHUB_EVENT_NAME !== "issues") return void 0;
-  const raw = JSON.parse(await (0, import_promises2.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
-  if (raw.action !== "opened") throw new Error("Gardener v1 supports only issues: opened");
-  const issue3 = raw.issue;
-  const author = issue3?.user;
-  if (!issue3 || !author) throw new Error("GitHub issue event payload is incomplete");
-  return runnerEventV1Schema.parse({
-    schemaVersion: "gardener.runner.event/v1",
-    kind: "github.issue.opened",
-    issue: {
-      id: String(issue3.id ?? ""),
-      number: issue3.number,
-      title: issue3.title,
-      body: issue3.body ?? null,
-      labels: Array.isArray(issue3.labels) ? issue3.labels.map((label) => String(label.name ?? "")) : [],
-      author: { id: String(author.id ?? ""), login: author.login }
+var EffectsRunnerApi = class extends RpcTarget {
+  execute(_action) {
+    return Promise.reject(new Error("Effects job cannot execute planning actions"));
+  }
+  result(_operationId) {
+    return Promise.resolve(null);
+  }
+  cancel(_operationId) {
+    return Promise.resolve();
+  }
+};
+async function recordReceipt(harnessUrl, bundleHash, receipt) {
+  const audience = new URL(harnessUrl).origin;
+  const oidcToken = await getIDToken(audience);
+  setSecret(oidcToken);
+  const hello = helloFromOidcToken(oidcToken, bundleHash, "effects");
+  const root = newWebSocketRpcSession(sessionSocketUrl(harnessUrl, hello, "effects"));
+  try {
+    const session = root.authenticate(hello, oidcToken, new EffectsRunnerApi());
+    await session.recordEffect(receipt);
+  } finally {
+    root[Symbol.dispose]();
+  }
+}
+function renderGardenerComment(plan, marker) {
+  const repositoryUrl = `https://github.com/${plan.repository.fullName}`;
+  const sourcePath = plan.provenance.sourcePath.split("/").map(encodeURIComponent).join("/");
+  const sourceUrl = `${repositoryUrl}/blob/${plan.provenance.commitSha}/${sourcePath}`;
+  const runUrl = `${repositoryUrl}/actions/runs/${plan.provenance.workflowRunId}/attempts/${plan.provenance.workflowRunAttempt}`;
+  const commitUrl = `${repositoryUrl}/commit/${plan.provenance.commitSha}`;
+  return [
+    `## \u{1F331} Gardener \xB7 ${escapeMarkdownInline(plan.taskName)}`,
+    "",
+    plan.body,
+    "",
+    "<details>",
+    "<summary>Gardener provenance</summary>",
+    "",
+    `[Task source](${sourceUrl}) \xB7 [Workflow run](${runUrl}) \xB7 [Commit](${commitUrl})`,
+    "",
+    `Bundle \`${plan.bundleHash}\`  `,
+    `Operation \`${plan.operationId}\``,
+    "",
+    "</details>",
+    "",
+    marker
+  ].join("\n");
+}
+function escapeMarkdownInline(value) {
+  return value.replace(/[\\`*_{}\[\]()<>#+.!|~-]/g, "\\$&");
+}
+async function findExistingComment(repository, issue3, marker, token) {
+  const response = await githubFetch(`https://api.github.com/repos/${repository}/issues/${issue3}/comments?per_page=100`, token);
+  const comments = await response.json();
+  return comments.find((comment) => comment.body?.includes(marker));
+}
+async function createComment(repository, issue3, body2, token) {
+  const response = await githubFetch(`https://api.github.com/repos/${repository}/issues/${issue3}/comments`, token, {
+    method: "POST",
+    body: JSON.stringify({ body: body2 })
+  });
+  return await response.json();
+}
+async function githubFetch(url2, token, init = {}) {
+  const response = await fetch(url2, {
+    ...init,
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      "user-agent": "gardener-effects-v1",
+      "x-github-api-version": "2022-11-28"
     }
   });
+  if (!response.ok) throw new Error(`GitHub comment effect failed with HTTP ${response.status}`);
+  return response;
 }
-async function getIdTokenWithoutEnvironmentLeak(audience) {
-  if (!oidcRequestUrl || !oidcRequestToken) throw new Error("GitHub Actions OIDC is unavailable; grant id-token: write");
-  process.env.ACTIONS_ID_TOKEN_REQUEST_URL = oidcRequestUrl;
-  process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = oidcRequestToken;
-  try {
-    const token = await getIDToken(audience);
-    setSecret(token);
-    return token;
-  } finally {
-    delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
-    delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
-  }
-}
-function requiredInput(name) {
-  const value = getInput(name, { required: true }).trim();
-  if (!value) throw new Error(`${name} is required`);
+function requiredEnvironment(name2) {
+  const value = process.env[name2];
+  if (!value) throw new Error(`${name2} is required`);
   return value;
-}
-function integerInput(name, fallback, minimum, maximum) {
-  const raw = getInput(name).trim();
-  if (!raw) return fallback;
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new Error(`${name} must be an integer from ${minimum} through ${maximum}`);
-  }
-  return value;
-}
-function requiredEnvironment2(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
-function message2(error63) {
-  return error63 instanceof Error ? error63.message : "Unknown Gardener runner failure";
 }
 void main();
 /*! Bundled license information:

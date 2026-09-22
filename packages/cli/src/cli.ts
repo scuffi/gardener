@@ -105,7 +105,7 @@ Options:
 
 const CONNECT_HELP = `gardener connect
 
-Enroll a repository, upload its compiled bundles, and set its non-secret ingress variable.
+Enroll a repository, upload its compiled bundles, and set its non-secret runtime URL variable.
 
 Options:
   --workspace <name>           Existing Gardener installation

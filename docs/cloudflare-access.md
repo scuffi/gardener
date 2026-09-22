@@ -1,21 +1,14 @@
-# Cloudflare Access dashboard identity
+# Cloudflare Access notes
 
-Actions-native Gardener uses Cloudflare Access as the dashboard identity boundary. The dashboard Worker validates the Access application JWT again inside the application before granting an owner principal; an edge policy or header alone is not sufficient.
+The current Actions-native Gardener deployment is headless. It has no dashboard or administrative HTTP API, and no UI topology decision has been made.
 
-Configure the dashboard Worker with:
+The single public Gardener Worker exposes only:
 
-- `CLOUDFLARE_ACCESS_TEAM_DOMAIN`: exact HTTPS team origin, such as `https://team.cloudflareaccess.com`;
-- `CLOUDFLARE_ACCESS_AUD`: exact Access application audience;
-- `CLOUDFLARE_ACCESS_OWNER_EMAIL`: the single owner email, stored as a Worker secret.
+- `GET /health`;
+- `/session/<id>`, with mandatory GitHub OIDC authentication inside the Cap'n Web session.
 
-Gardener verifies the `Cf-Access-Jwt-Assertion` signature against the team's `/cdn-cgi/access/certs` keys and binds the exact issuer, audience, subject, and normalized owner email. The first valid request creates or links the immutable `cloudflare-access` identity to the permanent workspace owner. A wrong email, missing claim, malformed configuration, invalid signature, wrong issuer, or wrong audience fails closed. Logout clears any legacy Gardener cookie and redirects through the team Access logout endpoint.
+Everything else returns `404`.
 
-Protect the complete dashboard/runtime hostname with Access. Do not create a bypass for it. The dedicated runner hostname is the only public bypass:
+If an account-wide Cloudflare Access policy intercepts all `workers.dev` hostnames, the CLI can create an exact-host bypass for this runtime hostname using a locally supplied `CLOUDFLARE_API_TOKEN` scoped to Access Apps and Policies Edit. The token is never persisted or sent to GitHub or the Worker. The bypass grants network reachability only; repository authority still requires a fresh GitHub-signed OIDC token matching the enrolled repository, workflow SHA, run, attempt, commit, audience, phase, and effects environment.
 
-- dashboard and API: Access protected;
-- `gardener-runner-ingress` WebSocket endpoint: exact-host Access bypass, followed by mandatory GitHub OIDC authentication inside the Cap'n Web session;
-- Worker-to-Worker runtime calls: private Service Binding, not public HTTP credentials.
-
-`/api/health` reports `dashboardAuth.provider = cloudflare-access` only when all three settings exist and pass static validation. Keep `LOCAL_DEV_BYPASS=false` in every deployed environment.
-
-The archived Gateway architecture used a reciprocal GitHub Gateway login handoff. That remains supported for historical deployments when Access identity is not configured, but it is not required by the Actions-native dashboard.
+The previous dashboard identity and two-Worker ingress/runtime topology are historical and remain available in Git history. A future UI may use Access, but its topology is deliberately out of scope for the headless single-Worker V1.

@@ -9,8 +9,7 @@ import {
   actionsRepositoryTaskEnrollmentSql,
   actionsResourceNames,
   destroyActions,
-  ensurePublicRunnerIngress,
-  renderIngressConfig,
+  ensurePublicRuntime,
   renderRuntimeConfig,
 } from "../src/actions-installation";
 
@@ -28,8 +27,7 @@ describe("Actions-native installation topology", () => {
   it("derives isolated deterministic Cloudflare names", () => {
     expect(actionsResourceNames("demo-team")).toEqual({
       database: "gardener-demo-team",
-      runtimeWorker: "gardener-demo-team-runtime",
-      ingressWorker: "gardener-demo-team-runner-ingress",
+      runtimeWorker: "gardener-demo-team",
     });
     expect(() => actionsResourceNames("Invalid Workspace")).toThrow();
   });
@@ -46,7 +44,7 @@ describe("Actions-native installation topology", () => {
     expect(sql).not.toContain("enabled=1");
   });
 
-  it("creates an exact-host Access bypass only when the account intercepts ingress", async () => {
+  it("creates an exact-host Access bypass only when the account intercepts the runtime", async () => {
     process.env.CLOUDFLARE_API_TOKEN = "test-token";
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
@@ -71,26 +69,23 @@ describe("Actions-native installation topology", () => {
     });
     vi.stubGlobal("fetch", fetch);
 
-    await expect(ensurePublicRunnerIngress({
+    await expect(ensurePublicRuntime({
       accountId: "account-1",
       workspace: "demo-team",
-      ingressOrigin: "https://runner.example.workers.dev",
+      runtimeOrigin: "https://runner.example.workers.dev",
       existingAppId: null,
     }, 0)).resolves.toBe("access-app-1");
   });
 
-  it("hashes the exact deployable runtime, ingress, and migrations", async () => {
+  it("hashes the exact deployable runtime and migrations", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-actions-deployment-"));
     await mkdir(join(root, "apps/gardener/dist/gardener_actions_v1_runtime"), { recursive: true });
     await mkdir(join(root, "apps/gardener/migrations-actions"), { recursive: true });
-    await mkdir(join(root, "apps/runner-ingress/src"), { recursive: true });
     await writeFile(join(root, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"), "export default 1;\n");
     await writeFile(join(root, "apps/gardener/migrations-actions/0001.sql"), "SELECT 1;\n");
-    await writeFile(join(root, "apps/runner-ingress/src/index.ts"), "export default 2;\n");
-    await writeFile(join(root, "apps/runner-ingress/package.json"), "{}\n");
     const first = await actionsDeploymentHash(root);
     expect(await actionsDeploymentHash(root)).toBe(first);
-    await writeFile(join(root, "apps/runner-ingress/src/index.ts"), "export default 3;\n");
+    await writeFile(join(root, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"), "export default 2;\n");
     expect(await actionsDeploymentHash(root)).not.toBe(first);
   });
 
@@ -99,17 +94,15 @@ describe("Actions-native installation topology", () => {
     const directory = actionsInstallationDirectory("demo-team");
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, "installation.json"), JSON.stringify({
-      schemaVersion: "gardener.actions-installation/v1",
+      schemaVersion: "gardener.actions-installation/v2",
       workspace: "demo-team",
       cloudflare: {
         accountId: "account-1",
         database: { name: "gardener-demo-team", id: "11111111-1111-4111-8111-111111111111" },
-        runtimeWorker: "gardener-demo-team-runtime",
-        ingressWorker: "gardener-demo-team-runner-ingress",
-        ingressOrigin: "https://runner.example.workers.dev",
+        runtimeWorker: "gardener-demo-team",
+        runtimeOrigin: "https://runner.example.workers.dev",
         runnerAccessBypassAppId: null,
         runtimeConfig: "/private/runtime.json",
-        ingressConfig: "/private/ingress.json",
       },
       createdAt: "2026-09-21T00:00:00.000Z",
       updatedAt: "2026-09-21T00:00:00.000Z",
@@ -140,7 +133,40 @@ describe("Actions-native installation topology", () => {
       .not.toBe(first.intentDigest);
   });
 
-  it("renders a private runtime and one narrow public ingress binding", () => {
+  it("keeps a teardown path for retired two-Worker manifests", async () => {
+    process.env.GARDENER_CONFIG_HOME = await mkdtemp(join(tmpdir(), "gardener-legacy-down-"));
+    const directory = actionsInstallationDirectory("legacy-team");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "installation.json"), JSON.stringify({
+      schemaVersion: "gardener.actions-installation/v1",
+      workspace: "legacy-team",
+      cloudflare: {
+        accountId: "account-1",
+        database: { name: "gardener-legacy-team", id: "11111111-1111-4111-8111-111111111111" },
+        runtimeWorker: "gardener-legacy-team-runtime",
+        ingressWorker: "gardener-legacy-team-runner-ingress",
+        ingressOrigin: "https://legacy-runner.example.workers.dev",
+        runnerAccessBypassAppId: null,
+        runtimeConfig: "/private/runtime.json",
+        ingressConfig: "/private/ingress.json",
+      },
+      createdAt: "2026-09-21T00:00:00.000Z",
+      updatedAt: "2026-09-21T00:00:00.000Z",
+    }));
+
+    await expect(destroyActions({ workspace: "legacy-team", sourceRoot: ".", execute: false }))
+      .resolves.toMatchObject({ destroyed: false });
+    const intent = JSON.parse(await readFile(join(directory, "teardown-intent.json"), "utf8"));
+    expect(intent).toMatchObject({
+      schemaVersion: "gardener.actions-teardown-intent/v2",
+      resources: {
+        runtimeWorker: "gardener-legacy-team-runtime",
+        legacyIngressWorker: "gardener-legacy-team-runner-ingress",
+      },
+    });
+  });
+
+  it("renders one narrow public runtime Worker", () => {
     const sourceRoot = "/trusted/gardener";
     const names = actionsResourceNames("demo-team");
     const runtime = JSON.parse(renderRuntimeConfig({
@@ -149,11 +175,9 @@ describe("Actions-native installation topology", () => {
       sourceRoot,
       workspace: "demo-team",
     })) as Record<string, any>;
-    const ingress = JSON.parse(renderIngressConfig({ names, sourceRoot })) as Record<string, any>;
-
     expect(runtime.name).toBe(names.runtimeWorker);
     expect(runtime.main).toBe(join(sourceRoot, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"));
-    expect(runtime.workers_dev).toBe(false);
+    expect(runtime.workers_dev).toBe(true);
     expect(runtime.d1_databases).toEqual([expect.objectContaining({
       database_name: names.database,
       database_id: "11111111-1111-4111-8111-111111111111",
@@ -172,14 +196,6 @@ describe("Actions-native installation topology", () => {
     ]);
     expect(JSON.stringify(runtime)).not.toMatch(/Gateway|ComputerWorkspace|GardenerGitHubEntrypoint|FlueGardenerHarnessAgent/);
 
-    expect(ingress.name).toBe(names.ingressWorker);
-    expect(ingress.workers_dev).toBe(true);
-    expect(ingress.services).toEqual([{
-      binding: "GARDENER",
-      service: names.runtimeWorker,
-      entrypoint: "GardenerRunnerIngressEntrypoint",
-    }]);
-    expect(JSON.stringify(ingress)).not.toContain("DB");
-    expect(JSON.stringify(ingress)).not.toContain("AI");
+    expect(runtime).not.toHaveProperty("services");
   });
 });
