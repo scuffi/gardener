@@ -85,12 +85,12 @@ Options:
 
 const UPGRADE_HELP = `gardener upgrade
 
-Provision or upgrade the runtime and one repository's pinned GitHub bridge release, rebuild its
+Upgrade an existing runtime and one repository's pinned GitHub bridge release, rebuild its
 workflows, re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the up command.
 
 Options:
-  --workspace <name>           Stable installation name
-  --repository <owner/name>    GitHub repository to provision or upgrade
+  --workspace <name>           Existing Gardener installation
+  --repository <owner/name>    Connected GitHub repository to upgrade
   --repository-root <path>     Customer repository (defaults to current directory)
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;

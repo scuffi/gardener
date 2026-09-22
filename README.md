@@ -148,7 +148,7 @@ pnpm gardener -- up \
 It is safe to rerun. It never commits or pushes repository files. Existing projects keep their
 pinned bridge release until explicitly upgraded.
 
-To provision or upgrade the runtime and explicitly move one existing repository's bridge pin:
+To upgrade an existing runtime and explicitly move one repository's bridge pin:
 
 ```bash
 pnpm gardener -- upgrade \

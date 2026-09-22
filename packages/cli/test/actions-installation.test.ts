@@ -11,6 +11,7 @@ import {
   destroyActions,
   ensurePublicRuntime,
   renderRuntimeConfig,
+  upgradeActions,
 } from "../src/actions-installation";
 
 const originalToken = process.env.CLOUDFLARE_API_TOKEN;
@@ -30,6 +31,12 @@ describe("Actions-native installation topology", () => {
       runtimeWorker: "gardener-demo-team",
     });
     expect(() => actionsResourceNames("Invalid Workspace")).toThrow();
+  });
+
+  it("fails upgrade before provisioning when the workspace does not exist", async () => {
+    process.env.GARDENER_CONFIG_HOME = await mkdtemp(join(tmpdir(), "gardener-missing-upgrade-"));
+    await expect(upgradeActions({ workspace: "missing-team", sourceRoot: "." }))
+      .rejects.toThrow(/No Actions installation exists/);
   });
 
   it("preserves a task kill-switch while enrolling only the current bundle", () => {

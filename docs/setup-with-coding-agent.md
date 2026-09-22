@@ -9,6 +9,7 @@ hoc Wrangler, Cloudflare API, GitHub API, curl, or SQL commands.
 - Node.js 24+ and pnpm 11.25.0;
 - authenticated `wrangler` and `gh` sessions;
 - a clean customer repository working tree;
+- while `scuffi/gardener` is private, a private customer/demo repository owned by `scuffi` and the Gardener repository Actions access setting enabled for repositories owned by that user;
 - when account-wide Access protects all `workers.dev` hostnames, a local
   `CLOUDFLARE_API_TOKEN` scoped to Access Apps and Policies Edit.
 

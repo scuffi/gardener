@@ -10,7 +10,7 @@ import {
   unavailableGitHubOperationKinds,
 } from "@gardener/provider-github";
 import { CloudflareAccessRedirectError, fetchJsonEndpoint } from "../src/access";
-import { actionsEnrollmentSql, renderActionsCaller } from "../src/actions";
+import { actionsEnrollmentSql } from "../src/actions";
 import { parse } from "../src/args";
 import { deploymentNames, writeGatewayConfig } from "../src/config";
 import { destroyPlan, destroyQualification } from "../src/destroy";
@@ -81,30 +81,9 @@ describe("Gardener CLI", () => {
       .toBe("/customer/repository");
   });
 
-  it("renders a deterministic full-SHA-pinned Actions caller and enrollment", () => {
+  it("renders deterministic full-SHA-pinned enrollment SQL", () => {
     const workflowRef = `gardener/actions/.github/workflows/triage.yml@${"a".repeat(40)}`;
     const audience = "https://runner.example.workers.dev";
-    const taskBundleHash = "b".repeat(64);
-    expect(renderActionsCaller({ workflowRef, audience, taskBundleHash })).toBe(`name: Gardener triage
-
-on:
-  issues:
-    types: [opened]
-
-permissions: {}
-
-jobs:
-  gardener:
-    if: \${{ contains(github.event.issue.labels.*.name, 'gardener-test') }}
-    permissions:
-      contents: read
-      issues: write
-      id-token: write
-    uses: ${workflowRef}
-    with:
-      runtime-url: ${audience}
-      task-bundle-hash: ${taskBundleHash}
-`);
     const sql = actionsEnrollmentSql({
       repositoryId: "1374842705",
       ownerId: "45369682",
@@ -118,10 +97,24 @@ jobs:
     expect(sql).toContain(`'${workflowRef}'`);
     expect(sql).toContain("enabled) VALUES");
     expect(sql).not.toContain("oidc_audience=excluded.oidc_audience,enabled=1");
-    expect(() => renderActionsCaller({ workflowRef: "gardener/actions/.github/workflows/triage.yml@main", audience, taskBundleHash }))
-      .toThrow(/full-sha/i);
-    expect(() => renderActionsCaller({ workflowRef, audience: `${audience}/path`, taskBundleHash }))
-      .toThrow(/HTTPS origin/);
+    expect(() => actionsEnrollmentSql({
+      repositoryId: "1374842705",
+      ownerId: "45369682",
+      ownerLogin: "owner",
+      repositoryName: "repository",
+      visibility: "private",
+      workflowRef: "gardener/actions/.github/workflows/triage.yml@main",
+      audience,
+    })).toThrow(/full-sha/i);
+    expect(() => actionsEnrollmentSql({
+      repositoryId: "1374842705",
+      ownerId: "45369682",
+      ownerLogin: "owner",
+      repositoryName: "repository",
+      visibility: "private",
+      workflowRef,
+      audience: `${audience}/path`,
+    })).toThrow(/HTTPS origin/);
   });
 
   it("uses restrained TTY colours and respects NO_COLOR", () => {
