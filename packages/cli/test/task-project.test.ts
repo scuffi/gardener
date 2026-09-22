@@ -3,7 +3,12 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildProject, initializeProject } from "../src/project";
+import {
+  buildProject,
+  DEFAULT_WORKFLOW_REF,
+  initializeProject,
+  upgradeProjectRelease,
+} from "../src/project";
 import { compileTaskSource } from "../src/task-authoring";
 
 const TASK = `---
@@ -91,6 +96,31 @@ describe("local Gardener project", () => {
     expect(workflowsFirst.join("\n")).not.toMatch(/\$\{\{\s*secrets\.|password|api[_-]?key/i);
     const lock = JSON.parse(lockFirst) as { tasks: Record<string, { bundleHash: string }> };
     expect(lock.tasks["bug-intake"]?.bundleHash).toBe(first.tasks[0]?.bundleHash);
+  });
+
+  it("upgrades an existing project bridge pin only when explicitly requested", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-upgrade-"));
+    await initializeProject({ repositoryRoot: root, demos: true });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const oldWorkflowRef = `scuffi/gardener-actions/.github/workflows/gardener-task.yml@${"a".repeat(40)}`;
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    project.release.workflowRef = oldWorkflowRef;
+    await writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`);
+    await initializeProject({ repositoryRoot: root, demos: true });
+    expect(JSON.parse(await readFile(projectPath, "utf8")).release.workflowRef).toBe(oldWorkflowRef);
+
+    await expect(upgradeProjectRelease({ repositoryRoot: root })).resolves.toMatchObject({
+      previousWorkflowRef: oldWorkflowRef,
+      workflowRef: DEFAULT_WORKFLOW_REF,
+      changed: true,
+    });
+    await expect(upgradeProjectRelease({ repositoryRoot: root })).resolves.toMatchObject({ changed: false });
+  });
+
+  it("explains how to recover when upgrade runs outside a Gardener project", async () => {
+    const root = await mkdtemp(join(tmpdir(), "not-a-gardener-project-"));
+    await expect(upgradeProjectRelease({ repositoryRoot: root }))
+      .rejects.toThrow(/Pass --repository-root/);
   });
 
   it("preserves source files and refuses to overwrite an unmanaged workflow", async () => {

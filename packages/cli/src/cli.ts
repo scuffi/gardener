@@ -17,7 +17,7 @@ import {
 } from "./actions-operations.js";
 import { qualifyActions } from "./actions-qualify.js";
 import { parse } from "./args.js";
-import { buildProject, initializeProject } from "./project.js";
+import { buildProject, initializeProject, upgradeProjectRelease } from "./project.js";
 import { defaultSourceRoot } from "./distribution.js";
 import { terminal } from "./terminal.js";
 
@@ -27,7 +27,7 @@ Commands:
   init                         Create a local .gardener project
   build                        Compile TASK.md files and generate caller workflows
   deploy                       Provision the headless Actions-native Cloudflare runtime
-  upgrade                      Redeploy trusted source and journal its digest
+  upgrade                      Upgrade runtime and one repository bridge pin
   rollback                     Redeploy an explicitly confirmed historical source digest
   connect                      Enroll a GitHub repository and its compiled task bundles
   up                           Init, build, deploy, connect, and verify
@@ -85,10 +85,13 @@ Options:
 
 const UPGRADE_HELP = `gardener upgrade
 
-Build and deploy trusted source, retaining the prior immutable deployment digest for rollback.
+Upgrade the runtime and one repository's pinned GitHub bridge release, rebuild its workflows,
+re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the up command.
 
 Options:
   --workspace <name>           Existing Gardener installation
+  --repository <owner/name>    Connected GitHub repository to upgrade
+  --repository-root <path>     Customer repository (defaults to current directory)
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
@@ -208,10 +211,23 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   if (command === "upgrade") {
-    console.log(JSON.stringify(await upgradeActions({
-      workspace: requiredStringFlag(flags, "workspace"),
-      sourceRoot,
-    }), null, 2));
+    const workspace = requiredStringFlag(flags, "workspace");
+    const repository = requiredStringFlag(flags, "repository");
+    const runtime = await upgradeActions({ workspace, sourceRoot });
+    try {
+      const project = await upgradeProjectRelease({ repositoryRoot });
+      const build = await buildProject({ repositoryRoot });
+      const connection = await connectActions({ workspace, repository, repositoryRoot, sourceRoot });
+      const doctor = await doctorActions(workspace, sourceRoot);
+      warnStaleBridgeRepositories(doctor);
+      console.log(JSON.stringify({ runtime, project, build, connection, doctor }, null, 2));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "unknown repository error";
+      throw new Error(
+        `The runtime upgrade completed, but the repository bridge upgrade did not: ${detail}. Fix the repository error, then rerun the identical gardener upgrade command; every step is resumable.`,
+        { cause: error },
+      );
+    }
     return;
   }
   if (command === "rollback") {
@@ -232,7 +248,9 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   if (command === "doctor") {
-    console.log(JSON.stringify(await doctorActions(requiredStringFlag(flags, "workspace"), sourceRoot), null, 2));
+    const doctor = await doctorActions(requiredStringFlag(flags, "workspace"), sourceRoot);
+    warnStaleBridgeRepositories(doctor);
+    console.log(JSON.stringify(doctor, null, 2));
     return;
   }
   if (command === "qualify") {
@@ -268,7 +286,9 @@ async function main(argv: string[]): Promise<void> {
       repositoryRoot,
       sourceRoot,
     }), null, 2));
-    console.log(JSON.stringify(await doctorActions(workspace, sourceRoot), null, 2));
+    const doctor = await doctorActions(workspace, sourceRoot);
+    warnStaleBridgeRepositories(doctor);
+    console.log(JSON.stringify(doctor, null, 2));
     return;
   }
   console.log(HELP);
@@ -348,6 +368,14 @@ async function operate(command: string, args: string[]): Promise<void> {
     return;
   }
   throw new Error(`Unknown Gardener operation: ${command}`);
+}
+
+function warnStaleBridgeRepositories(doctor: Awaited<ReturnType<typeof doctorActions>>): void {
+  if (doctor.staleBridgeRepositories > 0) {
+    console.error(terminal.caution(
+      `${doctor.staleBridgeRepositories} enabled repository enrollment(s) differ from this CLI's bridge release; run gardener upgrade for each repository.`,
+    ));
+  }
 }
 
 function printInit(result: { created: string[]; preserved: string[] }): void {

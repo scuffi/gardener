@@ -145,7 +145,21 @@ pnpm gardener -- up \
   --demos
 ```
 
-It is safe to rerun. It never commits or pushes repository files.
+It is safe to rerun. It never commits or pushes repository files. Existing projects keep their
+pinned bridge release until explicitly upgraded.
+
+To upgrade the runtime and one repository's bridge pin together:
+
+```bash
+pnpm gardener -- upgrade \
+  --workspace my-gardener \
+  --repository my-org/my-repository \
+  --repository-root /path/to/repository \
+  --source-root "$PWD"
+```
+
+Repeat the explicit upgrade for each connected repository. `doctor` reports enabled enrollments that
+differ from the bridge release embedded in the running CLI.
 
 ## Qualify, diagnose, and tear down
 

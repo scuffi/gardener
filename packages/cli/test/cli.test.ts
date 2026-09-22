@@ -63,6 +63,12 @@ describe("Gardener CLI", () => {
     expect(build.status).toBe(0);
     expect(build.stdout).toContain("gardener build");
     expect(build.stdout).toContain("TaskBundleV1");
+
+    const incompleteUpgrade = spawnSync(process.execPath, [
+      "dist/cli.js", "--", "upgrade", "--workspace", "demo-team",
+    ], { cwd: process.cwd(), encoding: "utf8" });
+    expect(incompleteUpgrade.status).toBe(1);
+    expect(incompleteUpgrade.stderr).toContain("--repository is required");
   });
 
   it("uses packaged runtime assets when the CLI distribution contains them", async () => {

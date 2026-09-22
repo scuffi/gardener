@@ -6,6 +6,7 @@ import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { z } from "zod";
 import { actionsEnrollmentSql } from "./actions.js";
 import { compileGitHubActionsTask } from "./actions-target.js";
+import { DEFAULT_WORKFLOW_REF } from "./project.js";
 import { runCommand, workerOrigin, wrangler } from "./commands.js";
 import { listDatabases, selectedAccountId, workerExists } from "./provision.js";
 import { ensurePrivateDirectory, writePrivateJson, writePrivateText } from "./state.js";
@@ -389,6 +390,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   repositories: number;
   enabledRepositories: number;
   enabledTasks: number;
+  staleBridgeRepositories: number;
 }> {
   const manifest = await requiredActionsManifest(workspace);
   if (selectedAccountId(resolve(sourceRoot)) !== manifest.cloudflare.accountId) {
@@ -415,10 +417,10 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   const presentTables = new Set(schemaRows.map((row) => String(row.name)));
   const missingTables = requiredTables.filter((name) => !presentTables.has(name));
   if (missingTables.length > 0) {
-    throw new Error(`Gardener D1 schema is incomplete (${missingTables.join(", ")}); run gardener upgrade to apply migrations`);
+    throw new Error(`Gardener D1 schema is incomplete (${missingTables.join(", ")}); run gardener deploy --workspace ${workspace} to apply migrations`);
   }
   const counts = queryDoctorD1(resolve(sourceRoot), manifest,
-    "SELECT (SELECT COUNT(*) FROM actions_repository_enrollments) AS repositories,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1) AS enabled_repositories,(SELECT COUNT(*) FROM actions_repository_tasks WHERE enabled=1) AS enabled_tasks;")[0];
+    `SELECT (SELECT COUNT(*) FROM actions_repository_enrollments) AS repositories,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1) AS enabled_repositories,(SELECT COUNT(*) FROM actions_repository_tasks WHERE enabled=1) AS enabled_tasks,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1 AND plan_job_workflow_ref<>${sql(DEFAULT_WORKFLOW_REF)}) AS stale_bridge_repositories;`)[0];
   if (!counts) throw new Error("Gardener D1 did not return operational counts");
   if (manifest.cloudflare.runnerAccessBypassAppId) {
     const record = objectResult(await cloudflareApi(
@@ -446,6 +448,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
     repositories: Number(counts.repositories),
     enabledRepositories: Number(counts.enabled_repositories),
     enabledTasks: Number(counts.enabled_tasks),
+    staleBridgeRepositories: Number(counts.stale_bridge_repositories),
   };
 }
 

@@ -53,7 +53,7 @@ Canonical Flue continuation was also re-investigated in attempts 1–9 of run `3
 The CLI now removes hand-written enrollment SQL and hand-authored caller YAML from the repeatable path:
 
 ```sh
-pnpm --filter gardener-actions-cli-demo build
+pnpm --filter gardener-cli-demo build
 node packages/cli/dist/cli.js actions workflow \
   --workflow-ref OWNER/ACTIONS_REPOSITORY/.github/workflows/gardener-triage-reusable.yml@FULL_SHA \
   --audience https://RUNNER_INGRESS \
@@ -181,9 +181,9 @@ The private repository passed the same release candidate on attempt 1:
 
 Wave 2 also live-qualified repository/task kill switches, retired-bundle isolation across reconnect, trigger-backed immutable control auditing, portable remote `doctor`, manifest-bound 24-hour teardown intents, idempotent upgrade, and explicit-old-source rollback. The rollback drill moved from deployment hash `12a06b94e8bdd3808eb562cb5cfeb616ff5b12e29b03c92e3f6536570c21aaaf` to trusted prior hash `dded175a69d2a4f5eca21b2e002ff4026bca72feebec394cb0b06ce48ff8e554`, then restored the confirmed current hash. The real `cloudflare/computer` pilot remains blocked pending the final reviewed release; no pilot branch or persistent effect was introduced there.
 
-## Standalone Actions-only distribution (2026-09-22)
+## Standalone Actions-only distribution before the single-Worker overhaul (2026-09-22)
 
-The temporary `gardener-actions-cli-demo` package identity was packed and exercised from `/tmp` without a monorepo checkout. The final local tarball was 1,348,204 bytes (22 files) and contained:
+The temporary `gardener-actions-cli-demo` package identity was packed and exercised from `/tmp` without a monorepo checkout. That qualified two-Worker tarball was 1,348,204 bytes (22 files) and contained:
 
 - the bundled CLI/compiler;
 - the transitive module closure for the Actions-only runtime;
@@ -210,7 +210,17 @@ The Actions-only runtime itself passed canonical positive tasks after the hard c
 
 A separate fresh tarball deployment (`qual-actions-tarball-2`) created a new D1 containing only the six `actions_*` tables plus Wrangler's `d1_migrations` table. Its final ingress health check was intentionally blocked by account-wide Cloudflare Access because no scoped Access API token was present; the manifest-bound two-step tarball teardown then removed its D1 and both Workers. This isolates the only fresh-install blocker to an external account policy credential, not a package or runtime dependency.
 
-The production Worker entry now exports only `TaskRunnerSession`, `FlueGardenerTaskHarnessAgent`, `GardenerRunnerIngressEntrypoint`, and the health handler. Legacy source remains in repository history but is excluded from the workspace's shipped production graph, deploy build, package assets, D1 baseline, and runtime import graph. The shipped workspace version gate is green; deliberately qualified Flue/pi-ai, Workers build, Agent helper, Wrangler, and package-manager pins remain explicit review signals rather than silent drift.
+That production runtime exported `TaskRunnerSession`, `FlueGardenerTaskHarnessAgent`, `GardenerRunnerIngressEntrypoint`, and the health handler. Legacy source remained in repository history but was excluded from the shipped runtime import graph.
+
+## Single-Worker and in-repo bridge overhaul (2026-09-22)
+
+The GitHub-hosted adapter now lives in the canonical private Gardener repository as `bridges/github/plan` and `bridges/github/apply`. The reusable workflow is `.github/workflows/gardener-task.yml`; generated workflows pin its private commit SHA and use `runtime-url` / `GARDENER_RUNTIME_URL`. The former public `scuffi/gardener-actions` repository was archived after its open v1.1 PR was closed as superseded; immutable v1.0 references remain preserved.
+
+The customer deployment is now one narrow public Worker with D1, Workers AI, `TaskRunnerSession`, and `FlueGardenerTaskHarnessAgent`. It exposes only `GET /health` and the exact `/session/<id>` route; the runner-ingress Worker, Service Binding, replay probe, and active spike workflows were removed. Existing two-Worker manifests are accepted only by the manifest-bound teardown path; all other commands require a fresh v2 installation, matching the approved pre-launch hard cutover.
+
+Local validation is green: typecheck, 345 Gardener tests, 16 bridge tests, 31 CLI tests, runtime export/leak guard, tracked bridge-bundle guard, package integrity, deploy dry-run, and `actionlint`. The renamed temporary `gardener-cli-demo` package contains 20 files and one Actions-only baseline migration. The private repository cannot publish a Cloudflare deploy button yet; a docs-only button contract is prepared. A fresh live Worker was intentionally not qualified because this account's wildcard Access policy requires an operator-supplied scoped token for a new exact-host bypass, and the user chose to defer that live demo. The partially created Worker/D1 were removed through the new two-step teardown, and the previous qualified two-Worker workspace was also cleanly removed through its legacy teardown path.
+
+The shipped workspace version gate is green; deliberately qualified Flue/pi-ai, Workers build, Agent helper, Wrangler, and package-manager pins remain explicit review signals rather than silent drift.
 
 ## Historical transport qualification (2026-09-17)
 

@@ -49,7 +49,7 @@ pnpm gardener -- up \
 For a standalone tarball, run the packaged binary without a Gardener source checkout:
 
 ```bash
-npx --yes --package=./gardener-actions-cli-demo-0.1.0.tgz gardener up \
+npx --yes --package=./gardener-cli-demo-0.1.0.tgz gardener up \
   --workspace my-gardener \
   --repository owner/repository \
   --demos
@@ -99,7 +99,8 @@ The Actions-only cutover starts deployment-hash version `actions-v2` and intenti
 pre-cutover rollback digests because their legacy migration inputs are not part of the shipped package:
 
 ```bash
-pnpm gardener -- upgrade --workspace my-gardener --source-root "$PWD"
+pnpm gardener -- upgrade --workspace my-gardener --repository my-org/my-repository \
+  --repository-root /path/to/customer-repository --source-root "$PWD"
 pnpm gardener -- rollback --workspace my-gardener \
   --source-root /trusted/prior/gardener --confirm <historical-source-digest>
 ```

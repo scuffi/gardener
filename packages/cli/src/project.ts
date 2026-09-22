@@ -139,6 +139,37 @@ export async function initializeProject(input: {
   return { created, preserved };
 }
 
+export async function upgradeProjectRelease(input: { repositoryRoot: string }): Promise<{
+  previousWorkflowRef: string;
+  workflowRef: string;
+  changed: boolean;
+}> {
+  const root = resolve(input.repositoryRoot);
+  const projectPath = join(root, ".gardener", "gardener.json");
+  let source: string;
+  try {
+    source = await readFile(projectPath, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      throw new Error(`Not a Gardener project: ${root}. Pass --repository-root for a repository containing .gardener/gardener.json`);
+    }
+    throw error;
+  }
+  const project = projectSchema.parse(JSON.parse(source));
+  const previousWorkflowRef = project.release.workflowRef;
+  if (previousWorkflowRef !== DEFAULT_WORKFLOW_REF) {
+    await atomicWrite(projectPath, `${JSON.stringify({
+      ...project,
+      release: { ...project.release, workflowRef: DEFAULT_WORKFLOW_REF },
+    }, null, 2)}\n`);
+  }
+  return {
+    previousWorkflowRef,
+    workflowRef: DEFAULT_WORKFLOW_REF,
+    changed: previousWorkflowRef !== DEFAULT_WORKFLOW_REF,
+  };
+}
+
 export async function buildProject(input: { repositoryRoot: string }): Promise<ProjectBuildResult> {
   const root = resolve(input.repositoryRoot);
   const gardenerDirectory = join(root, ".gardener");
@@ -281,6 +312,7 @@ async function readPreviousLock(path: string): Promise<string[]> {
 }
 
 async function atomicWrite(path: string, content: string): Promise<void> {
+  if (await exists(path) && await readFile(path, "utf8") === content) return;
   const temporary = `${path}.tmp-${process.pid}`;
   await writeFile(temporary, content, { encoding: "utf8", mode: 0o644 });
   await rename(temporary, path);
