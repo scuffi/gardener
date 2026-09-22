@@ -46,6 +46,20 @@ pnpm gardener -- up \
   --demos
 ```
 
+For a standalone tarball, run the packaged binary without a Gardener source checkout:
+
+```bash
+npx --yes --package=./gardener-actions-cli-demo-0.1.0.tgz gardener up \
+  --workspace my-gardener \
+  --repository owner/repository \
+  --demos
+```
+
+The tarball contains the Actions-only runtime bundle, narrow runner ingress, compiler defaults, and
+one Actions-only D1 baseline migration. If account-wide Cloudflare Access intercepts new
+`workers.dev` hostnames, set a scoped `CLOUDFLARE_API_TOKEN` with Access Apps and Policies edit
+permission so Gardener can create the exact-host runner bypass.
+
 Then review and commit in the customer repository:
 
 ```bash
@@ -80,7 +94,9 @@ Use `repository enable|disable` and `task enable|disable` as admission kill swit
 checks negative admission, force cancellation, and settlement/effect audit cardinality.
 
 Upgrade records an immutable source digest. Code rollback requires an explicit trusted prior source
-checkout and a digest already present in deployment history; database migrations remain forward-only:
+checkout and a digest already present in deployment history; database migrations remain forward-only.
+The Actions-only cutover starts deployment-hash version `actions-v2` and intentionally discards
+pre-cutover rollback digests because their legacy migration inputs are not part of the shipped package:
 
 ```bash
 pnpm gardener -- upgrade --workspace my-gardener --source-root "$PWD"

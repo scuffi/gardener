@@ -1,28 +1,37 @@
 {
-  "name": "@gardener/cli",
+  "name": "gardener-actions-cli-demo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "files": [
+    "assets",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
     "gardener": "dist/cli.js"
   },
   "dependencies": {
-    "@gardener/contracts": "workspace:*",
-    "@gardener/core": "workspace:*",
-    "@gardener/provider-github": "workspace:*",
-    "@gardener/protocol": "workspace:*",
-    "yaml": "2.9.1",
-    "zod": "4.6.5"
+    "wrangler": "4.131.0",
+    "yaml": "2.9.1"
   },
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:yaml --sourcemap --outfile=dist/cli.js",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/cli.ts --bundle --platform=node --format=esm --external:yaml --sourcemap --outfile=dist/cli.js",
+    "prepack": "node scripts/prepare-package.mjs --clean && pnpm --filter @gardener/app build && node ../../scripts/check-actions-runtime.mjs && node scripts/prepare-package.mjs && pnpm build",
     "typecheck": "tsc -p tsconfig.json",
     "test": "pnpm build && vitest run"
   },
   "devDependencies": {
+    "@gardener/contracts": "workspace:*",
+    "@gardener/core": "workspace:*",
+    "@gardener/provider-github": "workspace:*",
+    "@gardener/protocol": "workspace:*",
     "@types/node": "22.20.3",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
-    "vitest": "5.0.1"
+    "vitest": "5.0.1",
+    "zod": "4.6.5"
   }
 }

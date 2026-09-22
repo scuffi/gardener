@@ -5,8 +5,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 const fluePlugins = flue({
-  app: "src/app.ts",
-  agents: "**/*agent.ts",
+  app: "src/task-runtime/actions-app.ts",
+  agents: "**/task-runtime/flue-agent.ts",
   providers: ["cloudflare"],
   // Repository and model content must never be copied into Workers Traces.
   tracing: false,

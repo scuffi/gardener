@@ -53,7 +53,7 @@ Canonical Flue continuation was also re-investigated in attempts 1–9 of run `3
 The CLI now removes hand-written enrollment SQL and hand-authored caller YAML from the repeatable path:
 
 ```sh
-pnpm --filter @gardener/cli build
+pnpm --filter gardener-actions-cli-demo build
 node packages/cli/dist/cli.js actions workflow \
   --workflow-ref OWNER/ACTIONS_REPOSITORY/.github/workflows/gardener-triage-reusable.yml@FULL_SHA \
   --audience https://RUNNER_INGRESS \
@@ -180,6 +180,37 @@ The private repository passed the same release candidate on attempt 1:
 - documentation helper: run `35707484158`, issue #8, comment `5773778543`.
 
 Wave 2 also live-qualified repository/task kill switches, retired-bundle isolation across reconnect, trigger-backed immutable control auditing, portable remote `doctor`, manifest-bound 24-hour teardown intents, idempotent upgrade, and explicit-old-source rollback. The rollback drill moved from deployment hash `12a06b94e8bdd3808eb562cb5cfeb616ff5b12e29b03c92e3f6536570c21aaaf` to trusted prior hash `dded175a69d2a4f5eca21b2e002ff4026bca72feebec394cb0b06ce48ff8e554`, then restored the confirmed current hash. The real `cloudflare/computer` pilot remains blocked pending the final reviewed release; no pilot branch or persistent effect was introduced there.
+
+## Standalone Actions-only distribution (2026-09-22)
+
+The temporary `gardener-actions-cli-demo` package identity was packed and exercised from `/tmp` without a monorepo checkout. The final local tarball was 1,348,192 bytes (22 files) and contained:
+
+- the bundled CLI/compiler;
+- the transitive module closure for the Actions-only runtime;
+- the narrow runner-ingress source;
+- exactly one D1 migration, `migrations-actions/0001_actions_baseline.sql`;
+- no Gateway application, historical migration, `ComputerWorkspace`, `GardenerGitHubEntrypoint`, or generic historical Flue Agent.
+
+The portable invocation is:
+
+```bash
+npx --yes --package=./gardener-actions-cli-demo-0.1.0.tgz gardener up ...
+```
+
+From `scuffi/gardener-cli-tarball-demo`, that invocation completed `init → build → deploy → connect → doctor` against `qual-actions-cli-1` in 54 seconds with deployment hash `3eaf8a208ed10b289dc38b4cb0d11ae8044262df0b960c98691db5eb38983f22`. The same packaged CLI then passed negative admission and cancellation drills:
+
+- disabled admission: run `35720278921`, issue #7;
+- durable cancellation: run `35720332840`, issue #8;
+- two successful-run reconciliation invariants, with zero duplicate settlement/effect events.
+
+The Actions-only runtime itself passed canonical positive tasks after the hard cutover:
+
+- bug intake: run `35718801949`, issue #5, comment `5775263125`;
+- documentation helper: run `35718892134`, issue #6, comment `5775275437`.
+
+A separate fresh tarball deployment (`qual-actions-tarball-2`) created a new D1 containing only the six `actions_*` tables plus Wrangler's `d1_migrations` table. Its final ingress health check was intentionally blocked by account-wide Cloudflare Access because no scoped Access API token was present; the manifest-bound two-step tarball teardown then removed its D1 and both Workers. This isolates the only fresh-install blocker to an external account policy credential, not a package or runtime dependency.
+
+The production Worker entry now exports only `TaskRunnerSession`, `FlueGardenerTaskHarnessAgent`, `GardenerRunnerIngressEntrypoint`, and the health handler. Legacy source remains in repository history but is excluded from the workspace's shipped production graph, deploy build, package assets, D1 baseline, and runtime import graph.
 
 ## Historical transport qualification (2026-09-17)
 

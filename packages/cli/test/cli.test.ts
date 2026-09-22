@@ -1,8 +1,9 @@
 /// <reference types="node" />
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   availableGitHubOperationKinds,
@@ -13,6 +14,7 @@ import { actionsEnrollmentSql, renderActionsCaller } from "../src/actions";
 import { parse } from "../src/args";
 import { deploymentNames, writeGatewayConfig } from "../src/config";
 import { destroyPlan, destroyQualification } from "../src/destroy";
+import { defaultSourceRoot } from "../src/distribution";
 import { githubAppManifest } from "../src/manifest";
 import { gatewayPlan } from "../src/plan";
 import { evaluateSmoke } from "../src/smoke";
@@ -61,6 +63,16 @@ describe("Gardener CLI", () => {
     expect(build.status).toBe(0);
     expect(build.stdout).toContain("gardener build");
     expect(build.stdout).toContain("TaskBundleV1");
+  });
+
+  it("uses packaged runtime assets when the CLI distribution contains them", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-distribution-test-"));
+    await mkdir(join(root, "assets"));
+    await writeFile(join(root, "assets/gardener-distribution.json"), "{}\n");
+    expect(defaultSourceRoot("/customer/repository", pathToFileURL(join(root, "dist/cli.js")).href))
+      .toBe(join(root, "assets"));
+    expect(defaultSourceRoot("/customer/repository", pathToFileURL(join(root, "no-package/dist/cli.js")).href))
+      .toBe("/customer/repository");
   });
 
   it("renders a deterministic full-SHA-pinned Actions caller and enrollment", () => {

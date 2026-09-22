@@ -1,50 +1,35 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gardener-actions-v1-runtime",
-  "main": "src/index.ts",
+  "main": "src/task-runtime/runtime-entrypoint.ts",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat", "experimental", "global_fetch_strictly_public"],
-  "assets": {
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/hooks/*", "/mcp", "/oauth/*", "/.well-known/*"]
-  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "gardener-actions-v1-runtime",
       "database_id": "e5b4c408-55d6-42f7-802e-93542cf93877",
-      "migrations_dir": "migrations"
+      "migrations_dir": "migrations-actions"
     }
   ],
   "ai": { "binding": "AI" },
   "durable_objects": {
     "bindings": [
-      { "name": "RUNNER_SESSIONS", "class_name": "TaskRunnerSession" }
+      { "name": "RUNNER_SESSIONS", "class_name": "TaskRunnerSession" },
+      { "name": "FLUE_GARDENER_TASK_HARNESS_AGENT", "class_name": "FlueGardenerTaskHarnessAgent" }
     ]
   },
   "migrations": [
-    {
-      "tag": "agent-native-foundation-v1",
-      "new_sqlite_classes": ["ComputerWorkspace", "GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness", "FlueGardenerHarnessAgent"]
-    },
-    {
-      "tag": "flue-only-runtime-v1",
-      "deleted_classes": ["GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness"]
-    },
     {
       "tag": "actions-task-runtime-v1",
       "new_sqlite_classes": ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"]
     }
   ],
-  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "AI_MODEL": "@cf/moonshotai/kimi-k2.6",
     "GARDENER_WORKSPACE_ID": "workspace-local",
     "GARDENER_DEPLOYMENT_MODE": "actions-v1",
-    "LOCAL_DEV_BYPASS": "false",
-    "CLOUDFLARE_ACCESS_TEAM_DOMAIN": "https://agents-b8a.cloudflareaccess.com",
-    "CLOUDFLARE_ACCESS_AUD": "dcf682687b48f790044cf39e6dc9c8fac775f4f1096dd198eaf32025f77f9ec7"
+    "LOCAL_DEV_BYPASS": "false"
   },
   "observability": {
     "enabled": true,

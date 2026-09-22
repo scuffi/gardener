@@ -79,16 +79,15 @@ describe("Actions-native installation topology", () => {
     }, 0)).resolves.toBe("access-app-1");
   });
 
-  it("hashes the exact deployable runtime, ingress, lockfile, and migrations", async () => {
+  it("hashes the exact deployable runtime, ingress, and migrations", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-actions-deployment-"));
     await mkdir(join(root, "apps/gardener/dist/gardener_actions_v1_runtime"), { recursive: true });
-    await mkdir(join(root, "apps/gardener/migrations"), { recursive: true });
+    await mkdir(join(root, "apps/gardener/migrations-actions"), { recursive: true });
     await mkdir(join(root, "apps/runner-ingress/src"), { recursive: true });
     await writeFile(join(root, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"), "export default 1;\n");
-    await writeFile(join(root, "apps/gardener/migrations/0010.sql"), "SELECT 1;\n");
+    await writeFile(join(root, "apps/gardener/migrations-actions/0001.sql"), "SELECT 1;\n");
     await writeFile(join(root, "apps/runner-ingress/src/index.ts"), "export default 2;\n");
     await writeFile(join(root, "apps/runner-ingress/package.json"), "{}\n");
-    await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9'\n");
     const first = await actionsDeploymentHash(root);
     expect(await actionsDeploymentHash(root)).toBe(first);
     await writeFile(join(root, "apps/runner-ingress/src/index.ts"), "export default 3;\n");
@@ -165,6 +164,13 @@ describe("Actions-native installation topology", () => {
       LOCAL_DEV_BYPASS: "false",
     });
     expect(runtime).not.toHaveProperty("assets");
+    expect(runtime).not.toHaveProperty("triggers");
+    expect(runtime.d1_databases[0].migrations_dir).toBe(join(sourceRoot, "apps/gardener/migrations-actions"));
+    expect(runtime.durable_objects.bindings).toEqual([
+      { name: "RUNNER_SESSIONS", class_name: "TaskRunnerSession" },
+      { name: "FLUE_GARDENER_TASK_HARNESS_AGENT", class_name: "FlueGardenerTaskHarnessAgent" },
+    ]);
+    expect(JSON.stringify(runtime)).not.toMatch(/Gateway|ComputerWorkspace|GardenerGitHubEntrypoint|FlueGardenerHarnessAgent/);
 
     expect(ingress.name).toBe(names.ingressWorker);
     expect(ingress.workers_dev).toBe(true);

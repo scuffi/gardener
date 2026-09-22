@@ -18,6 +18,7 @@ import {
 import { qualifyActions } from "./actions-qualify.js";
 import { parse } from "./args.js";
 import { buildProject, initializeProject } from "./project.js";
+import { defaultSourceRoot } from "./distribution.js";
 import { terminal } from "./terminal.js";
 
 const HELP = `gardener <command>
@@ -52,7 +53,7 @@ Options:
   --run <id>                   Run identity for run show
   --limit <1-100>              Maximum runs to list
   --repository-root <path>     Customer repository (defaults to current directory)
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
 const INIT_HELP = `gardener init
@@ -79,7 +80,7 @@ Provision or resume one headless Actions-native Gardener deployment.
 
 Options:
   --workspace <name>           Stable installation name
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
 const UPGRADE_HELP = `gardener upgrade
@@ -88,7 +89,7 @@ Build and deploy trusted source, retaining the prior immutable deployment digest
 
 Options:
   --workspace <name>           Existing Gardener installation
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
 const ROLLBACK_HELP = `gardener rollback
@@ -110,7 +111,7 @@ Options:
   --workspace <name>           Existing Gardener installation
   --repository <owner/name>    GitHub repository to enroll
   --repository-root <path>     Customer repository (defaults to current directory)
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
 const QUALIFY_HELP = `gardener qualify
@@ -123,7 +124,7 @@ Options:
   --workspace <name>           Existing Gardener installation
   --repository <owner/name>    Connected GitHub repository
   --repository-root <path>     Customer repository (defaults to current directory)
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
   --drills                     Also run negative admission and cancellation drills
   --drills-only                Reuse recent successful runs and execute only the drills
 `;
@@ -134,7 +135,7 @@ Create or execute a manifest-bound teardown intent for the recorded Cloudflare r
 
 Options:
   --workspace <name>           Existing Gardener installation
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
   --execute                    Execute a previously written teardown intent
   --confirm <intent-digest>    Exact digest returned by the planning invocation
 `;
@@ -148,7 +149,7 @@ Options:
   --repository <owner/name>    GitHub repository to enroll
   --demos                      Add the two bounded demo tasks
   --repository-root <path>     Customer repository (defaults to current directory)
-  --source-root <path>         Trusted Gardener source checkout (defaults to current directory)
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
 async function main(argv: string[]): Promise<void> {
@@ -185,7 +186,7 @@ async function main(argv: string[]): Promise<void> {
   const { positional, flags } = parse(rest);
   if (positional.length) throw new Error(`gardener ${command} does not accept positional arguments`);
   const repositoryRoot = stringFlag(flags, "repository-root") ?? process.cwd();
-  const sourceRoot = stringFlag(flags, "source-root") ?? process.cwd();
+  const sourceRoot = stringFlag(flags, "source-root") ?? defaultSourceRoot();
 
   if (command === "init") {
     printInit(await initializeProject({
@@ -280,7 +281,7 @@ async function operate(command: string, args: string[]): Promise<void> {
   const runShow = command === "run";
   const parsed = parse(actionCommand || runShow ? rest : args);
   const repositoryRoot = stringFlag(parsed.flags, "repository-root") ?? process.cwd();
-  const sourceRoot = stringFlag(parsed.flags, "source-root") ?? process.cwd();
+  const sourceRoot = stringFlag(parsed.flags, "source-root") ?? defaultSourceRoot();
   const workspace = requiredStringFlag(parsed.flags, "workspace");
   const repository = stringFlag(parsed.flags, "repository");
 

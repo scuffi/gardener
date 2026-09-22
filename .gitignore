@@ -8,6 +8,7 @@ dist/
 .dev.vars
 .env
 coverage/
+packages/cli/assets/
 .tmp/
 .DS_Store
 *.log

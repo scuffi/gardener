@@ -61,6 +61,8 @@ const manifestSchema = z.strictObject({
   }),
   deployment: deploymentRecordSchema.optional(),
   deploymentHistory: z.array(deploymentRecordSchema).max(20).optional(),
+  deploymentHashVersion: z.literal("actions-v2").optional(),
+  runtimeGeneration: z.literal("actions-only").optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -93,6 +95,7 @@ export function renderRuntimeConfig(input: {
   databaseId: string;
   sourceRoot: string;
   workspace: string;
+  migrationMode?: "fresh" | "legacy-cutover" | "steady";
 }): string {
   return `${JSON.stringify({
     name: input.names.runtimeWorker,
@@ -104,30 +107,38 @@ export function renderRuntimeConfig(input: {
       binding: "DB",
       database_name: input.names.database,
       database_id: input.databaseId,
-      migrations_dir: join(input.sourceRoot, "apps/gardener/migrations"),
+      migrations_dir: join(input.sourceRoot, "apps/gardener/migrations-actions"),
     }],
     ai: { binding: "AI" },
     durable_objects: { bindings: [
-      { name: "COMPUTER_WORKSPACES", class_name: "ComputerWorkspace" },
       { name: "RUNNER_SESSIONS", class_name: "TaskRunnerSession" },
-      { name: "FLUE_GARDENER_HARNESS_AGENT", class_name: "FlueGardenerHarnessAgent" },
       { name: "FLUE_GARDENER_TASK_HARNESS_AGENT", class_name: "FlueGardenerTaskHarnessAgent" },
-    ] }, 
-    migrations: [
-      {
-        tag: "agent-native-foundation-v1",
-        new_sqlite_classes: ["ComputerWorkspace", "GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness", "FlueGardenerHarnessAgent"],
-      },
-      {
-        tag: "flue-only-runtime-v1",
-        deleted_classes: ["GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness"],
-      },
-      {
-        tag: "actions-task-runtime-v1",
-        new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
-      },
-    ],
-    triggers: { crons: ["* * * * *"] },
+    ] },
+    ...(input.migrationMode === "steady" ? {} : {
+      migrations: input.migrationMode === "legacy-cutover"
+        ? [
+            {
+              tag: "agent-native-foundation-v1",
+              new_sqlite_classes: ["ComputerWorkspace", "GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness", "FlueGardenerHarnessAgent"],
+            },
+            {
+              tag: "flue-only-runtime-v1",
+              deleted_classes: ["GardenerThinkHarnessAgent", "GardenerCloudflareAgentsHarness"],
+            },
+            {
+              tag: "actions-task-runtime-v1",
+              new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
+            },
+            {
+              tag: "actions-only-runtime-v1",
+              deleted_classes: ["ComputerWorkspace", "FlueGardenerHarnessAgent"],
+            },
+          ]
+        : [{
+            tag: "actions-task-runtime-v1",
+            new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
+          }],
+    }),
     vars: {
       AI_MODEL: "@cf/moonshotai/kimi-k2.6",
       GARDENER_WORKSPACE_ID: input.workspace,
@@ -217,7 +228,9 @@ export async function deployActions(input: {
     throw new Error("Existing installation manifest does not match the Cloudflare D1 database");
   }
 
-  runCommand("pnpm", ["--filter", "@gardener/app", "build"], { cwd: sourceRoot, quiet: true });
+  if (!(await isPackagedDistribution(sourceRoot))) {
+    runCommand("pnpm", ["--filter", "@gardener/app", "build"], { cwd: sourceRoot, quiet: true });
+  }
   const sourceHash = await actionsDeploymentHash(sourceRoot);
   if (input.expectedDeploymentHash && sourceHash !== sha256.parse(input.expectedDeploymentHash)) {
     throw new Error("Trusted rollback source does not match the confirmed historical deployment digest");
@@ -229,6 +242,9 @@ export async function deployActions(input: {
     databaseId: database.uuid,
     sourceRoot,
     workspace,
+    migrationMode: prior === null ? "fresh"
+      : prior.runtimeGeneration === "actions-only" ? "steady"
+      : "legacy-cutover",
   }));
   await writePrivateText(ingressConfig, renderIngressConfig({ names, sourceRoot }));
 
@@ -259,12 +275,14 @@ export async function deployActions(input: {
   ], undefined, { quiet: true });
   const ingressOrigin = workerOrigin(ingressDeploy, names.ingressWorker);
   const now = new Date().toISOString();
-  const deploymentHistory = prior?.deployment && prior.deployment.sourceHash !== sourceHash
-    ? [prior.deployment, ...(prior.deploymentHistory ?? [])]
-      .filter((record, index, records) => record.sourceHash !== sourceHash
-        && records.findIndex((candidate) => candidate.sourceHash === record.sourceHash) === index)
-      .slice(0, 20)
-    : prior?.deploymentHistory ?? [];
+  const deploymentHistory = prior?.deploymentHashVersion !== "actions-v2"
+    ? []
+    : prior.deployment && prior.deployment.sourceHash !== sourceHash
+      ? [prior.deployment, ...(prior.deploymentHistory ?? [])]
+        .filter((record, index, records) => record.sourceHash !== sourceHash
+          && records.findIndex((candidate) => candidate.sourceHash === record.sourceHash) === index)
+        .slice(0, 20)
+      : prior.deploymentHistory ?? [];
   let manifest = manifestSchema.parse({
     schemaVersion: "gardener.actions-installation/v1",
     workspace,
@@ -280,6 +298,8 @@ export async function deployActions(input: {
     },
     deployment: { sourceHash, deployedAt: now },
     deploymentHistory,
+    deploymentHashVersion: "actions-v2",
+    runtimeGeneration: "actions-only",
     createdAt: prior?.createdAt ?? now,
     updatedAt: now,
   });
@@ -554,9 +574,9 @@ export async function destroyActions(input: {
   deleteWorker(sourceRoot, "apps/runner-ingress", manifest.cloudflare.ingressWorker, manifest.cloudflare.ingressConfig);
   deleteWorker(sourceRoot, "apps/gardener", manifest.cloudflare.runtimeWorker, manifest.cloudflare.runtimeConfig);
   if (database) {
-    runCommand("pnpm", [
-      "exec", "wrangler", "d1", "delete", manifest.cloudflare.database.name, "--skip-confirmation",
-    ], { cwd: join(sourceRoot, "apps/gardener"), quiet: true });
+    wrangler(sourceRoot, "apps/gardener", [
+      "d1", "delete", manifest.cloudflare.database.name, "--skip-confirmation",
+    ], undefined, { quiet: true });
   }
   await writePrivateJson(join(directory, "teardown.json"), {
     schemaVersion: "gardener.actions-teardown/v1",
@@ -573,13 +593,12 @@ export async function destroyActions(input: {
 
 export async function actionsDeploymentHash(sourceRootInput: string): Promise<string> {
   const sourceRoot = resolve(sourceRootInput);
-  const migrationRoot = join(sourceRoot, "apps/gardener/migrations");
+  const migrationRoot = join(sourceRoot, "apps/gardener/migrations-actions");
   const migrationNames = (await readdir(migrationRoot)).filter((name) => name.endsWith(".sql")).sort();
   return canonicalSha256({
     runtimeBundle: await readFile(join(sourceRoot, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"), "utf8"),
     ingressSource: await readFile(join(sourceRoot, "apps/runner-ingress/src/index.ts"), "utf8"),
     ingressPackage: await readFile(join(sourceRoot, "apps/runner-ingress/package.json"), "utf8"),
-    lockfile: await readFile(join(sourceRoot, "pnpm-lock.yaml"), "utf8"),
     migrations: await Promise.all(migrationNames.map(async (name) => ({
       name,
       sql: await readFile(join(migrationRoot, name), "utf8"),
@@ -782,6 +801,18 @@ function arrayResult(value: unknown): Array<Record<string, unknown>> {
   );
 }
 
+async function isPackagedDistribution(sourceRoot: string): Promise<boolean> {
+  try {
+    const value = JSON.parse(await readFile(join(sourceRoot, "gardener-distribution.json"), "utf8")) as {
+      schemaVersion?: unknown;
+    };
+    return value.schemaVersion === "gardener.cli-distribution/v1";
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 function queryDoctorD1(
   sourceRoot: string,
   manifest: ActionsInstallationManifest,
@@ -803,9 +834,9 @@ function queryDoctorD1(
 }
 
 function deleteWorker(sourceRoot: string, directory: string, worker: string, config: string): void {
-  const result = runCommand("pnpm", [
-    "exec", "wrangler", "delete", worker, "--force", "--config", config,
-  ], { cwd: join(sourceRoot, directory), quiet: true, allowFailure: true });
+  const result = wrangler(sourceRoot, directory, [
+    "delete", worker, "--force", "--config", config,
+  ], undefined, { quiet: true, allowFailure: true });
   if (result.status !== 0 && !/not found|does not exist|10090/i.test(`${result.stdout}\n${result.stderr}`)) {
     throw new Error(`Failed to delete Gardener Worker ${worker}`);
   }

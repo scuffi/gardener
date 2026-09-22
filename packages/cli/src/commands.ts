@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 export interface CommandResult {
   stdout: string;
@@ -57,12 +60,13 @@ export function wrangler(
   workingDirectory: string,
   args: string[],
   input?: string,
-  options?: { quiet?: boolean },
+  options?: { quiet?: boolean; allowFailure?: boolean },
 ): CommandResult {
-  return runCommand("pnpm", ["exec", "wrangler", ...args], {
+  return runCommand(process.execPath, [require.resolve("wrangler"), ...args], {
     cwd: `${repositoryRoot}/${workingDirectory}`,
     ...(input === undefined ? {} : { input }),
     ...(options?.quiet === undefined ? {} : { quiet: options.quiet }),
+    ...(options?.allowFailure === undefined ? {} : { allowFailure: options.allowFailure }),
   });
 }
 

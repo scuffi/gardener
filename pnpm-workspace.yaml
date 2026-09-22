@@ -1,5 +1,6 @@
 packages:
-  - "apps/*"
+  - "apps/gardener"
+  - "apps/runner-ingress"
   - "packages/*"
   - "spikes/*"
 

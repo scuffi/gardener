@@ -1,4 +1,4 @@
-import { runCommand, wrangler } from "./commands.js";
+import { wrangler } from "./commands.js";
 import type { DeploymentNames } from "./config.js";
 
 export interface CloudflareResources {
@@ -80,7 +80,7 @@ export function selectedAccountId(repositoryRoot: string): string {
 }
 
 export function selectedAccount(repositoryRoot: string): CloudflareAccountDescription {
-  const result = wrangler(repositoryRoot, "apps/github-gateway", ["whoami", "--json"], undefined, {
+  const result = wrangler(repositoryRoot, ".", ["whoami", "--json"], undefined, {
     quiet: true,
   });
   const value = JSON.parse(result.stdout) as unknown;
@@ -121,7 +121,7 @@ function collectAccounts(value: unknown): CloudflareAccountDescription[] {
 }
 
 export function listDatabases(repositoryRoot: string): D1DatabaseDescription[] {
-  const result = wrangler(repositoryRoot, "apps/github-gateway", ["d1", "list", "--json"], undefined, {
+  const result = wrangler(repositoryRoot, ".", ["d1", "list", "--json"], undefined, {
     quiet: true,
   });
   const value = JSON.parse(result.stdout) as unknown;
@@ -137,15 +137,9 @@ export function listDatabases(repositoryRoot: string): D1DatabaseDescription[] {
 }
 
 export function workerExists(repositoryRoot: string, worker: string): boolean {
-  const result = runCommand(
-    "pnpm",
-    ["exec", "wrangler", "deployments", "list", "--name", worker, "--json"],
-    {
-      cwd: `${repositoryRoot}/apps/github-gateway`,
-      quiet: true,
-      allowFailure: true,
-    },
-  );
+  const result = wrangler(repositoryRoot, ".", [
+    "deployments", "list", "--name", worker, "--json",
+  ], undefined, { quiet: true, allowFailure: true });
   if (result.status === 0) {
     try {
       const deployments = JSON.parse(result.stdout) as unknown;
@@ -160,15 +154,9 @@ export function workerExists(repositoryRoot: string, worker: string): boolean {
 }
 
 export function r2BucketExists(repositoryRoot: string, bucket: string): boolean {
-  const result = runCommand(
-    "pnpm",
-    ["exec", "wrangler", "r2", "bucket", "info", bucket, "--json"],
-    {
-      cwd: `${repositoryRoot}/apps/github-gateway`,
-      quiet: true,
-      allowFailure: true,
-    },
-  );
+  const result = wrangler(repositoryRoot, ".", [
+    "r2", "bucket", "info", bucket, "--json",
+  ], undefined, { quiet: true, allowFailure: true });
   if (result.status === 0) return true;
   const output = `${result.stdout}\n${result.stderr}`;
   if (/not found|does not exist|10006/i.test(output)) return false;
