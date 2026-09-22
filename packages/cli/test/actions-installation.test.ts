@@ -154,6 +154,11 @@ describe("Actions-native installation topology", () => {
       updatedAt: "2026-09-21T00:00:00.000Z",
     }));
 
+    await writeFile(join(directory, "teardown-intent.json"), JSON.stringify({
+      schemaVersion: "gardener.actions-teardown-intent/v1",
+      workspace: "legacy-team",
+      resources: { ingressWorker: "legacy" },
+    }));
     await expect(destroyActions({ workspace: "legacy-team", sourceRoot: ".", execute: false }))
       .resolves.toMatchObject({ destroyed: false });
     const intent = JSON.parse(await readFile(join(directory, "teardown-intent.json"), "utf8"));

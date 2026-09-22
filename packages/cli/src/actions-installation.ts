@@ -599,7 +599,10 @@ function teardownIntentExpired(createdAt: string, now = Date.now()): boolean {
 
 async function readTeardownIntent(path: string): Promise<z.infer<typeof teardownIntentSchema> | null> {
   try {
-    return teardownIntentSchema.parse(JSON.parse(await readFile(path, "utf8")));
+    const value = JSON.parse(await readFile(path, "utf8")) as { schemaVersion?: unknown };
+    return value.schemaVersion === "gardener.actions-teardown-intent/v2"
+      ? teardownIntentSchema.parse(value)
+      : null;
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
     throw error;
