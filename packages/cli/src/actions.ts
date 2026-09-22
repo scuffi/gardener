@@ -33,7 +33,7 @@ jobs:
       id-token: write
     uses: ${input.workflowRef}
     with:
-      harness-url: ${input.audience}
+      runtime-url: ${input.audience}
       task-bundle-hash: ${input.taskBundleHash}
 `;
 }

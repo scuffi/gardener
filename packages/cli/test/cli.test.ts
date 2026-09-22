@@ -96,7 +96,7 @@ jobs:
       id-token: write
     uses: ${workflowRef}
     with:
-      harness-url: ${audience}
+      runtime-url: ${audience}
       task-bundle-hash: ${taskBundleHash}
 `);
     const sql = actionsEnrollmentSql({

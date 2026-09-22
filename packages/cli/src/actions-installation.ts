@@ -371,12 +371,10 @@ export async function connectActions(input: {
     "--remote", "--config", manifest.cloudflare.runtimeConfig,
     "--command", statements.join("\n"),
   ], undefined, { quiet: true });
-  for (const variable of ["GARDENER_RUNTIME_URL", "GARDENER_INGRESS_URL"]) {
-    runCommand("gh", [
-      "variable", "set", variable, "--repo", repository,
-      "--body", manifest.cloudflare.runtimeOrigin,
-    ], { cwd: input.repositoryRoot, quiet: true });
-  }
+  runCommand("gh", [
+    "variable", "set", "GARDENER_RUNTIME_URL", "--repo", repository,
+    "--body", manifest.cloudflare.runtimeOrigin,
+  ], { cwd: input.repositoryRoot, quiet: true });
   return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin: manifest.cloudflare.runtimeOrigin };
 }
 

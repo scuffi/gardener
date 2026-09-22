@@ -82,7 +82,10 @@ describe("local Gardener project", () => {
       .toEqual(workflowsFirst);
 
     expect(first.tasks.map((task) => task.taskId)).toEqual(["bug-intake", "docs-helper"]);
-    expect(workflowsFirst.join("\n")).toContain("vars.GARDENER_INGRESS_URL");
+    expect(workflowsFirst.join("\n")).toContain("vars.GARDENER_RUNTIME_URL");
+    expect(workflowsFirst.join("\n")).toContain(
+      "scuffi/gardener/.github/workflows/gardener-task.yml@ca4533054b1f6af96fa2f4d248ccb10bcf1d1a76",
+    );
     expect(workflowsFirst.join("\n")).toContain("gardener-bug");
     expect(workflowsFirst.join("\n")).toContain("gardener-docs");
     expect(workflowsFirst.join("\n")).not.toMatch(/\$\{\{\s*secrets\.|password|api[_-]?key/i);
