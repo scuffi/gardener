@@ -1,0 +1,19 @@
+bridges/github/README.md
+  s_c17a6138dcd423::t_5803ae93cdc733 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "50ede6af1ef813179ae5a5c560a1b7e59e92db48",
+  "prompts": {},
+  "sessions": {
+    "s_c17a6138dcd423": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c9bb-a4e6-71fa-b86d-216d8a1fd972",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
