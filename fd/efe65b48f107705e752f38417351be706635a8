@@ -1,0 +1,21 @@
+apps/gardener/migrations/0014_actions_control_audit_triggers.sql
+  s_c8924ddc4e741a::t_297049172b6d89 1-17
+apps/gardener/src/database.ts
+  s_c8924ddc4e741a::t_05a247ba153a22 11-12,14,81-90,115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fdefe65b48f107705e752f38417351be706635a8",
+  "prompts": {},
+  "sessions": {
+    "s_c8924ddc4e741a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c886-2d53-76b6-a746-5079d376d737",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
