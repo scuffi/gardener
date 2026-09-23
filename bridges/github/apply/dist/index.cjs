@@ -48097,6 +48097,16 @@ async function applyOrderedPlan(input2) {
   const applied = effectReceipt(plan, input2.artifactSha256, completed, "applied", null);
   return { receipt: applied, outputs };
 }
+var MARKER_BODY_KINDS = /* @__PURE__ */ new Set([
+  "issue.comment.create",
+  "pull_request.review.submit",
+  "pull_request.open_draft"
+]);
+function bodyWithOperationMarker(body2, operationId) {
+  const marker = `<!-- gardener-operation:${operationId} -->`;
+  return body2.length === 0 ? marker : `${body2}
+${marker}`;
+}
 function materializeOperation(plan, index, outputs, owner, name2) {
   const step = plan.operations[index];
   if (!step) throw new Error(`Plan operation ${index} is missing`);
@@ -48111,6 +48121,10 @@ function materializeOperation(plan, index, outputs, owner, name2) {
       throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
     }
     setJsonPointer(payload, pointer, source[reference.output]);
+  }
+  if (MARKER_BODY_KINDS.has(step.kind)) {
+    if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);
+    payload.body = bodyWithOperationMarker(payload.body, step.operationId);
   }
   if (step.kind === "commit.create") {
     if (!plan.capture) throw new Error("commit.create has no verified capture manifest");

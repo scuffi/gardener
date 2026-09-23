@@ -199,6 +199,78 @@ describe("ordered effect application", () => {
     expect(result.outputs.get("release")?.releaseId).toBe("99");
   });
 
+  it("derives provider-visible idempotency markers after planning", async () => {
+    const value = plan([
+      commentStep("issue-comment", "op_issue", "Thanks."),
+      step("review", "op_review", "pull_request.review.submit", {
+        pullNumber: 8,
+        expectedHeadSha: SHA,
+        expectedBaseRef: "main",
+        expectedBaseSha: SHA,
+        expectedState: "open",
+        expectedDraft: false,
+        expectedPullUpdatedAt: NOW,
+        event: "comment",
+        body: "Review note.",
+        comments: [],
+      }),
+      step("draft", "op_draft", "pull_request.open_draft", {
+        head: "gardener/fix-1",
+        base: "main",
+        expectedHeadSha: SHA,
+        expectedBaseSha: SHA,
+        title: "Draft fix",
+        body: "",
+        draft: true,
+      }),
+    ]);
+    const seen: Operation[] = [];
+    await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation) => {
+        seen.push(operation);
+        if (operation.kind === "issue.comment.create") {
+          return success(operation, {
+            kind: operation.kind,
+            issueNumber: operation.issueNumber,
+            commentId: "101",
+            commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-101",
+          });
+        }
+        if (operation.kind === "pull_request.review.submit") {
+          return success(operation, {
+            kind: operation.kind,
+            pullNumber: operation.pullNumber,
+            reviewId: "201",
+            reviewUrl: "https://github.com/owner/repo/pull/8#pullrequestreview-201",
+            reviewState: "COMMENTED",
+          });
+        }
+        if (operation.kind !== "pull_request.open_draft") throw new Error("unexpected operation");
+        return success(operation, {
+          kind: operation.kind,
+          pullNumber: 9,
+          pullUrl: "https://github.com/owner/repo/pull/9",
+          pullNodeId: "PR_kwDOAbc",
+          headRef: operation.head,
+          headSha: operation.expectedHeadSha,
+          baseRef: operation.base,
+        });
+      },
+      record: async () => undefined,
+    });
+
+    expect(seen.map((operation) => "body" in operation ? operation.body : undefined)).toEqual([
+      "Thanks.\n<!-- gardener-operation:op_issue -->",
+      "Review note.\n<!-- gardener-operation:op_review -->",
+      "<!-- gardener-operation:op_draft -->",
+    ]);
+  });
+
   it("stops on the first failed step and resumes from its successful prefix", async () => {
     const value = plan([
       commentStep("first", "op_first", "First."),

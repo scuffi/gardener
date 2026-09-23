@@ -205,6 +205,17 @@ export async function applyOrderedPlan(input: {
   return { receipt: applied, outputs };
 }
 
+const MARKER_BODY_KINDS = new Set<OperationKind>([
+  "issue.comment.create",
+  "pull_request.review.submit",
+  "pull_request.open_draft",
+]);
+
+function bodyWithOperationMarker(body: string, operationId: string): string {
+  const marker = `<!-- gardener-operation:${operationId} -->`;
+  return body.length === 0 ? marker : `${body}\n${marker}`;
+}
+
 function materializeOperation(
   plan: TaskEffectPlanV1,
   index: number,
@@ -225,6 +236,15 @@ function materializeOperation(
       throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
     }
     setJsonPointer(payload, pointer, source[reference.output]);
+  }
+  // These three creates use a provider-visible marker for exact idempotency.
+  // The model cannot author it: the proposal contract rejects reserved marker
+  // text, and the marker depends on Gardener's derived operation id. Add it
+  // only after typed references have resolved so the final exact body is a
+  // deterministic function of the validated plan and prior scalar outputs.
+  if (MARKER_BODY_KINDS.has(step.kind)) {
+    if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);
+    payload.body = bodyWithOperationMarker(payload.body, step.operationId);
   }
   if (step.kind === "commit.create") {
     if (!plan.capture) throw new Error("commit.create has no verified capture manifest");
