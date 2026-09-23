@@ -13,8 +13,8 @@ var __commonJS = (cb, mod) => function __require() {
   }
 };
 var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
+  for (var name2 in all)
+    __defProp(target, name2, { get: all[name2], enumerable: true });
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -413,12 +413,12 @@ var require_errors = __commonJS({
     };
     var kResponseStatusCodeError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RESPONSE_STATUS_CODE");
     var ResponseStatusCodeError = class extends UndiciError {
-      constructor(message3, statusCode, headers, body) {
+      constructor(message3, statusCode, headers, body2) {
         super(message3);
         this.name = "ResponseStatusCodeError";
         this.message = message3 || "Response Status Code Error";
         this.code = "UND_ERR_RESPONSE_STATUS_CODE";
-        this.body = body;
+        this.body = body2;
         this.status = statusCode;
         this.statusCode = statusCode;
         this.headers = headers;
@@ -974,8 +974,8 @@ var require_util = __commonJS({
     var { tree } = require_tree();
     var [nodeMajor, nodeMinor] = process.versions.node.split(".").map((v) => Number(v));
     var BodyAsyncIterable = class {
-      constructor(body) {
-        this[kBody] = body;
+      constructor(body2) {
+        this[kBody] = body2;
         this[kBodyUsed] = false;
       }
       async *[Symbol.asyncIterator]() {
@@ -984,26 +984,26 @@ var require_util = __commonJS({
         yield* this[kBody];
       }
     };
-    function wrapRequestBody(body) {
-      if (isStream(body)) {
-        if (bodyLength(body) === 0) {
-          body.on("data", function() {
+    function wrapRequestBody(body2) {
+      if (isStream(body2)) {
+        if (bodyLength(body2) === 0) {
+          body2.on("data", function() {
             assert2(false);
           });
         }
-        if (typeof body.readableDidRead !== "boolean") {
-          body[kBodyUsed] = false;
-          EE.prototype.on.call(body, "data", function() {
+        if (typeof body2.readableDidRead !== "boolean") {
+          body2[kBodyUsed] = false;
+          EE.prototype.on.call(body2, "data", function() {
             this[kBodyUsed] = true;
           });
         }
-        return body;
-      } else if (body && typeof body.pipeTo === "function") {
-        return new BodyAsyncIterable(body);
-      } else if (body && typeof body !== "string" && !ArrayBuffer.isView(body) && isIterable(body)) {
-        return new BodyAsyncIterable(body);
+        return body2;
+      } else if (body2 && typeof body2.pipeTo === "function") {
+        return new BodyAsyncIterable(body2);
+      } else if (body2 && typeof body2 !== "string" && !ArrayBuffer.isView(body2) && isIterable(body2)) {
+        return new BodyAsyncIterable(body2);
       } else {
-        return body;
+        return body2;
       }
     }
     function nop() {
@@ -1011,16 +1011,16 @@ var require_util = __commonJS({
     function isStream(obj) {
       return obj && typeof obj === "object" && typeof obj.pipe === "function" && typeof obj.on === "function";
     }
-    function isBlobLike(object2) {
-      if (object2 === null) {
+    function isBlobLike(object3) {
+      if (object3 === null) {
         return false;
-      } else if (object2 instanceof Blob2) {
+      } else if (object3 instanceof Blob2) {
         return true;
-      } else if (typeof object2 !== "object") {
+      } else if (typeof object3 !== "object") {
         return false;
       } else {
-        const sTag = object2[Symbol.toStringTag];
-        return (sTag === "Blob" || sTag === "File") && ("stream" in object2 && typeof object2.stream === "function" || "arrayBuffer" in object2 && typeof object2.arrayBuffer === "function");
+        const sTag = object3[Symbol.toStringTag];
+        return (sTag === "Blob" || sTag === "File") && ("stream" in object3 && typeof object3.stream === "function" || "arrayBuffer" in object3 && typeof object3.arrayBuffer === "function");
       }
     }
     function buildURL(url2, queryParams) {
@@ -1072,14 +1072,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path3 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path4 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path3 && path3[0] !== "/") {
-          path3 = `/${path3}`;
+        if (path4 && path4[0] !== "/") {
+          path4 = `/${path4}`;
         }
-        return new URL(`${origin}${path3}`);
+        return new URL(`${origin}${path4}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1123,21 +1123,21 @@ var require_util = __commonJS({
     function isIterable(obj) {
       return !!(obj != null && (typeof obj[Symbol.iterator] === "function" || typeof obj[Symbol.asyncIterator] === "function"));
     }
-    function bodyLength(body) {
-      if (body == null) {
+    function bodyLength(body2) {
+      if (body2 == null) {
         return 0;
-      } else if (isStream(body)) {
-        const state = body._readableState;
+      } else if (isStream(body2)) {
+        const state = body2._readableState;
         return state && state.objectMode === false && state.ended === true && Number.isFinite(state.length) ? state.length : null;
-      } else if (isBlobLike(body)) {
-        return body.size != null ? body.size : null;
-      } else if (isBuffer(body)) {
-        return body.byteLength;
+      } else if (isBlobLike(body2)) {
+        return body2.size != null ? body2.size : null;
+      } else if (isBuffer(body2)) {
+        return body2.byteLength;
       }
       return null;
     }
-    function isDestroyed(body) {
-      return body && !!(body.destroyed || body[kDestroyed] || stream.isDestroyed?.(body));
+    function isDestroyed(body2) {
+      return body2 && !!(body2.destroyed || body2[kDestroyed] || stream.isDestroyed?.(body2));
     }
     function destroy(stream2, err) {
       if (stream2 == null || !isStream(stream2) || isDestroyed(stream2)) {
@@ -1252,14 +1252,14 @@ var require_util = __commonJS({
         }
       }
     }
-    function isDisturbed(body) {
-      return !!(body && (stream.isDisturbed(body) || body[kBodyUsed]));
+    function isDisturbed(body2) {
+      return !!(body2 && (stream.isDisturbed(body2) || body2[kBodyUsed]));
     }
-    function isErrored(body) {
-      return !!(body && stream.isErrored(body));
+    function isErrored(body2) {
+      return !!(body2 && stream.isErrored(body2));
     }
-    function isReadable(body) {
-      return !!(body && stream.isReadable(body));
+    function isReadable(body2) {
+      return !!(body2 && stream.isReadable(body2));
     }
     function getSocketInfo(socket) {
       return {
@@ -1302,8 +1302,8 @@ var require_util = __commonJS({
         }
       );
     }
-    function isFormDataLike(object2) {
-      return object2 && typeof object2 === "object" && typeof object2.append === "function" && typeof object2.delete === "function" && typeof object2.get === "function" && typeof object2.getAll === "function" && typeof object2.has === "function" && typeof object2.set === "function" && object2[Symbol.toStringTag] === "FormData";
+    function isFormDataLike(object3) {
+      return object3 && typeof object3 === "object" && typeof object3.append === "function" && typeof object3.delete === "function" && typeof object3.get === "function" && typeof object3.getAll === "function" && typeof object3.has === "function" && typeof object3.set === "function" && object3[Symbol.toStringTag] === "FormData";
     }
     function addAbortListener(signal, listener) {
       if ("addEventListener" in signal) {
@@ -1369,15 +1369,15 @@ var require_util = __commonJS({
         size: m[3] ? parseInt(m[3]) : null
       } : null;
     }
-    function addListener(obj, name, listener) {
+    function addListener(obj, name2, listener) {
       const listeners = obj[kListeners] ??= [];
-      listeners.push([name, listener]);
-      obj.on(name, listener);
+      listeners.push([name2, listener]);
+      obj.on(name2, listener);
       return obj;
     }
     function removeAllListeners(obj) {
-      for (const [name, listener] of obj[kListeners] ?? []) {
-        obj.removeListener(name, listener);
+      for (const [name2, listener] of obj[kListeners] ?? []) {
+        obj.removeListener(name2, listener);
       }
       obj[kListeners] = null;
     }
@@ -1530,39 +1530,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path: path4, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path3);
+        debuglog("sending request to %s %s/%s", method, origin, path4);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path: path4, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path3,
+          path4,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path: path4, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path3);
+        debuglog("trailers received from %s %s/%s", method, origin, path4);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path: path4, origin },
           error: error63
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path3,
+          path4,
           error63.message
         );
       });
@@ -1611,9 +1611,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path3, origin }
+            request: { method, path: path4, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path3);
+          debuglog("sending request to %s %s/%s", method, origin, path4);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1676,9 +1676,9 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path: path3,
+        path: path4,
         method,
-        body,
+        body: body2,
         headers,
         query,
         idempotent,
@@ -1691,11 +1691,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path3 !== "string") {
+        if (typeof path4 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path4[0] !== "/" && !(path4.startsWith("http://") || path4.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path3)) {
+        } else if (invalidPathRegex.test(path4)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1726,10 +1726,10 @@ var require_request = __commonJS({
         this.throwOnError = throwOnError === true;
         this.method = method;
         this.abort = null;
-        if (body == null) {
+        if (body2 == null) {
           this.body = null;
-        } else if (isStream(body)) {
-          this.body = body;
+        } else if (isStream(body2)) {
+          this.body = body2;
           const rState = this.body._readableState;
           if (!rState || !rState.autoDestroy) {
             this.endHandler = function autoDestroy() {
@@ -1745,23 +1745,23 @@ var require_request = __commonJS({
             }
           };
           this.body.on("error", this.errorHandler);
-        } else if (isBuffer(body)) {
-          this.body = body.byteLength ? body : null;
-        } else if (ArrayBuffer.isView(body)) {
-          this.body = body.buffer.byteLength ? Buffer.from(body.buffer, body.byteOffset, body.byteLength) : null;
-        } else if (body instanceof ArrayBuffer) {
-          this.body = body.byteLength ? Buffer.from(body) : null;
-        } else if (typeof body === "string") {
-          this.body = body.length ? Buffer.from(body) : null;
-        } else if (isFormDataLike(body) || isIterable(body) || isBlobLike(body)) {
-          this.body = body;
+        } else if (isBuffer(body2)) {
+          this.body = body2.byteLength ? body2 : null;
+        } else if (ArrayBuffer.isView(body2)) {
+          this.body = body2.buffer.byteLength ? Buffer.from(body2.buffer, body2.byteOffset, body2.byteLength) : null;
+        } else if (body2 instanceof ArrayBuffer) {
+          this.body = body2.byteLength ? Buffer.from(body2) : null;
+        } else if (typeof body2 === "string") {
+          this.body = body2.length ? Buffer.from(body2) : null;
+        } else if (isFormDataLike(body2) || isIterable(body2) || isBlobLike(body2)) {
+          this.body = body2;
         } else {
           throw new InvalidArgumentError("body must be a string, a Buffer, a Readable stream, an iterable, or an async iterable");
         }
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path3, query) : path3;
+        this.path = query ? buildURL(path4, query) : path4;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -3262,11 +3262,11 @@ var require_data_url = __commonJS({
       }
       position.position++;
       const encodedBody = input2.slice(mimeTypeLength + 1);
-      let body = stringPercentDecode(encodedBody);
+      let body2 = stringPercentDecode(encodedBody);
       if (/;(\u0020){0,}base64$/i.test(mimeType)) {
-        const stringBody = isomorphicDecode(body);
-        body = forgivingBase64(stringBody);
-        if (body === "failure") {
+        const stringBody = isomorphicDecode(body2);
+        body2 = forgivingBase64(stringBody);
+        if (body2 === "failure") {
           return "failure";
         }
         mimeType = mimeType.slice(0, -6);
@@ -3280,7 +3280,7 @@ var require_data_url = __commonJS({
       if (mimeTypeRecord === "failure") {
         mimeTypeRecord = parseMIMEType("text/plain;charset=US-ASCII");
       }
-      return { mimeType: mimeTypeRecord, body };
+      return { mimeType: mimeTypeRecord, body: body2 };
     }
     function URLSerializer(url2, excludeFragment = false) {
       if (!excludeFragment) {
@@ -3481,9 +3481,9 @@ var require_data_url = __commonJS({
       assert2(mimeType !== "failure");
       const { parameters, essence } = mimeType;
       let serialization = essence;
-      for (let [name, value] of parameters.entries()) {
+      for (let [name2, value] of parameters.entries()) {
         serialization += ";";
-        serialization += name;
+        serialization += name2;
         serialization += "=";
         if (!HTTP_TOKEN_CODEPOINTS.test(value)) {
           value = value.replace(/(\\|")/g, "\\$1");
@@ -3931,11 +3931,11 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.TypedArray = function(V, T, prefix, name, opts) {
+    webidl.converters.TypedArray = function(V, T, prefix, name2, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isTypedArray(V) || V.constructor.name !== T.name) {
         throw webidl.errors.conversionFailed({
           prefix,
-          argument: `${name} ("${webidl.util.Stringify(V)}")`,
+          argument: `${name2} ("${webidl.util.Stringify(V)}")`,
           types: [T.name]
         });
       }
@@ -3953,11 +3953,11 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.DataView = function(V, prefix, name, opts) {
+    webidl.converters.DataView = function(V, prefix, name2, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isDataView(V)) {
         throw webidl.errors.exception({
           header: prefix,
-          message: `${name} is not a DataView.`
+          message: `${name2} is not a DataView.`
         });
       }
       if (opts?.allowShared === false && types.isSharedArrayBuffer(V.buffer)) {
@@ -3974,19 +3974,19 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.BufferSource = function(V, prefix, name, opts) {
+    webidl.converters.BufferSource = function(V, prefix, name2, opts) {
       if (types.isAnyArrayBuffer(V)) {
-        return webidl.converters.ArrayBuffer(V, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.ArrayBuffer(V, prefix, name2, { ...opts, allowShared: false });
       }
       if (types.isTypedArray(V)) {
-        return webidl.converters.TypedArray(V, V.constructor, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.TypedArray(V, V.constructor, prefix, name2, { ...opts, allowShared: false });
       }
       if (types.isDataView(V)) {
-        return webidl.converters.DataView(V, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.DataView(V, prefix, name2, { ...opts, allowShared: false });
       }
       throw webidl.errors.conversionFailed({
         prefix,
-        argument: `${name} ("${webidl.util.Stringify(V)}")`,
+        argument: `${name2} ("${webidl.util.Stringify(V)}")`,
         types: ["BufferSource"]
       });
     };
@@ -4010,7 +4010,7 @@ var require_webidl = __commonJS({
 var require_util2 = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/fetch/util.js"(exports2, module2) {
     "use strict";
-    var { Transform } = require("node:stream");
+    var { Transform: Transform2 } = require("node:stream");
     var zlib = require("node:zlib");
     var { redirectStatusSet, referrerPolicySet: referrerPolicyTokens, badPortsSet } = require_constants3();
     var { getGlobalOrigin } = require_global();
@@ -4025,7 +4025,7 @@ var require_util2 = __commonJS({
     try {
       crypto2 = require("node:crypto");
       const possibleRelevantHashes = ["sha256", "sha384", "sha512"];
-      supportedHashes = crypto2.getHashes().filter((hash2) => possibleRelevantHashes.includes(hash2));
+      supportedHashes = crypto2.getHashes().filter((hash8) => possibleRelevantHashes.includes(hash8));
     } catch {
     }
     function responseURL(response) {
@@ -4072,8 +4072,8 @@ var require_util2 = __commonJS({
       }
       return "allowed";
     }
-    function isErrorLike(object2) {
-      return object2 instanceof Error || (object2?.constructor?.name === "Error" || object2?.constructor?.name === "DOMException");
+    function isErrorLike(object3) {
+      return object3 instanceof Error || (object3?.constructor?.name === "Error" || object3?.constructor?.name === "DOMException");
     }
     function isValidReasonPhrase(statusText) {
       for (let i = 0; i < statusText.length; ++i) {
@@ -4150,8 +4150,8 @@ var require_util2 = __commonJS({
         request.headersList.append("origin", serializedOrigin, true);
       }
     }
-    function coarsenTime(timestamp, crossOriginIsolatedCapability) {
-      return timestamp;
+    function coarsenTime(timestamp5, crossOriginIsolatedCapability) {
+      return timestamp5;
     }
     function clampAndCoarsenConnectionTimingInfo(connectionTimingInfo, defaultStartTime, crossOriginIsolatedCapability) {
       if (!connectionTimingInfo?.startTime || connectionTimingInfo.startTime < defaultStartTime) {
@@ -4430,7 +4430,7 @@ var require_util2 = __commonJS({
       return result;
     }
     var esIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
-    function createIterator(name, kInternalIterator, keyIndex = 0, valueIndex = 1) {
+    function createIterator(name2, kInternalIterator, keyIndex = 0, valueIndex = 1) {
       class FastIterableIterator {
         /** @type {any} */
         #target;
@@ -4451,7 +4451,7 @@ var require_util2 = __commonJS({
         next() {
           if (typeof this !== "object" || this === null || !(#target in this)) {
             throw new TypeError(
-              `'next' called on an object that does not implement interface ${name} Iterator.`
+              `'next' called on an object that does not implement interface ${name2} Iterator.`
             );
           }
           const index = this.#index;
@@ -4490,7 +4490,7 @@ var require_util2 = __commonJS({
           writable: false,
           enumerable: false,
           configurable: true,
-          value: `${name} Iterator`
+          value: `${name2} Iterator`
         },
         next: { writable: true, enumerable: true, configurable: true }
       });
@@ -4498,15 +4498,15 @@ var require_util2 = __commonJS({
         return new FastIterableIterator(target, kind);
       };
     }
-    function iteratorMixin(name, object2, kInternalIterator, keyIndex = 0, valueIndex = 1) {
-      const makeIterator = createIterator(name, kInternalIterator, keyIndex, valueIndex);
+    function iteratorMixin(name2, object3, kInternalIterator, keyIndex = 0, valueIndex = 1) {
+      const makeIterator = createIterator(name2, kInternalIterator, keyIndex, valueIndex);
       const properties = {
         keys: {
           writable: true,
           enumerable: true,
           configurable: true,
           value: function keys() {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             return makeIterator(this, "key");
           }
         },
@@ -4515,7 +4515,7 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function values() {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             return makeIterator(this, "value");
           }
         },
@@ -4524,7 +4524,7 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function entries() {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             return makeIterator(this, "key+value");
           }
         },
@@ -4533,11 +4533,11 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function forEach(callbackfn, thisArg = globalThis) {
-            webidl.brandCheck(this, object2);
-            webidl.argumentLengthCheck(arguments, 1, `${name}.forEach`);
+            webidl.brandCheck(this, object3);
+            webidl.argumentLengthCheck(arguments, 1, `${name2}.forEach`);
             if (typeof callbackfn !== "function") {
               throw new TypeError(
-                `Failed to execute 'forEach' on '${name}': parameter 1 is not of type 'Function'.`
+                `Failed to execute 'forEach' on '${name2}': parameter 1 is not of type 'Function'.`
               );
             }
             for (const { 0: key, 1: value } of makeIterator(this, "key+value")) {
@@ -4546,7 +4546,7 @@ var require_util2 = __commonJS({
           }
         }
       };
-      return Object.defineProperties(object2.prototype, {
+      return Object.defineProperties(object3.prototype, {
         ...properties,
         [Symbol.iterator]: {
           writable: true,
@@ -4556,12 +4556,12 @@ var require_util2 = __commonJS({
         }
       });
     }
-    async function fullyReadBody(body, processBody, processBodyError) {
+    async function fullyReadBody(body2, processBody, processBodyError) {
       const successSteps = processBody;
       const errorSteps = processBodyError;
       let reader;
       try {
-        reader = body.stream.getReader();
+        reader = body2.stream.getReader();
       } catch (e) {
         errorSteps(e);
         return;
@@ -4698,7 +4698,7 @@ var require_util2 = __commonJS({
       contentRange += isomorphicEncode(`${fullLength}`);
       return contentRange;
     }
-    var InflateStream = class extends Transform {
+    var InflateStream = class extends Transform2 {
       #zlibOptions;
       /** @param {zlib.ZlibOptions} [zlibOptions] */
       constructor(zlibOptions) {
@@ -4789,8 +4789,8 @@ var require_util2 = __commonJS({
       }
       return values;
     }
-    function getDecodeSplit(name, list) {
-      const value = list.get(name, true);
+    function getDecodeSplit(name2, list) {
+      const value = list.get(name2, true);
       if (value === null) {
         return null;
       }
@@ -4946,8 +4946,8 @@ var require_file = __commonJS({
       }
     };
     webidl.converters.Blob = webidl.interfaceConverter(Blob2);
-    function isFileLike(object2) {
-      return object2 instanceof File2 || object2 && (typeof object2.stream === "function" || typeof object2.arrayBuffer === "function") && object2[Symbol.toStringTag] === "File";
+    function isFileLike(object3) {
+      return object3 instanceof File2 || object3 && (typeof object3.stream === "function" || typeof object3.arrayBuffer === "function") && object3[Symbol.toStringTag] === "File";
     }
     module2.exports = { FileLike, isFileLike };
   }
@@ -4977,7 +4977,7 @@ var require_formdata = __commonJS({
         }
         this[kState] = [];
       }
-      append(name, value, filename = void 0) {
+      append(name2, value, filename = void 0) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.append";
         webidl.argumentLengthCheck(arguments, 2, prefix);
@@ -4986,45 +4986,45 @@ var require_formdata = __commonJS({
             "Failed to execute 'append' on 'FormData': parameter 2 is not of type 'Blob'"
           );
         }
-        name = webidl.converters.USVString(name, prefix, "name");
+        name2 = webidl.converters.USVString(name2, prefix, "name");
         value = isBlobLike(value) ? webidl.converters.Blob(value, prefix, "value", { strict: false }) : webidl.converters.USVString(value, prefix, "value");
         filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix, "filename") : void 0;
-        const entry = makeEntry(name, value, filename);
+        const entry = makeEntry(name2, value, filename);
         this[kState].push(entry);
       }
-      delete(name) {
+      delete(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.delete";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        this[kState] = this[kState].filter((entry) => entry.name !== name);
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        this[kState] = this[kState].filter((entry) => entry.name !== name2);
       }
-      get(name) {
+      get(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.get";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        const idx = this[kState].findIndex((entry) => entry.name === name);
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        const idx = this[kState].findIndex((entry) => entry.name === name2);
         if (idx === -1) {
           return null;
         }
         return this[kState][idx].value;
       }
-      getAll(name) {
+      getAll(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.getAll";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        return this[kState].filter((entry) => entry.name === name).map((entry) => entry.value);
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        return this[kState].filter((entry) => entry.name === name2).map((entry) => entry.value);
       }
-      has(name) {
+      has(name2) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.has";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
-        return this[kState].findIndex((entry) => entry.name === name) !== -1;
+        name2 = webidl.converters.USVString(name2, prefix, "name");
+        return this[kState].findIndex((entry) => entry.name === name2) !== -1;
       }
-      set(name, value, filename = void 0) {
+      set(name2, value, filename = void 0) {
         webidl.brandCheck(this, _FormData);
         const prefix = "FormData.set";
         webidl.argumentLengthCheck(arguments, 2, prefix);
@@ -5033,16 +5033,16 @@ var require_formdata = __commonJS({
             "Failed to execute 'set' on 'FormData': parameter 2 is not of type 'Blob'"
           );
         }
-        name = webidl.converters.USVString(name, prefix, "name");
+        name2 = webidl.converters.USVString(name2, prefix, "name");
         value = isBlobLike(value) ? webidl.converters.Blob(value, prefix, "name", { strict: false }) : webidl.converters.USVString(value, prefix, "name");
         filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix, "name") : void 0;
-        const entry = makeEntry(name, value, filename);
-        const idx = this[kState].findIndex((entry2) => entry2.name === name);
+        const entry = makeEntry(name2, value, filename);
+        const idx = this[kState].findIndex((entry2) => entry2.name === name2);
         if (idx !== -1) {
           this[kState] = [
             ...this[kState].slice(0, idx),
             entry,
-            ...this[kState].slice(idx + 1).filter((entry2) => entry2.name !== name)
+            ...this[kState].slice(idx + 1).filter((entry2) => entry2.name !== name2)
           ];
         } else {
           this[kState].push(entry);
@@ -5080,7 +5080,7 @@ var require_formdata = __commonJS({
         configurable: true
       }
     });
-    function makeEntry(name, value, filename) {
+    function makeEntry(name2, value, filename) {
       if (typeof value === "string") {
       } else {
         if (!isFileLike(value)) {
@@ -5094,7 +5094,7 @@ var require_formdata = __commonJS({
           value = value instanceof NativeFile ? new File2([value], filename, options) : new FileLike(value, filename, options);
         }
       }
-      return { name, value };
+      return { name: name2, value };
     }
     module2.exports = { FormData, makeEntry };
   }
@@ -5173,18 +5173,18 @@ var require_formdata_parser = __commonJS({
         if (result === "failure") {
           return "failure";
         }
-        let { name, filename, contentType, encoding } = result;
+        let { name: name2, filename, contentType, encoding } = result;
         position.position += 2;
-        let body;
+        let body2;
         {
           const boundaryIndex = input2.indexOf(boundary.subarray(2), position.position);
           if (boundaryIndex === -1) {
             return "failure";
           }
-          body = input2.subarray(position.position, boundaryIndex - 4);
-          position.position += body.length;
+          body2 = input2.subarray(position.position, boundaryIndex - 4);
+          position.position += body2.length;
           if (encoding === "base64") {
-            body = Buffer.from(body.toString(), "base64");
+            body2 = Buffer.from(body2.toString(), "base64");
           }
         }
         if (input2[position.position] !== 13 || input2[position.position + 1] !== 10) {
@@ -5198,26 +5198,26 @@ var require_formdata_parser = __commonJS({
           if (!isAsciiString(contentType)) {
             contentType = "";
           }
-          value = new File2([body], filename, { type: contentType });
+          value = new File2([body2], filename, { type: contentType });
         } else {
-          value = utf8DecodeBytes(Buffer.from(body));
+          value = utf8DecodeBytes(Buffer.from(body2));
         }
-        assert2(isUSVString(name));
+        assert2(isUSVString(name2));
         assert2(typeof value === "string" && isUSVString(value) || isFileLike(value));
-        entryList.push(makeEntry(name, value, filename));
+        entryList.push(makeEntry(name2, value, filename));
       }
     }
     function parseMultipartFormDataHeaders(input2, position) {
-      let name = null;
+      let name2 = null;
       let filename = null;
       let contentType = null;
       let encoding = null;
       while (true) {
         if (input2[position.position] === 13 && input2[position.position + 1] === 10) {
-          if (name === null) {
+          if (name2 === null) {
             return "failure";
           }
-          return { name, filename, contentType, encoding };
+          return { name: name2, filename, contentType, encoding };
         }
         let headerName = collectASequenceOfBytes(
           (char) => char !== 10 && char !== 13 && char !== 58,
@@ -5239,13 +5239,13 @@ var require_formdata_parser = __commonJS({
         );
         switch (bufferToLowerCasedHeaderName(headerName)) {
           case "content-disposition": {
-            name = filename = null;
+            name2 = filename = null;
             if (!bufferStartsWith(input2, formDataNameBuffer, position)) {
               return "failure";
             }
             position.position += 17;
-            name = parseMultipartFormDataName(input2, position);
-            if (name === null) {
+            name2 = parseMultipartFormDataName(input2, position);
+            if (name2 === null) {
               return "failure";
             }
             if (bufferStartsWith(input2, filenameBuffer, position)) {
@@ -5302,7 +5302,7 @@ var require_formdata_parser = __commonJS({
     }
     function parseMultipartFormDataName(input2, position) {
       assert2(input2[position.position - 1] === 34);
-      let name = collectASequenceOfBytes(
+      let name2 = collectASequenceOfBytes(
         (char) => char !== 10 && char !== 13 && char !== 34,
         input2,
         position
@@ -5312,8 +5312,8 @@ var require_formdata_parser = __commonJS({
       } else {
         position.position++;
       }
-      name = new TextDecoder().decode(name).replace(/%0A/ig, "\n").replace(/%0D/ig, "\r").replace(/%22/g, '"');
-      return name;
+      name2 = new TextDecoder().decode(name2).replace(/%0A/ig, "\n").replace(/%0D/ig, "\r").replace(/%22/g, '"');
+      return name2;
     }
     function collectASequenceOfBytes(condition, input2, position) {
       let start = position.position;
@@ -5395,12 +5395,12 @@ var require_body = __commonJS({
         }
       });
     }
-    function extractBody(object2, keepalive = false) {
+    function extractBody(object3, keepalive = false) {
       let stream = null;
-      if (object2 instanceof ReadableStream) {
-        stream = object2;
-      } else if (isBlobLike(object2)) {
-        stream = object2.stream();
+      if (object3 instanceof ReadableStream) {
+        stream = object3;
+      } else if (isBlobLike(object3)) {
+        stream = object3.stream();
       } else {
         stream = new ReadableStream({
           async pull(controller) {
@@ -5420,17 +5420,17 @@ var require_body = __commonJS({
       let source = null;
       let length = null;
       let type = null;
-      if (typeof object2 === "string") {
-        source = object2;
+      if (typeof object3 === "string") {
+        source = object3;
         type = "text/plain;charset=UTF-8";
-      } else if (object2 instanceof URLSearchParams) {
-        source = object2.toString();
+      } else if (object3 instanceof URLSearchParams) {
+        source = object3.toString();
         type = "application/x-www-form-urlencoded;charset=UTF-8";
-      } else if (isArrayBuffer(object2)) {
-        source = new Uint8Array(object2.slice());
-      } else if (ArrayBuffer.isView(object2)) {
-        source = new Uint8Array(object2.buffer.slice(object2.byteOffset, object2.byteOffset + object2.byteLength));
-      } else if (util.isFormDataLike(object2)) {
+      } else if (isArrayBuffer(object3)) {
+        source = new Uint8Array(object3.slice());
+      } else if (ArrayBuffer.isView(object3)) {
+        source = new Uint8Array(object3.buffer.slice(object3.byteOffset, object3.byteOffset + object3.byteLength));
+      } else if (util.isFormDataLike(object3)) {
         const boundary = `----formdata-undici-0${`${random(1e11)}`.padStart(11, "0")}`;
         const prefix = `--${boundary}\r
 Content-Disposition: form-data`;
@@ -5440,16 +5440,16 @@ Content-Disposition: form-data`;
         const rn = new Uint8Array([13, 10]);
         length = 0;
         let hasUnknownSizeValue = false;
-        for (const [name, value] of object2) {
+        for (const [name2, value] of object3) {
           if (typeof value === "string") {
-            const chunk2 = textEncoder.encode(prefix + `; name="${escape(normalizeLinefeeds(name))}"\r
+            const chunk2 = textEncoder.encode(prefix + `; name="${escape(normalizeLinefeeds(name2))}"\r
 \r
 ${normalizeLinefeeds(value)}\r
 `);
             blobParts.push(chunk2);
             length += chunk2.byteLength;
           } else {
-            const chunk2 = textEncoder.encode(`${prefix}; name="${escape(normalizeLinefeeds(name))}"` + (value.name ? `; filename="${escape(value.name)}"` : "") + `\r
+            const chunk2 = textEncoder.encode(`${prefix}; name="${escape(normalizeLinefeeds(name2))}"` + (value.name ? `; filename="${escape(value.name)}"` : "") + `\r
 Content-Type: ${value.type || "application/octet-stream"}\r
 \r
 `);
@@ -5468,7 +5468,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
         if (hasUnknownSizeValue) {
           length = null;
         }
-        source = object2;
+        source = object3;
         action = async function* () {
           for (const part of blobParts) {
             if (part.stream) {
@@ -5479,22 +5479,22 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           }
         };
         type = `multipart/form-data; boundary=${boundary}`;
-      } else if (isBlobLike(object2)) {
-        source = object2;
-        length = object2.size;
-        if (object2.type) {
-          type = object2.type;
+      } else if (isBlobLike(object3)) {
+        source = object3;
+        length = object3.size;
+        if (object3.type) {
+          type = object3.type;
         }
-      } else if (typeof object2[Symbol.asyncIterator] === "function") {
+      } else if (typeof object3[Symbol.asyncIterator] === "function") {
         if (keepalive) {
           throw new TypeError("keepalive");
         }
-        if (util.isDisturbed(object2) || object2.locked) {
+        if (util.isDisturbed(object3) || object3.locked) {
           throw new TypeError(
             "Response body object should not be disturbed or locked"
           );
         }
-        stream = object2 instanceof ReadableStream ? object2 : ReadableStreamFrom(object2);
+        stream = object3 instanceof ReadableStream ? object3 : ReadableStreamFrom(object3);
       }
       if (typeof source === "string" || util.isBuffer(source)) {
         length = Buffer.byteLength(source);
@@ -5503,7 +5503,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
         let iterator;
         stream = new ReadableStream({
           async start() {
-            iterator = action(object2)[Symbol.asyncIterator]();
+            iterator = action(object3)[Symbol.asyncIterator]();
           },
           async pull(controller) {
             const { value, done } = await iterator.next();
@@ -5528,23 +5528,23 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           type: "bytes"
         });
       }
-      const body = { stream, source, length };
-      return [body, type];
+      const body2 = { stream, source, length };
+      return [body2, type];
     }
-    function safelyExtractBody(object2, keepalive = false) {
-      if (object2 instanceof ReadableStream) {
-        assert2(!util.isDisturbed(object2), "The body has already been consumed.");
-        assert2(!object2.locked, "The stream is locked.");
+    function safelyExtractBody(object3, keepalive = false) {
+      if (object3 instanceof ReadableStream) {
+        assert2(!util.isDisturbed(object3), "The body has already been consumed.");
+        assert2(!object3.locked, "The stream is locked.");
       }
-      return extractBody(object2, keepalive);
+      return extractBody(object3, keepalive);
     }
-    function cloneBody(instance, body) {
-      const [out1, out2] = body.stream.tee();
-      body.stream = out1;
+    function cloneBody(instance, body2) {
+      const [out1, out2] = body2.stream.tee();
+      body2.stream = out1;
       return {
         stream: out2,
-        length: body.length,
-        source: body.source
+        length: body2.length,
+        source: body2.source
       };
     }
     function throwIfAborted(state) {
@@ -5593,8 +5593,8 @@ Content-Type: ${value.type || "application/octet-stream"}\r
                 case "application/x-www-form-urlencoded": {
                   const entries = new URLSearchParams(value.toString());
                   const fd = new FormData();
-                  for (const [name, value2] of entries) {
-                    fd.append(name, value2);
+                  for (const [name2, value2] of entries) {
+                    fd.append(name2, value2);
                   }
                   return fd;
                 }
@@ -5616,12 +5616,12 @@ Content-Type: ${value.type || "application/octet-stream"}\r
     function mixinBody(prototype) {
       Object.assign(prototype.prototype, bodyMixinMethods(prototype));
     }
-    async function consumeBody(object2, convertBytesToJSValue, instance) {
-      webidl.brandCheck(object2, instance);
-      if (bodyUnusable(object2)) {
+    async function consumeBody(object3, convertBytesToJSValue, instance) {
+      webidl.brandCheck(object3, instance);
+      if (bodyUnusable(object3)) {
         throw new TypeError("Body is unusable: Body has already been read");
       }
-      throwIfAborted(object2[kState]);
+      throwIfAborted(object3[kState]);
       const promise2 = createDeferredPromise();
       const errorSteps = (error63) => promise2.reject(error63);
       const successSteps = (data) => {
@@ -5631,16 +5631,16 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           errorSteps(e);
         }
       };
-      if (object2[kState].body == null) {
+      if (object3[kState].body == null) {
         successSteps(Buffer.allocUnsafe(0));
         return promise2.promise;
       }
-      await fullyReadBody(object2[kState].body, successSteps, errorSteps);
+      await fullyReadBody(object3[kState].body, successSteps, errorSteps);
       return promise2.promise;
     }
-    function bodyUnusable(object2) {
-      const body = object2[kState].body;
-      return body != null && (body.stream.locked || util.isDisturbed(body.stream));
+    function bodyUnusable(object3) {
+      const body2 = object3[kState].body;
+      return body2 != null && (body2.stream.locked || util.isDisturbed(body2.stream));
     }
     function parseJSONFromBytes(bytes) {
       return JSON.parse(utf8DecodeBytes(bytes));
@@ -5890,14 +5890,14 @@ var require_client_h1 = __commonJS({
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
           if (ret !== constants3.ERROR.OK) {
-            const body = data.subarray(offset);
+            const body2 = data.subarray(offset);
             if (ret === constants3.ERROR.PAUSED_UPGRADE) {
-              this.onUpgrade(body);
+              this.onUpgrade(body2);
             } else if (ret === constants3.ERROR.PAUSED) {
               this.paused = true;
-              socket.unshift(body);
+              socket.unshift(body2);
             } else {
-              throw this.createError(ret, body);
+              throw this.createError(ret, body2);
             }
           }
         } catch (err) {
@@ -6390,21 +6390,21 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path3, host, upgrade, blocking, reset } = request;
-      let { body, headers, contentLength } = request;
+      const { method, path: path4, host, upgrade, blocking, reset } = request;
+      let { body: body2, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
-      if (util.isFormDataLike(body)) {
+      if (util.isFormDataLike(body2)) {
         if (!extractBody) {
           extractBody = require_body().extractBody;
         }
-        const [bodyStream, contentType] = extractBody(body);
+        const [bodyStream, contentType] = extractBody(body2);
         if (request.contentType == null) {
           headers.push("content-type", contentType);
         }
-        body = bodyStream.stream;
+        body2 = bodyStream.stream;
         contentLength = bodyStream.length;
-      } else if (util.isBlobLike(body) && request.contentType == null) {
-        const contentType = body.type;
+      } else if (util.isBlobLike(body2) && request.contentType == null) {
+        const contentType = body2.type;
         if (contentType) {
           const contentTypeValue = `${contentType}`;
           if (!util.isValidHeaderValue(contentTypeValue)) {
@@ -6414,10 +6414,10 @@ var require_client_h1 = __commonJS({
           headers.push("content-type", contentTypeValue);
         }
       }
-      if (body && typeof body.read === "function") {
-        body.read(0);
+      if (body2 && typeof body2.read === "function") {
+        body2.read(0);
       }
-      const bodyLength = util.bodyLength(body);
+      const bodyLength = util.bodyLength(body2);
       contentLength = bodyLength ?? contentLength;
       if (contentLength === null) {
         contentLength = request.contentLength;
@@ -6439,7 +6439,7 @@ var require_client_h1 = __commonJS({
           return;
         }
         util.errorRequest(client, request, err || new RequestAbortedError());
-        util.destroy(body);
+        util.destroy(body2);
         util.destroy(socket, new InformationalError("aborted"));
       };
       try {
@@ -6465,7 +6465,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path3} HTTP/1.1\r
+      let header = `${method} ${path4} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6500,26 +6500,26 @@ upgrade: ${upgrade}\r
       if (channels.sendHeaders.hasSubscribers) {
         channels.sendHeaders.publish({ request, headers: header, socket });
       }
-      if (!body || bodyLength === 0) {
+      if (!body2 || bodyLength === 0) {
         writeBuffer(abort, null, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isBuffer(body)) {
-        writeBuffer(abort, body, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isBlobLike(body)) {
-        if (typeof body.stream === "function") {
-          writeIterable(abort, body.stream(), client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isBuffer(body2)) {
+        writeBuffer(abort, body2, client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isBlobLike(body2)) {
+        if (typeof body2.stream === "function") {
+          writeIterable(abort, body2.stream(), client, request, socket, contentLength, header, expectsPayload);
         } else {
-          writeBlob(abort, body, client, request, socket, contentLength, header, expectsPayload);
+          writeBlob(abort, body2, client, request, socket, contentLength, header, expectsPayload);
         }
-      } else if (util.isStream(body)) {
-        writeStream(abort, body, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isIterable(body)) {
-        writeIterable(abort, body, client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isStream(body2)) {
+        writeStream(abort, body2, client, request, socket, contentLength, header, expectsPayload);
+      } else if (util.isIterable(body2)) {
+        writeIterable(abort, body2, client, request, socket, contentLength, header, expectsPayload);
       } else {
         assert2(false);
       }
       return true;
     }
-    function writeStream(abort, body, client, request, socket, contentLength, header, expectsPayload) {
+    function writeStream(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
       let finished = false;
       const writer = new AsyncWriter({ abort, socket, request, contentLength, client, expectsPayload, header });
@@ -6539,13 +6539,13 @@ upgrade: ${upgrade}\r
         if (finished) {
           return;
         }
-        if (body.resume) {
-          body.resume();
+        if (body2.resume) {
+          body2.resume();
         }
       };
       const onClose = function() {
         queueMicrotask(() => {
-          body.removeListener("error", onFinished);
+          body2.removeListener("error", onFinished);
         });
         if (!finished) {
           const err = new RequestAbortedError();
@@ -6559,7 +6559,7 @@ upgrade: ${upgrade}\r
         finished = true;
         assert2(socket.destroyed || socket[kWriting] && client[kRunning] <= 1);
         socket.off("drain", onDrain).off("error", onFinished);
-        body.removeListener("data", onData).removeListener("end", onFinished).removeListener("close", onClose);
+        body2.removeListener("data", onData).removeListener("end", onFinished).removeListener("close", onClose);
         if (!err) {
           try {
             writer.end();
@@ -6569,28 +6569,28 @@ upgrade: ${upgrade}\r
         }
         writer.destroy(err);
         if (err && (err.code !== "UND_ERR_INFO" || err.message !== "reset")) {
-          util.destroy(body, err);
+          util.destroy(body2, err);
         } else {
-          util.destroy(body);
+          util.destroy(body2);
         }
       };
-      body.on("data", onData).on("end", onFinished).on("error", onFinished).on("close", onClose);
-      if (body.resume) {
-        body.resume();
+      body2.on("data", onData).on("end", onFinished).on("error", onFinished).on("close", onClose);
+      if (body2.resume) {
+        body2.resume();
       }
       socket.on("drain", onDrain).on("error", onFinished);
-      if (body.errorEmitted ?? body.errored) {
-        setImmediate(() => onFinished(body.errored));
-      } else if (body.endEmitted ?? body.readableEnded) {
+      if (body2.errorEmitted ?? body2.errored) {
+        setImmediate(() => onFinished(body2.errored));
+      } else if (body2.endEmitted ?? body2.readableEnded) {
         setImmediate(() => onFinished(null));
       }
-      if (body.closeEmitted ?? body.closed) {
+      if (body2.closeEmitted ?? body2.closed) {
         setImmediate(onClose);
       }
     }
-    function writeBuffer(abort, body, client, request, socket, contentLength, header, expectsPayload) {
+    function writeBuffer(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
       try {
-        if (!body) {
+        if (!body2) {
           if (contentLength === 0) {
             socket.write(`${header}content-length: 0\r
 \r
@@ -6600,15 +6600,15 @@ upgrade: ${upgrade}\r
             socket.write(`${header}\r
 `, "latin1");
           }
-        } else if (util.isBuffer(body)) {
-          assert2(contentLength === body.byteLength, "buffer body must have content length");
+        } else if (util.isBuffer(body2)) {
+          assert2(contentLength === body2.byteLength, "buffer body must have content length");
           socket.cork();
           socket.write(`${header}content-length: ${contentLength}\r
 \r
 `, "latin1");
-          socket.write(body);
+          socket.write(body2);
           socket.uncork();
-          request.onBodySent(body);
+          request.onBodySent(body2);
           if (!expectsPayload && request.reset !== false) {
             socket[kReset] = true;
           }
@@ -6619,13 +6619,13 @@ upgrade: ${upgrade}\r
         abort(err);
       }
     }
-    async function writeBlob(abort, body, client, request, socket, contentLength, header, expectsPayload) {
-      assert2(contentLength === body.size, "blob body must have content length");
+    async function writeBlob(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
+      assert2(contentLength === body2.size, "blob body must have content length");
       try {
-        if (contentLength != null && contentLength !== body.size) {
+        if (contentLength != null && contentLength !== body2.size) {
           throw new RequestContentLengthMismatchError();
         }
-        const buffer = Buffer.from(await body.arrayBuffer());
+        const buffer = Buffer.from(await body2.arrayBuffer());
         socket.cork();
         socket.write(`${header}content-length: ${contentLength}\r
 \r
@@ -6642,7 +6642,7 @@ upgrade: ${upgrade}\r
         abort(err);
       }
     }
-    async function writeIterable(abort, body, client, request, socket, contentLength, header, expectsPayload) {
+    async function writeIterable(abort, body2, client, request, socket, contentLength, header, expectsPayload) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "iterator body cannot be pipelined");
       let callback = null;
       function onDrain() {
@@ -6663,7 +6663,7 @@ upgrade: ${upgrade}\r
       socket.on("close", onDrain).on("drain", onDrain);
       const writer = new AsyncWriter({ abort, socket, request, contentLength, client, expectsPayload, header });
       try {
-        for await (const chunk of body) {
+        for await (const chunk of body2) {
           if (socket[kError]) {
             throw socket[kError];
           }
@@ -6794,7 +6794,7 @@ var require_client_h2 = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/dispatcher/client-h2.js"(exports2, module2) {
     "use strict";
     var assert2 = require("node:assert");
-    var { pipeline } = require("node:stream");
+    var { pipeline: pipeline2 } = require("node:stream");
     var util = require_util();
     var {
       RequestContentLengthMismatchError,
@@ -6843,13 +6843,13 @@ var require_client_h2 = __commonJS({
     } = http2;
     function parseH2Headers(headers) {
       const result = [];
-      for (const [name, value] of Object.entries(headers)) {
+      for (const [name2, value] of Object.entries(headers)) {
         if (Array.isArray(value)) {
           for (const subvalue of value) {
-            result.push(Buffer.from(name), Buffer.from(subvalue));
+            result.push(Buffer.from(name2), Buffer.from(subvalue));
           }
         } else {
-          result.push(Buffer.from(name), Buffer.from(value));
+          result.push(Buffer.from(name2), Buffer.from(value));
         }
       }
       return result;
@@ -6954,8 +6954,8 @@ var require_client_h2 = __commonJS({
       this[kSocket][kError] = err;
       this[kClient][kOnError](err);
     }
-    function onHttp2FrameError(type, code, id) {
-      if (id === 0) {
+    function onHttp2FrameError(type, code, id8) {
+      if (id8 === 0) {
         const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
         this[kSocket][kError] = err;
         this[kClient][kOnError](err);
@@ -6991,8 +6991,8 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
-      let { body } = request;
+      const { method, path: path4, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      let { body: body2 } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
         return false;
@@ -7026,7 +7026,7 @@ var require_client_h2 = __commonJS({
         if (stream != null) {
           util.destroy(stream, err);
         }
-        util.destroy(body, err);
+        util.destroy(body2, err);
         client[kQueue][client[kRunningIdx]++] = null;
         client[kResume]();
       };
@@ -7058,18 +7058,18 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path3;
+      headers[HTTP2_HEADER_PATH] = path4;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
-      if (body && typeof body.read === "function") {
-        body.read(0);
+      if (body2 && typeof body2.read === "function") {
+        body2.read(0);
       }
-      let contentLength = util.bodyLength(body);
-      if (util.isFormDataLike(body)) {
+      let contentLength = util.bodyLength(body2);
+      if (util.isFormDataLike(body2)) {
         extractBody ??= require_body().extractBody;
-        const [bodyStream, contentType] = extractBody(body);
+        const [bodyStream, contentType] = extractBody(body2);
         headers["content-type"] = contentType;
-        body = bodyStream.stream;
+        body2 = bodyStream.stream;
         contentLength = bodyStream.length;
       }
       if (contentLength == null) {
@@ -7086,11 +7086,11 @@ var require_client_h2 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       if (contentLength != null) {
-        assert2(body, "no body must not have content length");
+        assert2(body2, "no body must not have content length");
         headers[HTTP2_HEADER_CONTENT_LENGTH] = `${contentLength}`;
       }
       session.ref();
-      const shouldEndStream = method === "GET" || method === "HEAD" || body === null;
+      const shouldEndStream = method === "GET" || method === "HEAD" || body2 === null;
       if (expectContinue) {
         headers[HTTP2_HEADER_EXPECT] = "100-continue";
         stream = session.request(headers, { endStream: shouldEndStream, signal });
@@ -7147,7 +7147,7 @@ var require_client_h2 = __commonJS({
       });
       return true;
       function writeBodyH2() {
-        if (!body || contentLength === 0) {
+        if (!body2 || contentLength === 0) {
           writeBuffer(
             abort,
             stream,
@@ -7158,23 +7158,23 @@ var require_client_h2 = __commonJS({
             contentLength,
             expectsPayload
           );
-        } else if (util.isBuffer(body)) {
+        } else if (util.isBuffer(body2)) {
           writeBuffer(
             abort,
             stream,
-            body,
+            body2,
             client,
             request,
             client[kSocket],
             contentLength,
             expectsPayload
           );
-        } else if (util.isBlobLike(body)) {
-          if (typeof body.stream === "function") {
+        } else if (util.isBlobLike(body2)) {
+          if (typeof body2.stream === "function") {
             writeIterable(
               abort,
               stream,
-              body.stream(),
+              body2.stream(),
               client,
               request,
               client[kSocket],
@@ -7185,7 +7185,7 @@ var require_client_h2 = __commonJS({
             writeBlob(
               abort,
               stream,
-              body,
+              body2,
               client,
               request,
               client[kSocket],
@@ -7193,22 +7193,22 @@ var require_client_h2 = __commonJS({
               expectsPayload
             );
           }
-        } else if (util.isStream(body)) {
+        } else if (util.isStream(body2)) {
           writeStream(
             abort,
             client[kSocket],
             expectsPayload,
             stream,
-            body,
+            body2,
             client,
             request,
             contentLength
           );
-        } else if (util.isIterable(body)) {
+        } else if (util.isIterable(body2)) {
           writeIterable(
             abort,
             stream,
-            body,
+            body2,
             client,
             request,
             client[kSocket],
@@ -7220,15 +7220,15 @@ var require_client_h2 = __commonJS({
         }
       }
     }
-    function writeBuffer(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
+    function writeBuffer(abort, h2stream, body2, client, request, socket, contentLength, expectsPayload) {
       try {
-        if (body != null && util.isBuffer(body)) {
-          assert2(contentLength === body.byteLength, "buffer body must have content length");
+        if (body2 != null && util.isBuffer(body2)) {
+          assert2(contentLength === body2.byteLength, "buffer body must have content length");
           h2stream.cork();
-          h2stream.write(body);
+          h2stream.write(body2);
           h2stream.uncork();
           h2stream.end();
-          request.onBodySent(body);
+          request.onBodySent(body2);
         }
         if (!expectsPayload) {
           socket[kReset] = true;
@@ -7239,10 +7239,10 @@ var require_client_h2 = __commonJS({
         abort(error63);
       }
     }
-    function writeStream(abort, socket, expectsPayload, h2stream, body, client, request, contentLength) {
+    function writeStream(abort, socket, expectsPayload, h2stream, body2, client, request, contentLength) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
-      const pipe2 = pipeline(
-        body,
+      const pipe2 = pipeline2(
+        body2,
         h2stream,
         (err) => {
           if (err) {
@@ -7263,13 +7263,13 @@ var require_client_h2 = __commonJS({
         request.onBodySent(chunk);
       }
     }
-    async function writeBlob(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
-      assert2(contentLength === body.size, "blob body must have content length");
+    async function writeBlob(abort, h2stream, body2, client, request, socket, contentLength, expectsPayload) {
+      assert2(contentLength === body2.size, "blob body must have content length");
       try {
-        if (contentLength != null && contentLength !== body.size) {
+        if (contentLength != null && contentLength !== body2.size) {
           throw new RequestContentLengthMismatchError();
         }
-        const buffer = Buffer.from(await body.arrayBuffer());
+        const buffer = Buffer.from(await body2.arrayBuffer());
         h2stream.cork();
         h2stream.write(buffer);
         h2stream.uncork();
@@ -7284,7 +7284,7 @@ var require_client_h2 = __commonJS({
         abort(err);
       }
     }
-    async function writeIterable(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
+    async function writeIterable(abort, h2stream, body2, client, request, socket, contentLength, expectsPayload) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "iterator body cannot be pipelined");
       let callback = null;
       function onDrain() {
@@ -7304,7 +7304,7 @@ var require_client_h2 = __commonJS({
       });
       h2stream.on("close", onDrain).on("drain", onDrain);
       try {
-        for await (const chunk of body) {
+        for await (const chunk of body2) {
           if (socket[kError]) {
             throw socket[kError];
           }
@@ -7342,8 +7342,8 @@ var require_redirect_handler = __commonJS({
     var redirectableStatusCodes = [300, 301, 302, 303, 307, 308];
     var kBody = /* @__PURE__ */ Symbol("body");
     var BodyAsyncIterable = class {
-      constructor(body) {
-        this[kBody] = body;
+      constructor(body2) {
+        this[kBody] = body2;
         this[kBodyUsed] = false;
       }
       async *[Symbol.asyncIterator]() {
@@ -7411,9 +7411,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path3 = search ? `${pathname}${search}` : pathname;
+        const path4 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path3;
+        this.opts.path = path4;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7461,8 +7461,8 @@ var require_redirect_handler = __commonJS({
         return true;
       }
       if (unknownOrigin && (header.length === 13 || header.length === 6 || header.length === 19)) {
-        const name = util.headerNameToString(header);
-        return name === "authorization" || name === "cookie" || name === "proxy-authorization";
+        const name2 = util.headerNameToString(header);
+        return name2 === "authorization" || name2 === "cookie" || name2 === "proxy-authorization";
       }
       return false;
     }
@@ -8464,9 +8464,9 @@ var require_balanced_pool = __commonJS({
         if (allClientsBusy) {
           return;
         }
-        let counter = 0;
+        let counter2 = 0;
         let maxWeightIndex = this[kClients].findIndex((pool) => !pool[kNeedDrain]);
-        while (counter++ < this[kClients].length) {
+        while (counter2++ < this[kClients].length) {
           this[kIndex] = (this[kIndex] + 1) % this[kClients].length;
           const pool = this[kClients][this[kIndex]];
           if (pool[kWeight] > this[kClients][maxWeightIndex][kWeight] && !pool[kNeedDrain]) {
@@ -8648,10 +8648,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path3 = "/",
+          path: path4 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path3;
+        opts.path = origin + path4;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -9088,7 +9088,7 @@ var require_retry_handler = __commonJS({
           errorCodes,
           methods
         } = retryOptions;
-        const { counter } = state;
+        const { counter: counter2 } = state;
         if (code && code !== "UND_ERR_REQ_RETRY" && !errorCodes.includes(code)) {
           cb(err);
           return;
@@ -9101,7 +9101,7 @@ var require_retry_handler = __commonJS({
           cb(err);
           return;
         }
-        if (counter > maxRetries) {
+        if (counter2 > maxRetries) {
           cb(err);
           return;
         }
@@ -9110,7 +9110,7 @@ var require_retry_handler = __commonJS({
           retryAfterHeader = Number(retryAfterHeader);
           retryAfterHeader = Number.isNaN(retryAfterHeader) ? calculateRetryAfterHeader(retryAfterHeader) : retryAfterHeader * 1e3;
         }
-        const retryTimeout = retryAfterHeader > 0 ? Math.min(retryAfterHeader, maxTimeout) : Math.min(minTimeout * timeoutFactor ** (counter - 1), maxTimeout);
+        const retryTimeout = retryAfterHeader > 0 ? Math.min(retryAfterHeader, maxTimeout) : Math.min(minTimeout * timeoutFactor ** (counter2 - 1), maxTimeout);
         setTimeout(() => cb(null), retryTimeout);
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
@@ -9582,18 +9582,18 @@ var require_readable = __commonJS({
       return buffer;
     }
     function consumeEnd(consume2) {
-      const { type, body, resolve, stream, length } = consume2;
+      const { type, body: body2, resolve, stream, length } = consume2;
       try {
         if (type === "text") {
-          resolve(chunksDecode(body, length));
+          resolve(chunksDecode(body2, length));
         } else if (type === "json") {
-          resolve(JSON.parse(chunksDecode(body, length)));
+          resolve(JSON.parse(chunksDecode(body2, length)));
         } else if (type === "arrayBuffer") {
-          resolve(chunksConcat(body, length).buffer);
+          resolve(chunksConcat(body2, length).buffer);
         } else if (type === "blob") {
-          resolve(new Blob(body, { type: stream[kContentType] }));
+          resolve(new Blob(body2, { type: stream[kContentType] }));
         } else if (type === "bytes") {
-          resolve(chunksConcat(body, length));
+          resolve(chunksConcat(body2, length));
         }
         consumeFinish(consume2);
       } catch (err) {
@@ -9633,12 +9633,12 @@ var require_util3 = __commonJS({
     } = require_errors();
     var { chunksDecode } = require_readable();
     var CHUNK_LIMIT = 128 * 1024;
-    async function getResolveErrorBodyCallback({ callback, body, contentType, statusCode, statusMessage, headers }) {
-      assert2(body);
+    async function getResolveErrorBodyCallback({ callback, body: body2, contentType, statusCode, statusMessage, headers }) {
+      assert2(body2);
       let chunks = [];
       let length = 0;
       try {
-        for await (const chunk of body) {
+        for await (const chunk of body2) {
           chunks.push(chunk);
           length += chunk.length;
           if (length > CHUNK_LIMIT) {
@@ -9700,7 +9700,7 @@ var require_api_request = __commonJS({
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        const { signal, method, opaque, body, onInfo, responseHeaders, throwOnError, highWaterMark } = opts;
+        const { signal, method, opaque, body: body2, onInfo, responseHeaders, throwOnError, highWaterMark } = opts;
         try {
           if (typeof callback !== "function") {
             throw new InvalidArgumentError("invalid callback");
@@ -9719,8 +9719,8 @@ var require_api_request = __commonJS({
           }
           super("UNDICI_REQUEST");
         } catch (err) {
-          if (util.isStream(body)) {
-            util.destroy(body.on("error", util.nop), err);
+          if (util.isStream(body2)) {
+            util.destroy(body2.on("error", util.nop), err);
           }
           throw err;
         }
@@ -9730,7 +9730,7 @@ var require_api_request = __commonJS({
         this.callback = callback;
         this.res = null;
         this.abort = null;
-        this.body = body;
+        this.body = body2;
         this.trailers = {};
         this.context = null;
         this.onInfo = onInfo || null;
@@ -9739,8 +9739,8 @@ var require_api_request = __commonJS({
         this.signal = signal;
         this.reason = null;
         this.removeAbortListener = null;
-        if (util.isStream(body)) {
-          body.on("error", (err) => {
+        if (util.isStream(body2)) {
+          body2.on("error", (err) => {
             this.onError(err);
           });
         }
@@ -9824,7 +9824,7 @@ var require_api_request = __commonJS({
         this.res.push(null);
       }
       onError(err) {
-        const { res, callback, body, opaque } = this;
+        const { res, callback, body: body2, opaque } = this;
         if (callback) {
           this.callback = null;
           queueMicrotask(() => {
@@ -9837,9 +9837,9 @@ var require_api_request = __commonJS({
             util.destroy(res, err);
           });
         }
-        if (body) {
+        if (body2) {
           this.body = null;
-          util.destroy(body, err);
+          util.destroy(body2, err);
         }
         if (this.removeAbortListener) {
           res?.off("close", this.removeAbortListener);
@@ -9938,7 +9938,7 @@ var require_api_stream = __commonJS({
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        const { signal, method, opaque, body, onInfo, responseHeaders, throwOnError } = opts;
+        const { signal, method, opaque, body: body2, onInfo, responseHeaders, throwOnError } = opts;
         try {
           if (typeof callback !== "function") {
             throw new InvalidArgumentError("invalid callback");
@@ -9957,8 +9957,8 @@ var require_api_stream = __commonJS({
           }
           super("UNDICI_STREAM");
         } catch (err) {
-          if (util.isStream(body)) {
-            util.destroy(body.on("error", util.nop), err);
+          if (util.isStream(body2)) {
+            util.destroy(body2.on("error", util.nop), err);
           }
           throw err;
         }
@@ -9970,11 +9970,11 @@ var require_api_stream = __commonJS({
         this.abort = null;
         this.context = null;
         this.trailers = null;
-        this.body = body;
+        this.body = body2;
         this.onInfo = onInfo || null;
         this.throwOnError = throwOnError || false;
-        if (util.isStream(body)) {
-          body.on("error", (err) => {
+        if (util.isStream(body2)) {
+          body2.on("error", (err) => {
             this.onError(err);
           });
         }
@@ -10055,7 +10055,7 @@ var require_api_stream = __commonJS({
         res.end();
       }
       onError(err) {
-        const { res, callback, opaque, body } = this;
+        const { res, callback, opaque, body: body2 } = this;
         removeSignal(this);
         this.factory = null;
         if (res) {
@@ -10067,9 +10067,9 @@ var require_api_stream = __commonJS({
             this.runInAsyncScope(callback, null, err, { opaque });
           });
         }
-        if (body) {
+        if (body2) {
           this.body = null;
-          util.destroy(body, err);
+          util.destroy(body2, err);
         }
       }
     };
@@ -10176,9 +10176,9 @@ var require_api_pipeline = __commonJS({
           readableObjectMode: opts.objectMode,
           autoDestroy: true,
           read: () => {
-            const { body } = this;
-            if (body?.resume) {
-              body.resume();
+            const { body: body2 } = this;
+            if (body2?.resume) {
+              body2.resume();
             }
           },
           write: (chunk, encoding, callback) => {
@@ -10190,14 +10190,14 @@ var require_api_pipeline = __commonJS({
             }
           },
           destroy: (err, callback) => {
-            const { body, req, res, ret, abort } = this;
+            const { body: body2, req, res, ret, abort } = this;
             if (!err && !ret._readableState.endEmitted) {
               err = new RequestAbortedError();
             }
             if (abort && err) {
               abort();
             }
-            util.destroy(body, err);
+            util.destroy(body2, err);
             util.destroy(req, err);
             util.destroy(res, err);
             removeSignal(this);
@@ -10231,11 +10231,11 @@ var require_api_pipeline = __commonJS({
           return;
         }
         this.res = new PipelineResponse(resume);
-        let body;
+        let body2;
         try {
           this.handler = null;
           const headers = this.responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
-          body = this.runInAsyncScope(handler, null, {
+          body2 = this.runInAsyncScope(handler, null, {
             statusCode,
             headers,
             opaque,
@@ -10246,13 +10246,13 @@ var require_api_pipeline = __commonJS({
           this.res.on("error", util.nop);
           throw err;
         }
-        if (!body || typeof body.on !== "function") {
+        if (!body2 || typeof body2.on !== "function") {
           throw new InvalidReturnValueError("expected Readable");
         }
-        body.on("data", (chunk) => {
-          const { ret, body: body2 } = this;
-          if (!ret.push(chunk) && body2.pause) {
-            body2.pause();
+        body2.on("data", (chunk) => {
+          const { ret, body: body3 } = this;
+          if (!ret.push(chunk) && body3.pause) {
+            body3.pause();
           }
         }).on("error", (err) => {
           const { ret } = this;
@@ -10266,7 +10266,7 @@ var require_api_pipeline = __commonJS({
             util.destroy(ret, new RequestAbortedError());
           }
         });
-        this.body = body;
+        this.body = body2;
       }
       onData(chunk) {
         const { res } = this;
@@ -10282,7 +10282,7 @@ var require_api_pipeline = __commonJS({
         util.destroy(ret, err);
       }
     };
-    function pipeline(opts, handler) {
+    function pipeline2(opts, handler) {
       try {
         const pipelineHandler = new PipelineHandler(opts, handler);
         this.dispatch({ ...opts, body: pipelineHandler.req }, pipelineHandler);
@@ -10291,7 +10291,7 @@ var require_api_pipeline = __commonJS({
         return new PassThrough().destroy(err);
       }
     }
-    module2.exports = pipeline;
+    module2.exports = pipeline2;
   }
 });
 
@@ -10623,22 +10623,22 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path3) {
-      if (typeof path3 !== "string") {
-        return path3;
+    function safeUrl(path4) {
+      if (typeof path4 !== "string") {
+        return path4;
       }
-      const pathSegments = path3.split("?");
+      const pathSegments = path4.split("?");
       if (pathSegments.length !== 2) {
-        return path3;
+        return path4;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path3, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path3);
+    function matchKey(mockDispatch2, { path: path4, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path4);
       const methodMatch = matchValue(mockDispatch2.method, method);
-      const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
+      const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
       return pathMatch && methodMatch && bodyMatch && headersMatch;
     }
@@ -10658,7 +10658,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path4 }) => matchValue(safeUrl(path4), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10666,7 +10666,7 @@ var require_mock_utils = __commonJS({
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for method '${key.method}' on path '${resolvedPath}'`);
       }
-      matchedMockDispatches = matchedMockDispatches.filter(({ body }) => typeof body !== "undefined" ? matchValue(body, key.body) : true);
+      matchedMockDispatches = matchedMockDispatches.filter(({ body: body2 }) => typeof body2 !== "undefined" ? matchValue(body2, key.body) : true);
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for body '${key.body}' on path '${resolvedPath}'`);
       }
@@ -10696,11 +10696,11 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path3, method, body, headers, query } = opts;
+      const { path: path4, method, body: body2, headers, query } = opts;
       return {
-        path: path3,
+        path: path4,
         method,
-        body,
+        body: body2,
         headers,
         query
       };
@@ -10711,13 +10711,13 @@ var require_mock_utils = __commonJS({
       for (let i = 0; i < keys.length; ++i) {
         const key = keys[i];
         const value = data[key];
-        const name = Buffer.from(`${key}`);
+        const name2 = Buffer.from(`${key}`);
         if (Array.isArray(value)) {
           for (let j = 0; j < value.length; ++j) {
-            result.push(name, Buffer.from(`${value[j]}`));
+            result.push(name2, Buffer.from(`${value[j]}`));
           }
         } else {
-          result.push(name, Buffer.from(`${value}`));
+          result.push(name2, Buffer.from(`${value}`));
         }
       }
       return result;
@@ -10725,9 +10725,9 @@ var require_mock_utils = __commonJS({
     function getStatusText(statusCode) {
       return STATUS_CODES[statusCode] || "unknown";
     }
-    async function getResponse(body) {
+    async function getResponse(body2) {
       const buffers = [];
-      for await (const data of body) {
+      for await (const data of body2) {
         buffers.push(data);
       }
       return Buffer.concat(buffers).toString("utf8");
@@ -10757,12 +10757,12 @@ var require_mock_utils = __commonJS({
       }
       function handleReply(mockDispatches, _data = data) {
         const optsHeaders = Array.isArray(opts.headers) ? buildHeadersFromArray(opts.headers) : opts.headers;
-        const body = typeof _data === "function" ? _data({ ...opts, headers: optsHeaders }) : _data;
-        if (isPromise(body)) {
-          body.then((newData) => handleReply(mockDispatches, newData));
+        const body2 = typeof _data === "function" ? _data({ ...opts, headers: optsHeaders }) : _data;
+        if (isPromise(body2)) {
+          body2.then((newData) => handleReply(mockDispatches, newData));
           return;
         }
-        const responseData = getResponseData(body);
+        const responseData = getResponseData(body2);
         const responseHeaders = generateKeyValues(headers);
         const responseTrailers = generateKeyValues(trailers);
         handler.onConnect?.((err) => handler.onError(err), null);
@@ -11141,13 +11141,13 @@ var require_pluralizer = __commonJS({
 var require_pending_interceptors_formatter = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/mock/pending-interceptors-formatter.js"(exports2, module2) {
     "use strict";
-    var { Transform } = require("node:stream");
+    var { Transform: Transform2 } = require("node:stream");
     var { Console } = require("node:console");
     var PERSISTENT = process.versions.icu ? "\u2705" : "Y ";
     var NOT_PERSISTENT = process.versions.icu ? "\u274C" : "N ";
     module2.exports = class PendingInterceptorsFormatter {
       constructor({ disableColors } = {}) {
-        this.transform = new Transform({
+        this.transform = new Transform2({
           transform(chunk, _enc, cb) {
             cb(null, chunk);
           }
@@ -11161,10 +11161,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path4, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path3,
+            Path: path4,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -11683,10 +11683,10 @@ var require_dns = __commonJS({
         return ip;
       }
       setRecords(origin, addresses) {
-        const timestamp = Date.now();
+        const timestamp5 = Date.now();
         const records = { records: { 4: null, 6: null } };
         for (const record2 of addresses) {
-          record2.timestamp = timestamp;
+          record2.timestamp = timestamp5;
           if (typeof record2.ttl === "number") {
             record2.ttl = Math.min(record2.ttl, this.#maxTTL);
           } else {
@@ -11842,10 +11842,10 @@ var require_headers = __commonJS({
       while (j > i && isHTTPWhiteSpaceCharCode(potentialValue.charCodeAt(i))) ++i;
       return i === 0 && j === potentialValue.length ? potentialValue : potentialValue.substring(i, j);
     }
-    function fill(headers, object2) {
-      if (Array.isArray(object2)) {
-        for (let i = 0; i < object2.length; ++i) {
-          const header = object2[i];
+    function fill(headers, object3) {
+      if (Array.isArray(object3)) {
+        for (let i = 0; i < object3.length; ++i) {
+          const header = object3[i];
           if (header.length !== 2) {
             throw webidl.errors.exception({
               header: "Headers constructor",
@@ -11854,10 +11854,10 @@ var require_headers = __commonJS({
           }
           appendHeader(headers, header[0], header[1]);
         }
-      } else if (typeof object2 === "object" && object2 !== null) {
-        const keys = Object.keys(object2);
+      } else if (typeof object3 === "object" && object3 !== null) {
+        const keys = Object.keys(object3);
         for (let i = 0; i < keys.length; ++i) {
-          appendHeader(headers, keys[i], object2[keys[i]]);
+          appendHeader(headers, keys[i], object3[keys[i]]);
         }
       } else {
         throw webidl.errors.conversionFailed({
@@ -11867,12 +11867,12 @@ var require_headers = __commonJS({
         });
       }
     }
-    function appendHeader(headers, name, value) {
+    function appendHeader(headers, name2, value) {
       value = headerValueNormalize(value);
-      if (!isValidHeaderName(name)) {
+      if (!isValidHeaderName(name2)) {
         throw webidl.errors.invalidArgument({
           prefix: "Headers.append",
-          value: name,
+          value: name2,
           type: "header name"
         });
       } else if (!isValidHeaderValue(value)) {
@@ -11885,7 +11885,7 @@ var require_headers = __commonJS({
       if (getHeadersGuard(headers) === "immutable") {
         throw new TypeError("immutable");
       }
-      return getHeadersList(headers).append(name, value, false);
+      return getHeadersList(headers).append(name2, value, false);
     }
     function compareHeaderName(a, b) {
       return a[0] < b[0] ? -1 : 1;
@@ -11908,8 +11908,8 @@ var require_headers = __commonJS({
        * @param {string} name
        * @param {boolean} isLowerCase
        */
-      contains(name, isLowerCase) {
-        return this[kHeadersMap].has(isLowerCase ? name : name.toLowerCase());
+      contains(name2, isLowerCase) {
+        return this[kHeadersMap].has(isLowerCase ? name2 : name2.toLowerCase());
       }
       clear() {
         this[kHeadersMap].clear();
@@ -11922,9 +11922,9 @@ var require_headers = __commonJS({
        * @param {string} value
        * @param {boolean} isLowerCase
        */
-      append(name, value, isLowerCase) {
+      append(name2, value, isLowerCase) {
         this[kHeadersSortedMap] = null;
-        const lowercaseName = isLowerCase ? name : name.toLowerCase();
+        const lowercaseName = isLowerCase ? name2 : name2.toLowerCase();
         const exists2 = this[kHeadersMap].get(lowercaseName);
         if (exists2) {
           const delimiter = lowercaseName === "cookie" ? "; " : ", ";
@@ -11933,7 +11933,7 @@ var require_headers = __commonJS({
             value: `${exists2.value}${delimiter}${value}`
           });
         } else {
-          this[kHeadersMap].set(lowercaseName, { name, value });
+          this[kHeadersMap].set(lowercaseName, { name: name2, value });
         }
         if (lowercaseName === "set-cookie") {
           (this.cookies ??= []).push(value);
@@ -11945,26 +11945,26 @@ var require_headers = __commonJS({
        * @param {string} value
        * @param {boolean} isLowerCase
        */
-      set(name, value, isLowerCase) {
+      set(name2, value, isLowerCase) {
         this[kHeadersSortedMap] = null;
-        const lowercaseName = isLowerCase ? name : name.toLowerCase();
+        const lowercaseName = isLowerCase ? name2 : name2.toLowerCase();
         if (lowercaseName === "set-cookie") {
           this.cookies = [value];
         }
-        this[kHeadersMap].set(lowercaseName, { name, value });
+        this[kHeadersMap].set(lowercaseName, { name: name2, value });
       }
       /**
        * @see https://fetch.spec.whatwg.org/#concept-header-list-delete
        * @param {string} name
        * @param {boolean} isLowerCase
        */
-      delete(name, isLowerCase) {
+      delete(name2, isLowerCase) {
         this[kHeadersSortedMap] = null;
-        if (!isLowerCase) name = name.toLowerCase();
-        if (name === "set-cookie") {
+        if (!isLowerCase) name2 = name2.toLowerCase();
+        if (name2 === "set-cookie") {
           this.cookies = null;
         }
-        this[kHeadersMap].delete(name);
+        this[kHeadersMap].delete(name2);
       }
       /**
        * @see https://fetch.spec.whatwg.org/#concept-header-list-get
@@ -11972,19 +11972,19 @@ var require_headers = __commonJS({
        * @param {boolean} isLowerCase
        * @returns {string | null}
        */
-      get(name, isLowerCase) {
-        return this[kHeadersMap].get(isLowerCase ? name : name.toLowerCase())?.value ?? null;
+      get(name2, isLowerCase) {
+        return this[kHeadersMap].get(isLowerCase ? name2 : name2.toLowerCase())?.value ?? null;
       }
       *[Symbol.iterator]() {
-        for (const { 0: name, 1: { value } } of this[kHeadersMap]) {
-          yield [name, value];
+        for (const { 0: name2, 1: { value } } of this[kHeadersMap]) {
+          yield [name2, value];
         }
       }
       get entries() {
         const headers = {};
         if (this[kHeadersMap].size !== 0) {
-          for (const { name, value } of this[kHeadersMap].values()) {
-            headers[name] = value;
+          for (const { name: name2, value } of this[kHeadersMap].values()) {
+            headers[name2] = value;
           }
         }
         return headers;
@@ -11995,13 +11995,13 @@ var require_headers = __commonJS({
       get entriesList() {
         const headers = [];
         if (this[kHeadersMap].size !== 0) {
-          for (const { 0: lowerName, 1: { name, value } } of this[kHeadersMap]) {
+          for (const { 0: lowerName, 1: { name: name2, value } } of this[kHeadersMap]) {
             if (lowerName === "set-cookie") {
               for (const cookie of this.cookies) {
-                headers.push([name, cookie]);
+                headers.push([name2, cookie]);
               }
             } else {
-              headers.push([name, value]);
+              headers.push([name2, value]);
             }
           }
         }
@@ -12047,8 +12047,8 @@ var require_headers = __commonJS({
           return array2;
         } else {
           let i = 0;
-          for (const { 0: name, 1: { value } } of this[kHeadersMap]) {
-            array2[i++] = [name, value];
+          for (const { 0: name2, 1: { value } } of this[kHeadersMap]) {
+            array2[i++] = [name2, value];
             assert2(value !== null);
           }
           return array2.sort(compareHeaderName);
@@ -12071,77 +12071,77 @@ var require_headers = __commonJS({
         }
       }
       // https://fetch.spec.whatwg.org/#dom-headers-append
-      append(name, value) {
+      append(name2, value) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 2, "Headers.append");
         const prefix = "Headers.append";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
         value = webidl.converters.ByteString(value, prefix, "value");
-        return appendHeader(this, name, value);
+        return appendHeader(this, name2, value);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-delete
-      delete(name) {
+      delete(name2) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.delete");
         const prefix = "Headers.delete";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        if (!isValidHeaderName(name)) {
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix: "Headers.delete",
-            value: name,
+            value: name2,
             type: "header name"
           });
         }
         if (this.#guard === "immutable") {
           throw new TypeError("immutable");
         }
-        if (!this.#headersList.contains(name, false)) {
+        if (!this.#headersList.contains(name2, false)) {
           return;
         }
-        this.#headersList.delete(name, false);
+        this.#headersList.delete(name2, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-get
-      get(name) {
+      get(name2) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.get");
         const prefix = "Headers.get";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        if (!isValidHeaderName(name)) {
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix,
-            value: name,
+            value: name2,
             type: "header name"
           });
         }
-        return this.#headersList.get(name, false);
+        return this.#headersList.get(name2, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-has
-      has(name) {
+      has(name2) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.has");
         const prefix = "Headers.has";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        if (!isValidHeaderName(name)) {
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix,
-            value: name,
+            value: name2,
             type: "header name"
           });
         }
-        return this.#headersList.contains(name, false);
+        return this.#headersList.contains(name2, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-set
-      set(name, value) {
+      set(name2, value) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 2, "Headers.set");
         const prefix = "Headers.set";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        name2 = webidl.converters.ByteString(name2, prefix, "name");
         value = webidl.converters.ByteString(value, prefix, "value");
         value = headerValueNormalize(value);
-        if (!isValidHeaderName(name)) {
+        if (!isValidHeaderName(name2)) {
           throw webidl.errors.invalidArgument({
             prefix,
-            value: name,
+            value: name2,
             type: "header name"
           });
         } else if (!isValidHeaderValue(value)) {
@@ -12154,7 +12154,7 @@ var require_headers = __commonJS({
         if (this.#guard === "immutable") {
           throw new TypeError("immutable");
         }
-        this.#headersList.set(name, value, false);
+        this.#headersList.set(name2, value, false);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-getsetcookie
       getSetCookie() {
@@ -12177,13 +12177,13 @@ var require_headers = __commonJS({
           return this.#headersList[kHeadersSortedMap] = names;
         }
         for (let i = 0; i < names.length; ++i) {
-          const { 0: name, 1: value } = names[i];
-          if (name === "set-cookie") {
+          const { 0: name2, 1: value } = names[i];
+          if (name2 === "set-cookie") {
             for (let j = 0; j < cookies.length; ++j) {
-              headers.push([name, cookies[j]]);
+              headers.push([name2, cookies[j]]);
             }
           } else {
-            headers.push([name, value]);
+            headers.push([name2, value]);
           }
         }
         return this.#headersList[kHeadersSortedMap] = headers;
@@ -12306,9 +12306,9 @@ var require_response = __commonJS({
         const bytes = textEncoder.encode(
           serializeJavascriptValueToJSONString(data)
         );
-        const body = extractBody(bytes);
+        const body2 = extractBody(bytes);
         const responseObject = fromInnerResponse(makeResponse({}), "response");
-        initializeResponse(responseObject, init, { body: body[0], type: "application/json" });
+        initializeResponse(responseObject, init, { body: body2[0], type: "application/json" });
         return responseObject;
       }
       // Creates a redirect Response that redirects to url with status status.
@@ -12332,13 +12332,13 @@ var require_response = __commonJS({
         return responseObject;
       }
       // https://fetch.spec.whatwg.org/#dom-response
-      constructor(body = null, init = {}) {
+      constructor(body2 = null, init = {}) {
         webidl.util.markAsUncloneable(this);
-        if (body === kConstruct) {
+        if (body2 === kConstruct) {
           return;
         }
-        if (body !== null) {
-          body = webidl.converters.BodyInit(body);
+        if (body2 !== null) {
+          body2 = webidl.converters.BodyInit(body2);
         }
         init = webidl.converters.ResponseInit(init);
         this[kState] = makeResponse({});
@@ -12346,8 +12346,8 @@ var require_response = __commonJS({
         setHeadersGuard(this[kHeaders], "response");
         setHeadersList(this[kHeaders], this[kState].headersList);
         let bodyWithType = null;
-        if (body != null) {
-          const [extractedBody, type] = extractBody(body);
+        if (body2 != null) {
+          const [extractedBody, type] = extractBody(body2);
           bodyWithType = { body: extractedBody, type };
         }
         initializeResponse(this, init, bodyWithType);
@@ -12552,7 +12552,7 @@ var require_response = __commonJS({
       assert2(isCancelled(fetchParams));
       return isAborted(fetchParams) ? makeNetworkError(Object.assign(new DOMException("The operation was aborted.", "AbortError"), { cause: err })) : makeNetworkError(Object.assign(new DOMException("Request was cancelled."), { cause: err }));
     }
-    function initializeResponse(response, init, body) {
+    function initializeResponse(response, init, body2) {
       if (init.status !== null && (init.status < 200 || init.status > 599)) {
         throw new RangeError('init["status"] must be in the range of 200 to 599, inclusive.');
       }
@@ -12570,16 +12570,16 @@ var require_response = __commonJS({
       if ("headers" in init && init.headers != null) {
         fill(response[kHeaders], init.headers);
       }
-      if (body) {
+      if (body2) {
         if (nullBodyStatus.includes(response.status)) {
           throw webidl.errors.exception({
             header: "Response constructor",
             message: `Invalid response status code ${response.status}`
           });
         }
-        response[kState].body = body.body;
-        if (body.type != null && !response[kState].headersList.contains("content-type", true)) {
-          response[kState].headersList.append("content-type", body.type, true);
+        response[kState].body = body2.body;
+        if (body2.type != null && !response[kState].headersList.contains("content-type", true)) {
+          response[kState].headersList.append("content-type", body2.type, true);
         }
       }
     }
@@ -12603,23 +12603,23 @@ var require_response = __commonJS({
     webidl.converters.URLSearchParams = webidl.interfaceConverter(
       URLSearchParams
     );
-    webidl.converters.XMLHttpRequestBodyInit = function(V, prefix, name) {
+    webidl.converters.XMLHttpRequestBodyInit = function(V, prefix, name2) {
       if (typeof V === "string") {
-        return webidl.converters.USVString(V, prefix, name);
+        return webidl.converters.USVString(V, prefix, name2);
       }
       if (isBlobLike(V)) {
-        return webidl.converters.Blob(V, prefix, name, { strict: false });
+        return webidl.converters.Blob(V, prefix, name2, { strict: false });
       }
       if (ArrayBuffer.isView(V) || types.isArrayBuffer(V)) {
-        return webidl.converters.BufferSource(V, prefix, name);
+        return webidl.converters.BufferSource(V, prefix, name2);
       }
       if (util.isFormDataLike(V)) {
-        return webidl.converters.FormData(V, prefix, name, { strict: false });
+        return webidl.converters.FormData(V, prefix, name2, { strict: false });
       }
       if (V instanceof URLSearchParams) {
-        return webidl.converters.URLSearchParams(V, prefix, name);
+        return webidl.converters.URLSearchParams(V, prefix, name2);
       }
-      return webidl.converters.DOMString(V, prefix, name);
+      return webidl.converters.DOMString(V, prefix, name2);
     };
     webidl.converters.BodyInit = function(V, prefix, argument) {
       if (V instanceof ReadableStream) {
@@ -12990,8 +12990,8 @@ var require_request2 = __commonJS({
           const headers = init.headers !== void 0 ? init.headers : new HeadersList(headersList);
           headersList.clear();
           if (headers instanceof HeadersList) {
-            for (const { name, value } of headers.rawValues()) {
-              headersList.append(name, value, false);
+            for (const { name: name2, value } of headers.rawValues()) {
+              headersList.append(name2, value, false);
             }
             headersList.cookies = headers.cookies;
           } else {
@@ -13456,7 +13456,7 @@ var require_fetch = __commonJS({
       subresourceSet
     } = require_constants3();
     var EE = require("node:events");
-    var { Readable, pipeline, finished } = require("node:stream");
+    var { Readable, pipeline: pipeline2, finished } = require("node:stream");
     var { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = require_util();
     var { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = require_data_url();
     var { getGlobalDispatcher } = require_global2();
@@ -14218,11 +14218,11 @@ var require_fetch = __commonJS({
         })();
       }
       try {
-        const { body, status, statusText, headersList, socket } = await dispatch({ body: requestBody });
+        const { body: body2, status, statusText, headersList, socket } = await dispatch({ body: requestBody });
         if (socket) {
           response = makeResponse({ status, statusText, headersList, socket });
         } else {
-          const iterator = body[Symbol.asyncIterator]();
+          const iterator = body2[Symbol.asyncIterator]();
           fetchParams.controller.next = () => iterator.next();
           response = makeResponse({ status, statusText, headersList });
         }
@@ -14317,7 +14317,7 @@ var require_fetch = __commonJS({
         fetchParams.controller.connection.destroy();
       }
       return response;
-      function dispatch({ body }) {
+      function dispatch({ body: body2 }) {
         const url2 = requestCurrentURL(request);
         const agent = fetchParams.controller.dispatcher;
         return new Promise((resolve, reject) => agent.dispatch(
@@ -14325,7 +14325,7 @@ var require_fetch = __commonJS({
             path: url2.pathname + url2.search,
             origin: url2.origin,
             method: request.method,
-            body: agent.isMockActive ? request.body && (request.body.source || request.body.stream) : body,
+            body: agent.isMockActive ? request.body && (request.body.source || request.body.stream) : body2,
             headers: request.headersList.entries,
             maxRedirections: 0,
             upgrade: request.mode === "websocket" ? "websocket" : void 0
@@ -14400,7 +14400,7 @@ var require_fetch = __commonJS({
                 status,
                 statusText,
                 headersList,
-                body: decoders.length ? pipeline(this.body, ...decoders, (err) => {
+                body: decoders.length ? pipeline2(this.body, ...decoders, (err) => {
                   if (err) {
                     this.onError(err);
                   }
@@ -15997,9 +15997,9 @@ var require_util6 = __commonJS({
       }
       return false;
     }
-    function validateCookieName(name) {
-      for (let i = 0; i < name.length; ++i) {
-        const code = name.charCodeAt(i);
+    function validateCookieName(name2) {
+      for (let i = 0; i < name2.length; ++i) {
+        const code = name2.charCodeAt(i);
         if (code < 33 || // exclude CTLs (0-31), SP and HT
         code > 126 || // exclude non-ascii and DEL
         code === 34 || // "
@@ -16045,9 +16045,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path3) {
-      for (let i = 0; i < path3.length; ++i) {
-        const code = path3.charCodeAt(i);
+    function validateCookiePath(path4) {
+      for (let i = 0; i < path4.length; ++i) {
+        const code = path4.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code > 126 || // exclude DEL and non-ascii
         code === 59) {
@@ -16206,7 +16206,7 @@ var require_parse = __commonJS({
       }
       let nameValuePair = "";
       let unparsedAttributes = "";
-      let name = "";
+      let name2 = "";
       let value = "";
       if (header.includes(";")) {
         const position = { position: 0 };
@@ -16219,20 +16219,20 @@ var require_parse = __commonJS({
         value = nameValuePair;
       } else {
         const position = { position: 0 };
-        name = collectASequenceOfCodePointsFast(
+        name2 = collectASequenceOfCodePointsFast(
           "=",
           nameValuePair,
           position
         );
         value = nameValuePair.slice(position.position + 1);
       }
-      name = name.trim();
+      name2 = name2.trim();
       value = value.trim();
-      if (name.length + value.length > maxNameValuePairSize) {
+      if (name2.length + value.length > maxNameValuePairSize) {
         return null;
       }
       return {
-        name,
+        name: name2,
         value,
         ...parseUnparsedAttributes(unparsedAttributes)
       };
@@ -16345,19 +16345,19 @@ var require_cookies = __commonJS({
         return out;
       }
       for (const piece of cookie.split(";")) {
-        const [name, ...value] = piece.split("=");
-        out[name.trim()] = value.join("=");
+        const [name2, ...value] = piece.split("=");
+        out[name2.trim()] = value.join("=");
       }
       return out;
     }
-    function deleteCookie(headers, name, attributes) {
+    function deleteCookie(headers, name2, attributes) {
       webidl.brandCheck(headers, Headers3, { strict: false });
       const prefix = "deleteCookie";
       webidl.argumentLengthCheck(arguments, 2, prefix);
-      name = webidl.converters.DOMString(name, prefix, "name");
+      name2 = webidl.converters.DOMString(name2, prefix, "name");
       attributes = webidl.converters.DeleteCookieAttributes(attributes);
       setCookie(headers, {
-        name,
+        name: name2,
         value: "",
         expires: /* @__PURE__ */ new Date(0),
         ...attributes
@@ -16919,9 +16919,9 @@ var require_util7 = __commonJS({
       const extensionList = /* @__PURE__ */ new Map();
       while (position.position < extensions.length) {
         const pair = collectASequenceOfCodePointsFast(";", extensions, position);
-        const [name, value = ""] = pair.split("=");
+        const [name2, value = ""] = pair.split("=");
         extensionList.set(
-          removeHTTPWhitespace(name, true, false),
+          removeHTTPWhitespace(name2, true, false),
           removeHTTPWhitespace(value, false, true)
         );
         position.position++;
@@ -17318,7 +17318,7 @@ var require_permessage_deflate = __commonJS({
 var require_receiver = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/websocket/receiver.js"(exports2, module2) {
     "use strict";
-    var { Writable } = require("node:stream");
+    var { Writable: Writable2 } = require("node:stream");
     var assert2 = require("node:assert");
     var { parserStates, opcodes, states, emptyBuffer, sentCloseFrameState } = require_constants5();
     var { kReadyState, kSentClose, kResponse, kReceivedClose } = require_symbols5();
@@ -17341,7 +17341,7 @@ var require_receiver = __commonJS({
       closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
       failWebsocketConnection(ws, reason);
     }
-    var ByteParser = class extends Writable {
+    var ByteParser = class extends Writable2 {
       #buffers = [];
       #fragmentsBytes = 0;
       #byteOffset = 0;
@@ -17492,13 +17492,13 @@ var require_receiver = __commonJS({
             if (this.#byteOffset < this.#info.payloadLength) {
               return callback();
             }
-            const body = this.consume(this.#info.payloadLength);
+            const body2 = this.consume(this.#info.payloadLength);
             if (isControlFrame(this.#info.opcode)) {
-              this.#loop = this.parseControlFrame(body);
+              this.#loop = this.parseControlFrame(body2);
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                if (!this.writeFragments(body)) {
+                if (!this.writeFragments(body2)) {
                   return;
                 }
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
@@ -17511,7 +17511,7 @@ var require_receiver = __commonJS({
                 this.#state = parserStates.INFO;
               } else {
                 this.#extensions.get("permessage-deflate").decompress(
-                  body,
+                  body2,
                   this.#info.fin,
                   (error63, data) => {
                     if (error63) {
@@ -17624,14 +17624,14 @@ var require_receiver = __commonJS({
        * Parses control frames.
        * @param {Buffer} body
        */
-      parseControlFrame(body) {
+      parseControlFrame(body2) {
         const { opcode, payloadLength } = this.#info;
         if (opcode === opcodes.CLOSE) {
           if (payloadLength === 1) {
             failWebsocketConnection(this.ws, "Received close frame with a 1-byte body.");
             return false;
           }
-          this.#info.closeInfo = this.parseCloseBody(body);
+          this.#info.closeInfo = this.parseCloseBody(body2);
           if (this.#info.closeInfo.error) {
             const { code, reason } = this.#info.closeInfo;
             closeWebSocketConnection(this.ws, code, reason, reason.length);
@@ -17639,12 +17639,12 @@ var require_receiver = __commonJS({
             return false;
           }
           if (this.ws[kSentClose] !== sentCloseFrameState.SENT) {
-            let body2 = emptyBuffer;
+            let body3 = emptyBuffer;
             if (this.#info.closeInfo.code) {
-              body2 = Buffer.allocUnsafe(2);
-              body2.writeUInt16BE(this.#info.closeInfo.code, 0);
+              body3 = Buffer.allocUnsafe(2);
+              body3.writeUInt16BE(this.#info.closeInfo.code, 0);
             }
-            const closeFrame = new WebsocketFrameSend(body2);
+            const closeFrame = new WebsocketFrameSend(body3);
             this.ws[kResponse].socket.write(
               closeFrame.createFrame(opcodes.CLOSE),
               (err) => {
@@ -17659,18 +17659,18 @@ var require_receiver = __commonJS({
           return false;
         } else if (opcode === opcodes.PING) {
           if (!this.ws[kReceivedClose]) {
-            const frame = new WebsocketFrameSend(body);
+            const frame = new WebsocketFrameSend(body2);
             this.ws[kResponse].socket.write(frame.createFrame(opcodes.PONG));
             if (channels.ping.hasSubscribers) {
               channels.ping.publish({
-                payload: body
+                payload: body2
               });
             }
           }
         } else if (opcode === opcodes.PONG) {
           if (channels.pong.hasSubscribers) {
             channels.pong.publish({
-              payload: body
+              payload: body2
             });
           }
         }
@@ -18189,7 +18189,7 @@ var require_util8 = __commonJS({
 var require_eventsource_stream = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/eventsource/eventsource-stream.js"(exports2, module2) {
     "use strict";
-    var { Transform } = require("node:stream");
+    var { Transform: Transform2 } = require("node:stream");
     var { isASCIINumber, isValidLastEventId } = require_util8();
     var BOM = [239, 187, 191];
     var LF = 10;
@@ -18230,7 +18230,7 @@ var require_eventsource_stream = __commonJS({
       }
       return true;
     }
-    var EventSourceStream = class extends Transform {
+    var EventSourceStream = class extends Transform2 {
       /**
        * @type {eventSourceSettings}
        */
@@ -18529,7 +18529,7 @@ ${value}`;
 var require_eventsource = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/eventsource/eventsource.js"(exports2, module2) {
     "use strict";
-    var { pipeline } = require("node:stream");
+    var { pipeline: pipeline2 } = require("node:stream");
     var { fetching } = require_fetch();
     var { makeRequest } = require_request2();
     var { webidl } = require_webidl();
@@ -18687,7 +18687,7 @@ var require_eventsource = __commonJS({
               ));
             }
           });
-          pipeline(
+          pipeline2(
             response.body.stream,
             eventSourceStream,
             (error63) => {
@@ -18889,11 +18889,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path3 = opts.path;
+          let path4 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path3 = `/${path3}`;
+            path4 = `/${path4}`;
           }
-          url2 = new URL(util.parseOrigin(url2).origin + path3);
+          url2 = new URL(util.parseOrigin(url2).origin + path4);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -20047,8 +20047,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addRaw(text, addEOL = false) {
-    this._buffer += text;
+  addRaw(text2, addEOL = false) {
+    this._buffer += text2;
     return addEOL ? this.addEOL() : this;
   }
   /**
@@ -20144,10 +20144,10 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addHeading(text, level) {
+  addHeading(text2, level) {
     const tag = `h${level}`;
     const allowedTag = ["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag) ? tag : "h1";
-    const element = this.wrap(allowedTag, text);
+    const element = this.wrap(allowedTag, text2);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -20176,9 +20176,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addQuote(text, cite) {
+  addQuote(text2, cite) {
     const attrs = Object.assign({}, cite && { cite });
-    const element = this.wrap("blockquote", text, attrs);
+    const element = this.wrap("blockquote", text2, attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -20189,8 +20189,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addLink(text, href) {
-    const element = this.wrap("a", text, { href });
+  addLink(text2, href) {
+    const element = this.wrap("a", text2, { href });
     return this.addRaw(element).addEOL();
   }
 };
@@ -20248,23 +20248,23 @@ var ExitCode;
 function setSecret(secret) {
   issueCommand("add-mask", {}, secret);
 }
-function getInput(name, options) {
-  const val = process.env[`INPUT_${name.replace(/ /g, "_").toUpperCase()}`] || "";
+function getInput(name2, options) {
+  const val = process.env[`INPUT_${name2.replace(/ /g, "_").toUpperCase()}`] || "";
   if (options && options.required && !val) {
-    throw new Error(`Input required and not supplied: ${name}`);
+    throw new Error(`Input required and not supplied: ${name2}`);
   }
   if (options && options.trimWhitespace === false) {
     return val;
   }
   return val.trim();
 }
-function setOutput(name, value) {
+function setOutput(name2, value) {
   const filePath = process.env["GITHUB_OUTPUT"] || "";
   if (filePath) {
-    return issueFileCommand("OUTPUT", prepareKeyValueMessage(name, value));
+    return issueFileCommand("OUTPUT", prepareKeyValueMessage(name2, value));
   }
   process.stdout.write(os4.EOL);
-  issueCommand("set-output", { name }, toCommandValue(value));
+  issueCommand("set-output", { name: name2 }, toCommandValue(value));
 }
 function setFailed(message3) {
   process.exitCode = ExitCode.Failure;
@@ -20286,9 +20286,9 @@ function getIDToken(aud) {
 }
 
 // src/main.ts
-var import_node_crypto = require("node:crypto");
-var import_promises2 = require("node:fs/promises");
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
+var import_promises4 = require("node:fs/promises");
+var import_node_path3 = __toESM(require("node:path"), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -21012,9 +21012,9 @@ function floatSafeRemainder(val, step) {
   return ratio - roundedRatio;
 }
 var EVALUATING = /* @__PURE__ */ Symbol("evaluating");
-function defineLazy(object2, key, getter) {
+function defineLazy(object3, key, getter) {
   let value = void 0;
-  Object.defineProperty(object2, key, {
+  Object.defineProperty(object3, key, {
     get() {
       if (value === EVALUATING) {
         return void 0;
@@ -21026,7 +21026,7 @@ function defineLazy(object2, key, getter) {
       return value;
     },
     set(v) {
-      Object.defineProperty(object2, key, {
+      Object.defineProperty(object3, key, {
         value: v
         // configurable: true,
       });
@@ -21106,10 +21106,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path4) {
+  if (!path4)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path4.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -21408,12 +21408,12 @@ function merge(a, b) {
   });
   return clone(a, def);
 }
-function partial(Class2, schema, mask, name = "partial") {
+function partial(Class2, schema, mask, name2 = "partial") {
   const currDef = schema._zod.def;
   const checks = currDef.checks;
   const hasChecks = checks && checks.length > 0;
   if (hasChecks) {
-    throw new Error(`.${name}() cannot be used on object schemas containing refinements`);
+    throw new Error(`.${name2}() cannot be used on object schemas containing refinements`);
   }
   const selected = mask ? new Set(maskedKeys(schema, mask)) : void 0;
   const newShape = {};
@@ -21449,11 +21449,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path4, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path4);
     return iss;
   });
 }
@@ -21558,8 +21558,8 @@ function cleanEnum(obj) {
     return Number.isNaN(Number.parseInt(k, 10));
   }).map((el) => el[1]);
 }
-function base64ToUint8Array(base643) {
-  const binaryString = atob(base643);
+function base64ToUint8Array(base644) {
+  const binaryString = atob(base644);
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
@@ -21574,9 +21574,9 @@ function uint8ArrayToBase64(bytes) {
   return btoa(binaryString);
 }
 function base64urlToUint8Array(base64url3) {
-  const base643 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - base643.length % 4) % 4);
-  return base64ToUint8Array(base643 + padding);
+  const base644 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - base644.length % 4) % 4);
+  return base64ToUint8Array(base644 + padding);
 }
 function uint8ArrayToBase64url(bytes) {
   return uint8ArrayToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
@@ -21741,7 +21741,7 @@ function newError(Definition) {
   return new Definition();
 }
 // @__NO_SIDE_EFFECTS__
-function $constructor(name, initializer3, proto, params) {
+function $constructor(name2, initializer3, proto, params) {
   const zodProto = {};
   function Internals(def) {
     this.def = def;
@@ -21759,10 +21759,10 @@ function $constructor(name, initializer3, proto, params) {
       } finally {
         _zodDesc.value = void 0;
       }
-    } else if (inst._zod.traits.has(name)) {
+    } else if (inst._zod.traits.has(name2)) {
       return;
     }
-    inst._zod.traits.add(name);
+    inst._zod.traits.add(name2);
     initializer3(inst, def);
     if (initialized) {
       const own2 = Object.getPrototypeOf(inst);
@@ -21788,7 +21788,7 @@ function $constructor(name, initializer3, proto, params) {
   const Parent = params?.Parent ?? Object;
   class Definition extends Parent {
   }
-  Object.defineProperty(Definition, "name", { value: name });
+  Object.defineProperty(Definition, "name", { value: name2 });
   function _(def) {
     const inst = params?.Parent ? newError(Definition) : this;
     init(inst, def);
@@ -21809,10 +21809,10 @@ function $constructor(name, initializer3, proto, params) {
     value: (inst) => {
       if (params?.Parent && inst instanceof params.Parent)
         return true;
-      return inst?._zod?.traits?.has(name);
+      return inst?._zod?.traits?.has(name2);
     }
   });
-  Object.defineProperty(_, "name", { value: name });
+  Object.defineProperty(_, "name", { value: name2 });
   return _;
 }
 var $brand = /* @__PURE__ */ Symbol("zod_brand");
@@ -21822,8 +21822,8 @@ var $ZodAsyncError = class extends Error {
   }
 };
 var $ZodEncodeError = class extends Error {
-  constructor(name) {
-    super(`Encountered unidirectional transform during encode: ${name}`);
+  constructor(name2) {
+    super(`Encountered unidirectional transform during encode: ${name2}`);
     this.name = "ZodEncodeError";
   }
 };
@@ -21903,16 +21903,16 @@ function flattenError(error63, mapper = (issue3) => issue3.message) {
 }
 function formatError(error63, mapper = (issue3) => issue3.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error64, path3 = []) => {
+  const processError = (error64, path4 = []) => {
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path4, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else {
-        const fullpath = [...path3, ...issue3.path];
+        const fullpath = [...path4, ...issue3.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue3));
         } else {
@@ -21951,17 +21951,17 @@ function formatError(error63, mapper = (issue3) => issue3.message) {
 }
 function treeifyError(error63, mapper = (issue3) => issue3.message) {
   const result = { errors: [] };
-  const processError = (error64, path3 = []) => {
+  const processError = (error64, path4 = []) => {
     var _a3;
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path4, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else {
-        const fullpath = [...path3, ...issue3.path];
+        const fullpath = [...path4, ...issue3.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue3));
           continue;
@@ -22000,8 +22000,8 @@ function treeifyError(error63, mapper = (issue3) => issue3.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path3) {
+  const path4 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path4) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -23319,8 +23319,8 @@ var base64urlCharset = /^[A-Za-z0-9_-]*$/;
 function isValidBase64URL(data) {
   if (!base64urlCharset.test(data))
     return false;
-  const base643 = data.replace(/[-_]/g, (c) => c === "-" ? "+" : "/");
-  const padded = base643.padEnd(Math.ceil(base643.length / 4) * 4, "=");
+  const base644 = data.replace(/[-_]/g, (c) => c === "-" ? "+" : "/");
+  const padded = base644.padEnd(Math.ceil(base644.length / 4) * 4, "=");
   return isValidBase64(padded);
 }
 var $ZodBase64URL = /* @__PURE__ */ $constructor("$ZodBase64URL", (inst, def) => {
@@ -23869,56 +23869,56 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     const syms = normalized.symbolKeys;
     const doc = new Doc(["payload", "ctx"], { shape, inst, memo: memo2, syms });
     const parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
-    const prefixStr = (id, k) => `
-          let ${id}_ab = false;
-          for (let i = 0; i < ${id}.issues.length; i++) {
-            const iss = ${id}.issues[i];
+    const prefixStr = (id8, k) => `
+          let ${id8}_ab = false;
+          for (let i = 0; i < ${id8}.issues.length; i++) {
+            const iss = ${id8}.issues[i];
             iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
-            if (iss.continue !== true) ${id}_ab = true;
+            if (iss.continue !== true) ${id8}_ab = true;
           }
-          if (${id}_ab && ctx && ctx.abortEarly) {
+          if (${id8}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
             return payload;
           }`;
     doc.write(`const input = payload.value;`);
     const ids = /* @__PURE__ */ Object.create(null);
-    let counter = 0;
+    let counter2 = 0;
     for (const key of normalized.allKeys) {
-      ids[key] = `key_${counter++}`;
+      ids[key] = `key_${counter2++}`;
     }
     doc.write(memo2 ? `const newResult = memo.alloc(inst, payload, {}, ctx);` : `const newResult = {};`);
     for (const key of normalized.allKeys) {
       if (key === "__proto__")
         continue;
-      const id = ids[key];
+      const id8 = ids[key];
       const k = typeof key === "symbol" ? `syms[${syms.indexOf(key)}]` : esc(key);
       const isPresent = `${k} in input`;
       const schema = shape[key];
       const optin = schema?._zod?.optin;
       const isOptionalIn = optin !== void 0;
       const isOptionalOut = schema?._zod?.optout === "optional";
-      doc.write(`const ${id} = ${parseStr(k)};`);
+      doc.write(`const ${id8} = ${parseStr(k)};`);
       if (isOptionalIn && isOptionalOut) {
-        const assign = optin === "optional" ? `${id}_present` : `${id}.value !== undefined || ${id}_present`;
+        const assign = optin === "optional" ? `${id8}_present` : `${id8}.value !== undefined || ${id8}_present`;
         doc.write(`
-        const ${id}_present = ${isPresent};
-        if (!${id}.issues.length || ${id}_present) {
-          if (${id}.issues.length) {${prefixStr(id, k)}
+        const ${id8}_present = ${isPresent};
+        if (!${id8}.issues.length || ${id8}_present) {
+          if (${id8}.issues.length) {${prefixStr(id8, k)}
           }
 
           if (${assign}) {
-            newResult[${k}] = ${id}.value;
+            newResult[${k}] = ${id8}.value;
           }
         }
 
       `);
       } else if (!isOptionalIn) {
         doc.write(`
-        const ${id}_present = ${isPresent};
-        if (${id}.issues.length) {${prefixStr(id, k)}
+        const ${id8}_present = ${isPresent};
+        if (${id8}.issues.length) {${prefixStr(id8, k)}
         }
-        if (!${id}_present && !${id}.issues.length) {
+        if (!${id8}_present && !${id8}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
@@ -23931,22 +23931,22 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
           }
         }
 
-        if (${id}_present) {
-          newResult[${k}] = ${id}.value;
+        if (${id8}_present) {
+          newResult[${k}] = ${id8}.value;
         }
 
       `);
       } else {
         doc.write(`
-        if (${id}.issues.length) {${prefixStr(id, k)}
+        if (${id8}.issues.length) {${prefixStr(id8, k)}
         }
       `);
         if (optin === "defaulted") {
-          doc.write(`newResult[${k}] = ${id}.value;`);
+          doc.write(`newResult[${k}] = ${id8}.value;`);
         } else {
           doc.write(`
-        if (${id}.value !== undefined || ${isPresent}) {
-          newResult[${k}] = ${id}.value;
+        if (${id8}.value !== undefined || ${isPresent}) {
+          newResult[${k}] = ${id8}.value;
         }
       `);
         }
@@ -29599,8 +29599,8 @@ function ko_default() {
 }
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/lt.js
-var capitalizeFirstCharacter = (text) => {
-  return text.charAt(0).toUpperCase() + text.slice(1);
+var capitalizeFirstCharacter = (text2) => {
+  return text2.charAt(0).toUpperCase() + text2.slice(1);
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
@@ -33322,13 +33322,13 @@ ${code}
   return fn;
 }
 function addConstant(ctx, value) {
-  for (const [name2, v] of ctx.constants) {
+  for (const [name3, v] of ctx.constants) {
     if (v === value)
-      return name2;
+      return name3;
   }
-  const name = `c${ctx.constantCounter++}`;
-  ctx.constants.set(name, value);
-  return name;
+  const name2 = `c${ctx.constantCounter++}`;
+  ctx.constants.set(name2, value);
+  return name2;
 }
 function addUserConstant(ctx, fn) {
   ctx.definite = false;
@@ -34600,7 +34600,7 @@ function generateRecordCheck(doc, ctx, schema, accessor) {
   }, `return INVALID;`);
   return outputVar;
 }
-function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
+function emitOwnKeys(doc, ctx, accessor, kVar, body2, onSymbol) {
   const propIsEnumerableConst = addConstant(ctx, Object.prototype.propertyIsEnumerable);
   const symsVar = newVar(ctx);
   const keysVar = newVar(ctx);
@@ -34611,7 +34611,7 @@ function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
   doc.indented((d) => {
     d.write(`const ${kVar} = ${keysVar}[${iVar}];`);
     d.write(`if (${kVar} === "__proto__" || !${propIsEnumerableConst}.call(${accessor}, ${kVar})) continue;`);
-    body(d);
+    body2(d);
   });
   doc.write(`}`);
   doc.write(`for (let ${iVar} = 0; ${iVar} < ${symsVar}.length; ${iVar}++) {`);
@@ -34621,7 +34621,7 @@ function emitOwnKeys(doc, ctx, accessor, kVar, body, onSymbol) {
     if (onSymbol)
       d.write(onSymbol);
     else
-      body(d);
+      body2(d);
   });
   doc.write(`}`);
 }
@@ -35964,26 +35964,26 @@ function extractDefs(ctx, schema) {
     return;
   const idToSchema = /* @__PURE__ */ new Map();
   for (const entry of ctx.seen.entries()) {
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
-      const existing = idToSchema.get(id);
+    const id8 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id8) {
+      const existing = idToSchema.get(id8);
       if (existing && existing !== entry[0]) {
-        throw new Error(`Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
+        throw new Error(`Duplicate schema id "${id8}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
       }
-      idToSchema.set(id, entry[0]);
+      idToSchema.set(id8, entry[0]);
     }
   }
   const makeURI = (entry) => {
     const defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
     if (ctx.external) {
       const externalId = ctx.external.registry.get(entry[0])?.id;
-      const uriGenerator = ctx.external.uri ?? ((id2) => id2);
+      const uriGenerator = ctx.external.uri ?? ((id9) => id9);
       if (externalId) {
         return { ref: uriGenerator(externalId) };
       }
-      const id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
-      entry[1].defId = id;
-      return { defId: id, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id)}` };
+      const id8 = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+      entry[1].defId = id8;
+      return { defId: id8, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id8)}` };
     }
     const uriPrefix = `#`;
     const defUriPrefix = `${uriPrefix}/${defsSegment}/`;
@@ -36031,8 +36031,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         continue;
       }
     }
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
+    const id8 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id8) {
       extractToDef(entry);
       continue;
     }
@@ -36093,8 +36093,8 @@ function foldObjects(members2) {
   }
   const properties = {};
   const required2 = /* @__PURE__ */ new Set();
-  for (const object2 of objects) {
-    for (const key in object2.properties) {
+  for (const object3 of objects) {
+    for (const key in object3.properties) {
       if (Object.prototype.hasOwnProperty.call(properties, key))
         continue;
       const parts = [];
@@ -36108,18 +36108,18 @@ function foldObjects(members2) {
       const merged = parts.length === 1 ? parts[0] : foldObjects(parts) ?? { allOf: parts };
       assignProp(properties, key, merged);
     }
-    for (const key of object2.required ?? [])
+    for (const key of object3.required ?? [])
       required2.add(key);
   }
   const folded = { type: "object", properties };
   if (required2.size)
     folded.required = [...required2];
-  if (objects.every((object2) => object2.additionalProperties === false)) {
+  if (objects.every((object3) => object3.additionalProperties === false)) {
     folded.additionalProperties = false;
   } else {
     const constraints = [];
-    for (const object2 of objects) {
-      const constraint = undeclaredConstraint(object2);
+    for (const object3 of objects) {
+      const constraint = undeclaredConstraint(object3);
       if (constraint && !constraints.some((seen) => JSON.stringify(seen) === JSON.stringify(constraint)))
         constraints.push(constraint);
     }
@@ -36265,10 +36265,10 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id = ctx.external.registry.get(schema)?.id;
-    if (!id)
+    const id8 = ctx.external.registry.get(schema)?.id;
+    if (!id8)
       throw new Error("Schema is missing an `id` property");
-    result.$id = ctx.external.uri(id);
+    result.$id = ctx.external.uri(id8);
   }
   assignProps(result, root.defId ? root.schema : root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
@@ -36874,7 +36874,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json2;
+  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id: id8, ...rest } = json2;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -39103,13 +39103,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path3 = ref.slice(1).split("/").filter(Boolean);
-  if (path3.length === 0) {
+  const path4 = ref.slice(1).split("/").filter(Boolean);
+  if (path4.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path3[0] === defsKey) {
-    const key = path3[1] === void 0 ? void 0 : decodeJSONPointerSegment(path3[1]);
+  if (path4[0] === defsKey) {
+    const key = path4[1] === void 0 ? void 0 : decodeJSONPointerSegment(path4[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -39958,39 +39958,2510 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// ../protocol/src/schema.ts
-var identifier = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+// ../contracts/src/identity.ts
+var githubNumericIdSchema = external_exports.string().regex(/^[1-9][0-9]{0,31}$/, "expected a numeric GitHub id");
+var githubAccountTypeSchema = external_exports.enum(["User", "Organization", "Bot", "Mannequin"]);
+var githubIdentitySchema = external_exports.object({
+  id: githubNumericIdSchema,
+  login: external_exports.string().trim().min(1).max(255),
+  accountType: githubAccountTypeSchema
+}).strict();
+var gardenerPrincipalSchema = external_exports.object({
+  kind: external_exports.enum(["owner", "member", "publisher", "system", "channel"]),
+  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
+  displayName: external_exports.string().trim().min(1).max(255).optional()
+}).strict();
+var authoringPrincipalSchema = external_exports.discriminatedUnion("provider", [
+  external_exports.object({ provider: external_exports.literal("github"), identity: githubIdentitySchema }).strict(),
+  external_exports.object({ provider: external_exports.literal("gardener"), principal: gardenerPrincipalSchema }).strict(),
+  external_exports.object({ provider: external_exports.literal("oauth_client"), clientId: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/) }).strict()
+]);
+
+// ../contracts/src/repository.ts
+var name = external_exports.string().trim().min(1).max(255).regex(/^[A-Za-z0-9_.-]+$/);
+var operationRepositoryRefSchema = external_exports.object({
+  provider: external_exports.literal("github"),
+  id: githubNumericIdSchema,
+  installationId: githubNumericIdSchema.optional(),
+  owner: name,
+  name,
+  defaultBranch: external_exports.string().trim().min(1).max(255)
+}).strict();
+var repositoryRefSchema = operationRepositoryRefSchema.extend({
+  installationId: githubNumericIdSchema
+}).strict();
+var issueRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
+var pullRequestRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
+var discussionRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
+
+// ../contracts/src/events.ts
+var id = external_exports.string().min(1).max(255);
+var text = external_exports.string().max(65536);
+var sha = external_exports.string().regex(/^[a-fA-F0-9]{40}$/);
+var labels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100).default([]);
+var repositoryEventKindValues = [
+  "github.issue",
+  "github.pull_request",
+  "github.issue_comment",
+  "github.pull_request_comment",
+  "github.pull_request_review",
+  "github.pull_request_review_comment",
+  "github.discussion",
+  "github.discussion_comment",
+  "github.check_run",
+  "github.check_suite",
+  "github.push",
+  "github.release",
+  "gardener.manual",
+  "gardener.scheduled"
+];
+var repositoryEventKindSchema = external_exports.enum(repositoryEventKindValues);
+var issueEventActions = ["opened", "edited", "reopened", "closed", "labeled", "unlabeled", "assigned", "unassigned", "milestoned", "demilestoned", "locked", "unlocked", "typed", "untyped", "transferred", "deleted", "pinned", "unpinned"];
+var pullRequestEventActions = ["opened", "edited", "reopened", "closed", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "assigned", "unassigned", "milestoned", "demilestoned", "locked", "unlocked", "enqueued", "dequeued", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled"];
+var commentEventActions = ["created", "edited", "deleted"];
+var reviewEventActions = ["submitted", "edited", "dismissed"];
+var discussionEventActions = ["created", "edited", "deleted", "transferred", "pinned", "unpinned", "locked", "unlocked", "category_changed", "labeled", "unlabeled", "answered", "unanswered"];
+var checkRunEventActions = ["created", "rerequested", "completed", "requested_action"];
+var checkSuiteEventActions = ["requested", "rerequested", "completed"];
+var releaseEventActions = ["created", "edited", "deleted", "published", "unpublished", "prereleased", "released"];
+var issueEventActionSchema = external_exports.enum(issueEventActions);
+var pullRequestEventActionSchema = external_exports.enum(pullRequestEventActions);
+var commentEventActionSchema = external_exports.enum(commentEventActions);
+var reviewEventActionSchema = external_exports.enum(reviewEventActions);
+var discussionEventActionSchema = external_exports.enum(discussionEventActions);
+var checkRunEventActionSchema = external_exports.enum(checkRunEventActions);
+var checkSuiteEventActionSchema = external_exports.enum(checkSuiteEventActions);
+var releaseEventActionSchema = external_exports.enum(releaseEventActions);
+var issueResourceV2Schema = external_exports.object({
+  id,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: text.nullable(),
+  state: external_exports.enum(["open", "closed"]),
+  labels,
+  locked: external_exports.boolean(),
+  updatedAt: external_exports.iso.datetime(),
+  htmlUrl: external_exports.url()
+}).strict();
+var pullRequestResourceV2Schema = external_exports.object({
+  id,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: text.nullable(),
+  state: external_exports.enum(["open", "closed"]),
+  draft: external_exports.boolean(),
+  merged: external_exports.boolean(),
+  labels,
+  head: external_exports.object({ ref: external_exports.string().min(1).max(255), sha }).strict(),
+  base: external_exports.object({ ref: external_exports.string().min(1).max(255), sha }).strict(),
+  updatedAt: external_exports.iso.datetime(),
+  htmlUrl: external_exports.url()
+}).strict();
+var commentResourceV2Schema = external_exports.object({ id, body: text, updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
+var reviewResourceV2Schema = external_exports.object({ id, state: external_exports.enum(["pending", "commented", "approved", "changes_requested", "dismissed"]), body: text, submittedAt: external_exports.iso.datetime().nullable(), commitSha: sha }).strict();
+var reviewCommentResourceV2Schema = commentResourceV2Schema.extend({ path: external_exports.string().min(1).max(1024), line: external_exports.number().int().positive().nullable(), commitSha: sha }).strict();
+var discussionResourceV2Schema = external_exports.object({ id, number: external_exports.number().int().positive(), title: external_exports.string().max(1024), body: text, state: external_exports.enum(["open", "closed"]), answered: external_exports.boolean(), labels, updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
+var checkRunResourceV2Schema = external_exports.object({ id, name: external_exports.string().min(1).max(255), headSha: sha, status: external_exports.enum(["queued", "in_progress", "completed", "waiting", "pending"]), conclusion: external_exports.enum(["action_required", "cancelled", "failure", "neutral", "skipped", "stale", "startup_failure", "success", "timed_out"]).nullable(), detailsUrl: external_exports.url().nullable() }).strict();
+var checkSuiteResourceV2Schema = external_exports.object({ id, headSha: sha, status: external_exports.enum(["queued", "in_progress", "completed", "waiting", "pending"]), conclusion: external_exports.string().min(1).max(100).nullable() }).strict();
+var pushResourceV2Schema = external_exports.object({ ref: external_exports.string().min(1).max(255), before: sha, after: sha, forced: external_exports.boolean(), created: external_exports.boolean(), deleted: external_exports.boolean(), commitCount: external_exports.number().int().nonnegative().max(1e4) }).strict();
+var releaseResourceV2Schema = external_exports.object({ id, tagName: external_exports.string().min(1).max(255), targetCommitish: external_exports.string().min(1).max(255), name: external_exports.string().max(255).nullable(), body: text.nullable(), draft: external_exports.boolean(), prerelease: external_exports.boolean(), publishedAt: external_exports.iso.datetime().nullable(), updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
+var githubEventBaseSchema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  id,
+  deliveryId: id,
+  instanceId: id,
+  occurredAt: external_exports.iso.datetime(),
+  repository: repositoryRefSchema,
+  actor: githubIdentitySchema,
+  resourceAuthor: githubIdentitySchema.nullable()
+});
+var githubEventSchemas = [
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.issue"), action: issueEventActionSchema, issue: issueResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request"), action: pullRequestEventActionSchema, pullRequest: pullRequestResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.issue_comment"), action: commentEventActionSchema, issue: issueResourceV2Schema, comment: commentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_comment"), action: commentEventActionSchema, pullRequest: pullRequestResourceV2Schema, comment: commentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_review"), action: reviewEventActionSchema, pullRequest: pullRequestResourceV2Schema, review: reviewResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_review_comment"), action: commentEventActionSchema, pullRequest: pullRequestResourceV2Schema, comment: reviewCommentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.discussion"), action: discussionEventActionSchema, discussion: discussionResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.discussion_comment"), action: commentEventActionSchema, discussion: discussionResourceV2Schema, comment: commentResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.check_run"), action: checkRunEventActionSchema, checkRun: checkRunResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.check_suite"), action: checkSuiteEventActionSchema, checkSuite: checkSuiteResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.push"), action: external_exports.literal("pushed"), push: pushResourceV2Schema }).strict(),
+  githubEventBaseSchema.extend({ kind: external_exports.literal("github.release"), action: releaseEventActionSchema, release: releaseResourceV2Schema }).strict()
+];
+var gardenerEventBaseSchema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  id,
+  instanceId: id,
+  occurredAt: external_exports.iso.datetime(),
+  repository: repositoryRefSchema,
+  actor: gardenerPrincipalSchema,
+  resourceAuthor: external_exports.null()
+});
+var manualEventSchema = gardenerEventBaseSchema.extend({ kind: external_exports.literal("gardener.manual"), action: external_exports.literal("requested"), requestId: id, prompt: external_exports.string().trim().min(1).max(2e4) }).strict();
+var scheduledEventSchema = gardenerEventBaseSchema.extend({ kind: external_exports.literal("gardener.scheduled"), action: external_exports.literal("triggered"), scheduleId: id, scheduledFor: external_exports.iso.datetime() }).strict();
+var repositoryEventV2Schema = external_exports.discriminatedUnion("kind", [...githubEventSchemas, manualEventSchema, scheduledEventSchema]);
+var triggerSelectors = [
+  ...issueEventActions.map((action) => `github.issue.${action}`),
+  ...pullRequestEventActions.map((action) => `github.pull_request.${action}`),
+  ...commentEventActions.flatMap((action) => [`github.issue_comment.${action}`, `github.pull_request_comment.${action}`, `github.pull_request_review_comment.${action}`, `github.discussion_comment.${action}`]),
+  ...reviewEventActions.map((action) => `github.pull_request_review.${action}`),
+  ...discussionEventActions.map((action) => `github.discussion.${action}`),
+  ...checkRunEventActions.map((action) => `github.check_run.${action}`),
+  ...checkSuiteEventActions.map((action) => `github.check_suite.${action}`),
+  "github.push.pushed",
+  ...releaseEventActions.map((action) => `github.release.${action}`),
+  "gardener.manual.requested",
+  "gardener.scheduled.triggered"
+];
+var repositoryEventTriggerValues = triggerSelectors;
+var repositoryEventTriggerSchema = external_exports.enum(repositoryEventTriggerValues);
+
+// ../contracts/src/operations.ts
+var operationKindValues = [
+  "issue.label.add",
+  "issue.label.remove",
+  "issue.comment.create",
+  "issue.comment.update",
+  "issue.close",
+  "issue.reopen",
+  "issue.assignee.add",
+  "issue.assignee.remove",
+  "pull_request.comment.create",
+  "pull_request.comment.update",
+  "pull_request.review.submit",
+  "pull_request.reviewer.request",
+  "pull_request.reviewer.remove",
+  "pull_request.update",
+  "branch.create",
+  "commit.create",
+  "pull_request.open_draft",
+  "pull_request.merge",
+  "discussion.comment.create",
+  "discussion.comment.update",
+  "discussion.answer.mark",
+  "discussion.answer.unmark",
+  "discussion.close",
+  "discussion.reopen",
+  "check.rerun",
+  "release.create",
+  "release.update",
+  "release.publish",
+  "release.delete"
+];
+var operationKindSchema = external_exports.enum(operationKindValues);
+var operationFamilySchema = external_exports.enum(["issue", "pull_request", "git", "discussion", "check", "release"]);
+var operationCatalogEntrySchema = external_exports.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: external_exports.literal(true), highImpact: external_exports.boolean() }).strict();
+var operationCatalog = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
+  kind,
+  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind === "commit.create" ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
+  persistent: true,
+  highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete"
+})));
+var shaSchema = external_exports.string().regex(/^[a-fA-F0-9]{40}$/);
+function isValidGitBranchName(value) {
+  const components = value.split("/");
+  return value !== "@" && !value.startsWith("/") && !value.endsWith("/") && !value.endsWith(".") && !value.includes("..") && !value.includes("//") && !value.includes("@{") && !/[~^:?*[\\\x00-\x20\x7f]/.test(value) && components.every((component) => component.length > 0 && !component.startsWith(".") && !component.endsWith(".") && !component.endsWith(".lock"));
+}
+var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(isValidGitBranchName, "invalid Git branch name");
+var gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
+var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
+var COMMIT_FILE_LIMIT = 1e3;
+var INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES = 7e6;
+var canonicalBase64Schema = external_exports.string().regex(
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
+  "expected canonical base64 content"
+);
+var commitFilePathSchema = external_exports.string().min(1).max(1024).refine(
+  (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  "invalid repository path"
+);
+var inlineCommitFileSchema = external_exports.object({
+  path: commitFilePathSchema,
+  contentBase64: canonicalBase64Schema.max(14e5).nullable()
+}).strict();
+var capturedCommitFileSchema = external_exports.object({
+  path: commitFilePathSchema,
+  captured: external_exports.discriminatedUnion("status", [
+    external_exports.object({
+      status: external_exports.enum(["added", "modified"]),
+      mode: external_exports.enum(["100644", "100755", "120000"]),
+      /** Bounded by GitHub's per-blob maximum, so an inapplicable capture is refused before apply. */
+      sizeBytes: external_exports.number().int().nonnegative().max(100 * 1024 * 1024),
+      sha256: external_exports.string().regex(/^[a-f0-9]{64}$/)
+    }).strict(),
+    external_exports.object({ status: external_exports.literal("deleted") }).strict()
+  ])
+}).strict();
+var commitFileSchema = external_exports.union([inlineCommitFileSchema, capturedCommitFileSchema]);
+var operationBase = external_exports.object({ schemaVersion: external_exports.literal("v2"), id: operationIdSchema, repository: operationRepositoryRefSchema });
+var expectedTimestamp = external_exports.iso.datetime();
+var body = external_exports.string().min(1).max(65536);
+var issueBase = operationBase.extend({ issueNumber: external_exports.number().int().positive(), expectedIssueState: external_exports.enum(["open", "closed"]), expectedIssueUpdatedAt: expectedTimestamp });
+var pullBase = operationBase.extend({
+  pullNumber: external_exports.number().int().positive(),
+  expectedHeadSha: shaSchema,
+  expectedBaseRef: branchNameSchema,
+  expectedBaseSha: shaSchema,
+  expectedState: external_exports.enum(["open", "closed"]),
+  expectedDraft: external_exports.boolean(),
+  expectedPullUpdatedAt: expectedTimestamp
+});
+var discussionBase = operationBase.extend({ discussionNumber: external_exports.number().int().positive(), expectedDiscussionState: external_exports.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
+var commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body };
+var requiredCheckSchema = external_exports.object({ context: external_exports.string().trim().min(1).max(255), appId: external_exports.number().int().positive() }).strict();
+var operationOptions = [
+  issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: external_exports.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: external_exports.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.comment.create"), body }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.comment.update"), ...commentUpdate }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.close"), expectedIssueState: external_exports.literal("open") }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.reopen"), expectedIssueState: external_exports.literal("closed") }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.comment.create"), body }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.comment.update"), ...commentUpdate }).strict(),
+  pullBase.extend({
+    kind: external_exports.literal("pull_request.review.submit"),
+    expectedState: external_exports.literal("open"),
+    event: external_exports.enum(["comment", "approve", "request_changes"]),
+    body: external_exports.string().max(65536),
+    comments: external_exports.array(external_exports.object({ path: external_exports.string().min(1).max(1024), line: external_exports.number().int().positive(), side: external_exports.enum(["LEFT", "RIGHT"]), body }).strict()).max(100)
+  }).strict().superRefine((value, context) => {
+    if (value.event !== "approve" && !value.body.trim() && value.comments.length === 0) context.addIssue({ code: "custom", path: ["body"], message: "comment and request-changes reviews require content" });
+  }),
+  pullBase.extend({ kind: external_exports.literal("pull_request.reviewer.request"), reviewerIds: external_exports.array(githubNumericIdSchema).min(1).max(15) }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.reviewer.remove"), reviewerIds: external_exports.array(githubNumericIdSchema).min(1).max(15) }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.update"), title: external_exports.string().trim().min(1).max(256).optional(), body: external_exports.string().max(65536).optional(), draft: external_exports.boolean().optional(), state: external_exports.enum(["open", "closed"]).optional() }).strict().superRefine((value, context) => {
+    if (value.title === void 0 && value.body === void 0 && value.draft === void 0 && value.state === void 0) context.addIssue({ code: "custom", message: "pull request update requires at least one change" });
+    if (value.draft !== void 0 && (value.title !== void 0 || value.body !== void 0 || value.state !== void 0)) {
+      context.addIssue({ code: "custom", message: "draft state must be updated in a separate exact operation" });
+    }
+  }),
+  operationBase.extend({ kind: external_exports.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
+  operationBase.extend({
+    kind: external_exports.literal("commit.create"),
+    branch: gardenerBranchNameSchema,
+    expectedHeadSha: shaSchema,
+    message: external_exports.string().trim().min(1).max(1e3),
+    files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT)
+  }).strict().superRefine((value, context) => {
+    const paths = /* @__PURE__ */ new Set();
+    let encodedBytes = 0;
+    let inlineFiles = 0;
+    value.files.forEach((file2, index) => {
+      if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file2.path);
+      if ("contentBase64" in file2) {
+        inlineFiles += 1;
+        encodedBytes += file2.contentBase64?.length ?? 0;
+      }
+    });
+    if (encodedBytes > INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
+    if (inlineFiles > 0 && inlineFiles !== value.files.length) {
+      context.addIssue({ code: "custom", path: ["files"], message: "a commit may not mix inline content with capture-backed content" });
+    }
+  }),
+  operationBase.extend({
+    kind: external_exports.literal("pull_request.open_draft"),
+    head: gardenerBranchNameSchema,
+    base: branchNameSchema,
+    expectedHeadSha: shaSchema,
+    expectedBaseSha: shaSchema,
+    title: external_exports.string().trim().min(1).max(256),
+    body: external_exports.string().max(65536),
+    draft: external_exports.literal(true)
+  }).strict(),
+  pullBase.extend({
+    kind: external_exports.literal("pull_request.merge"),
+    expectedState: external_exports.literal("open"),
+    expectedDraft: external_exports.literal(false),
+    method: external_exports.enum(["merge", "squash", "rebase"]),
+    /**
+     * The real gate. Merging with zero verified checks is not something this
+     * contract can express, in any target.
+     */
+    requiredChecks: external_exports.array(requiredCheckSchema).min(1).max(100),
+    /**
+     * Digest of the branch-protection configuration observed when the merge was
+     * proposed. Optional because the Actions target cannot read branch
+     * protection with a repository `GITHUB_TOKEN` and must not fabricate a
+     * digest it never computed; GitHub itself remains the authoritative
+     * enforcement point there. Installation-backed boundaries that *can* read
+     * protection still require it — see `evaluateOperationPolicy`, which denies
+     * a merge whose expected digest is absent.
+     */
+    expectedBranchProtectionHash: external_exports.string().regex(/^[a-f0-9]{64}$/).optional()
+  }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.comment.create"), body }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.comment.update"), ...commentUpdate }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.answer.mark"), answerCommentId: githubNumericIdSchema, expectedAnswerCommentId: githubNumericIdSchema.nullable() }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.answer.unmark"), expectedAnswerCommentId: githubNumericIdSchema }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.close"), expectedDiscussionState: external_exports.literal("open") }).strict(),
+  discussionBase.extend({ kind: external_exports.literal("discussion.reopen"), expectedDiscussionState: external_exports.literal("closed") }).strict(),
+  operationBase.extend({ kind: external_exports.literal("check.rerun"), checkRunId: githubNumericIdSchema, expectedHeadSha: shaSchema, expectedStatus: external_exports.literal("completed"), expectedConclusion: external_exports.string().trim().min(1).max(100).nullable() }).strict(),
+  operationBase.extend({
+    kind: external_exports.literal("release.create"),
+    tagName: external_exports.string().trim().min(1).max(255),
+    targetCommitSha: shaSchema,
+    expectedTagAbsent: external_exports.literal(true),
+    name: external_exports.string().trim().min(1).max(255),
+    body: external_exports.string().max(65536),
+    draft: external_exports.literal(true),
+    prerelease: external_exports.boolean()
+  }).strict(),
+  operationBase.extend({
+    kind: external_exports.literal("release.update"),
+    releaseId: githubNumericIdSchema,
+    expectedTagName: external_exports.string().min(1).max(255),
+    expectedTargetCommitSha: shaSchema,
+    expectedDraft: external_exports.boolean(),
+    expectedPrerelease: external_exports.boolean(),
+    expectedReleaseUpdatedAt: expectedTimestamp,
+    name: external_exports.string().trim().min(1).max(255).optional(),
+    body: external_exports.string().max(65536).optional(),
+    prerelease: external_exports.boolean().optional()
+  }).strict().superRefine((value, context) => {
+    if (value.name === void 0 && value.body === void 0 && value.prerelease === void 0) context.addIssue({ code: "custom", message: "release update requires at least one change" });
+  }),
+  operationBase.extend({ kind: external_exports.literal("release.publish"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.literal(true), expectedPrerelease: external_exports.boolean(), expectedPublished: external_exports.literal(false), expectedReleaseUpdatedAt: expectedTimestamp }).strict(),
+  operationBase.extend({ kind: external_exports.literal("release.delete"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.boolean(), expectedPublished: external_exports.boolean(), expectedReleaseUpdatedAt: expectedTimestamp }).strict()
+];
+var reservedMarker = /(?:<!--\s*gardener-operation:|gardener-operation:|gardener-idempotency:)/i;
+function collectStrings(value, output2) {
+  if (typeof value === "string") output2.push(value);
+  else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStrings(item, output2));
+}
+var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
+  const strings = [];
+  if (operation.kind === "issue.comment.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
+    const marker = `<!-- gardener-operation:${operation.id} -->`;
+    const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
+${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
+    collectStrings({ ...operation, body: bodyWithoutExactMarker }, strings);
+  } else {
+    collectStrings(operation, strings);
+  }
+  if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
+  if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
+  if (operation.kind === "pull_request.merge") {
+    const checks = operation.requiredChecks.map((check2) => `${check2.appId}:${check2.context}`);
+    if (new Set(checks).size !== checks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
+  }
+});
+var operationReceiptSchema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  operationId: operationIdSchema,
+  operationHash: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  kind: operationKindSchema,
+  status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
+  attempt: external_exports.number().int().positive(),
+  attemptedAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime(),
+  providerRequestId: external_exports.string().min(1).max(255).optional(),
+  resourceUrl: external_exports.url().optional(),
+  error: external_exports.object({ code: external_exports.string().min(1).max(100), message: external_exports.string().min(1).max(2e3), retryable: external_exports.boolean() }).strict().optional()
+}).strict().superRefine((receipt, context) => {
+  if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
+  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
+  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
+});
+var issueOutputs = { issueNumber: "resourceNumber" };
+var pullOutputs = { pullNumber: "resourceNumber" };
+var discussionOutputs = { discussionNumber: "resourceNumber" };
+var commentOutputs = { commentId: "githubId", commentUrl: "url" };
+var releaseOutputs = {
+  releaseId: "githubId",
+  tagName: "string",
+  releaseUrl: "url",
+  draft: "boolean",
+  prerelease: "boolean"
+};
+var operationOutputCatalog = {
+  "issue.label.add": { ...issueOutputs, label: "string" },
+  "issue.label.remove": { ...issueOutputs, label: "string" },
+  "issue.comment.create": { ...issueOutputs, ...commentOutputs },
+  "issue.comment.update": { ...issueOutputs, ...commentOutputs },
+  "issue.close": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
+  "issue.reopen": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
+  "issue.assignee.add": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "issue.assignee.remove": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "pull_request.comment.create": { ...pullOutputs, ...commentOutputs },
+  "pull_request.comment.update": { ...pullOutputs, ...commentOutputs },
+  "pull_request.review.submit": { ...pullOutputs, reviewId: "githubId", reviewUrl: "url", reviewState: "string" },
+  "pull_request.reviewer.request": { ...pullOutputs },
+  "pull_request.reviewer.remove": { ...pullOutputs },
+  "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
+  "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
+  "commit.create": {
+    branch: "gardenerBranch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    parentSha: "commitSha",
+    commitUrl: "url"
+  },
+  "pull_request.open_draft": {
+    ...pullOutputs,
+    pullUrl: "url",
+    pullNodeId: "nodeId",
+    headRef: "gardenerBranch",
+    headSha: "commitSha",
+    baseRef: "string"
+  },
+  "pull_request.merge": { ...pullOutputs, mergeCommitSha: "commitSha", pullUrl: "url" },
+  "discussion.comment.create": { ...discussionOutputs, ...commentOutputs, commentNodeId: "nodeId" },
+  "discussion.comment.update": { ...discussionOutputs, ...commentOutputs, commentNodeId: "nodeId" },
+  "discussion.answer.mark": { ...discussionOutputs, answerCommentId: "nullableGithubId" },
+  "discussion.answer.unmark": { ...discussionOutputs, answerCommentId: "nullableGithubId" },
+  "discussion.close": { ...discussionOutputs, state: "openClosedState", discussionUrl: "url" },
+  "discussion.reopen": { ...discussionOutputs, state: "openClosedState", discussionUrl: "url" },
+  "check.rerun": { checkRunId: "githubId", headSha: "commitSha", status: "string" },
+  "release.create": { ...releaseOutputs },
+  "release.update": { ...releaseOutputs },
+  "release.publish": { ...releaseOutputs },
+  "release.delete": { releaseId: "githubId", tagName: "string" }
+};
+function operationOutputType(kind, output2) {
+  const outputs = operationOutputCatalog[kind];
+  return Object.hasOwn(outputs, output2) ? outputs[output2] : void 0;
+}
+var outputSentinels = {
+  string: "gardener-step-output",
+  resourceNumber: 1,
+  boolean: true,
+  commitSha: "0".repeat(40),
+  githubId: "1",
+  nullableGithubId: "1",
+  gardenerBranch: "gardener/step-output",
+  gitRef: "refs/heads/gardener/step-output",
+  url: "https://github.com/gardener/step-output",
+  nodeId: "GardenerStepOutput",
+  openClosedState: "open"
+};
+function operationOutputSentinel(type) {
+  return outputSentinels[type];
+}
+
+// ../contracts/src/capabilities.ts
+var observationCapabilityValues = [
+  "github.repository.metadata.read",
+  "github.issue.read",
+  "github.pull_request.read",
+  "github.comment.read",
+  "github.review.read",
+  "github.discussion.read",
+  "github.check.read",
+  "github.contents.read",
+  "github.commit.read",
+  "github.release.read"
+];
+var observationCapabilitySchema = external_exports.enum(observationCapabilityValues);
+var workspaceCapabilityValues = [
+  "workspace.fs.read",
+  "workspace.fs.write",
+  "workspace.git.read",
+  "workspace.git.write-local",
+  "workspace.exec.shell",
+  "workspace.exec.javascript",
+  "workspace.exec.container",
+  "workspace.network.connect",
+  "workspace.dependencies.install",
+  "workspace.artifacts.publish"
+];
+var workspaceCapabilitySchema = external_exports.enum(workspaceCapabilityValues);
+var effectCapabilitySchema = operationKindSchema;
+function uniqueValues(values, context, path4) {
+  if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path: path4, message: "capabilities must be unique" });
+}
+var requestedCapabilitySetSchema = external_exports.object({
+  observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length).default([]),
+  workspace: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilityValues.length).default([]),
+  effects: external_exports.array(effectCapabilitySchema).max(operationKindSchema.options.length).default([])
+}).strict().superRefine((value, context) => {
+  uniqueValues(value.observation, context, ["observation"]);
+  uniqueValues(value.workspace, context, ["workspace"]);
+  uniqueValues(value.effects, context, ["effects"]);
+});
+var capabilityPolicyModeSchema = external_exports.enum(["disabled", "approval", "automatic"]);
+var effectiveCapabilitySetSchema = external_exports.object({
+  observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length),
+  workspace: external_exports.array(external_exports.object({
+    capability: workspaceCapabilitySchema,
+    mode: capabilityPolicyModeSchema
+  }).strict()).max(workspaceCapabilityValues.length),
+  effects: external_exports.array(external_exports.object({
+    capability: effectCapabilitySchema,
+    mode: capabilityPolicyModeSchema
+  }).strict()).max(operationKindSchema.options.length)
+}).strict().superRefine((value, context) => {
+  uniqueValues(value.observation, context, ["observation"]);
+  uniqueValues(value.workspace.map((item) => item.capability), context, ["workspace"]);
+  uniqueValues(value.effects.map((item) => item.capability), context, ["effects"]);
+});
+var capabilityCatalogEntrySchema = external_exports.object({
+  id: external_exports.union([observationCapabilitySchema, workspaceCapabilitySchema, effectCapabilitySchema]),
+  category: external_exports.enum(["observation", "workspace", "effect"]),
+  description: external_exports.string().min(1).max(500),
+  runtimeGrant: external_exports.enum(["safe_one_run", "revision_required", "never"])
+}).strict();
+var capabilityCatalog = Object.freeze([
+  ...observationCapabilityValues.map((id8) => ({ id: id8, category: "observation", description: `Observe ${id8}.`, runtimeGrant: "safe_one_run" })),
+  ...workspaceCapabilityValues.map((id8) => ({
+    id: id8,
+    category: "workspace",
+    description: `Use ${id8} in the run-scoped Cloudflare Computer workspace.`,
+    runtimeGrant: "safe_one_run"
+  })),
+  ...operationKindSchema.options.map((id8) => ({
+    id: id8,
+    category: "effect",
+    description: `Propose the persistent effect ${id8}.`,
+    runtimeGrant: "revision_required"
+  }))
+]);
+var publicNetworkHostnameSchema = external_exports.hostname().transform((value) => value.toLowerCase()).refine((value) => {
+  if (value === "localhost" || value.endsWith(".localhost") || value.endsWith(".local") || value.endsWith(".internal") || value.endsWith(".home.arpa")) return false;
+  if (value === "metadata.google.internal" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value) || value.includes(":")) return false;
+  return true;
+}, "network host must be a public DNS hostname; resolved addresses must also be checked at execution time");
+var capabilityRequestBaseSchema = external_exports.object({
+  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
+  reason: external_exports.string().trim().min(1).max(2e3),
+  requestedAt: external_exports.iso.datetime()
+});
+var runtimeCapabilityRequestSchema = external_exports.discriminatedUnion("kind", [
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("observation"), capability: observationCapabilitySchema }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("workspace"), capability: workspaceCapabilitySchema.exclude(["workspace.exec.container", "workspace.network.connect"]) }).strict(),
+  capabilityRequestBaseSchema.extend({
+    kind: external_exports.literal("container"),
+    capability: external_exports.literal("workspace.exec.container"),
+    imageProfile: external_exports.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
+    maxRuntimeSeconds: external_exports.number().int().positive().max(3600)
+  }).strict(),
+  capabilityRequestBaseSchema.extend({
+    kind: external_exports.literal("network"),
+    capability: external_exports.literal("workspace.network.connect"),
+    hosts: external_exports.array(publicNetworkHostnameSchema).min(1).max(20)
+  }).strict().superRefine((request, context) => {
+    if (new Set(request.hosts).size !== request.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
+  }),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("persistent_effect"), capabilities: external_exports.array(effectCapabilitySchema).min(1).max(operationKindSchema.options.length) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("actor_broadening"), actorIds: external_exports.array(githubNumericIdSchema).min(1).max(100) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("authority_increase"), requestedMode: external_exports.enum(["approval", "automatic"]) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("credentials"), credentialKind: external_exports.string().trim().min(1).max(100) }).strict(),
+  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("policy_edit"), policyId: external_exports.string().min(1).max(255) }).strict()
+]);
+var runtimeGrantClassificationSchema = external_exports.enum(["safe_one_run", "revision_required", "never"]);
+
+// ../contracts/src/eligibility.ts
+var agentEligibilitySchema = external_exports.object({
+  actorIds: external_exports.array(githubNumericIdSchema).max(100).default([]),
+  resourceAuthorIds: external_exports.array(githubNumericIdSchema).max(100).default([]),
+  labelsAny: external_exports.array(external_exports.string().trim().min(1).max(100)).max(50).default([]),
+  labelsAll: external_exports.array(external_exports.string().trim().min(1).max(100)).max(50).default([]),
+  baseBranches: external_exports.array(external_exports.string().trim().min(1).max(255)).max(50).default([]),
+  includeDraftPullRequests: external_exports.boolean().default(true)
+}).strict().superRefine((value, context) => {
+  for (const key of ["actorIds", "resourceAuthorIds", "labelsAny", "labelsAll", "baseBranches"]) {
+    if (new Set(value[key]).size !== value[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+  }
+});
+var eventEligibilityDecisionSchema = external_exports.object({
+  eligible: external_exports.boolean(),
+  reasons: external_exports.array(external_exports.string().min(1).max(500)).max(100),
+  matchedTrigger: external_exports.string().min(1).max(255).nullable()
+}).strict();
+
+// ../contracts/src/policies.ts
+var policyModeSchema = external_exports.enum(["disabled", "approval", "automatic"]);
+var instancePolicyV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
+  version: external_exports.number().int().positive(),
+  policyHash: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  operationModes: external_exports.record(operationKindSchema, policyModeSchema),
+  allowedObservations: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+  workspaceModes: external_exports.partialRecord(workspaceCapabilitySchema, policyModeSchema),
+  allowedMergeMethods: external_exports.array(external_exports.enum(["merge", "squash", "rebase"])).min(1).max(3),
+  requiredChecks: external_exports.array(external_exports.string().trim().min(1).max(255)).max(100),
+  maxCommentLength: external_exports.number().int().positive().max(65536),
+  maxChangedFiles: external_exports.number().int().positive().max(100),
+  deniedPathPrefixes: external_exports.array(external_exports.string().min(1).max(1024)).max(100)
+}).strict().superRefine((policy, context) => {
+  if (new Set(policy.allowedObservations).size !== policy.allowedObservations.length) context.addIssue({ code: "custom", path: ["allowedObservations"], message: "observation capabilities must be unique" });
+  if (new Set(policy.requiredChecks).size !== policy.requiredChecks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
+});
+var policyDecisionSchema = external_exports.object({
+  outcome: external_exports.enum(["denied", "approval_required", "authorized"]),
+  operationId: external_exports.string().min(1).max(255),
+  mode: policyModeSchema,
+  reasons: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100)
+}).strict();
+
+// ../contracts/src/workspace.ts
+var id2 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var timestamp = external_exports.iso.datetime();
+var workspaceRoleValues = ["owner", "member"];
+var workspaceRoleSchema = external_exports.enum(workspaceRoleValues);
+var workspacePermissionValues = [
+  "workspace.view",
+  "agent.draft.save",
+  "agent.validate",
+  "agent.simulate",
+  "agent.revision.publish_paused",
+  "agent.revision.activate",
+  "inbox.dismiss",
+  "run.cancel",
+  "run.approve",
+  "assignment.add",
+  "assignment.expand",
+  "assignment.enable",
+  "assignment.pause",
+  "assignment.resume",
+  "assignment.disable",
+  "assignment.remove",
+  "policy.narrow",
+  "policy.widen",
+  "member.manage",
+  "repository.sync",
+  "installation.manage"
+];
+var workspacePermissionSchema = external_exports.enum(workspacePermissionValues);
+var memberPermissions = [
+  "workspace.view",
+  "agent.draft.save",
+  "agent.validate",
+  "agent.simulate",
+  "agent.revision.publish_paused",
+  "inbox.dismiss",
+  "run.cancel",
+  "assignment.pause",
+  "assignment.disable",
+  "assignment.remove",
+  "policy.narrow"
+];
+var workspaceRolePermissions = Object.freeze({
+  member: Object.freeze(memberPermissions),
+  owner: Object.freeze(workspacePermissionValues)
+});
+var principalKindSchema = external_exports.enum(["dashboard-session", "cloudflare-access", "mcp-token", "local-dev"]);
+var internalUserV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  displayName: external_exports.string().trim().min(1).max(255),
+  createdAt: timestamp,
+  disabledAt: timestamp.nullable()
+}).strict();
+var externalIdentityV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  userId: id2,
+  provider: external_exports.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  providerSubject: external_exports.string().trim().min(1).max(255),
+  login: external_exports.string().trim().min(1).max(255),
+  createdAt: timestamp
+}).strict();
+var workspaceMembershipV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  userId: id2,
+  role: workspaceRoleSchema,
+  createdAt: timestamp,
+  revokedAt: timestamp.nullable()
+}).strict();
+var workspaceInvitationV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id2,
+  provider: external_exports.literal("github"),
+  providerSubject: githubNumericIdSchema,
+  login: external_exports.string().trim().min(1).max(255),
+  role: workspaceRoleSchema,
+  invitedByUserId: id2,
+  createdAt: timestamp,
+  expiresAt: timestamp,
+  acceptedAt: timestamp.nullable(),
+  revokedAt: timestamp.nullable()
+}).strict().superRefine((invitation, context) => {
+  if (Date.parse(invitation.expiresAt) <= Date.parse(invitation.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "invitation expiry must follow creation" });
+  if (invitation.acceptedAt !== null && invitation.revokedAt !== null) context.addIssue({ code: "custom", message: "invitation cannot be both accepted and revoked" });
+});
+
+// ../contracts/src/assignments.ts
+var id3 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var agentId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
+var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var timestamp2 = external_exports.iso.datetime();
+var displayName = external_exports.string().trim().min(1).max(255);
+var agentRepositoryAssignmentV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id3,
+  version: external_exports.number().int().positive(),
+  configHash: hash2,
+  agentId,
+  agentDisplayName: displayName.optional(),
+  repositoryId: githubNumericIdSchema,
+  repositoryDisplayName: displayName.optional(),
+  enabled: external_exports.boolean(),
+  authorityCeiling: policyModeSchema,
+  createdAt: timestamp2,
+  updatedAt: timestamp2,
+  removedAt: timestamp2.nullable()
+}).strict().superRefine((assignment, context) => {
+  if (Date.parse(assignment.updatedAt) < Date.parse(assignment.createdAt)) context.addIssue({ code: "custom", path: ["updatedAt"], message: "assignment update cannot precede creation" });
+});
+var assignmentHistoryBase = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id3,
+  assignmentId: id3,
+  assignmentVersion: external_exports.number().int().positive(),
+  actorUserId: id3,
+  createdAt: timestamp2
+});
+var assignmentHistoryDetailsSchema = external_exports.discriminatedUnion("action", [
+  external_exports.object({ action: external_exports.literal("added"), repositoryId: githubNumericIdSchema, agentId }).strict(),
+  external_exports.object({ action: external_exports.literal("enabled") }).strict(),
+  external_exports.object({ action: external_exports.literal("paused") }).strict(),
+  external_exports.object({ action: external_exports.literal("resumed") }).strict(),
+  external_exports.object({ action: external_exports.literal("disabled") }).strict(),
+  external_exports.object({ action: external_exports.literal("removed") }).strict(),
+  external_exports.object({ action: external_exports.literal("authority_narrowed"), from: policyModeSchema, to: policyModeSchema }).strict(),
+  external_exports.object({ action: external_exports.literal("authority_widened"), from: policyModeSchema, to: policyModeSchema }).strict()
+]);
+var agentRepositoryAssignmentHistoryV1Schema = assignmentHistoryBase.extend({ details: assignmentHistoryDetailsSchema }).strict();
+var repositoryPolicyV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  repositoryId: githubNumericIdSchema,
+  repositoryDisplayName: displayName.optional(),
+  version: external_exports.number().int().positive(),
+  policyHash: hash2,
+  operationModes: external_exports.partialRecord(operationKindSchema, policyModeSchema),
+  allowedObservations: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+  workspaceModes: external_exports.partialRecord(workspaceCapabilitySchema, policyModeSchema)
+}).strict().superRefine((policy, context) => {
+  if (new Set(policy.allowedObservations).size !== policy.allowedObservations.length) context.addIssue({ code: "custom", path: ["allowedObservations"], message: "observation capabilities must be unique" });
+});
+var modeRank = { disabled: 0, approval: 1, automatic: 2 };
+var effectiveAuthorityLayersV1Schema = external_exports.object({
+  workspace: policyModeSchema,
+  repository: policyModeSchema,
+  agent: policyModeSchema,
+  assignment: policyModeSchema,
+  effective: policyModeSchema
+}).strict().superRefine((layers, context) => {
+  const expected = [layers.workspace, layers.repository, layers.agent, layers.assignment].reduce((narrowest, mode) => modeRank[mode] < modeRank[narrowest] ? mode : narrowest, "automatic");
+  if (layers.effective !== expected) context.addIssue({ code: "custom", path: ["effective"], message: "effective authority must be the most restrictive layer" });
+});
+var effectiveEffectAuthorityV1Schema = external_exports.object({
+  capability: operationKindSchema,
+  layers: effectiveAuthorityLayersV1Schema
+}).strict();
+var effectiveAssignmentPolicyV1Schema = external_exports.object({
+  authority: external_exports.array(effectiveEffectAuthorityV1Schema).max(operationKindSchema.options.length),
+  capabilities: effectiveCapabilitySetSchema
+}).strict();
+var assignmentOverlapConflictV1Schema = external_exports.object({
+  assignmentId: id3,
+  assignmentVersion: external_exports.number().int().positive(),
+  agentId,
+  agentDisplayName: displayName.optional(),
+  activeRevisionId: id3,
+  /** Canonical 64-hex hash of compiled revision content, never the agent_<hash> compiled revision ID. */
+  activeRevisionCompiledHash: hash2,
+  sharedTriggers: external_exports.array(repositoryEventTriggerSchema).min(1).max(repositoryEventTriggerSchema.options.length),
+  sharedEffects: external_exports.array(operationKindSchema).min(1).max(operationKindSchema.options.length)
+}).strict();
+var assignmentOverlapWarningV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  assignmentEpoch: external_exports.number().int().nonnegative(),
+  repositoryId: githubNumericIdSchema,
+  candidate: external_exports.object({ agentId, revisionId: id3, revisionCompiledHash: hash2, assignmentId: id3, assignmentVersion: external_exports.number().int().positive() }).strict(),
+  conflicts: external_exports.array(assignmentOverlapConflictV1Schema).min(1),
+  fingerprint: hash2
+}).strict();
+
+// ../contracts/src/grants.ts
+var id4 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash3 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var unparameterizedWorkspaceCapabilitySchema = workspaceCapabilitySchema.exclude(["workspace.exec.container", "workspace.network.connect"]);
+var runGrantScopeSchema = external_exports.discriminatedUnion("kind", [
+  external_exports.object({ kind: external_exports.literal("observation"), capabilities: external_exports.array(observationCapabilitySchema).min(1).max(observationCapabilitySchema.options.length) }).strict(),
+  external_exports.object({ kind: external_exports.literal("workspace"), capabilities: external_exports.array(unparameterizedWorkspaceCapabilitySchema).min(1).max(unparameterizedWorkspaceCapabilitySchema.options.length) }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("container"),
+    capability: external_exports.literal("workspace.exec.container"),
+    capabilityRequestId: id4,
+    interruptionId: id4,
+    imageProfile: external_exports.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
+    maxRuntimeSeconds: external_exports.number().int().positive().max(3600)
+  }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("network"),
+    capability: external_exports.literal("workspace.network.connect"),
+    capabilityRequestId: id4,
+    interruptionId: id4,
+    hosts: external_exports.array(publicNetworkHostnameSchema).min(1).max(20)
+  }).strict().superRefine((scope, context) => {
+    if (new Set(scope.hosts).size !== scope.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
+  }),
+  external_exports.object({ kind: external_exports.literal("operation.execute"), operationId: id4, operationKind: operationKindSchema, operationHash: hash3, interruptionId: id4.nullable() }).strict()
+]);
+var runGrantV2Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v2"),
+  id: id4,
+  instanceId: id4,
+  runId: id4,
+  eventId: id4,
+  repository: repositoryRefSchema,
+  scopes: external_exports.array(runGrantScopeSchema).min(1).max(50),
+  issuedAt: external_exports.iso.datetime(),
+  expiresAt: external_exports.iso.datetime(),
+  nonce: external_exports.string().min(32).max(512)
+}).strict().superRefine((grant, context) => {
+  if (Date.parse(grant.expiresAt) <= Date.parse(grant.issuedAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "grant must expire after it is issued" });
+});
+
+// ../contracts/src/agent.ts
+var hash4 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var identifier = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
+var entityId = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var relativePath = external_exports.string().min(1).max(1024).refine((path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "package paths must be normalized POSIX-relative paths");
+var base643 = external_exports.string().max(28e5).regex(
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
+  "expected canonical base64 bytes"
+);
+var agentPackageFileV1Schema = external_exports.object({
+  path: relativePath,
+  mediaType: external_exports.string().regex(/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/).max(100),
+  bytesBase64: base643
+}).strict();
+var agentSourceV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  agentMd: external_exports.object({ path: external_exports.literal("AGENT.md"), mediaType: external_exports.literal("text/markdown"), bytesBase64: base643 }).strict(),
+  files: external_exports.array(agentPackageFileV1Schema).max(100).default([])
+}).strict().superRefine((source, context) => {
+  const paths = /* @__PURE__ */ new Set(["AGENT.md"]);
+  let encodedSize = source.agentMd.bytesBase64.length;
+  source.files.forEach((file2, index) => {
+    if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "package paths must be unique" });
+    paths.add(file2.path);
+    encodedSize += file2.bytesBase64.length;
+  });
+  if (encodedSize > 14e6) context.addIssue({ code: "custom", message: "agent package exceeds the 10 MiB encoded-size budget" });
+});
+var agentLimitsV1Schema = external_exports.object({
+  runtimeSeconds: external_exports.number().int().positive().max(86400).default(900),
+  maxTurns: external_exports.number().int().positive().max(128).default(24),
+  maxToolCalls: external_exports.number().int().positive().max(1024).default(80),
+  maxTasks: external_exports.number().int().positive().max(256).default(32),
+  maxParallelTasks: external_exports.number().int().positive().max(64).default(8),
+  inputTokens: external_exports.number().int().positive().max(2e6).default(64e3),
+  outputTokens: external_exports.number().int().positive().max(1e6).default(16e3),
+  costUsd: external_exports.number().nonnegative().max(1e3).default(2),
+  operations: external_exports.number().int().positive().max(100).default(10),
+  artifactBytes: external_exports.number().int().positive().max(1e9).default(5e7),
+  retriesPerStep: external_exports.number().int().nonnegative().max(10).default(2)
+}).strict();
+var agentSpecShape = {
+  schemaVersion: external_exports.literal("gardener.agent/v1"),
+  name: external_exports.string().trim().min(1).max(100),
+  description: external_exports.string().trim().min(1).max(1e3),
+  triggers: external_exports.array(repositoryEventTriggerSchema).min(1).max(100),
+  requestedCapabilities: requestedCapabilitySetSchema.default({ observation: [], workspace: [], effects: [] }),
+  behavior: external_exports.string().trim().min(1).max(1e5),
+  authorityCeiling: policyModeSchema.default("approval"),
+  limits: agentLimitsV1Schema.default({ runtimeSeconds: 900, maxTurns: 24, maxToolCalls: 80, maxTasks: 32, maxParallelTasks: 8, inputTokens: 64e3, outputTokens: 16e3, costUsd: 2, operations: 10, artifactBytes: 5e7, retriesPerStep: 2 }),
+  skills: external_exports.array(relativePath).max(50).default([]),
+  evals: external_exports.array(relativePath).max(100).default([]),
+  eligibility: agentEligibilitySchema.default({ actorIds: [], resourceAuthorIds: [], labelsAny: [], labelsAll: [], baseBranches: [], includeDraftPullRequests: true })
+};
+function validatePortableAgentProse(value) {
+  const lines = value.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trim());
+  if (/\b(?:(?:https?:\/\/)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\b/i.test(value)) return "must not bind a GitHub repository URL";
+  if (lines.some((line) => {
+    const match = /^(?:[-*]\s*)?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(line);
+    return match !== null && !/\.[A-Za-z0-9]{1,10}$/.test(match[2]);
+  })) return "must not contain a bare owner/repository binding";
+  if (/\b(?:repository|repo)[-_ ]?(?:id|name|path)?\s*[:=]\s*\S+/i.test(value)) return "must not contain a labelled repository binding";
+  if (lines.some((line) => /^(?:[-*]\s*)?(?:(?:commit[-_ ]?)?sha\s*[:=]\s*)?[0-9a-f]{7,40}$/i.test(line))) return "must not bind a commit SHA";
+  if (/\b(?:token|password|secret|credential)\s*[:=]\s*\S+/i.test(value)) return "must not contain a credential assignment";
+  if (/\b(?:runtime|compiler|harness)[-_ ]version\s*[:=]\s*\S+/i.test(value)) return "must not contain a runtime-version binding";
+  return void 0;
+}
+function refineAgentSpec(spec, context) {
+  for (const key of ["triggers", "skills", "evals"]) {
+    if (new Set(spec[key]).size !== spec[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+  }
+  for (const key of ["name", "description", "behavior"]) {
+    const message3 = validatePortableAgentProse(spec[key]);
+    if (message3) context.addIssue({ code: "custom", path: [key], message: `Agent ${key} ${message3}` });
+  }
+}
+var agentSpecV1Schema = external_exports.object(agentSpecShape).strict().superRefine(refineAgentSpec);
+var compiledAgentSpecV1Schema = external_exports.object(agentSpecShape).strict().superRefine(refineAgentSpec);
+var agentProvenanceV1Schema = external_exports.object({
+  source: external_exports.enum(["dashboard", "git", "mcp", "api", "migration"]),
+  authoredBy: authoringPrincipalSchema,
+  publishedBy: authoringPrincipalSchema,
+  authoredAt: external_exports.iso.datetime(),
+  publishedAt: external_exports.iso.datetime(),
+  git: external_exports.object({ repositoryId: githubNumericIdSchema, commitSha: external_exports.string().regex(/^[a-fA-F0-9]{40}$/), path: relativePath }).strict().optional()
+}).strict().superRefine((provenance, context) => {
+  if (Date.parse(provenance.publishedAt) < Date.parse(provenance.authoredAt)) context.addIssue({ code: "custom", path: ["publishedAt"], message: "publication cannot precede authorship" });
+  if (provenance.source === "git" && !provenance.git) context.addIssue({ code: "custom", path: ["git"], message: "Git provenance requires a commit binding" });
+});
+var agentDraftV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  draftId: identifier,
+  agentId: identifier.nullable(),
+  status: external_exports.literal("paused"),
+  source: agentSourceV1Schema,
+  provenance: agentProvenanceV1Schema,
+  createdAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime()
+}).strict().superRefine((draft, context) => {
+  if (Date.parse(draft.updatedAt) < Date.parse(draft.createdAt)) context.addIssue({ code: "custom", path: ["updatedAt"], message: "draft update cannot precede creation" });
+});
+var agentRevisionV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  agentId: identifier,
+  revision: external_exports.number().int().positive(),
+  revisionId: identifier,
+  source: agentSourceV1Schema,
+  spec: agentSpecV1Schema,
+  sourceHash: hash4,
+  semanticHash: hash4,
+  provenance: agentProvenanceV1Schema,
+  createdAt: external_exports.iso.datetime()
+}).strict();
+var compiledAgentRevisionV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  compiledRevisionId: external_exports.string().regex(/^agent_[a-f0-9]{64}$/),
+  agentId: identifier,
+  revision: external_exports.number().int().positive(),
+  revisionId: identifier,
+  sourceHash: hash4,
+  semanticHash: hash4,
+  spec: compiledAgentSpecV1Schema,
+  referencedFiles: external_exports.array(external_exports.object({ path: relativePath, hash: hash4, kind: external_exports.enum(["skill", "eval"]) }).strict()).max(150),
+  compiler: external_exports.object({ id: external_exports.literal("gardener-agent-compiler"), version: external_exports.string().min(1).max(100) }).strict(),
+  capabilityCatalogVersion: external_exports.string().min(1).max(100),
+  runtimeVersion: external_exports.string().min(1).max(100),
+  compiledAt: external_exports.iso.datetime()
+}).strict();
+var agentRunSnapshotV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  runId: identifier,
+  createdAt: external_exports.iso.datetime(),
+  revision: compiledAgentRevisionV1Schema,
+  assignment: external_exports.object({ id: entityId, version: external_exports.number().int().positive(), configHash: hash4 }).strict(),
+  repository: external_exports.object({ id: githubNumericIdSchema, policyHash: hash4, policyVersion: external_exports.number().int().positive() }).strict(),
+  workspace: external_exports.object({ policyHash: hash4, policyVersion: external_exports.number().int().positive() }).strict(),
+  effectiveConstraints: external_exports.object({
+    allowedMergeMethods: external_exports.array(external_exports.enum(["merge", "squash", "rebase"])).min(1).max(3),
+    requiredChecks: external_exports.array(external_exports.string().trim().min(1).max(255)).max(100),
+    maxCommentLength: external_exports.number().int().positive().max(65536),
+    maxChangedFiles: external_exports.number().int().positive().max(100),
+    deniedPathPrefixes: external_exports.array(external_exports.string().min(1).max(1024)).max(100)
+  }).strict(),
+  effectiveAuthority: external_exports.array(effectiveEffectAuthorityV1Schema).max(effectCapabilitySchema.options.length),
+  effectiveCapabilities: effectiveCapabilitySetSchema,
+  harness: external_exports.object({ id: external_exports.string().min(1).max(255), version: external_exports.string().min(1).max(100) }).strict(),
+  versions: external_exports.object({ runtime: external_exports.string().min(1).max(100), capabilityCatalog: external_exports.string().min(1).max(100), compiler: external_exports.string().min(1).max(100) }).strict(),
+  snapshotHash: hash4
+}).strict();
+var agentSemanticDiffV1Schema = external_exports.object({
+  fromRevisionId: identifier.nullable(),
+  toRevisionId: identifier,
+  triggers: external_exports.object({ added: external_exports.array(repositoryEventTriggerSchema).max(100), removed: external_exports.array(repositoryEventTriggerSchema).max(100) }).strict(),
+  capabilities: external_exports.object({
+    observationAdded: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+    observationRemoved: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
+    workspaceAdded: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
+    workspaceRemoved: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
+    effectsAdded: external_exports.array(effectCapabilitySchema).max(effectCapabilitySchema.options.length),
+    effectsRemoved: external_exports.array(effectCapabilitySchema).max(effectCapabilitySchema.options.length)
+  }).strict(),
+  authority: external_exports.object({ from: policyModeSchema.nullable(), to: policyModeSchema, increased: external_exports.boolean() }).strict(),
+  metadata: external_exports.object({
+    name: external_exports.object({ from: external_exports.string().max(100).nullable(), to: external_exports.string().max(100), changed: external_exports.boolean() }).strict(),
+    description: external_exports.object({ from: external_exports.string().max(1e3).nullable(), to: external_exports.string().max(1e3), changed: external_exports.boolean() }).strict()
+  }).strict(),
+  limitsChanged: external_exports.boolean(),
+  behaviorChanged: external_exports.boolean(),
+  eligibilityChanged: external_exports.boolean(),
+  skillsChanged: external_exports.boolean(),
+  evalsChanged: external_exports.boolean()
+}).strict();
+
+// ../contracts/src/runs.ts
+var id5 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash5 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var timestamp3 = external_exports.iso.datetime();
+function precedesOrEquals(left, right) {
+  return Date.parse(left) <= Date.parse(right);
+}
+var runStateSchema = external_exports.enum(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
+var taskStateSchema = external_exports.enum(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
+var stepStateSchema = external_exports.enum(["pending", "running", "waiting", "succeeded", "failed", "cancelled", "skipped"]);
+var stepKindSchema = external_exports.enum(["resolve", "model", "tool", "child_agent", "interruption", "proposal", "effect", "checkpoint", "cleanup"]);
+var runBudgetUsageV1Schema = external_exports.object({
+  turns: external_exports.number().int().nonnegative(),
+  toolCalls: external_exports.number().int().nonnegative(),
+  tasksCreated: external_exports.number().int().nonnegative(),
+  activeParallelTasks: external_exports.number().int().nonnegative(),
+  inputTokens: external_exports.number().int().nonnegative(),
+  outputTokens: external_exports.number().int().nonnegative(),
+  costUsd: external_exports.number().nonnegative(),
+  operations: external_exports.number().int().nonnegative(),
+  artifactBytes: external_exports.number().int().nonnegative(),
+  runtimeSeconds: external_exports.number().nonnegative()
+}).strict();
+var agentRunV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  instanceId: id5,
+  eventId: id5,
+  agentId: id5,
+  revisionId: id5,
+  snapshotHash: hash5,
+  orchestrationInstanceId: id5,
+  state: runStateSchema,
+  createdAt: timestamp3,
+  startedAt: timestamp3.nullable(),
+  completedAt: timestamp3.nullable(),
+  budgetUsage: runBudgetUsageV1Schema,
+  terminationReason: external_exports.string().max(1e3).nullable(),
+  traceId: id5
+}).strict().superRefine((run, context) => {
+  if (run.state === "queued" && (run.startedAt !== null || run.completedAt !== null)) context.addIssue({ code: "custom", message: "queued run cannot have lifecycle timestamps" });
+  if ((run.state === "running" || run.state === "waiting") && (run.startedAt === null || run.completedAt !== null)) context.addIssue({ code: "custom", message: "active run requires startedAt and no completedAt" });
+  if (["succeeded", "failed", "cancelled"].includes(run.state) && run.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal run requires completedAt" });
+  if ((run.state === "succeeded" || run.state === "failed") && run.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
+  if (["succeeded", "failed", "cancelled"].includes(run.state) && run.budgetUsage.activeParallelTasks !== 0) context.addIssue({ code: "custom", path: ["budgetUsage", "activeParallelTasks"], message: "terminal run cannot retain active parallel tasks" });
+  if (run.startedAt !== null && !precedesOrEquals(run.createdAt, run.startedAt)) context.addIssue({ code: "custom", path: ["startedAt"], message: "run cannot start before creation" });
+  if (run.completedAt !== null && (!precedesOrEquals(run.createdAt, run.completedAt) || run.startedAt !== null && !precedesOrEquals(run.startedAt, run.completedAt))) context.addIssue({ code: "custom", path: ["completedAt"], message: "run completion chronology is invalid" });
+});
+var agentTaskV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  parentTaskId: id5.nullable(),
+  kind: external_exports.enum(["main", "subagent", "evaluation", "workspace"]),
+  state: taskStateSchema,
+  ordinal: external_exports.number().int().nonnegative(),
+  assignedCapabilitiesHash: hash5,
+  workspaceId: id5.nullable(),
+  createdAt: timestamp3,
+  startedAt: timestamp3.nullable(),
+  completedAt: timestamp3.nullable(),
+  errorCode: external_exports.string().max(100).nullable()
+}).strict().superRefine((task, context) => {
+  if (task.state === "queued" && (task.startedAt !== null || task.completedAt !== null)) context.addIssue({ code: "custom", message: "queued task cannot have lifecycle timestamps" });
+  if ((task.state === "running" || task.state === "waiting") && (task.startedAt === null || task.completedAt !== null)) context.addIssue({ code: "custom", message: "active task requires startedAt and no completedAt" });
+  if (["succeeded", "failed", "cancelled"].includes(task.state) && task.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal task requires completedAt" });
+  if ((task.state === "succeeded" || task.state === "failed") && task.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
+  if (task.startedAt !== null && !precedesOrEquals(task.createdAt, task.startedAt)) context.addIssue({ code: "custom", path: ["startedAt"], message: "task cannot start before creation" });
+  if (task.completedAt !== null && (!precedesOrEquals(task.createdAt, task.completedAt) || task.startedAt !== null && !precedesOrEquals(task.startedAt, task.completedAt))) context.addIssue({ code: "custom", path: ["completedAt"], message: "task completion chronology is invalid" });
+});
+var agentStepV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  taskId: id5,
+  parentStepId: id5.nullable(),
+  kind: stepKindSchema,
+  state: stepStateSchema,
+  ordinal: external_exports.number().int().nonnegative(),
+  attempt: external_exports.number().int().positive(),
+  inputHash: hash5,
+  outputHash: hash5.nullable(),
+  artifactIds: external_exports.array(id5).max(100),
+  startedAt: timestamp3.nullable(),
+  completedAt: timestamp3.nullable(),
+  retryable: external_exports.boolean().nullable(),
+  errorCode: external_exports.string().max(100).nullable()
+}).strict().superRefine((step, context) => {
+  if (step.state === "pending" && (step.startedAt !== null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "pending step cannot have lifecycle timestamps" });
+  if ((step.state === "running" || step.state === "waiting") && (step.startedAt === null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "active step requires startedAt and no completedAt" });
+  if (["succeeded", "failed", "cancelled", "skipped"].includes(step.state) && step.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal step requires completedAt" });
+  if ((step.state === "succeeded" || step.state === "failed") && step.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
+  if (step.startedAt !== null && step.completedAt !== null && !precedesOrEquals(step.startedAt, step.completedAt)) context.addIssue({ code: "custom", path: ["completedAt"], message: "step completion cannot precede start" });
+});
+var agentArtifactV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  taskId: id5.nullable(),
+  stepId: id5.nullable(),
+  kind: external_exports.enum(["repository_snapshot", "patch", "log", "report", "trace", "model_input", "model_output", "tool_output", "test_result", "eval_result"]),
+  name: external_exports.string().min(1).max(255),
+  mediaType: external_exports.string().min(1).max(100),
+  sizeBytes: external_exports.number().int().nonnegative().max(1e9),
+  hash: hash5,
+  storage: external_exports.object({ provider: external_exports.enum(["r2", "d1", "computer", "inline"]), key: external_exports.string().min(1).max(1024) }).strict(),
+  trust: external_exports.enum(["trusted_system", "untrusted_repository", "untrusted_model", "untrusted_tool", "human_authored"]),
+  createdAt: timestamp3,
+  expiresAt: timestamp3.nullable()
+}).strict().superRefine((artifact, context) => {
+  if (artifact.expiresAt !== null && Date.parse(artifact.expiresAt) <= Date.parse(artifact.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "artifact expiry must follow creation" });
+});
+var agentEffectProposalV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id5,
+  runId: id5,
+  stepId: id5,
+  operation: operationSchema,
+  operationHash: hash5,
+  rationale: external_exports.string().trim().min(1).max(5e3),
+  evidenceArtifactIds: external_exports.array(id5).max(100),
+  createdAt: timestamp3
+}).strict();
+var agentEffectResultV1Schema = external_exports.object({ proposalId: id5, receipt: operationReceiptSchema }).strict();
+
+// ../contracts/src/interruptions.ts
+var id6 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash6 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var timestamp4 = external_exports.iso.datetime();
+var interruptionBase = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id6,
+  runId: id6,
+  taskId: id6,
+  stepId: id6,
+  state: external_exports.enum(["pending", "approved", "rejected", "expired", "cancelled"]),
+  eligibleResponders: external_exports.array(gardenerPrincipalSchema).min(1).max(100),
+  nonceHash: hash6,
+  createdAt: timestamp4,
+  expiresAt: timestamp4,
+  resolvedAt: timestamp4.nullable()
+});
+var interruptionSchema = external_exports.discriminatedUnion("kind", [
+  interruptionBase.extend({ kind: external_exports.literal("clarification"), question: external_exports.string().trim().min(1).max(5e3), choices: external_exports.array(external_exports.object({ id: id6, label: external_exports.string().min(1).max(200) }).strict()).max(20), response: external_exports.object({ text: external_exports.string().max(1e4), choiceId: id6.nullable() }).strict().nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("capability_request"), request: runtimeCapabilityRequestSchema, decision: external_exports.enum(["allow_once", "reject", "revision_required", "never_allowed"]).nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("effect_approval"), operation: operationSchema, operationHash: hash6, decision: external_exports.enum(["approve_exact", "reject"]).nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("patch_review"), patchArtifactId: id6, patchHash: hash6, decision: external_exports.enum(["approve", "reject", "request_changes"]).nullable(), response: external_exports.string().max(1e4).nullable() }).strict(),
+  interruptionBase.extend({ kind: external_exports.literal("budget_request"), budget: external_exports.enum(["turns", "tool_calls", "runtime", "tokens", "cost", "artifact_bytes"]), requestedAdditional: external_exports.number().positive(), decision: external_exports.enum(["allow_once", "reject"]).nullable() }).strict()
+]).superRefine((interruption, context) => {
+  if (Date.parse(interruption.expiresAt) <= Date.parse(interruption.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "interruption must expire after creation" });
+  const resolution = interruption.kind === "clarification" ? interruption.response : interruption.decision;
+  if (interruption.state === "pending") {
+    if (resolution !== null) context.addIssue({ code: "custom", message: "pending interruption cannot have a resolution" });
+    if (interruption.resolvedAt !== null) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "pending interruption cannot have a resolution timestamp" });
+    return;
+  }
+  if (interruption.resolvedAt === null) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "resolved interruption requires a resolution timestamp" });
+  if (interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) < Date.parse(interruption.createdAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "interruption cannot resolve before creation" });
+  if ((interruption.state === "approved" || interruption.state === "rejected") && interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) > Date.parse(interruption.expiresAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "approval or rejection cannot occur after expiration" });
+  if (interruption.state === "expired" && interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) < Date.parse(interruption.expiresAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "expiration cannot resolve before its deadline" });
+  if (interruption.state === "expired" || interruption.state === "cancelled") {
+    if (resolution !== null) context.addIssue({ code: "custom", message: "expired or cancelled interruption cannot contain a decision" });
+    return;
+  }
+  if (interruption.kind !== "clarification" && resolution === null) context.addIssue({ code: "custom", path: ["decision"], message: "approved or rejected interruption requires a decision" });
+  if (interruption.kind === "clarification") {
+    if (interruption.state === "approved" && interruption.response === null) context.addIssue({ code: "custom", path: ["response"], message: "approved clarification requires a response" });
+    if (interruption.state === "rejected" && interruption.response !== null) context.addIssue({ code: "custom", path: ["response"], message: "rejected clarification cannot contain a response" });
+  } else if (interruption.kind === "capability_request") {
+    const approved = interruption.decision === "allow_once";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "capability decision is incompatible with interruption state" });
+  } else if (interruption.kind === "effect_approval") {
+    const approved = interruption.decision === "approve_exact";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "effect decision is incompatible with interruption state" });
+  } else if (interruption.kind === "patch_review") {
+    const approved = interruption.decision === "approve";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "patch decision is incompatible with interruption state" });
+  } else {
+    const approved = interruption.decision === "allow_once";
+    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "budget decision is incompatible with interruption state" });
+  }
+});
+var interruptionResponseV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  interruptionId: id6,
+  nonce: external_exports.string().min(32).max(512),
+  responder: gardenerPrincipalSchema,
+  responseHash: hash6,
+  respondedAt: timestamp4,
+  payload: external_exports.union([
+    external_exports.object({ kind: external_exports.literal("clarification"), text: external_exports.string().max(1e4), choiceId: id6.nullable() }).strict(),
+    external_exports.object({ kind: external_exports.literal("capability_request"), decision: external_exports.enum(["allow_once", "reject", "revision_required", "never_allowed"]) }).strict(),
+    external_exports.object({ kind: external_exports.literal("effect_approval"), decision: external_exports.enum(["approve_exact", "reject"]), operationHash: hash6 }).strict(),
+    external_exports.object({ kind: external_exports.literal("patch_review"), decision: external_exports.enum(["approve", "reject", "request_changes"]), response: external_exports.string().max(1e4).nullable() }).strict(),
+    external_exports.object({ kind: external_exports.literal("budget_request"), decision: external_exports.enum(["allow_once", "reject"]) }).strict()
+  ])
+}).strict();
+var inboxBase = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  id: id6,
+  instanceId: id6,
+  runId: id6.nullable(),
+  createdAt: timestamp4,
+  updatedAt: timestamp4,
+  status: external_exports.enum(["unread", "open", "resolved", "dismissed"]),
+  severity: external_exports.enum(["info", "attention", "warning", "critical"]),
+  title: external_exports.string().trim().min(1).max(255),
+  summary: external_exports.string().trim().min(1).max(2e3)
+});
+var inboxItemSchema = external_exports.discriminatedUnion("kind", [
+  inboxBase.extend({ kind: external_exports.literal("interruption"), interruptionId: id6 }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("run_failure"), errorCode: external_exports.string().min(1).max(100), retryable: external_exports.boolean() }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("draft_activation"), draftId: id6 }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("eval_regression"), revisionId: id6, evalArtifactId: id6 }).strict(),
+  inboxBase.extend({ kind: external_exports.literal("temporary_grant_expiring"), grantId: id6, expiresAt: timestamp4 }).strict()
+]);
+
+// ../contracts/src/simulations.ts
+var id7 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
+var hash7 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var agentSimulationRequestV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  simulationId: id7,
+  revisionId: id7,
+  event: repositoryEventV2Schema,
+  mode: external_exports.enum(["validate", "shadow"]),
+  fixtureId: id7.nullable()
+}).strict();
+var agentSimulationResultV1Schema = external_exports.object({
+  schemaVersion: external_exports.literal("v1"),
+  simulationId: id7,
+  revisionId: id7,
+  eventId: id7,
+  status: external_exports.enum(["eligible", "ineligible", "completed", "failed", "blocked"]),
+  traceHash: hash7,
+  effectiveCapabilities: effectiveCapabilitySetSchema,
+  proposals: external_exports.array(agentEffectProposalV1Schema).max(100),
+  deniedRequests: external_exports.array(external_exports.object({ capability: external_exports.union([observationCapabilitySchema, workspaceCapabilitySchema, effectCapabilitySchema]), reason: external_exports.string().min(1).max(1e3) }).strict()).max(100),
+  usage: runBudgetUsageV1Schema,
+  summary: external_exports.string().max(1e4),
+  createdAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime()
+}).strict();
+
+// ../contracts/src/task.ts
+var identifier2 = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
+var boundIdentifier = external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
+var githubNumericId = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
+var sha1 = external_exports.string().regex(/^[a-f0-9]{40}$/);
 var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var repositoryFullName = external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201);
+var relativePath2 = external_exports.string().min(1).max(1024).refine(
+  (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  "expected a normalized repository-relative POSIX path"
+);
+var taskLabelFilterV1Schema = external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([]);
+var branchFilterV1Schema = external_exports.string().trim().min(1).max(255).regex(
+  /^!?[A-Za-z0-9_.\-/*?+[\]]+$/,
+  "expected a GitHub branch filter pattern"
+);
+var CRON_FIELD_BOUNDS = [
+  [0, 59],
+  [0, 23],
+  [1, 31],
+  [1, 12],
+  [0, 6]
+];
+function cronFieldIsValid(field, low, high) {
+  if (field.length === 0) return false;
+  return field.split(",").every((item) => {
+    if (item.length === 0) return false;
+    const [range, step, ...excess] = item.split("/");
+    if (excess.length > 0 || range === void 0) return false;
+    if (step !== void 0) {
+      if (!/^[0-9]{1,2}$/.test(step)) return false;
+      const parsed = Number(step);
+      if (parsed < 1 || parsed > high) return false;
+    }
+    if (range === "*") return true;
+    const bounds = range.split("-");
+    if (bounds.length > 2) return false;
+    if (!bounds.every((bound) => /^[0-9]{1,2}$/.test(bound))) return false;
+    const numbers = bounds.map(Number);
+    if (numbers.some((value) => value < low || value > high)) return false;
+    return numbers.length === 1 || numbers[0] <= numbers[1];
+  });
+}
+var cronExpressionV1Schema = external_exports.string().trim().min(1).max(100).superRefine((value, context) => {
+  const fields = value.split(" ");
+  if (fields.length !== 5) {
+    context.addIssue({ code: "custom", message: "expected a five-field cron expression" });
+    return;
+  }
+  for (const [index, field] of fields.entries()) {
+    const [low, high] = CRON_FIELD_BOUNDS[index];
+    if (!cronFieldIsValid(field, low, high)) {
+      context.addIssue({
+        code: "custom",
+        message: `cron field ${index + 1} must use numbers ${low}-${high}, ranges, lists, or steps`
+      });
+    }
+  }
+});
+function labelGatedTrigger(kind) {
+  return external_exports.strictObject({ kind: external_exports.literal(kind), labelsAll: taskLabelFilterV1Schema });
+}
+var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
+  labelGatedTrigger("github.issue.opened"),
+  labelGatedTrigger("github.issue.edited"),
+  labelGatedTrigger("github.issue.labeled"),
+  labelGatedTrigger("github.issue.unlabeled"),
+  labelGatedTrigger("github.issue.reopened"),
+  labelGatedTrigger("github.issue_comment.created"),
+  labelGatedTrigger("github.pull_request.opened"),
+  labelGatedTrigger("github.pull_request.reopened"),
+  labelGatedTrigger("github.pull_request.synchronize"),
+  labelGatedTrigger("github.pull_request.ready_for_review"),
+  labelGatedTrigger("github.pull_request.converted_to_draft"),
+  labelGatedTrigger("github.pull_request.edited"),
+  labelGatedTrigger("github.pull_request.labeled"),
+  labelGatedTrigger("github.pull_request.unlabeled"),
+  labelGatedTrigger("github.pull_request_review.submitted"),
+  labelGatedTrigger("github.pull_request_review_comment.created"),
+  external_exports.strictObject({
+    kind: external_exports.literal("github.push"),
+    /**
+     * At least one positive pattern is required. GitHub evaluates `branches`
+     * as an allowlist, so an all-negative list matches nothing and the task
+     * would never run.
+     */
+    branches: external_exports.array(branchFilterV1Schema).min(1).max(20).refine(
+      (branches) => branches.some((branch) => !branch.startsWith("!")),
+      "push branches must include at least one positive pattern"
+    )
+  }),
+  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") }),
+  external_exports.strictObject({ kind: external_exports.literal("github.schedule"), cron: cronExpressionV1Schema }),
+  labelGatedTrigger("github.discussion.created"),
+  labelGatedTrigger("github.discussion.edited"),
+  labelGatedTrigger("github.discussion.answered"),
+  labelGatedTrigger("github.discussion.unanswered"),
+  labelGatedTrigger("github.discussion.labeled"),
+  labelGatedTrigger("github.discussion.unlabeled"),
+  labelGatedTrigger("github.discussion_comment.created")
+]);
+var taskTriggerKindValues = [
+  "github.issue.opened",
+  "github.issue.edited",
+  "github.issue.labeled",
+  "github.issue.unlabeled",
+  "github.issue.reopened",
+  "github.issue_comment.created",
+  "github.pull_request.opened",
+  "github.pull_request.reopened",
+  "github.pull_request.synchronize",
+  "github.pull_request.ready_for_review",
+  "github.pull_request.converted_to_draft",
+  "github.pull_request.edited",
+  "github.pull_request.labeled",
+  "github.pull_request.unlabeled",
+  "github.pull_request_review.submitted",
+  "github.pull_request_review_comment.created",
+  "github.push",
+  "github.workflow_dispatch",
+  "github.schedule",
+  "github.discussion.created",
+  "github.discussion.edited",
+  "github.discussion.answered",
+  "github.discussion.unanswered",
+  "github.discussion.labeled",
+  "github.discussion.unlabeled",
+  "github.discussion_comment.created"
+];
+var triggerKindOrder = new Map(
+  taskTriggerKindValues.map((kind, index) => [kind, index])
+);
+var pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
+  (kind) => kind.startsWith("github.pull_request")
+);
+var taskToolV1Schema = external_exports.enum([
+  "repository.read_file",
+  "repository.list_files",
+  "repository.exec",
+  "provider.api.read"
+]);
+var taskEffectKindValues = operationKindValues;
+var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
+var networkHostPattern = external_exports.string().regex(
+  /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+  "expected a lowercase DNS hostname or leading-wildcard hostname"
+);
+var taskNetworkPolicyV1Schema = external_exports.strictObject({
+  default: external_exports.enum(["deny", "allow"]),
+  allow: external_exports.array(networkHostPattern).max(64),
+  deny: external_exports.array(networkHostPattern).max(64)
+}).superRefine((policy, context) => {
+  for (const key of ["allow", "deny"]) {
+    if (new Set(policy[key]).size !== policy[key].length) {
+      context.addIssue({ code: "custom", path: [key], message: `${key} hosts must be unique` });
+    }
+  }
+});
+var taskLimitsV1Schema = external_exports.strictObject({
+  runtimeSeconds: external_exports.number().int().positive().max(3600),
+  maxTurns: external_exports.number().int().positive().max(32),
+  maxToolCalls: external_exports.number().int().positive().max(256),
+  inputTokens: external_exports.number().int().positive().max(1e6),
+  outputTokens: external_exports.number().int().positive().max(25e4),
+  /**
+   * Optional task-authored effect-plan ceilings. When omitted Gardener adds no
+   * product cap and only provider and runtime ceilings apply. When present both
+   * planning and application fail closed.
+   */
+  maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
+  maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
+});
+var taskBundleV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-bundle/v1"),
+  taskId: identifier2,
+  name: external_exports.string().trim().min(1).max(100),
+  description: external_exports.string().trim().min(1).max(1e3),
+  instructions: external_exports.string().trim().min(1).max(1e5),
+  triggers: external_exports.array(taskTriggerV1Schema).min(1).max(taskTriggerKindValues.length),
+  tools: external_exports.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
+  effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
+  network: taskNetworkPolicyV1Schema,
+  limits: taskLimitsV1Schema
+}).superRefine((bundle, context) => {
+  for (const key of ["tools", "effects"]) {
+    if (new Set(bundle[key]).size !== bundle[key].length) {
+      context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+    }
+  }
+  const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
+  if (new Set(triggerKinds).size !== triggerKinds.length) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must be unique" });
+  }
+  const positions = triggerKinds.map((kind) => triggerKindOrder.get(kind));
+  if (positions.some((position, index) => index > 0 && position <= positions[index - 1])) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must use canonical declaration order" });
+  }
+  if (bundle.limits.outputTokens < bundle.limits.maxTurns * 16) {
+    context.addIssue({ code: "custom", path: ["limits", "outputTokens"], message: "outputTokens must permit at least 16 tokens per model turn" });
+  }
+});
+var normalizedRepositoryV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  ownerId: githubNumericId,
+  owner: external_exports.string().min(1).max(100),
+  name: external_exports.string().min(1).max(100),
+  fullName: repositoryFullName,
+  visibility: external_exports.enum(["public", "private", "internal"]),
+  commitSha: sha1,
+  ref: external_exports.string().min(1).max(1024),
+  /**
+   * Default branch as GitHub reported it *in the triggering event payload*.
+   *
+   * Every exact operation embeds a repository identity, and that identity
+   * includes the default branch. The value is taken from the bounded event
+   * payload rather than read back from the API at apply time on purpose: the
+   * default branch is mutable, so a later fetch could return a value that was
+   * never true for this run and would silently change the canonical operation
+   * hash — the same hash that commit trailers and receipts reconcile against.
+   * Carrying the event's value keeps operation identity a function of the run.
+   */
+  defaultBranch: external_exports.string().trim().min(1).max(255)
+});
+var normalizedEventNameV1Schema = external_exports.enum([
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "workflow_dispatch",
+  "schedule",
+  "discussion",
+  "discussion_comment"
+]);
+var eventNameByTriggerKind = {
+  "github.issue.opened": "issues",
+  "github.issue.edited": "issues",
+  "github.issue.labeled": "issues",
+  "github.issue.unlabeled": "issues",
+  "github.issue.reopened": "issues",
+  "github.issue_comment.created": "issue_comment",
+  "github.pull_request.opened": "pull_request",
+  "github.pull_request.reopened": "pull_request",
+  "github.pull_request.synchronize": "pull_request",
+  "github.pull_request.ready_for_review": "pull_request",
+  "github.pull_request.converted_to_draft": "pull_request",
+  "github.pull_request.edited": "pull_request",
+  "github.pull_request.labeled": "pull_request",
+  "github.pull_request.unlabeled": "pull_request",
+  "github.pull_request_review.submitted": "pull_request_review",
+  "github.pull_request_review_comment.created": "pull_request_review_comment",
+  "github.push": "push",
+  "github.workflow_dispatch": "workflow_dispatch",
+  "github.schedule": "schedule",
+  "github.discussion.created": "discussion",
+  "github.discussion.edited": "discussion",
+  "github.discussion.answered": "discussion",
+  "github.discussion.unanswered": "discussion",
+  "github.discussion.labeled": "discussion",
+  "github.discussion.unlabeled": "discussion",
+  "github.discussion_comment.created": "discussion_comment"
+};
+var eventActionByTriggerKind = {
+  "github.issue.opened": "opened",
+  "github.issue.edited": "edited",
+  "github.issue.labeled": "labeled",
+  "github.issue.unlabeled": "unlabeled",
+  "github.issue.reopened": "reopened",
+  "github.issue_comment.created": "created",
+  "github.pull_request.opened": "opened",
+  "github.pull_request.reopened": "reopened",
+  "github.pull_request.synchronize": "synchronize",
+  "github.pull_request.ready_for_review": "ready_for_review",
+  "github.pull_request.converted_to_draft": "converted_to_draft",
+  "github.pull_request.edited": "edited",
+  "github.pull_request.labeled": "labeled",
+  "github.pull_request.unlabeled": "unlabeled",
+  "github.pull_request_review.submitted": "submitted",
+  "github.pull_request_review_comment.created": "created",
+  "github.push": null,
+  "github.workflow_dispatch": null,
+  "github.schedule": null,
+  "github.discussion.created": "created",
+  "github.discussion.edited": "edited",
+  "github.discussion.answered": "answered",
+  "github.discussion.unanswered": "unanswered",
+  "github.discussion.labeled": "labeled",
+  "github.discussion.unlabeled": "unlabeled",
+  "github.discussion_comment.created": "created"
+};
+var normalizedWorkflowV1Schema = external_exports.strictObject({
+  runId: githubNumericId,
+  runAttempt: external_exports.number().int().positive().max(1e3),
+  eventName: normalizedEventNameV1Schema,
+  workflowRef: external_exports.string().min(1).max(1024),
+  jobWorkflowRef: external_exports.string().min(1).max(1024),
+  runnerEnvironment: external_exports.literal("github-hosted")
+});
+var normalizedActorV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  login: external_exports.string().min(1).max(100)
+});
+var normalizedEventBase = {
+  schemaVersion: external_exports.literal("gardener.normalized-event/v1"),
+  eventId: boundIdentifier,
+  occurredAt: external_exports.iso.datetime(),
+  repository: normalizedRepositoryV1Schema,
+  workflow: normalizedWorkflowV1Schema,
+  actor: normalizedActorV1Schema
+};
+var boundedLabels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100);
+var boundedBody = external_exports.string().max(65536).nullable();
+var githubNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
+var normalizedIssueV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema
+});
+var normalizedPullRequestRepositoryV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  fullName: repositoryFullName
+});
+var normalizedPullRequestV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+  draft: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  merged: external_exports.boolean(),
+  base: external_exports.strictObject({
+    ref: external_exports.string().min(1).max(255),
+    sha: sha1,
+    repo: normalizedPullRequestRepositoryV1Schema
+  }),
+  /**
+   * Head revision identity. `repo` is nullable because GitHub omits it when the
+   * fork has been deleted; a null head repository can never satisfy same-repo
+   * enforcement, so the run fails closed.
+   */
+  head: external_exports.strictObject({
+    ref: external_exports.string().min(1).max(255),
+    sha: sha1,
+    repo: normalizedPullRequestRepositoryV1Schema.nullable()
+  })
+});
+var normalizedCommentV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  body: boundedBody,
+  author: normalizedActorV1Schema
+});
+var normalizedReviewV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
+  body: boundedBody,
+  author: normalizedActorV1Schema
+});
+var normalizedDiscussionV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  nodeId: githubNodeId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+  category: external_exports.string().min(1).max(100),
+  answered: external_exports.boolean()
+});
+var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  nodeId: githubNodeId,
+  body: boundedBody,
+  author: normalizedActorV1Schema
+});
+var normalizedPushV1Schema = external_exports.strictObject({
+  ref: external_exports.string().min(1).max(1024),
+  before: sha1,
+  after: sha1,
+  forced: external_exports.boolean(),
+  /** Bounded commit summary; the full list is never carried into model context. */
+  commits: external_exports.array(external_exports.strictObject({
+    sha: sha1,
+    message: external_exports.string().max(4096),
+    author: external_exports.strictObject({ name: external_exports.string().max(200), email: external_exports.string().max(320) })
+  })).max(20),
+  /** Number of commits present in `commits`, which is never the push total. */
+  includedCommits: external_exports.number().int().min(0).max(20),
+  /**
+   * True when commits were dropped building this event. GitHub also caps its
+   * own push payload, so `false` does not prove the push was small; use
+   * `before`/`after` with the provider API when an exact range matters.
+   */
+  commitsTruncated: external_exports.boolean()
+});
+var changedLabel = external_exports.string().trim().min(1).max(100);
+function eventMember(kind, shape) {
+  return external_exports.strictObject({ ...normalizedEventBase, kind: external_exports.literal(kind), ...shape });
+}
+var issuePayload = { issue: normalizedIssueV1Schema };
+var pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+var discussionPayload = { discussion: normalizedDiscussionV1Schema };
+var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
+  eventMember("github.issue.opened", issuePayload),
+  eventMember("github.issue.edited", issuePayload),
+  eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
+  eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
+  eventMember("github.issue.reopened", issuePayload),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.pull_request.opened", pullRequestPayload),
+  eventMember("github.pull_request.reopened", pullRequestPayload),
+  eventMember("github.pull_request.synchronize", pullRequestPayload),
+  eventMember("github.pull_request.ready_for_review", pullRequestPayload),
+  eventMember("github.pull_request.converted_to_draft", pullRequestPayload),
+  eventMember("github.pull_request.edited", pullRequestPayload),
+  eventMember("github.pull_request.labeled", { ...pullRequestPayload, label: changedLabel }),
+  eventMember("github.pull_request.unlabeled", { ...pullRequestPayload, label: changedLabel }),
+  eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
+  eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.push", { push: normalizedPushV1Schema }),
+  eventMember("github.workflow_dispatch", { prompt: external_exports.string().trim().min(1).max(2e4) }),
+  eventMember("github.schedule", { cron: cronExpressionV1Schema }),
+  eventMember("github.discussion.created", discussionPayload),
+  eventMember("github.discussion.edited", discussionPayload),
+  eventMember("github.discussion.answered", discussionPayload),
+  eventMember("github.discussion.unanswered", discussionPayload),
+  eventMember("github.discussion.labeled", { ...discussionPayload, label: changedLabel }),
+  eventMember("github.discussion.unlabeled", { ...discussionPayload, label: changedLabel }),
+  eventMember("github.discussion_comment.created", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema })
+]).superRefine((event, context) => {
+  if (event.repository.fullName !== `${event.repository.owner}/${event.repository.name}`) {
+    context.addIssue({ code: "custom", path: ["repository", "fullName"], message: "fullName must match repository owner and name" });
+  }
+  if (event.workflow.eventName !== eventNameByTriggerKind[event.kind]) {
+    context.addIssue({ code: "custom", path: ["workflow", "eventName"], message: "workflow eventName does not match normalized event kind" });
+  }
+  if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
+    context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
+  }
+});
+var taskRunRequestV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-run-request/v1"),
+  runId: boundIdentifier,
+  bundle: taskBundleV1Schema,
+  bundleHash: sha256,
+  sourcePath: relativePath2,
+  policySnapshotHash: sha256,
+  event: normalizedEventV1Schema,
+  model: external_exports.strictObject({ id: external_exports.string().min(1).max(256) }),
+  admittedAt: external_exports.iso.datetime(),
+  deadlineAt: external_exports.iso.datetime()
+}).superRefine((request, context) => {
+  if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
+    context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
+  }
+  if (request.event.repository.commitSha.length !== 40) {
+    context.addIssue({ code: "custom", path: ["event", "repository", "commitSha"], message: "invalid commit binding" });
+  }
+});
+var taskToolResultV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-tool-result/v1"),
+  operationId: boundIdentifier,
+  tool: taskToolV1Schema,
+  status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
+  exitCode: external_exports.number().int().min(0).max(255).nullable(),
+  stdout: external_exports.string().max(4 * 1024 * 1024),
+  stderr: external_exports.string().max(4 * 1024 * 1024),
+  outputTruncated: external_exports.boolean()
+}).superRefine((result, context) => {
+  const exited = result.status === "completed" || result.status === "failed";
+  if (exited !== (result.exitCode !== null)) {
+    context.addIssue({ code: "custom", path: ["exitCode"], message: "exitCode must match process completion status" });
+  }
+});
+var taskStepNameV1Schema = external_exports.string().regex(
+  /^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/,
+  'expected a lowercase step name such as "comment" or "open-draft"'
+).max(63);
+var taskOutputNameV1Schema = external_exports.string().regex(/^[a-z][A-Za-z0-9]{0,63}$/);
+var prototypePollutingKeys = ["__proto__", "constructor", "prototype"];
+var prototypePollutingKeySet = new Set(prototypePollutingKeys);
+function isPrototypePollutingKey(key) {
+  return prototypePollutingKeySet.has(key);
+}
+var taskPayloadPointerV1Schema = external_exports.string().min(2).max(256).regex(/^(?:\/(?:[^~/]|~[01])*)+$/, 'expected an RFC 6901 JSON pointer such as "/body"').superRefine((pointer, context) => {
+  for (const segment of decodeJsonPointer(pointer)) {
+    if (isPrototypePollutingKey(segment)) {
+      context.addIssue({ code: "custom", message: `pointer segment "${segment}" is not addressable` });
+    }
+  }
+});
+var reservedPayloadKeys = ["schemaVersion", "id", "repository", "kind"];
+var reservedPayloadKeySet = new Set(reservedPayloadKeys);
+var MAX_PAYLOAD_DEPTH = 12;
+var MAX_PAYLOAD_BYTES = 1024 * 1024;
+var MAX_PAYLOAD_NODES = 1e5;
+var taskJsonValueV1Schema = external_exports.lazy(() => external_exports.union([
+  external_exports.string(),
+  external_exports.number().finite(),
+  external_exports.boolean(),
+  external_exports.null(),
+  external_exports.array(taskJsonValueV1Schema),
+  external_exports.record(external_exports.string(), taskJsonValueV1Schema)
+]));
+function canonicalJsonByteLength(value) {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === void 0) return null;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return null;
+  }
+}
+function inspectJsonStructure(root) {
+  const issues = [];
+  const ancestors = /* @__PURE__ */ new Set();
+  const stack = [{ value: root, depth: 1, enter: true }];
+  let nodes = 0;
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    const { value, depth } = frame;
+    if (!frame.enter) {
+      ancestors.delete(value);
+      continue;
+    }
+    if (issues.length > 0) break;
+    nodes += 1;
+    if (nodes > MAX_PAYLOAD_NODES) {
+      issues.push(`payload contains more than ${MAX_PAYLOAD_NODES} values`);
+      break;
+    }
+    if (depth > MAX_PAYLOAD_DEPTH) {
+      issues.push(`payload nests deeper than ${MAX_PAYLOAD_DEPTH} levels`);
+      break;
+    }
+    if (value === null) continue;
+    const type = typeof value;
+    if (type === "string" || type === "boolean") continue;
+    if (type === "number") {
+      if (!Number.isFinite(value)) issues.push("payload contains a non-finite number");
+      continue;
+    }
+    if (type !== "object") {
+      issues.push(`payload contains a ${type} value, which JSON cannot represent`);
+      continue;
+    }
+    const container = value;
+    if (ancestors.has(container)) {
+      issues.push("payload contains a circular reference");
+      break;
+    }
+    ancestors.add(container);
+    stack.push({ value: container, depth, enter: false });
+    if (Array.isArray(container)) {
+      for (const item of container) stack.push({ value: item, depth: depth + 1, enter: true });
+      continue;
+    }
+    for (const key of Reflect.ownKeys(container)) {
+      if (typeof key === "symbol") {
+        issues.push("payload contains a symbol key, which JSON cannot represent");
+        break;
+      }
+      if (isPrototypePollutingKey(key)) {
+        issues.push(`payload may not contain the key "${key}"`);
+        break;
+      }
+      stack.push({ value: container[key], depth: depth + 1, enter: true });
+    }
+  }
+  return issues;
+}
+var taskEffectPayloadV1Schema = external_exports.unknown().superRefine((payload, context) => {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    context.addIssue({ code: "custom", message: "payload must be a JSON object" });
+    return;
+  }
+  for (const message3 of inspectJsonStructure(payload)) {
+    context.addIssue({ code: "custom", message: message3 });
+    return;
+  }
+  for (const key of Object.keys(payload)) {
+    if (reservedPayloadKeySet.has(key)) {
+      context.addIssue({ code: "custom", path: [key], message: `payload may not set the plan-owned field ${key}` });
+    }
+  }
+  const bytes = canonicalJsonByteLength(payload);
+  if (bytes === null) {
+    context.addIssue({ code: "custom", message: "payload cannot be canonically serialized" });
+    return;
+  }
+  if (bytes > MAX_PAYLOAD_BYTES) {
+    context.addIssue({ code: "custom", message: `payload exceeds ${MAX_PAYLOAD_BYTES} bytes` });
+  }
+}).pipe(external_exports.record(external_exports.string().max(64), taskJsonValueV1Schema));
+var taskStepOutputRefV1Schema = external_exports.strictObject({
+  step: taskStepNameV1Schema,
+  output: taskOutputNameV1Schema
+});
+var MAX_STEP_REFERENCES = 32;
+var taskStepReferencesV1Schema = external_exports.record(taskPayloadPointerV1Schema, taskStepOutputRefV1Schema).superRefine((references, context) => {
+  const pointers = Object.keys(references);
+  if (pointers.length > MAX_STEP_REFERENCES) {
+    context.addIssue({ code: "custom", message: `a step may carry at most ${MAX_STEP_REFERENCES} references` });
+  }
+  for (const pointer of pointers) {
+    const [head] = decodeJsonPointer(pointer);
+    if (head !== void 0 && reservedPayloadKeySet.has(head)) {
+      context.addIssue({ code: "custom", path: [pointer], message: `references may not target the plan-owned field ${head}` });
+    }
+  }
+});
+function decodeJsonPointer(pointer) {
+  return pointer.split("/").slice(1).map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
+}
+function encodeJsonPointer(path4) {
+  return path4.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
+}
+var taskEffectProposalV1Schema = external_exports.strictObject({
+  stepName: taskStepNameV1Schema,
+  kind: taskEffectKindV1Schema,
+  payload: taskEffectPayloadV1Schema,
+  references: taskStepReferencesV1Schema.default({}),
+  rationale: external_exports.string().trim().min(1).max(5e3)
+}).superRefine((proposal, context) => {
+  for (const message3 of captureOwnedPointerIssues(proposal.kind, proposal.payload, proposal.references)) {
+    context.addIssue({ code: "custom", path: ["payload"], message: message3 });
+  }
+  for (const issue3 of probeOperationShape({
+    ...proposal,
+    deferredPointers: captureDeferredPointers(proposal.kind)
+  })) {
+    context.addIssue({ code: "custom", path: ["payload"], message: issue3 });
+  }
+});
+var PROBE_REPOSITORY = { provider: "github", id: "1", owner: "gardener", name: "probe", defaultBranch: "main" };
+var PROBE_OPERATION_ID = "gardener-probe";
+var PROBE_UNTYPED_SENTINEL = "gardener-step-output";
+var MAX_POINTER_ARRAY_INDEX = 99;
+var MAX_PROBE_MESSAGES = 32;
+function setPointer(root, segments, value) {
+  if (segments.length === 0) return false;
+  if (segments.some(isPrototypePollutingKey)) return false;
+  let cursor = root;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    const lookahead = segments[index + 1];
+    const seed = /^(?:0|[1-9][0-9]*)$/.test(lookahead) ? [] : /* @__PURE__ */ Object.create(null);
+    if (Array.isArray(cursor)) {
+      const position = arrayIndex(segment);
+      if (position === null) return false;
+      if (cursor[position] === void 0) cursor[position] = seed;
+      cursor = cursor[position];
+      continue;
+    }
+    if (cursor === null || typeof cursor !== "object") return false;
+    const record2 = cursor;
+    if (!Object.hasOwn(record2, segment)) {
+      Object.defineProperty(record2, segment, { value: seed, writable: true, enumerable: true, configurable: true });
+    }
+    cursor = record2[segment];
+  }
+  const last = segments[segments.length - 1];
+  if (Array.isArray(cursor)) {
+    const position = arrayIndex(last);
+    if (position === null) return false;
+    cursor[position] = value;
+    return true;
+  }
+  if (cursor === null || typeof cursor !== "object") return false;
+  Object.defineProperty(cursor, last, { value, writable: true, enumerable: true, configurable: true });
+  return true;
+}
+function arrayIndex(segment) {
+  if (!/^(?:0|[1-9][0-9]*)$/.test(segment)) return null;
+  const position = Number(segment);
+  if (!Number.isInteger(position) || position < 0 || position > MAX_POINTER_ARRAY_INDEX) return null;
+  return position;
+}
+function safeJsonClone(value, depth = 0) {
+  if (depth > MAX_PAYLOAD_DEPTH) return null;
+  if (Array.isArray(value)) return value.map((item) => safeJsonClone(item, depth + 1));
+  if (value === null || typeof value !== "object") return value;
+  const copy = {};
+  for (const key of Object.keys(value)) {
+    if (isPrototypePollutingKey(key)) continue;
+    copy[key] = safeJsonClone(value[key], depth + 1);
+  }
+  return copy;
+}
+function probeOperationShape(step) {
+  const messages = [];
+  const candidate = {
+    ...safeJsonClone(step.payload),
+    schemaVersion: "v2",
+    id: PROBE_OPERATION_ID,
+    repository: PROBE_REPOSITORY,
+    kind: step.kind
+  };
+  const deferred = new Set(step.deferredPointers ?? []);
+  for (const [pointer, reference] of Object.entries(step.references ?? {})) {
+    deferred.add(pointer);
+    const type = step.resolveOutputType?.(reference);
+    const sentinel = type === void 0 ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
+    if (!setPointer(candidate, decodeJsonPointer(pointer), sentinel)) {
+      messages.push(`reference pointer ${pointer} does not address a payload location`);
+    }
+  }
+  let probed;
+  try {
+    probed = operationSchema.safeParse(candidate);
+  } catch (cause) {
+    messages.push(`operation: payload could not be validated (${cause instanceof Error ? cause.name : "unknown error"})`);
+    return messages;
+  }
+  if (probed.success) return messages;
+  let suppressed = 0;
+  for (const issue3 of probed.error.issues) {
+    const pointer = encodeJsonPointer(issue3.path);
+    const isDeferred = pointer !== "" && [...deferred].some((prefix) => pointer === prefix || pointer.startsWith(`${prefix}/`));
+    if (isDeferred) continue;
+    if (messages.length >= MAX_PROBE_MESSAGES) {
+      suppressed += 1;
+      continue;
+    }
+    messages.push(`${pointer === "" ? "operation" : pointer}: ${issue3.message}`);
+  }
+  if (suppressed > 0) messages.push(`operation: ${suppressed} further problems were not reported`);
+  return messages;
+}
+var taskCaptureFileModeV1Schema = external_exports.enum(["100644", "100755", "120000"]);
+var CAPTURE_FILE_MAX_BYTES = 100 * 1024 * 1024;
+var CAPTURE_TOTAL_MAX_BYTES = 100 * CAPTURE_FILE_MAX_BYTES;
+var fileByteCount = external_exports.number().int().nonnegative().max(CAPTURE_FILE_MAX_BYTES);
+var captureByteCount = external_exports.number().int().nonnegative().max(CAPTURE_TOTAL_MAX_BYTES);
+var protectedCapturePathPrefixes = [
+  ".git/",
+  ".github/workflows/",
+  ".github/actions/",
+  ".gardener/"
+];
+var protectedCapturePaths = [
+  "CODEOWNERS",
+  ".github/CODEOWNERS",
+  ".github/dependabot.yml",
+  ".github/dependabot.yaml",
+  "docs/CODEOWNERS"
+];
+function isProtectedCapturePath(path4) {
+  const normalized = path4.toLowerCase();
+  if (protectedCapturePaths.some((protectedPath) => normalized === protectedPath.toLowerCase())) return true;
+  return protectedCapturePathPrefixes.some((prefix) => {
+    const lowered = prefix.toLowerCase();
+    return normalized === lowered.slice(0, -1) || normalized.startsWith(lowered);
+  });
+}
+var taskCaptureFileV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    path: relativePath2,
+    status: external_exports.enum(["added", "modified"]),
+    mode: taskCaptureFileModeV1Schema,
+    sizeBytes: fileByteCount,
+    sha256
+  }),
+  external_exports.strictObject({
+    path: relativePath2,
+    status: external_exports.literal("deleted")
+  })
+]);
+var taskCaptureManifestV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-manifest/v1"),
+  captureId: boundIdentifier,
+  /** Commit the capture was taken against; apply refuses a drifted base. */
+  baseSha: sha1,
+  /**
+   * Bounded by the number of files one `commit.create` may write. A capture
+   * larger than that could never be materialized, so it is refused here — when
+   * the capture is admitted, before a plan exists — rather than partway
+   * through apply with earlier steps already written.
+   */
+  files: external_exports.array(taskCaptureFileV1Schema).min(1),
+  totalBytes: captureByteCount,
+  /**
+   * A partial capture is never applicable, so the only representable value is
+   * `false`. Capture that hits a limit must fail the run, not ship a subset of
+   * the change the model believed it was making.
+   */
+  truncated: external_exports.literal(false)
+}).superRefine((manifest, context) => {
+  const paths = manifest.files.map((file2) => file2.path);
+  if (new Set(paths).size !== paths.length) {
+    context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
+  }
+  manifest.files.forEach((file2, index) => {
+    if (isProtectedCapturePath(file2.path)) {
+      context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file2.path}` });
+    }
+  });
+  const measured = manifest.files.reduce((total, file2) => total + ("sizeBytes" in file2 ? file2.sizeBytes : 0), 0);
+  if (measured !== manifest.totalBytes) {
+    context.addIssue({ code: "custom", path: ["totalBytes"], message: "totalBytes must equal the sum of captured file sizes" });
+  }
+});
+function taskCaptureManifestText(value) {
+  const manifest = taskCaptureManifestV1Schema.parse(value);
+  const stable = (entry) => {
+    if (entry === null || typeof entry !== "object") return JSON.stringify(entry) ?? "null";
+    if (Array.isArray(entry)) return `[${entry.map(stable).join(",")}]`;
+    const record2 = entry;
+    return `{${Object.keys(record2).sort().filter((key) => record2[key] !== void 0).map((key) => `${JSON.stringify(key)}:${stable(record2[key])}`).join(",")}}`;
+  };
+  return stable(manifest);
+}
+function taskCaptureChangesDigestInput(manifest) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  for (const file2 of manifest.files) {
+    const fields = file2.status === "deleted" ? ["delete", file2.path] : ["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256];
+    for (const field of fields) {
+      const bytes = encoder.encode(field);
+      chunks.push(encoder.encode(`${bytes.byteLength}:`), bytes);
+    }
+  }
+  const output2 = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    output2.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output2;
+}
+var taskCaptureRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
+  captureId: boundIdentifier,
+  baseSha: sha1,
+  /** Digest of the canonical manifest JSON. */
+  manifestSha256: sha256,
+  /**
+   * Digest of the canonical length-prefixed change stream binding each path,
+   * status, mode, size, and content digest. This is independent of archive
+   * container bytes so packaging cannot change the plan-bound identity.
+   */
+  changesSha256: sha256,
+  fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sizeBytes: captureByteCount
+});
+var gitChangeArtifactRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.git-change-artifact/v1"),
+  sha256,
+  manifestSha256: sha256,
+  sizeBytes: external_exports.number().int().nonnegative().max(1e9)
+});
+var taskEventResourceV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({ kind: external_exports.literal("issue"), id: githubNumericId, number: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), id: githubNumericId, number: external_exports.number().int().positive() }),
+  external_exports.strictObject({
+    kind: external_exports.literal("discussion"),
+    id: githubNumericId,
+    number: external_exports.number().int().positive(),
+    nodeId: githubNodeId
+  })
+]);
+var taskEventBindingV1Schema = external_exports.strictObject({
+  kind: external_exports.enum(taskTriggerKindValues),
+  eventName: normalizedEventNameV1Schema,
+  action: external_exports.string().min(1).max(64).nullable(),
+  resource: taskEventResourceV1Schema.nullable(),
+  /** Comment the event carried, when it carried one. */
+  commentId: githubNumericId.nullable()
+}).superRefine((binding, context) => {
+  if (eventNameByTriggerKind[binding.kind] !== binding.eventName) {
+    context.addIssue({ code: "custom", path: ["eventName"], message: "eventName does not match the trigger kind" });
+  }
+  if ((eventActionByTriggerKind[binding.kind] ?? null) !== binding.action) {
+    context.addIssue({ code: "custom", path: ["action"], message: "action does not match the trigger kind" });
+  }
+});
+var captureMaterializedPointers = {
+  "commit.create": ["/files"]
+};
+function captureDeferredPointers(kind) {
+  return captureMaterializedPointers[kind] ?? [];
+}
+function captureOwnedPointerIssues(kind, payload, references = {}) {
+  const pointers = captureDeferredPointers(kind);
+  if (pointers.length === 0) return [];
+  const messages = [];
+  const record2 = payload !== null && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const referenced = new Set(Object.keys(references).map((pointer) => decodeJsonPointer(pointer)[0]));
+  for (const pointer of pointers) {
+    const [head] = decodeJsonPointer(pointer);
+    if (head === void 0) continue;
+    if (Object.hasOwn(record2, head)) {
+      messages.push(
+        `${pointer} is materialized from the trusted repository capture and may not be supplied by the task`
+      );
+    }
+    if (referenced.has(head)) {
+      messages.push(`${pointer} is materialized from the trusted repository capture and may not be referenced`);
+    }
+  }
+  return messages;
+}
+var taskEffectPlanOperationV1Schema = external_exports.strictObject({
+  stepName: taskStepNameV1Schema,
+  /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
+  operationId: boundIdentifier,
+  kind: taskEffectKindV1Schema,
+  payload: taskEffectPayloadV1Schema,
+  references: taskStepReferencesV1Schema.default({}),
+  rationale: external_exports.string().trim().min(1).max(5e3)
+});
+var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
+var taskEffectPlanV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-effect-plan/v1"),
+  runId: boundIdentifier,
+  taskId: identifier2,
+  taskName: external_exports.string().trim().min(1).max(100),
+  bundleHash: sha256,
+  /**
+   * Repository identity every operation in this plan is constructed from.
+   *
+   * `defaultBranch` travels in the plan rather than being read back at apply
+   * time because it is part of the canonical operation hash. Re-fetching a
+   * mutable value would let the same plan hash differently on a retry.
+   */
+  repository: external_exports.strictObject({
+    id: githubNumericId,
+    fullName: repositoryFullName,
+    defaultBranch: external_exports.string().trim().min(1).max(255)
+  }),
+  provenance: external_exports.strictObject({
+    sourcePath: relativePath2,
+    commitSha: sha1,
+    workflowRunId: githubNumericId,
+    workflowRunAttempt: external_exports.number().int().positive()
+  }),
+  event: taskEventBindingV1Schema,
+  /** Copied from the bundle so apply enforces the same ceilings planning did. */
+  limits: external_exports.strictObject({
+    maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
+    maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
+  }),
+  /** Present only when a step materializes repository changes at apply time. */
+  capture: taskCaptureManifestV1Schema.optional(),
+  /** Digest of the changes artifact the capture manifest describes. */
+  changesSha256: sha256.optional(),
+  operations: external_exports.array(taskEffectPlanOperationV1Schema)
+}).superRefine((plan, context) => {
+  const indexByStepName = /* @__PURE__ */ new Map();
+  plan.operations.forEach((operation, index) => {
+    if (indexByStepName.has(operation.stepName)) {
+      context.addIssue({ code: "custom", path: ["operations", index, "stepName"], message: "step names must be unique within a plan" });
+      return;
+    }
+    indexByStepName.set(operation.stepName, index);
+  });
+  const operationIds = plan.operations.map((operation) => operation.operationId);
+  if (new Set(operationIds).size !== operationIds.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a plan" });
+  }
+  let anyStepDefersToCapture = false;
+  plan.operations.forEach((operation, index) => {
+    const path4 = ["operations", index];
+    const resolvedTypes = /* @__PURE__ */ new Map();
+    for (const [pointer, reference] of Object.entries(operation.references)) {
+      const targetIndex = indexByStepName.get(reference.step);
+      if (reference.step === operation.stepName) {
+        context.addIssue({ code: "custom", path: [...path4, "references", pointer], message: "a step cannot reference its own output" });
+        continue;
+      }
+      if (targetIndex === void 0) {
+        context.addIssue({ code: "custom", path: [...path4, "references", pointer], message: `unknown step "${reference.step}"` });
+        continue;
+      }
+      if (targetIndex >= index) {
+        context.addIssue({ code: "custom", path: [...path4, "references", pointer], message: `step "${reference.step}" does not run before this step` });
+        continue;
+      }
+      const targetKind = plan.operations[targetIndex].kind;
+      const outputType = operationOutputType(targetKind, reference.output);
+      if (outputType === void 0) {
+        context.addIssue({
+          code: "custom",
+          path: [...path4, "references", pointer],
+          message: `${targetKind} does not publish a scalar output named "${reference.output}"`
+        });
+        continue;
+      }
+      resolvedTypes.set(pointer, outputType);
+    }
+    for (const message3 of captureOwnedPointerIssues(operation.kind, operation.payload, operation.references)) {
+      context.addIssue({ code: "custom", path: [...path4, "payload"], message: message3 });
+    }
+    const deferredPointers = captureDeferredPointers(operation.kind);
+    if (deferredPointers.length > 0) anyStepDefersToCapture = true;
+    for (const message3 of probeOperationShape({
+      kind: operation.kind,
+      payload: operation.payload,
+      references: operation.references,
+      deferredPointers,
+      resolveOutputType: (reference) => {
+        for (const [pointer, type] of resolvedTypes) {
+          const candidate = operation.references[pointer];
+          if (candidate?.step === reference.step && candidate.output === reference.output) return type;
+        }
+        return void 0;
+      }
+    })) {
+      context.addIssue({ code: "custom", path: [...path4, "payload"], message: message3 });
+    }
+  });
+  const { maxEffectOperations, maxEffectBytes } = plan.limits;
+  if (maxEffectOperations !== void 0 && plan.operations.length > maxEffectOperations) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `plan has ${plan.operations.length} operations but the task allows at most ${maxEffectOperations}`
+    });
+  }
+  const operationBytes = canonicalJsonByteLength(plan.operations);
+  if (operationBytes === null) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "plan operations cannot be canonically serialized" });
+  } else if (maxEffectBytes !== void 0 && operationBytes > maxEffectBytes) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `plan operations serialize to ${operationBytes} bytes but the task allows at most ${maxEffectBytes}`
+    });
+  }
+  const planBytes = canonicalJsonByteLength(plan);
+  if (planBytes === null) {
+    context.addIssue({ code: "custom", message: "plan cannot be canonically serialized" });
+  } else if (planBytes > EFFECT_TRANSPORT_MAX_BYTES) {
+    context.addIssue({
+      code: "custom",
+      message: `plan serializes to ${planBytes} bytes but the effect artifact carries at most ${EFFECT_TRANSPORT_MAX_BYTES}`
+    });
+  }
+  if (plan.capture === void 0 !== (plan.changesSha256 === void 0)) {
+    context.addIssue({ code: "custom", path: ["changesSha256"], message: "capture manifest and changes digest must be present together" });
+  }
+  if (anyStepDefersToCapture && plan.capture === void 0) {
+    context.addIssue({ code: "custom", path: ["capture"], message: "a step materializes repository changes but the plan carries no capture manifest" });
+  }
+  if (!anyStepDefersToCapture && plan.capture !== void 0) {
+    context.addIssue({ code: "custom", path: ["capture"], message: "the plan carries a capture manifest that no step materializes" });
+  }
+  if (plan.capture !== void 0 && plan.capture.baseSha !== plan.provenance.commitSha) {
+    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
+  }
+});
+var taskObservationV1Schema = external_exports.strictObject({
+  kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
+  summary: external_exports.string().trim().min(1).max(8e3),
+  paths: external_exports.array(relativePath2).max(100).default([])
+});
+var taskOutcomeBase = {
+  schemaVersion: external_exports.literal("gardener.task-outcome/v1"),
+  runId: boundIdentifier,
+  taskId: identifier2,
+  bundleHash: sha256
+};
+var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    ...taskOutcomeBase,
+    status: external_exports.literal("completed"),
+    summary: external_exports.string().trim().min(1).max(32e3),
+    observations: external_exports.array(taskObservationV1Schema).max(200),
+    /**
+     * Ordered steps the model proposes, in the order it wants them applied.
+     * Unbounded by count for the same reason the plan is: the task's own
+     * `maxEffectOperations` is the ceiling that matters, and an empty list is
+     * the normal result of an inspect-only run.
+     */
+    proposedEffects: external_exports.array(taskEffectProposalV1Schema)
+  }),
+  external_exports.strictObject({
+    ...taskOutcomeBase,
+    status: external_exports.literal("failed"),
+    error: external_exports.strictObject({ code: identifier2, message: external_exports.string().min(1).max(8e3), retryable: external_exports.boolean() })
+  }),
+  external_exports.strictObject({
+    ...taskOutcomeBase,
+    status: external_exports.literal("cancelled"),
+    reason: external_exports.string().min(1).max(8e3)
+  })
+]);
+
+// ../protocol/src/schema.ts
+var identifier3 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var sha12 = external_exports.string().regex(/^[a-f0-9]{40}$/);
+var githubNumericId2 = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
+var EFFECT_TRANSPORT_MAX_BYTES2 = 4 * 1024 * 1024;
+function canonicalJsonByteLength2(value) {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === void 0) return null;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return null;
+  }
+}
+var runnerEventNameV1Schema = external_exports.enum([
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "workflow_dispatch",
+  "schedule",
+  "discussion",
+  "discussion_comment"
+]);
 var runnerHelloV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
   protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
   phase: external_exports.enum(["plan", "effects"]),
   repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
   ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  runId: identifier,
+  runId: identifier3,
   runAttempt: external_exports.number().int().positive().max(1e3),
   workflowRef: external_exports.string().min(1).max(1024),
   jobWorkflowRef: external_exports.string().min(1).max(1024),
-  eventName: external_exports.enum(["issues", "workflow_dispatch"]),
+  eventName: runnerEventNameV1Schema,
   ref: external_exports.string().min(1).max(1024),
   runnerEnvironment: external_exports.literal("github-hosted"),
   commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
-  agentHash: sha256
+  agentHash: sha2562
 });
-var runnerActionV1Schema = external_exports.strictObject({
+var runnerActionBaseFields = {
   schemaVersion: external_exports.literal("gardener.runner.action/v1"),
   sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier,
-  kind: external_exports.literal("shell.exec"),
-  command: external_exports.string().min(1).max(64 * 1024),
-  cwd: external_exports.string().min(1).max(4096),
-  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3),
-  maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
+  operationId: identifier3,
+  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3)
+};
+var githubReadRequestV1Schema = external_exports.discriminatedUnion("transport", [
+  external_exports.strictObject({
+    transport: external_exports.literal("rest"),
+    method: external_exports.enum(["GET", "HEAD"]),
+    path: external_exports.string().min(1).max(2048)
+  }),
+  external_exports.strictObject({
+    transport: external_exports.literal("graphql"),
+    query: external_exports.string().min(1).max(32 * 1024),
+    /**
+     * Bounded by count and serialized size. Actions are canonicalized into
+     * Durable Object storage, so an unbounded variables map would let a model
+     * grow durable state without limit.
+     */
+    variables: external_exports.record(external_exports.string().min(1).max(128), external_exports.unknown()).refine((value) => Object.keys(value).length <= 64, "too many GraphQL variables").refine((value) => {
+      const serialized = JSON.stringify(value);
+      return serialized !== void 0 && new TextEncoder().encode(serialized).byteLength <= 32 * 1024;
+    }, "GraphQL variables exceed the size limit").optional(),
+    operationName: external_exports.string().regex(/^[_A-Za-z][_0-9A-Za-z]{0,127}$/).optional()
+  })
+]);
+var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("shell.exec"),
+    command: external_exports.string().min(1).max(64 * 1024),
+    cwd: external_exports.string().min(1).max(4096),
+    maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
+  }),
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("github.read"),
+    request: githubReadRequestV1Schema,
+    maxOutputBytes: external_exports.number().int().positive().max(1024 * 1024)
+  }),
+  /**
+   * Trusted working-tree capture.
+   *
+   * Only the runtime issues this, and only once it holds a durable proposal
+   * that materializes repository changes. There is deliberately no field a
+   * model could fill: no paths, no directory, no content, no filters. The
+   * whole tree is captured, judged by Git against a baseline the runner took
+   * before the first task command ran, so what lands in a commit is what the
+   * runner observed rather than what the model claimed.
+   *
+   * `baseSha` is the commit the runtime bound the run to. The runner refuses
+   * the action unless its own pre-execution baseline was taken against the
+   * same commit, so neither side can drift alone.
+   */
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("repository.capture"),
+    baseSha: sha12,
+    maxOutputBytes: external_exports.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES2)
+  })
+]);
+var runnerCaptureRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
+  captureId: identifier3,
+  baseSha: sha12,
+  manifestSha256: sha2562,
+  changesSha256: sha2562,
+  fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 });
+var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
+    /** The working tree matched the checked-out commit; there is nothing to commit. */
+    status: external_exports.literal("unchanged")
+  }),
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
+    status: external_exports.literal("captured"),
+    ref: runnerCaptureRefV1Schema,
+    manifestJson: external_exports.string().min(2).max(EFFECT_TRANSPORT_MAX_BYTES2)
+  })
+]);
 var runnerActionResultV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
   sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier,
+  operationId: identifier3,
   status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
   exitCode: external_exports.number().int().min(0).max(255).nullable(),
   stdout: external_exports.string().max(4 * 1024 * 1024),
@@ -40006,38 +42477,268 @@ var runnerActionResultV1Schema = external_exports.strictObject({
     });
   }
 });
-var runnerEventV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.event/v1"),
-  kind: external_exports.literal("github.issue.opened"),
-  issue: external_exports.strictObject({
-    id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-    number: external_exports.number().int().positive(),
-    title: external_exports.string().max(1024),
-    body: external_exports.string().max(65536).nullable(),
-    labels: external_exports.array(external_exports.string().trim().min(1).max(100)).max(100),
-    author: external_exports.strictObject({
-      id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-      login: external_exports.string().min(1).max(100)
-    })
-  })
+var eventActor = external_exports.strictObject({
+  id: githubNumericId2,
+  login: external_exports.string().min(1).max(100)
+});
+var eventLabels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100);
+var eventBody = external_exports.string().max(65536).nullable();
+var eventNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
+var eventChangedLabel = external_exports.string().trim().min(1).max(100);
+var eventIssue = external_exports.strictObject({
+  id: githubNumericId2,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor
+});
+var eventPullRequestRepository = external_exports.strictObject({
+  id: githubNumericId2,
+  fullName: external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201)
+});
+var eventPullRequest = external_exports.strictObject({
+  id: githubNumericId2,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor,
+  draft: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  merged: external_exports.boolean(),
+  base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
+  head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
+});
+var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, author: eventActor });
+var eventReview = external_exports.strictObject({
+  id: githubNumericId2,
+  state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
+  body: eventBody,
+  author: eventActor
+});
+var eventDiscussion = external_exports.strictObject({
+  id: githubNumericId2,
+  nodeId: eventNodeId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor,
+  category: external_exports.string().min(1).max(100),
+  answered: external_exports.boolean()
+});
+var eventDiscussionComment = external_exports.strictObject({
+  id: githubNumericId2,
+  nodeId: eventNodeId,
+  body: eventBody,
+  author: eventActor
+});
+var eventPush = external_exports.strictObject({
+  ref: external_exports.string().min(1).max(1024),
+  before: sha12,
+  after: sha12,
+  forced: external_exports.boolean(),
+  commits: external_exports.array(external_exports.strictObject({
+    sha: sha12,
+    message: external_exports.string().max(4096),
+    author: external_exports.strictObject({ name: external_exports.string().max(200), email: external_exports.string().max(320) })
+  })).max(20),
+  /** Count present in `commits`; never claimed to be the push total. */
+  includedCommits: external_exports.number().int().min(0).max(20),
+  commitsTruncated: external_exports.boolean()
+});
+var eventRepository = external_exports.strictObject({ defaultBranch: external_exports.string().trim().min(1).max(255) });
+function runnerEventMember(kind, shape) {
+  return external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.event/v1"),
+    kind: external_exports.literal(kind),
+    repository: eventRepository,
+    ...shape
+  });
+}
+var issuePayload2 = { issue: eventIssue };
+var pullRequestPayload2 = { pullRequest: eventPullRequest };
+var discussionPayload2 = { discussion: eventDiscussion };
+var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
+  runnerEventMember("github.issue.opened", issuePayload2),
+  runnerEventMember("github.issue.edited", issuePayload2),
+  runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
+  runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
+  runnerEventMember("github.issue.reopened", issuePayload2),
+  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
+  runnerEventMember("github.pull_request.opened", pullRequestPayload2),
+  runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
+  runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
+  runnerEventMember("github.pull_request.ready_for_review", pullRequestPayload2),
+  runnerEventMember("github.pull_request.converted_to_draft", pullRequestPayload2),
+  runnerEventMember("github.pull_request.edited", pullRequestPayload2),
+  runnerEventMember("github.pull_request.labeled", { ...pullRequestPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.pull_request.unlabeled", { ...pullRequestPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload2, review: eventReview }),
+  runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload2, comment: eventComment }),
+  runnerEventMember("github.push", { push: eventPush }),
+  runnerEventMember("github.workflow_dispatch", { prompt: external_exports.string().trim().min(1).max(2e4) }),
+  runnerEventMember("github.schedule", { cron: external_exports.string().trim().min(1).max(100) }),
+  runnerEventMember("github.discussion.created", discussionPayload2),
+  runnerEventMember("github.discussion.edited", discussionPayload2),
+  runnerEventMember("github.discussion.answered", discussionPayload2),
+  runnerEventMember("github.discussion.unanswered", discussionPayload2),
+  runnerEventMember("github.discussion.labeled", { ...discussionPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment })
+]);
+var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
+var githubUrl = external_exports.url().refine(
+  (value) => new URL(value).origin === "https://github.com",
+  "Expected an HTTPS github.com URL"
+);
+var runnerOperationReceiptV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("v2"),
+  operationId: identifier3,
+  operationHash: sha2562,
+  kind: external_exports.string().min(1).max(100).regex(/^[a-z][a-z_]*(?:\.[a-z][a-z_]*)+$/),
+  status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
+  attempt: external_exports.number().int().positive(),
+  attemptedAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime(),
+  providerRequestId: external_exports.string().min(1).max(255).optional(),
+  resourceUrl: githubUrl.optional(),
+  error: external_exports.strictObject({
+    code: external_exports.string().min(1).max(100),
+    message: external_exports.string().min(1).max(2e3),
+    retryable: external_exports.boolean()
+  }).optional()
+}).superRefine((receipt, context) => {
+  if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) {
+    context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
+  }
+  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) {
+    context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
+  }
+  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) {
+    context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
+  }
+});
+var runnerScalarOutputV1Schema = external_exports.union([
+  external_exports.string().max(65536),
+  external_exports.number().safe(),
+  external_exports.boolean(),
+  external_exports.null()
+]);
+var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
+  stepName,
+  receipt: runnerOperationReceiptV1Schema,
+  /** Scalar provider outputs needed to resolve references after a retry. */
+  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({})
 });
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
-  planRunId: identifier,
-  bundleHash: sha256,
-  artifactSha256: sha256,
-  operationId: identifier,
-  kind: external_exports.literal("issue.comment.create"),
-  commentId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  commentUrl: external_exports.url().refine(
-    (value) => new URL(value).origin === "https://github.com",
-    "Expected an HTTPS github.com comment URL"
-  )
+  planRunId: identifier3,
+  bundleHash: sha2562,
+  artifactSha256: sha2562,
+  /** Digest of the changes artifact, when the plan materialized repository changes. */
+  changesSha256: sha2562.optional(),
+  /**
+   * Number of operations the plan this receipt answers contained. Without it a
+   * receipt cannot be shown to be complete: `operations.length` alone says
+   * nothing about how many steps were supposed to run, so a truncated apply
+   * would read as a successful one.
+   */
+  plannedOperations: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  status: external_exports.enum(["running", "applied", "stopped"]),
+  /** The step that halted the plan, or null when every step in the plan ran. */
+  stoppedAtStep: stepName.nullable(),
+  /**
+   * Recorded steps, in plan order. No count ceiling here either — the bound is
+   * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
+   */
+  operations: external_exports.array(runnerPlanStepReceiptV1Schema).min(1)
+}).superRefine((receipt, context) => {
+  const bytes = canonicalJsonByteLength2(receipt);
+  if (bytes === null) {
+    context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });
+  } else if (bytes > EFFECT_TRANSPORT_MAX_BYTES2) {
+    context.addIssue({
+      code: "custom",
+      message: `receipt serializes to ${bytes} bytes but the transport carries at most ${EFFECT_TRANSPORT_MAX_BYTES2}`
+    });
+  }
+  if (receipt.operations.length > receipt.plannedOperations) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `receipt records ${receipt.operations.length} steps but the plan contained ${receipt.plannedOperations}`
+    });
+  }
+  const stepNames = receipt.operations.map((entry) => entry.stepName);
+  if (new Set(stepNames).size !== stepNames.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "step names must be unique within a receipt" });
+  }
+  const operationIds = receipt.operations.map((entry) => entry.receipt.operationId);
+  if (new Set(operationIds).size !== operationIds.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a receipt" });
+  }
+  const halted = receipt.operations.filter((entry) => entry.receipt.status === "failed" || entry.receipt.status === "conflicted");
+  if (receipt.status === "running" || receipt.status === "applied") {
+    if (halted.length > 0) {
+      context.addIssue({ code: "custom", path: ["status"], message: `${receipt.status} plans cannot contain a failed or conflicted step` });
+    }
+    if (receipt.stoppedAtStep !== null) {
+      context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: `${receipt.status} plans did not stop at a step` });
+    }
+    if (receipt.status === "applied" && receipt.operations.length !== receipt.plannedOperations) {
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: `an applied plan must record all ${receipt.plannedOperations} planned steps, not ${receipt.operations.length}`
+      });
+    }
+    if (receipt.status === "running" && receipt.operations.length >= receipt.plannedOperations) {
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "a running receipt must be an incomplete successful prefix"
+      });
+    }
+    return;
+  }
+  const last = receipt.operations.at(-1);
+  if (last === void 0 || halted.length !== 1 || halted[0] !== last) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: "a stopped plan halts at exactly one failed or conflicted step, which must be the last recorded step"
+    });
+    return;
+  }
+  if (receipt.stoppedAtStep !== last.stepName) {
+    context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: "stoppedAtStep must name the halting step" });
+  }
 });
+function base64EncodedLength(bytes) {
+  return 4 * Math.ceil(bytes / 3);
+}
+function base64DecodedLength(encoded) {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return encoded.length / 4 * 3 - padding;
+}
 var runnerEffectArtifactV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
-  sha256,
-  bytesBase64: external_exports.string().min(1).max(128 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
+  sha256: sha2562,
+  bytesBase64: external_exports.string().min(1).max(base64EncodedLength(EFFECT_TRANSPORT_MAX_BYTES2)).regex(/^[A-Za-z0-9+/]*={0,2}$/).refine(
+    (value) => value.length % 4 === 0,
+    "Expected a padded base64 string"
+  ).refine(
+    (value) => base64DecodedLength(value) <= EFFECT_TRANSPORT_MAX_BYTES2,
+    `Expected at most ${EFFECT_TRANSPORT_MAX_BYTES2} decoded bytes`
+  ),
+  /**
+   * Digest of the repository-changes artifact this plan materializes, when it
+   * materializes one. Bound here so apply can refuse a plan/changes mismatch
+   * before it writes anything.
+   */
+  changesSha256: sha2562.optional()
 });
 var runnerTerminalV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
@@ -40056,6 +42757,1886 @@ var resumeCursorV1Schema = external_exports.strictObject({
 // ../protocol/src/session-id.ts
 function runnerSessionId(hello) {
   return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
+}
+
+// src/event.ts
+function object2(value, what) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`GitHub event payload is missing ${what}`);
+  }
+  return value;
+}
+function actor(value, what) {
+  const user = object2(value, what);
+  return { id: String(user.id ?? ""), login: user.login };
+}
+function labelNames(value) {
+  return Array.isArray(value) ? value.map((label) => String(object2(label, "a label").name ?? "")).filter((name2) => name2.length > 0) : [];
+}
+function changedLabel2(raw) {
+  return String(object2(raw.label, "the changed label").name ?? "");
+}
+function issuePayload3(raw) {
+  const issue3 = object2(raw.issue, "an issue");
+  return {
+    id: String(issue3.id ?? ""),
+    number: issue3.number,
+    title: issue3.title,
+    body: issue3.body ?? null,
+    labels: labelNames(issue3.labels),
+    author: actor(issue3.user, "an issue author")
+  };
+}
+function repositoryRef(value) {
+  if (value === null || value === void 0) return null;
+  const repository = object2(value, "a pull-request repository");
+  return { id: String(repository.id ?? ""), fullName: repository.full_name };
+}
+function pullRequestPayload3(raw) {
+  const pullRequest = object2(raw.pull_request, "a pull request");
+  const base = object2(pullRequest.base, "a pull-request base");
+  const head = object2(pullRequest.head, "a pull-request head");
+  return {
+    id: String(pullRequest.id ?? ""),
+    number: pullRequest.number,
+    title: pullRequest.title,
+    body: pullRequest.body ?? null,
+    labels: labelNames(pullRequest.labels),
+    author: actor(pullRequest.user, "a pull-request author"),
+    draft: Boolean(pullRequest.draft),
+    state: pullRequest.state === "closed" ? "closed" : "open",
+    merged: Boolean(pullRequest.merged),
+    base: { ref: base.ref, sha: base.sha, repo: repositoryRef(base.repo) },
+    head: { ref: head.ref, sha: head.sha, repo: repositoryRef(head.repo) }
+  };
+}
+function commentPayload(raw) {
+  const comment = object2(raw.comment, "a comment");
+  return {
+    id: String(comment.id ?? ""),
+    body: comment.body ?? null,
+    author: actor(comment.user, "a comment author")
+  };
+}
+function discussionPayload3(raw) {
+  const discussion = object2(raw.discussion, "a discussion");
+  return {
+    id: String(discussion.id ?? ""),
+    nodeId: discussion.node_id,
+    number: discussion.number,
+    title: discussion.title,
+    body: discussion.body ?? null,
+    labels: labelNames(discussion.labels),
+    author: actor(discussion.user, "a discussion author"),
+    category: object2(discussion.category, "a discussion category").name,
+    answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url)
+  };
+}
+var MAX_INCLUDED_COMMITS = 20;
+function pushPayload(raw) {
+  const commits = Array.isArray(raw.commits) ? raw.commits : [];
+  const included = commits.slice(0, MAX_INCLUDED_COMMITS);
+  return {
+    ref: raw.ref,
+    before: raw.before,
+    after: raw.after,
+    forced: Boolean(raw.forced),
+    commits: included.map((entry) => {
+      const commit = object2(entry, "a pushed commit");
+      const author = object2(commit.author, "a commit author");
+      return {
+        sha: commit.id,
+        message: String(commit.message ?? "").slice(0, 4096),
+        author: { name: String(author.name ?? ""), email: String(author.email ?? "") }
+      };
+    }),
+    includedCommits: included.length,
+    // GitHub caps its own push payload, so this only reports truncation we can
+    // observe. It is never a claim about the true size of the push.
+    commitsTruncated: commits.length > MAX_INCLUDED_COMMITS
+  };
+}
+function repositoryPayload(raw) {
+  const repository = object2(raw.repository, "the repository");
+  const defaultBranch = typeof repository.default_branch === "string" ? repository.default_branch.trim() : "";
+  if (!defaultBranch) throw new Error("GitHub event payload is missing the repository default branch");
+  return { defaultBranch };
+}
+function normalizeGitHubEvent(eventName, source) {
+  const raw = object2(source, "an event payload");
+  const action = typeof raw.action === "string" ? raw.action : void 0;
+  const unsupported = () => {
+    throw new Error(`Gardener does not support ${eventName}${action ? `: ${action}` : ""}`);
+  };
+  const payload = (() => {
+    switch (eventName) {
+      case "issues": {
+        if (!action || !["opened", "edited", "labeled", "unlabeled", "reopened"].includes(action)) unsupported();
+        const issue3 = { issue: issuePayload3(raw) };
+        return action === "labeled" || action === "unlabeled" ? { kind: `github.issue.${action}`, ...issue3, label: changedLabel2(raw) } : { kind: `github.issue.${action}`, ...issue3 };
+      }
+      case "issue_comment": {
+        if (action !== "created") unsupported();
+        return { kind: "github.issue_comment.created", issue: issuePayload3(raw), comment: commentPayload(raw) };
+      }
+      case "pull_request": {
+        const supported = ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "edited", "labeled", "unlabeled"];
+        if (!action || !supported.includes(action)) unsupported();
+        const pullRequest = { pullRequest: pullRequestPayload3(raw) };
+        return action === "labeled" || action === "unlabeled" ? { kind: `github.pull_request.${action}`, ...pullRequest, label: changedLabel2(raw) } : { kind: `github.pull_request.${action}`, ...pullRequest };
+      }
+      case "pull_request_review": {
+        if (action !== "submitted") unsupported();
+        const review = object2(raw.review, "a review");
+        return {
+          kind: "github.pull_request_review.submitted",
+          pullRequest: pullRequestPayload3(raw),
+          review: {
+            id: String(review.id ?? ""),
+            state: String(review.state ?? "").toLowerCase(),
+            body: review.body ?? null,
+            author: actor(review.user, "a review author")
+          }
+        };
+      }
+      case "pull_request_review_comment": {
+        if (action !== "created") unsupported();
+        return {
+          kind: "github.pull_request_review_comment.created",
+          pullRequest: pullRequestPayload3(raw),
+          comment: commentPayload(raw)
+        };
+      }
+      case "push":
+        return { kind: "github.push", push: pushPayload(raw) };
+      case "workflow_dispatch": {
+        const inputs = raw.inputs === void 0 ? {} : object2(raw.inputs, "dispatch inputs");
+        const prompt = typeof inputs.prompt === "string" ? inputs.prompt.trim() : "";
+        if (!prompt) throw new Error("workflow_dispatch requires a non-empty prompt input");
+        return { kind: "github.workflow_dispatch", prompt };
+      }
+      case "schedule": {
+        const cron = typeof raw.schedule === "string" ? raw.schedule.trim() : "";
+        if (!cron) throw new Error("schedule event payload is missing its cron expression");
+        return { kind: "github.schedule", cron };
+      }
+      case "discussion": {
+        const supported = ["created", "edited", "answered", "unanswered", "labeled", "unlabeled"];
+        if (!action || !supported.includes(action)) unsupported();
+        const discussion = { discussion: discussionPayload3(raw) };
+        return action === "labeled" || action === "unlabeled" ? { kind: `github.discussion.${action}`, ...discussion, label: changedLabel2(raw) } : { kind: `github.discussion.${action}`, ...discussion };
+      }
+      case "discussion_comment": {
+        if (action !== "created") unsupported();
+        const comment = object2(raw.comment, "a discussion comment");
+        return {
+          kind: "github.discussion_comment.created",
+          discussion: discussionPayload3(raw),
+          comment: {
+            id: String(comment.id ?? ""),
+            nodeId: comment.node_id,
+            body: comment.body ?? null,
+            author: actor(comment.user, "a discussion comment author")
+          }
+        };
+      }
+      default:
+        return unsupported();
+    }
+  })();
+  return runnerEventV1Schema.parse({
+    schemaVersion: "gardener.runner.event/v1",
+    repository: repositoryPayload(raw),
+    ...payload
+  });
+}
+
+// src/executor.ts
+var import_node_child_process2 = require("node:child_process");
+var import_promises3 = require("node:fs/promises");
+var import_node_path2 = __toESM(require("node:path"), 1);
+
+// src/capture.ts
+var import_node_child_process = require("node:child_process");
+var import_node_crypto = require("node:crypto");
+var import_node_fs = require("node:fs");
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_stream = require("node:stream");
+var import_promises2 = require("node:stream/promises");
+var GITLINK_MODE = "160000";
+var RUNNER_HOME_PATH = ".gardener/runner-home";
+var RUNNER_HOME_PREFIX = `${RUNNER_HOME_PATH}/`;
+var ATTRIBUTES_FILE = ".gitattributes";
+var ARTIFACT_ROOT = "gardener-capture";
+var DIRECTORY_MODE = 448;
+var FILE_MODE = 384;
+var GIT_MAX_OUTPUT = 64 * 1024 * 1024;
+var MAX_PATH_LENGTH = 1024;
+var GIT_PINNED_ARGV = [
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "protocol.allow=never",
+  "-c",
+  "core.attributesFile=/dev/null",
+  "-c",
+  "core.excludesFile=/dev/null"
+];
+function gitEnvironment() {
+  return {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_SYSTEM: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_ATTR_NOSYSTEM: "1",
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_ASKPASS: "",
+    GIT_LFS_SKIP_SMUDGE: "1"
+  };
+}
+var WorkingTreeCapture = class _WorkingTreeCapture {
+  #workspace;
+  #artifactRoot;
+  #baseSha;
+  #authority;
+  #submodules;
+  constructor(workspace, artifactRoot, baseSha, authority, submodules) {
+    this.#workspace = workspace;
+    this.#artifactRoot = artifactRoot;
+    this.#baseSha = baseSha;
+    this.#authority = authority;
+    this.#submodules = submodules;
+  }
+  /** Commit this capture is bound to. */
+  get baseSha() {
+    return this.#baseSha;
+  }
+  /**
+   * Records the pre-execution snapshot. Run this before the model is allowed to
+   * execute anything, and never afterwards.
+   */
+  static async initialize(options) {
+    const baseSha = normalizeSha1(options.baseSha, "base commit");
+    if (!await directoryExists(options.workspace)) throw new Error("Capture workspace does not exist");
+    if (!await directoryExists(options.runnerTemp)) throw new Error("Capture runner temp directory does not exist");
+    const workspace = await (0, import_promises.realpath)(import_node_path.default.resolve(options.workspace));
+    const runnerTemp = await (0, import_promises.realpath)(import_node_path.default.resolve(options.runnerTemp));
+    if (runnerTemp === workspace || contains(workspace, runnerTemp)) {
+      throw new Error("Capture artifacts must not be written inside the workspace");
+    }
+    const head = normalizeSha1(await gitText(workspace, ["rev-parse", "HEAD"]), "HEAD");
+    if (head !== baseSha) throw new Error(`Workspace HEAD ${head} does not match the expected base commit ${baseSha}`);
+    const { index, submodules, digest } = await readIndex(workspace);
+    const authority = {
+      index,
+      indexDigest: digest,
+      config: await readConfig(workspace),
+      excludeDigest: await fileDigest(import_node_path.default.join(workspace, ".git", "info", "exclude")),
+      attributeDigests: await readAttributeDigests(workspace, [...index.keys()])
+    };
+    return new _WorkingTreeCapture(workspace, import_node_path.default.join(runnerTemp, ARTIFACT_ROOT), baseSha, authority, submodules);
+  }
+  /**
+   * Derives the change set from the current working tree and writes the private
+   * artifact. Repeating a capture over an identical tree is idempotent.
+   */
+  async capture(request = {}) {
+    const filters = normalizeFilters(request.paths);
+    const maxBytes = optionalLimit(request.maxBytes, "maxBytes");
+    const maxFiles = optionalLimit(request.maxFiles, "maxFiles");
+    const head = normalizeSha1(await gitText(this.#workspace, ["rev-parse", "HEAD"]), "HEAD");
+    if (head !== this.#baseSha) {
+      throw new Error(`Workspace HEAD moved to ${head} during execution; the capture base is no longer valid`);
+    }
+    const walked = /* @__PURE__ */ new Map();
+    await this.#walk(this.#workspace, "", walked);
+    await this.#assertAuthorityUnchanged(walked);
+    await this.#assertSubmodulesUnchanged();
+    const untracked = /* @__PURE__ */ new Set();
+    for (const entry of splitNul(await gitText(this.#workspace, ["ls-files", "-z", "--others", "--exclude-standard"]))) {
+      assertCapturablePath(entry);
+      untracked.add(entry);
+    }
+    const candidates = [.../* @__PURE__ */ new Set([...this.#authority.index.keys(), ...untracked])].filter((entry) => matchesFilters(entry, filters)).sort(byPath);
+    const budget = captureBudget(maxBytes);
+    const { deletions, changed } = await this.#classify(candidates, walked, maxFiles, budget);
+    if (deletions.length + changed.length === 0) return { status: "unchanged" };
+    await this.#assertChangeWithinBudget(changed, walked, budget);
+    await this.#assertFreshAuthority();
+    const staging = await this.#prepareArtifactDirectory();
+    let totalBytes = 0;
+    const materialized = [];
+    try {
+      const blobPaths = changed.filter((file2) => file2.linkTarget === void 0).map((file2) => file2.path);
+      if (blobPaths.length > 0) {
+        await gitText(this.#workspace, ["hash-object", "-w", "--stdin-paths"], { input: `${blobPaths.join("\n")}
+` });
+      }
+      for (const file2 of changed) {
+        const written = await this.#materialize(staging, file2, budget, totalBytes);
+        totalBytes += written.sizeBytes;
+        materialized.push(written);
+      }
+      await this.#assertFreshAuthority();
+      const files = [...deletions, ...materialized].sort((left, right) => byPath(left.path, right.path));
+      const captureId = `cap_${sha256Hex(identityStream(this.#baseSha, files))}`;
+      const manifest = parseManifest({
+        schemaVersion: "gardener.task-capture-manifest/v1",
+        captureId,
+        baseSha: this.#baseSha,
+        files,
+        totalBytes,
+        truncated: false
+      });
+      const manifestBytes = Buffer.from(taskCaptureManifestText(manifest), "utf8");
+      const target = import_node_path.default.join(this.#artifactRoot, captureId);
+      const content = import_node_path.default.join(target, "content");
+      await (0, import_promises.mkdir)(content, { recursive: true, mode: DIRECTORY_MODE });
+      for (const entry of await (0, import_promises.readdir)(import_node_path.default.join(staging, "content"))) {
+        await (0, import_promises.rename)(import_node_path.default.join(staging, "content", entry), import_node_path.default.join(content, entry));
+      }
+      await atomicWrite(import_node_path.default.join(target, "manifest.json"), manifestBytes);
+      await (0, import_promises.rm)(staging, { recursive: true, force: true });
+      await hardenDirectories([this.#artifactRoot, target, content]);
+      const ref = taskCaptureRefV1Schema.parse({
+        schemaVersion: "gardener.task-capture-ref/v1",
+        captureId,
+        baseSha: this.#baseSha,
+        manifestSha256: sha256Hex(manifestBytes),
+        changesSha256: sha256Hex(changesStream(manifest)),
+        fileCount: files.length,
+        sizeBytes: totalBytes
+      });
+      return { status: "captured", ref, manifest, directory: target };
+    } catch (error63) {
+      await (0, import_promises.rm)(staging, { recursive: true, force: true }).catch(() => void 0);
+      throw error63;
+    }
+  }
+  /**
+   * Refuses to proceed when anything that defines "changed" moved after the
+   * pre-execution snapshot: staged entries, effective configuration, the
+   * private exclude file, or any attributes file — including one the model
+   * newly created, which would otherwise introduce a filter this module would
+   * then execute.
+   */
+  async #assertFreshAuthority() {
+    const walked = /* @__PURE__ */ new Map();
+    await this.#walk(this.#workspace, "", walked);
+    await this.#assertAuthorityUnchanged(walked);
+  }
+  async #assertAuthorityUnchanged(walked) {
+    const current = await readIndex(this.#workspace);
+    if (current.digest !== this.#authority.indexDigest) {
+      throw new Error("Git index changed during execution; stage nothing and let Gardener capture the working tree");
+    }
+    const config2 = await readConfig(this.#workspace);
+    if (config2.digest !== this.#authority.config.digest && !onlyLfsRepositoryFormatInitialization(this.#authority.config, config2)) {
+      throw new Error("Git configuration changed during execution; capture refuses model-supplied Git configuration");
+    }
+    if (await fileDigest(import_node_path.default.join(this.#workspace, ".git", "info", "exclude")) !== this.#authority.excludeDigest) {
+      throw new Error("Git exclude rules changed during execution; capture refuses model-supplied exclude rules");
+    }
+    const attributePaths = new Set(this.#authority.attributeDigests.keys());
+    for (const entry of walked.keys()) {
+      if (entry === ATTRIBUTES_FILE || entry.endsWith(`/${ATTRIBUTES_FILE}`)) attributePaths.add(entry);
+    }
+    const currentAttributes = await readAttributeDigests(this.#workspace, [...attributePaths]);
+    for (const attributePath of attributePaths) {
+      if (currentAttributes.get(attributePath) !== this.#authority.attributeDigests.get(attributePath)) {
+        throw new Error(`Git attributes changed during execution (${attributePath}); capture refuses model-supplied filters`);
+      }
+    }
+  }
+  /**
+   * A gitlink is a pointer into another repository, so its contents cannot be
+   * expressed in this manifest.
+   *
+   * `actions/checkout` does not initialize submodules by default, which Git
+   * reports with a `-` prefix. That is the normal state and must capture
+   * cleanly. A moved (`+`) or conflicted (`U`) gitlink, or a dirty initialized
+   * worktree, means work the model believes it did would be silently dropped.
+   *
+   * A gitlink with no `.gitmodules` mapping — the shape `git add` produces from
+   * an accidentally embedded repository, and the shape a deleted `.gitmodules`
+   * leaves behind — makes `git submodule status` exit 128 with nothing to
+   * parse. Letting that error escape would make every capture in such a
+   * repository fail on an unactionable git message, so this decides the same
+   * question directly from the worktree instead of treating the failure as
+   * either fatal or safe.
+   */
+  async #assertSubmodulesUnchanged() {
+    for (const submodule of this.#submodules) {
+      const absolute = import_node_path.default.join(this.#workspace, submodule);
+      const status = await gitText(this.#workspace, ["submodule", "status", "--", submodule], { trim: false }).catch(() => void 0);
+      if (status === void 0) {
+        if (await isAbsentOrEmptyDirectory(absolute)) continue;
+        throw new Error(
+          `Cannot capture ${submodule}: it is a Git submodule (gitlink) with no .gitmodules mapping and a populated worktree, so Gardener cannot prove it is unchanged`
+        );
+      }
+      const marker = status.charAt(0);
+      if (marker === "-") continue;
+      if (marker !== " ") {
+        throw new Error(`Cannot capture ${submodule}: submodule changes are not capturable`);
+      }
+      const worktree = await gitText(absolute, ["status", "--porcelain", "-z"]);
+      if (worktree.length > 0) {
+        throw new Error(`Cannot capture ${submodule}: submodule changes are not capturable`);
+      }
+    }
+  }
+  /**
+   * Refuses an oversized change before `hash-object -w` reads or stores a byte.
+   *
+   * Sizes come from `lstat`, which never follows the path's final component, so
+   * a symlink planted over a candidate cannot redirect the measurement. These
+   * are worktree sizes, so they are an estimate of what Git will finally store
+   * — a clean filter may shrink or expand them — which is why the streaming
+   * meter in {@link WorkingTreeCapture.#materialize} remains authoritative. The
+   * point of measuring here is that the object database and the artifact are
+   * never written for input already known to be too large.
+   */
+  async #assertChangeWithinBudget(files, walked, budget) {
+    let declared = 0;
+    for (const file2 of files) {
+      const bytes = file2.linkTarget !== void 0 ? file2.linkTarget.byteLength : await worktreeSize(walked.get(file2.path)?.absolute);
+      if (bytes === void 0) continue;
+      if (bytes > budget.perFile) throw budgetFailure(budget, budget.perFile, `Capture content for ${file2.path}`);
+      declared += bytes;
+      if (declared > budget.total) throw budgetFailure(budget, budget.total, "Capture");
+    }
+  }
+  /**
+   * Refuses an oversized *untracked* candidate before classification hashes it.
+   *
+   * An untracked path belongs to the change set whatever it hashes to, so its
+   * size is decidable without reading it. A tracked path is different: only its
+   * blob id says whether it changed at all, so it has to be hashed — a read
+   * that stores nothing, with the object database still gated behind
+   * {@link WorkingTreeCapture.#assertChangeWithinBudget}.
+   */
+  async #assertUntrackedWithinBudget(candidates, budget) {
+    let declared = 0;
+    for (const candidate of candidates) {
+      if (this.#authority.index.has(candidate.path)) continue;
+      const bytes = await worktreeSize(candidate.entry.absolute);
+      if (bytes === void 0) continue;
+      if (bytes > budget.perFile) throw budgetFailure(budget, budget.perFile, `Capture content for ${candidate.path}`);
+      declared += bytes;
+      if (declared > budget.total) throw budgetFailure(budget, budget.total, "Capture");
+    }
+  }
+  /**
+   * Splits candidates into deletions and changed entries.
+   *
+   * Classification asks Git for each present file's blob id so that `text`,
+   * `eol`, and clean-filter semantics decide equality. Comparing raw bytes
+   * against the index would mark every normalized file modified.
+   */
+  async #classify(candidates, walked, maxFiles, budget) {
+    const deletions = [];
+    const present = [];
+    for (const entry of candidates) {
+      this.#assertNotSubmodule(entry);
+      const walkedEntry = walked.get(entry);
+      const indexed = this.#authority.index.get(entry);
+      if (walkedEntry === void 0) {
+        if (indexed === void 0) continue;
+        assertCapturableTarget(entry);
+        deletions.push({ path: entry, status: "deleted" });
+        continue;
+      }
+      if (walkedEntry.kind === "special") {
+        throw new Error(`Cannot capture ${entry}: only regular files and symbolic links are capturable`);
+      }
+      present.push({
+        path: entry,
+        entry: walkedEntry,
+        mode: walkedEntry.kind === "symlink" ? "120000" : walkedEntry.executable ? "100755" : "100644"
+      });
+    }
+    const regular = present.filter((candidate) => candidate.entry.kind === "file");
+    await this.#assertUntrackedWithinBudget(regular, budget);
+    const blobShas = await this.#hashCandidates(regular.map((candidate) => candidate.path));
+    const filters = await this.#readFilterAttributes(regular.map((candidate) => candidate.path));
+    const changed = [];
+    for (const candidate of present) {
+      const indexed = this.#authority.index.get(candidate.path);
+      if (candidate.entry.kind === "symlink") {
+        const target = Buffer.from(await (0, import_promises.readlink)(candidate.entry.absolute), "utf8");
+        const blobSha2 = gitBlobSha1(target);
+        if (indexed !== void 0 && indexed.mode === "120000" && indexed.blobSha === blobSha2) continue;
+        assertCapturableTarget(candidate.path);
+        changed.push({ path: candidate.path, status: indexed === void 0 ? "added" : "modified", mode: "120000", linkTarget: target });
+        continue;
+      }
+      const blobSha = blobShas.get(candidate.path);
+      if (blobSha === void 0) throw new Error(`Git did not report a blob id for ${candidate.path}`);
+      if (indexed !== void 0 && indexed.mode === candidate.mode && indexed.blobSha === blobSha) continue;
+      const driver = filters.get(candidate.path);
+      if (driver !== void 0 && !this.#hasFilterDriver(driver)) {
+        throw new Error(
+          `Cannot capture ${candidate.path}: it uses the Git filter '${driver}', which is not available under Gardener's pinned Git configuration`
+        );
+      }
+      assertCapturableTarget(candidate.path);
+      changed.push({ path: candidate.path, status: indexed === void 0 ? "added" : "modified", mode: candidate.mode, blobSha });
+    }
+    const total = deletions.length + changed.length;
+    if (maxFiles !== void 0 && total > maxFiles) throw new Error(`Capture exceeds maxFiles=${maxFiles}`);
+    return { deletions, changed };
+  }
+  /** Batch `hash-object`, which applies the pinned attributes to every path. */
+  async #hashCandidates(paths) {
+    const result = /* @__PURE__ */ new Map();
+    if (paths.length === 0) return result;
+    const output2 = await gitText(this.#workspace, ["hash-object", "--stdin-paths"], { input: `${paths.join("\n")}
+` });
+    const lines = output2.split("\n").filter((line) => line.length > 0);
+    if (lines.length !== paths.length) throw new Error("Git reported an unexpected number of object ids");
+    paths.forEach((entry, position) => result.set(entry, normalizeSha1(lines[position], "worktree blob")));
+    return result;
+  }
+  /** Named clean/smudge drivers declared for each path by the pinned attributes. */
+  async #readFilterAttributes(paths) {
+    const result = /* @__PURE__ */ new Map();
+    if (paths.length === 0) return result;
+    const output2 = await gitText(this.#workspace, ["check-attr", "-z", "--stdin", "filter"], {
+      input: `${paths.join("\0")}\0`,
+      trim: false
+    });
+    const fields = output2.split("\0");
+    for (let index = 0; index + 2 < fields.length; index += 3) {
+      const value = fields[index + 2];
+      if (value === "unspecified" || value === "unset" || value === "set" || value === "") continue;
+      result.set(fields[index], value);
+    }
+    return result;
+  }
+  #hasFilterDriver(driver) {
+    const { values } = this.#authority.config;
+    return values.has(`filter.${driver}.clean`) || values.has(`filter.${driver}.process`);
+  }
+  #assertNotSubmodule(entry) {
+    for (const submodule of this.#submodules) {
+      if (entry === submodule || entry.startsWith(`${submodule}/`)) {
+        throw new Error(`Cannot capture ${entry}: submodule changes are not capturable`);
+      }
+    }
+  }
+  /** Private staging directory; content lands here before the capture id exists. */
+  async #prepareArtifactDirectory() {
+    const staging = import_node_path.default.join(this.#artifactRoot, `staging-${process.pid}-${uniqueSuffix()}`);
+    await (0, import_promises.mkdir)(import_node_path.default.join(staging, "content"), { recursive: true, mode: DIRECTORY_MODE });
+    await hardenDirectories([this.#artifactRoot, staging, import_node_path.default.join(staging, "content")]);
+    return staging;
+  }
+  /**
+   * Streams one file's canonical bytes into the artifact.
+   *
+   * Content never exists whole in memory: the batched `hash-object -w` has
+   * already stored the filtered blob in the workspace object database, and its
+   * bytes flow from `cat-file` through a hashing meter straight to disk. The
+   * meter is the authoritative ceiling rather than a second opinion: the
+   * pre-write check in {@link WorkingTreeCapture.#assertChangeWithinBudget}
+   * measures the *worktree*, and a clean filter may expand what Git finally
+   * stores, so only the canonical byte count can be trusted. Exceeding it
+   * abandons the stream part-written, and the staging directory is removed by
+   * the caller.
+   */
+  async #materialize(directory, file2, budget, capturedBytes) {
+    const temporary = import_node_path.default.join(directory, "content", `.tmp-${process.pid}-${uniqueSuffix()}`);
+    const handle = await (0, import_promises.open)(temporary, import_node_fs.constants.O_WRONLY | import_node_fs.constants.O_CREAT | import_node_fs.constants.O_EXCL | import_node_fs.constants.O_NOFOLLOW, FILE_MODE);
+    const hash8 = (0, import_node_crypto.createHash)("sha256");
+    let sizeBytes = 0;
+    const meter = new import_node_stream.Transform({
+      transform(chunk, _encoding, callback) {
+        sizeBytes += chunk.byteLength;
+        if (!Number.isSafeInteger(sizeBytes)) {
+          callback(new Error(`Capture content for ${file2.path} exceeds the safe integer range`));
+          return;
+        }
+        if (sizeBytes > budget.perFile) {
+          callback(budgetFailure(budget, budget.perFile, `Capture content for ${file2.path}`));
+          return;
+        }
+        if (capturedBytes + sizeBytes > budget.total) {
+          callback(budgetFailure(budget, budget.total, "Capture"));
+          return;
+        }
+        hash8.update(chunk);
+        callback(null, chunk);
+      }
+    });
+    try {
+      if (file2.linkTarget !== void 0) {
+        const target = file2.linkTarget;
+        await (0, import_promises2.pipeline)(async function* () {
+          yield target;
+        }, meter, fileHandleSink(handle));
+      } else {
+        await gitStream(this.#workspace, ["cat-file", "blob", file2.blobSha], meter, fileHandleSink(handle));
+      }
+      await handle.sync().catch(() => void 0);
+    } finally {
+      await handle.close();
+    }
+    const sha2563 = hash8.digest("hex");
+    await (0, import_promises.rename)(temporary, import_node_path.default.join(directory, "content", sha2563));
+    return { path: file2.path, status: file2.status, mode: file2.mode, sizeBytes, sha256: sha2563 };
+  }
+  async #walk(absolute, relative, output2) {
+    const entries = (await (0, import_promises.readdir)(absolute, { withFileTypes: true })).sort((left, right) => byPath(left.name, right.name));
+    for (const entry of entries) {
+      if (entry.name === ".git") continue;
+      const childRelative = relative === "" ? entry.name : `${relative}/${entry.name}`;
+      if (childRelative === RUNNER_HOME_PATH) continue;
+      const childAbsolute = import_node_path.default.join(absolute, entry.name);
+      if (entry.isSymbolicLink()) {
+        output2.set(childRelative, { kind: "symlink", absolute: childAbsolute, executable: false });
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await this.#walk(childAbsolute, childRelative, output2);
+        continue;
+      }
+      if (!entry.isFile()) {
+        output2.set(childRelative, { kind: "special", absolute: childAbsolute, executable: false });
+        continue;
+      }
+      const stats = await (0, import_promises.lstat)(childAbsolute).catch(() => void 0);
+      if (stats === void 0) continue;
+      output2.set(childRelative, { kind: "file", absolute: childAbsolute, executable: (stats.mode & 64) !== 0 });
+    }
+  }
+};
+function captureBudget(maxBytes) {
+  const total = Math.min(maxBytes ?? CAPTURE_TOTAL_MAX_BYTES, CAPTURE_TOTAL_MAX_BYTES);
+  return { perFile: Math.min(total, CAPTURE_FILE_MAX_BYTES), total, maxBytes };
+}
+function budgetFailure(budget, limit, subject) {
+  return budget.maxBytes !== void 0 && limit === budget.maxBytes ? new Error(`Capture exceeds maxBytes=${budget.maxBytes}`) : new Error(`${subject} exceeds the ${limit}-byte capture ceiling`);
+}
+async function worktreeSize(absolute) {
+  if (absolute === void 0) return void 0;
+  const stats = await (0, import_promises.lstat)(absolute).catch(() => void 0);
+  return stats?.isFile() === true ? stats.size : void 0;
+}
+async function isAbsentOrEmptyDirectory(absolute) {
+  const stats = await (0, import_promises.lstat)(absolute).catch(() => void 0);
+  if (stats === void 0) return true;
+  if (!stats.isDirectory()) return false;
+  const entries = await (0, import_promises.readdir)(absolute).catch(() => void 0);
+  return entries?.length === 0;
+}
+async function verifyCaptureArtifact(directory, expected) {
+  const reference = taskCaptureRefV1Schema.parse(expected);
+  const manifestBytes = await readBoundedFile(import_node_path.default.join(directory, "manifest.json"), GIT_MAX_OUTPUT);
+  const manifestSha256 = sha256Hex(manifestBytes);
+  if (!equalsConstantTime(manifestSha256, reference.manifestSha256)) {
+    throw new Error("Capture manifest digest mismatch");
+  }
+  const manifest = parseManifest(JSON.parse(manifestBytes.toString("utf8")));
+  if (taskCaptureManifestText(manifest) !== manifestBytes.toString("utf8")) throw new Error("Capture manifest is not canonical");
+  const totalBytes = manifest.files.reduce((total, file2) => total + (file2.status === "deleted" ? 0 : file2.sizeBytes), 0);
+  const expectations = [
+    ["capture id", manifest.captureId, reference.captureId],
+    ["base commit", manifest.baseSha, reference.baseSha],
+    ["file count", String(manifest.files.length), String(reference.fileCount)],
+    ["size", String(totalBytes), String(reference.sizeBytes)],
+    ["changes digest", sha256Hex(changesStream(manifest)), reference.changesSha256],
+    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest.files))}`, reference.captureId]
+  ];
+  for (const [label, actual, want] of expectations) {
+    if (!equalsConstantTime(actual, want)) throw new Error(`Capture ${label} mismatch`);
+  }
+  for (const file2 of manifest.files) {
+    if (file2.status === "deleted") continue;
+    const measured = await measureContent(import_node_path.default.join(directory, "content", file2.sha256), file2.sizeBytes);
+    if (measured === void 0) throw new Error(`Captured content size mismatch for ${file2.path}`);
+    if (!equalsConstantTime(measured, file2.sha256)) throw new Error(`Captured content digest mismatch for ${file2.path}`);
+  }
+  return { ref: reference, manifest };
+}
+function changesStream(manifest) {
+  return Buffer.from(taskCaptureChangesDigestInput(manifest));
+}
+function identityStream(baseSha, files) {
+  return Buffer.concat([framed(["gardener.task-capture/v1", baseSha]), ...files.map(fileRecord)]);
+}
+function fileRecord(file2) {
+  return file2.status === "deleted" ? framed(["delete", file2.path]) : framed(["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256]);
+}
+function framed(fields) {
+  return Buffer.concat(fields.map((field) => {
+    const bytes = Buffer.from(field, "utf8");
+    return Buffer.concat([Buffer.from(`${bytes.byteLength}:`, "utf8"), bytes]);
+  }));
+}
+function parseManifest(value) {
+  const parsed = taskCaptureManifestV1Schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const detail = parsed.error.issues.map((issue3) => `${issue3.path.join("/") || "manifest"}: ${issue3.message}`).join("; ");
+  throw new Error(`Capture manifest is invalid: ${detail}`);
+}
+function runGit(cwd, argv, input2, onStdout, stdoutPipe) {
+  return new Promise((resolve, reject) => {
+    const child = (0, import_node_child_process.spawn)("git", ["-C", cwd, ...GIT_PINNED_ARGV, ...argv], {
+      env: gitEnvironment(),
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let failure2;
+    let pending;
+    const stderr = [];
+    let stderrBytes = 0;
+    const fail = (error63) => {
+      failure2 ??= error63;
+      child.kill("SIGKILL");
+    };
+    if (stdoutPipe !== void 0) {
+      pending = (0, import_promises2.pipeline)(child.stdout, stdoutPipe.meter, stdoutPipe.sink).catch((error63) => {
+        fail(error63 instanceof Error ? error63 : new Error(String(error63)));
+      });
+    } else if (onStdout !== void 0) {
+      child.stdout.on("data", (chunk) => {
+        try {
+          onStdout(chunk);
+        } catch (error63) {
+          fail(error63 instanceof Error ? error63 : new Error(String(error63)));
+        }
+      });
+    } else {
+      child.stdout.resume();
+    }
+    child.stderr.on("data", (chunk) => {
+      if (stderrBytes >= 4096) return;
+      stderrBytes += chunk.byteLength;
+      stderr.push(chunk);
+    });
+    child.on("error", (error63) => fail(error63));
+    child.on("close", (code, signal) => {
+      void Promise.resolve(pending).then(() => {
+        if (failure2 !== void 0) {
+          reject(failure2);
+          return;
+        }
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        const detail = Buffer.concat(stderr).toString("utf8").trim().split("\n")[0] ?? "";
+        reject(new Error(`git ${argv[0] ?? ""} failed (${code ?? signal}): ${detail}`.trim()));
+      });
+    });
+    child.stdin.on("error", () => void 0);
+    child.stdin.end(input2 ?? "");
+  });
+}
+async function gitBuffer(cwd, argv, options = {}) {
+  const chunks = [];
+  let size = 0;
+  await runGit(cwd, argv, options.input, (chunk) => {
+    size += chunk.byteLength;
+    if (size > GIT_MAX_OUTPUT) throw new Error(`git ${argv[0] ?? ""} produced more than ${GIT_MAX_OUTPUT} bytes`);
+    chunks.push(chunk);
+  });
+  return Buffer.concat(chunks);
+}
+async function gitText(cwd, argv, options = {}) {
+  const output2 = (await gitBuffer(cwd, argv, options)).toString("utf8");
+  return options.trim === false ? output2 : output2.trim();
+}
+async function gitStream(cwd, argv, meter, sink) {
+  await runGit(cwd, argv, void 0, void 0, { meter, sink });
+}
+async function readIndex(workspace) {
+  const index = /* @__PURE__ */ new Map();
+  const submodules = [];
+  const records = [];
+  for (const record2 of splitNul(await gitText(workspace, ["ls-files", "-s", "-z"], { trim: false }))) {
+    const separator = record2.indexOf("	");
+    if (separator < 0) throw new Error("Unreadable Git index entry");
+    const [mode, blobSha, stage] = record2.slice(0, separator).split(" ");
+    const entry = record2.slice(separator + 1);
+    if (mode === void 0 || blobSha === void 0 || stage === void 0) throw new Error("Unreadable Git index entry");
+    if (stage !== "0") throw new Error(`Workspace has an unmerged path: ${entry}`);
+    assertCapturablePath(entry);
+    records.push(`${mode} ${blobSha} ${entry}`);
+    if (mode === GITLINK_MODE) {
+      submodules.push(entry);
+      continue;
+    }
+    if (entry === RUNNER_HOME_PATH || entry.startsWith(RUNNER_HOME_PREFIX)) {
+      throw new Error(`Repository tracks a reserved Gardener runner path: ${entry}`);
+    }
+    index.set(entry, { mode, blobSha: normalizeSha1(blobSha, "index blob") });
+  }
+  return { index, submodules, digest: sha256Hex(framed(records)) };
+}
+function onlyLfsRepositoryFormatInitialization(before, after) {
+  const clean = before.values.get("filter.lfs.clean") ?? "";
+  if (!/^git-lfs(?:\s|$)/.test(clean) || before.values.has("lfs.repositoryformatversion")) return false;
+  if (after.values.get("lfs.repositoryformatversion") !== "0") return false;
+  if (after.records.length !== before.records.length + 1) return false;
+  const remaining = [...after.records];
+  for (const record2 of before.records) {
+    const index = remaining.indexOf(record2);
+    if (index < 0) return false;
+    remaining.splice(index, 1);
+  }
+  if (remaining.length !== 1) return false;
+  const [, added = ""] = remaining[0].split("\0", 2);
+  const separator = added.indexOf("\n");
+  const key = separator < 0 ? added : added.slice(0, separator);
+  const value = separator < 0 ? "" : added.slice(separator + 1);
+  return key === "lfs.repositoryformatversion" && value === "0";
+}
+async function readConfig(workspace) {
+  const raw = await gitBuffer(workspace, ["config", "--null", "--list", "--show-origin"]);
+  const fields = raw.toString("utf8").split("\0");
+  const values = /* @__PURE__ */ new Map();
+  const records = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const origin = fields[index];
+    const record2 = fields[index + 1];
+    if (!origin && !record2) continue;
+    records.push(`${origin}\0${record2}`);
+    const separator = record2.indexOf("\n");
+    values.set(separator < 0 ? record2 : record2.slice(0, separator), separator < 0 ? "" : record2.slice(separator + 1));
+  }
+  return { digest: sha256Hex(raw), values, records };
+}
+async function readAttributeDigests(workspace, candidates) {
+  const digests = /* @__PURE__ */ new Map();
+  digests.set(".git/info/attributes", await fileDigest(import_node_path.default.join(workspace, ".git", "info", "attributes")));
+  for (const candidate of candidates) {
+    if (candidate !== ATTRIBUTES_FILE && !candidate.endsWith(`/${ATTRIBUTES_FILE}`)) continue;
+    digests.set(candidate, await fileDigest(import_node_path.default.join(workspace, candidate)));
+  }
+  return digests;
+}
+async function fileDigest(absolute) {
+  const handle = await (0, import_promises.open)(absolute, import_node_fs.constants.O_RDONLY | import_node_fs.constants.O_NOFOLLOW).catch(() => void 0);
+  if (handle === void 0) return "absent";
+  try {
+    const hash8 = (0, import_node_crypto.createHash)("sha256");
+    await (0, import_promises2.pipeline)(handle.createReadStream({ autoClose: false }), hash8);
+    return hash8.digest("hex");
+  } finally {
+    await handle.close();
+  }
+}
+async function readBoundedFile(absolute, limit) {
+  const handle = await (0, import_promises.open)(absolute, import_node_fs.constants.O_RDONLY | import_node_fs.constants.O_NOFOLLOW);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) throw new Error(`Capture artifact ${import_node_path.default.basename(absolute)} is not a regular file`);
+    if (stats.size > limit) throw new Error(`Capture artifact ${import_node_path.default.basename(absolute)} exceeds ${limit} bytes`);
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+}
+async function measureContent(absolute, expectedSize) {
+  const handle = await (0, import_promises.open)(absolute, import_node_fs.constants.O_RDONLY | import_node_fs.constants.O_NOFOLLOW);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile() || stats.size !== expectedSize) return void 0;
+    const hash8 = (0, import_node_crypto.createHash)("sha256");
+    let seen = 0;
+    await (0, import_promises2.pipeline)(
+      handle.createReadStream({ autoClose: false }),
+      new import_node_stream.Transform({
+        transform(chunk, _encoding, callback) {
+          seen += chunk.byteLength;
+          if (seen > expectedSize) {
+            callback(new Error("Capture content grew while it was being verified"));
+            return;
+          }
+          hash8.update(chunk);
+          callback(null, chunk);
+        }
+      }),
+      async function* (source) {
+        for await (const _chunk of source) {
+        }
+      }
+    );
+    return seen === expectedSize ? hash8.digest("hex") : void 0;
+  } finally {
+    await handle.close();
+  }
+}
+function fileHandleSink(handle) {
+  return new import_node_stream.Writable({
+    write(chunk, _encoding, callback) {
+      handle.write(chunk).then(() => callback(), callback);
+    }
+  });
+}
+async function atomicWrite(target, content) {
+  const temporary = `${target}.tmp-${process.pid}-${uniqueSuffix()}`;
+  const handle = await (0, import_promises.open)(temporary, import_node_fs.constants.O_WRONLY | import_node_fs.constants.O_CREAT | import_node_fs.constants.O_EXCL | import_node_fs.constants.O_NOFOLLOW, FILE_MODE);
+  try {
+    await handle.writeFile(content);
+    await handle.sync().catch(() => void 0);
+  } catch (error63) {
+    await handle.close();
+    await (0, import_promises.rm)(temporary, { force: true }).catch(() => void 0);
+    throw error63;
+  }
+  await handle.close();
+  await (0, import_promises.rename)(temporary, target);
+}
+async function hardenDirectories(directories) {
+  for (const directory of directories) {
+    await (0, import_promises.chmod)(directory, DIRECTORY_MODE).catch(() => void 0);
+  }
+}
+async function directoryExists(target) {
+  const stats = await (0, import_promises.stat)(target).catch(() => void 0);
+  return stats?.isDirectory() ?? false;
+}
+function contains(parent, child) {
+  return child.startsWith(`${parent}${import_node_path.default.sep}`);
+}
+var counter = 0;
+function uniqueSuffix() {
+  counter += 1;
+  return `${Date.now().toString(36)}-${counter}`;
+}
+function splitNul(value) {
+  return value.split("\0").filter((entry) => entry.length > 0);
+}
+function gitBlobSha1(content) {
+  return (0, import_node_crypto.createHash)("sha1").update(Buffer.from(`blob ${content.byteLength}\0`, "utf8")).update(content).digest("hex");
+}
+function sha256Hex(content) {
+  return (0, import_node_crypto.createHash)("sha256").update(content).digest("hex");
+}
+function equalsConstantTime(left, right) {
+  const first = Buffer.from(left, "utf8");
+  const second = Buffer.from(right, "utf8");
+  if (first.byteLength !== second.byteLength) return false;
+  return (0, import_node_crypto.timingSafeEqual)(first, second);
+}
+function normalizeFilters(paths) {
+  if (paths === void 0) return void 0;
+  if (!Array.isArray(paths) || paths.length === 0) throw new Error("Capture path filters must be a non-empty array");
+  const normalized = paths.map((entry) => {
+    if (typeof entry !== "string") throw new Error("Capture path filters must be strings");
+    const trimmed = entry === "." ? "" : entry.replace(/\/+$/, "");
+    if (trimmed === "") throw new Error("Capture path filter must name a path");
+    assertCapturablePath(trimmed);
+    return trimmed;
+  });
+  if (new Set(normalized).size !== normalized.length) throw new Error("Capture path filters must be unique");
+  return normalized;
+}
+function matchesFilters(entry, filters) {
+  if (filters === void 0) return true;
+  return filters.some((filter) => entry === filter || entry.startsWith(`${filter}/`));
+}
+function optionalLimit(value, name2) {
+  if (value === void 0) return void 0;
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name2} must be a positive safe integer`);
+  return value;
+}
+function assertCapturablePath(entry) {
+  if (entry.length === 0 || entry.length > MAX_PATH_LENGTH) throw new Error(`Unsupported repository path: ${entry}`);
+  if (entry.startsWith("/") || entry.endsWith("/") || entry.includes("\\")) {
+    throw new Error(`Unsupported repository path: ${entry}`);
+  }
+  if (/[\u0000-\u001f\u007f]/.test(entry)) throw new Error(`Unsupported repository path: ${entry}`);
+  const components = entry.split("/");
+  if (components.some((component) => component === "" || component === "." || component === "..")) {
+    throw new Error(`Repository path escapes the workspace: ${entry}`);
+  }
+  if (components[0] === ".git") throw new Error(`Cannot capture Git internals: ${entry}`);
+}
+function assertCapturableTarget(entry) {
+  if (entry === RUNNER_HOME_PATH || entry.startsWith(RUNNER_HOME_PREFIX)) {
+    throw new Error(`Cannot capture ${entry}: it is Gardener runner state, not repository content`);
+  }
+  if (isProtectedCapturePath(entry)) {
+    throw new Error(`Cannot capture ${entry}: a run may not rewrite workflows, actions, or Gardener's own task definitions`);
+  }
+}
+function normalizeSha1(value, label) {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(normalized)) throw new Error(`Invalid ${label} SHA-1`);
+  return normalized;
+}
+function byPath(left, right) {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+
+// src/executor.ts
+async function createPlanningExecutor(options) {
+  const { workspace, runnerTemp, baseSha, ...rest } = options;
+  return new PlanningShellExecutor(workspace, {
+    ...rest,
+    capture: await captureAvailability(workspace, runnerTemp, baseSha)
+  });
+}
+async function captureAvailability(workspace, runnerTemp, baseSha) {
+  if (!workspace) return { status: "unavailable", reason: "GITHUB_WORKSPACE is required to capture repository changes" };
+  if (!runnerTemp) return { status: "unavailable", reason: "RUNNER_TEMP is required to capture repository changes" };
+  if (!baseSha) return { status: "unavailable", reason: "GITHUB_SHA is required to bind a repository capture to a commit" };
+  try {
+    return { status: "ready", capture: await WorkingTreeCapture.initialize({ workspace, runnerTemp, baseSha }) };
+  } catch (error63) {
+    return { status: "unavailable", reason: redactCaptureDiagnostic(captureMessage(error63), workspace, runnerTemp) };
+  }
+}
+var PlanningShellExecutor = class {
+  #workspace;
+  #records = /* @__PURE__ */ new Map();
+  #active = /* @__PURE__ */ new Map();
+  #activeReads = /* @__PURE__ */ new Map();
+  #cancelled = /* @__PURE__ */ new Set();
+  #createReadClient;
+  #capture;
+  /** Memoized so one run captures exactly once, whatever the runtime asks. */
+  #capturePromise;
+  #captureArtifact;
+  constructor(workspace = requiredEnvironment("GITHUB_WORKSPACE"), options = {}) {
+    this.#workspace = import_node_path2.default.resolve(workspace);
+    this.#createReadClient = options.createReadClient;
+    this.#capture = options.capture ?? { status: "unavailable", reason: "This run took no pre-execution capture baseline" };
+  }
+  /**
+   * The verified capture this run produced, if any.
+   *
+   * Runner-process only: the directory is local state the bridge uploads after
+   * planning succeeds, and it is never returned to the runtime or the model.
+   */
+  captureArtifact() {
+    return this.#captureArtifact;
+  }
+  /**
+   * Re-proves the local artifact is still the capture the plan was built from.
+   *
+   * The artifact lives on a filesystem the model could write, so the binding
+   * that matters is the plan-bound changes digest, which came back through the
+   * runtime out of the model's reach. Call this immediately before publishing
+   * the artifact to anything.
+   */
+  async verifiedCaptureArtifact(planChangesSha256) {
+    const artifact = this.#captureArtifact;
+    if (!artifact) throw new Error("The plan binds a repository capture this runner did not produce");
+    if (artifact.ref.changesSha256 !== planChangesSha256) {
+      throw new Error("The plan binds a different repository capture than this runner produced");
+    }
+    await verifyCaptureArtifact(artifact.directory, artifact.ref);
+    return artifact;
+  }
+  async execute(input2) {
+    const action = runnerActionV1Schema.parse(input2);
+    const canonicalAction = canonicalValue(action);
+    const existing = this.#records.get(action.operationId);
+    if (existing) {
+      if (existing.canonicalAction !== canonicalAction) throw new Error("Operation ID was reused for different shell input");
+      if (existing.result) return existing.result;
+      if (existing.promise) return existing.promise;
+    }
+    const record2 = { canonicalAction };
+    const promise2 = this.#run(action).then((result) => {
+      record2.result = result;
+      delete record2.promise;
+      return result;
+    }).catch((error63) => {
+      this.#records.delete(action.operationId);
+      throw error63;
+    });
+    record2.promise = promise2;
+    this.#records.set(action.operationId, record2);
+    return promise2;
+  }
+  async cancel(operationId) {
+    const read = this.#activeReads.get(operationId);
+    if (read) {
+      this.#cancelled.add(operationId);
+      read.abort(new Error("Gardener cancelled the provider read"));
+      return;
+    }
+    const child = this.#active.get(operationId);
+    if (!child?.pid) return;
+    this.#cancelled.add(operationId);
+    killProcessGroup(child.pid, "SIGTERM");
+    const timer = setTimeout(() => {
+      if (this.#active.has(operationId)) killProcessGroup(child.pid, "SIGKILL");
+    }, 2e3);
+    timer.unref();
+  }
+  async result(operationId) {
+    const record2 = this.#records.get(operationId);
+    if (record2?.result) return record2.result;
+    return record2?.promise;
+  }
+  cursor() {
+    const completed = [...this.#records.values()].map((record2) => record2.result?.sequence ?? 0);
+    const sequence = Math.max(0, ...completed);
+    return { lastServerSequence: sequence, lastCompletedSequence: sequence };
+  }
+  async #run(action) {
+    if (action.kind === "github.read") return this.#runRead(action);
+    if (action.kind === "repository.capture") return this.#runCapture(action);
+    return this.#runShell(action);
+  }
+  /**
+   * Serves the trusted capture action.
+   *
+   * Capture happens at most once per run, memoized here rather than left to
+   * the caller: the durable action journal already makes one operation id
+   * idempotent, and this closes the remaining gap where two distinct ids would
+   * otherwise photograph the tree twice and disagree.
+   *
+   * Every failure is returned as a failed action result, never as a fabricated
+   * capture. A plan that needed one then fails closed in the runtime, which is
+   * the only safe outcome: committing an uncaptured tree is exactly what this
+   * boundary exists to prevent.
+   */
+  async #runCapture(action) {
+    if (this.#capture.status !== "ready") return captureResult(action, "failed", 1, "", this.#capture.reason);
+    if (this.#capture.capture.baseSha !== action.baseSha) {
+      return captureResult(
+        action,
+        "failed",
+        1,
+        "",
+        `Capture baseline is bound to ${this.#capture.capture.baseSha} but the runtime asked for ${action.baseSha}`
+      );
+    }
+    let envelope;
+    try {
+      this.#capturePromise ??= this.#performCapture(this.#capture.capture);
+      envelope = await this.#capturePromise;
+    } catch (error63) {
+      this.#capturePromise = void 0;
+      this.#captureArtifact = void 0;
+      return captureResult(action, "failed", 1, "", redactCaptureDiagnostic(captureMessage(error63), this.#workspace));
+    }
+    const stdout = JSON.stringify(envelope);
+    if (envelope.status !== "captured" || Buffer.byteLength(stdout, "utf8") > action.maxOutputBytes) {
+      this.#capturePromise = void 0;
+      this.#captureArtifact = void 0;
+    }
+    if (Buffer.byteLength(stdout, "utf8") > action.maxOutputBytes) {
+      return captureResult(
+        action,
+        "failed",
+        1,
+        "",
+        "The capture manifest is larger than the runtime's transport budget; the change set is too large to plan"
+      );
+    }
+    return captureResult(action, "completed", 0, stdout, "");
+  }
+  /** Captures once and proves the artifact before its reference leaves the runner. */
+  async #performCapture(capture) {
+    const result = await capture.capture();
+    if (result.status === "unchanged") {
+      return { schemaVersion: "gardener.runner.capture-result/v1", status: "unchanged" };
+    }
+    const { ref, manifest } = await verifyCaptureArtifact(result.directory, result.ref);
+    const manifestJson = await (0, import_promises3.readFile)(import_node_path2.default.join(result.directory, "manifest.json"), "utf8");
+    this.#captureArtifact = { directory: result.directory, ref };
+    return runnerCaptureResultV1Schema.parse({
+      schemaVersion: "gardener.runner.capture-result/v1",
+      status: "captured",
+      ref: { ...ref, fileCount: manifest.files.length },
+      manifestJson
+    });
+  }
+  /**
+   * Reads reuse the same durable operation record, cancellation, and reconnect
+   * machinery as shell actions so replay and reconciliation stay identical.
+   */
+  async #runRead(action) {
+    if (!this.#createReadClient) {
+      return readResult(action, "failed", 1, "", "The read-only provider API is not configured for this run", false);
+    }
+    const controller = new AbortController();
+    this.#activeReads.set(action.operationId, controller);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error("Provider read exceeded its timeout"));
+    }, action.timeoutMs);
+    timeout.unref?.();
+    try {
+      const client = this.#createReadClient(controller.signal, action.maxOutputBytes);
+      const request = action.request;
+      const result = request.transport === "rest" ? await client.rest({ path: request.path, method: request.method }) : await client.graphql({
+        query: request.query,
+        ...request.variables === void 0 ? {} : { variables: request.variables },
+        ...request.operationName === void 0 ? {} : { operationName: request.operationName }
+      });
+      const bounded = boundedReadPayload(result, action.maxOutputBytes);
+      if (bounded === void 0) {
+        return readResult(action, "failed", 1, "", "Provider read output budget is too small to return a response", true);
+      }
+      return readResult(action, "completed", 0, bounded.stdout, "", bounded.outputTruncated);
+    } catch (error63) {
+      if (timedOut) return readResult(action, "timed_out", null, "", "Provider read exceeded its timeout", false);
+      if (this.#cancelled.has(action.operationId)) {
+        return readResult(action, "cancelled", null, "", "Provider read was cancelled", false);
+      }
+      return readResult(action, "failed", 1, "", redactedReadError(error63), false);
+    } finally {
+      clearTimeout(timeout);
+      this.#activeReads.delete(action.operationId);
+      this.#cancelled.delete(action.operationId);
+    }
+  }
+  async #runShell(action) {
+    if (this.#capturePromise || this.#captureArtifact) {
+      return {
+        schemaVersion: "gardener.runner.action-result/v1",
+        sequence: action.sequence,
+        operationId: action.operationId,
+        status: "failed",
+        exitCode: 1,
+        stdout: "",
+        stderr: "The working tree capture has started; no later shell command may run",
+        outputTruncated: false
+      };
+    }
+    const cwd = localWorkspacePath(this.#workspace, action.cwd);
+    const home = import_node_path2.default.join(this.#workspace, ".gardener", "runner-home");
+    await (0, import_promises3.mkdir)(home, { recursive: true, mode: 448 });
+    const child = (0, import_node_child_process2.spawn)("/bin/bash", ["--noprofile", "--norc", "-o", "pipefail", "-c", action.command], {
+      cwd,
+      detached: true,
+      env: safePlannerEnvironment(this.#workspace, home),
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    this.#active.set(action.operationId, child);
+    const stdout = [];
+    const stderr = [];
+    let capturedBytes = 0;
+    let outputTruncated = false;
+    const capture = (target) => (chunk) => {
+      const remaining = action.maxOutputBytes - capturedBytes;
+      if (remaining > 0) {
+        const accepted = chunk.subarray(0, remaining);
+        target.push(accepted);
+        capturedBytes += accepted.byteLength;
+      }
+      if (chunk.byteLength > remaining) outputTruncated = true;
+    };
+    child.stdout.on("data", capture(stdout));
+    child.stderr.on("data", capture(stderr));
+    let timedOut = false;
+    let forceKill;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      if (child.pid) {
+        killProcessGroup(child.pid, "SIGTERM");
+        forceKill = setTimeout(() => killProcessGroup(child.pid, "SIGKILL"), 2e3);
+        forceKill.unref();
+      }
+    }, action.timeoutMs);
+    timeout.unref();
+    const exit = await new Promise((resolve) => {
+      child.once("error", (error63) => resolve({ code: null, error: error63 }));
+      child.once("close", (code) => resolve({ code }));
+    });
+    clearTimeout(timeout);
+    if (forceKill) clearTimeout(forceKill);
+    if (child.pid) {
+      killProcessGroup(child.pid, "SIGTERM");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      killProcessGroup(child.pid, "SIGKILL");
+    }
+    this.#active.delete(action.operationId);
+    const cancelled = this.#cancelled.delete(action.operationId);
+    const status = timedOut ? "timed_out" : cancelled ? "cancelled" : exit.code === 0 ? "completed" : "failed";
+    return {
+      schemaVersion: "gardener.runner.action-result/v1",
+      sequence: action.sequence,
+      operationId: action.operationId,
+      status,
+      exitCode: status === "completed" || status === "failed" ? exit.code ?? 1 : null,
+      stdout: Buffer.concat(stdout).toString("utf8"),
+      stderr: Buffer.concat(stderr).toString("utf8") || exit.error?.message || "",
+      outputTruncated
+    };
+  }
+};
+function readResult(action, status, exitCode, stdout, stderr, outputTruncated) {
+  const boundedStderr = truncateUtf8(stderr, action.maxOutputBytes);
+  const boundedStdout = truncateUtf8(stdout, action.maxOutputBytes - Buffer.byteLength(boundedStderr, "utf8"));
+  return {
+    schemaVersion: "gardener.runner.action-result/v1",
+    sequence: action.sequence,
+    operationId: action.operationId,
+    status,
+    exitCode,
+    stdout: boundedStdout,
+    stderr: boundedStderr,
+    outputTruncated: outputTruncated || boundedStdout.length !== stdout.length || boundedStderr.length !== stderr.length
+  };
+}
+function captureResult(action, status, exitCode, stdout, stderr) {
+  const boundedStderr = truncateUtf8(stderr, action.maxOutputBytes);
+  const boundedStdout = truncateUtf8(stdout, action.maxOutputBytes - Buffer.byteLength(boundedStderr, "utf8"));
+  return {
+    schemaVersion: "gardener.runner.action-result/v1",
+    sequence: action.sequence,
+    operationId: action.operationId,
+    status,
+    exitCode,
+    stdout: boundedStdout,
+    stderr: boundedStderr,
+    outputTruncated: boundedStdout.length !== stdout.length || boundedStderr.length !== stderr.length
+  };
+}
+function redactCaptureDiagnostic(message3, ...roots) {
+  let redacted = message3;
+  for (const root of roots) {
+    if (root) redacted = redacted.split(import_node_path2.default.resolve(root)).join("<runner-path>");
+  }
+  return redacted.replace(/(?:\/home\/runner|\/Users\/runner|[A-Za-z]:\\)[^\s'\"`]*/g, "<runner-path>").slice(0, 2e3);
+}
+function captureMessage(error63) {
+  return (error63 instanceof Error ? error63.message : "Repository capture failed").slice(0, 2e3);
+}
+function truncateUtf8(value, maxBytes) {
+  if (maxBytes <= 0) return "";
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.byteLength <= maxBytes) return value;
+  let end = maxBytes;
+  while (end > 0 && (bytes[end] & 192) === 128) end -= 1;
+  return bytes.subarray(0, end).toString("utf8");
+}
+function boundedReadPayload(result, maxOutputBytes) {
+  const base = {
+    transport: result.transport,
+    status: result.status,
+    ok: result.ok,
+    bodyBytes: result.bodyBytes
+  };
+  const bodyBudget = (overhead) => {
+    let candidate = Math.max(0, maxOutputBytes - overhead);
+    while (candidate > 0) {
+      const text2 = truncateUtf8(result.body, candidate);
+      const encoded = JSON.stringify(text2);
+      if (Buffer.byteLength(encoded, "utf8") + overhead <= maxOutputBytes) return text2;
+      candidate = Math.floor(candidate / 2);
+    }
+    return "";
+  };
+  const candidates = [
+    () => ({ ...base, headers: result.headers, json: result.json, body: result.body, truncated: result.truncated }),
+    () => ({ ...base, headers: result.headers, json: null, body: result.body, truncated: true }),
+    () => ({ ...base, headers: result.headers, json: null, body: bodyBudget(overheadOf({ ...base, headers: result.headers, json: null, truncated: true })), truncated: true }),
+    () => ({ ...base, json: null, body: bodyBudget(overheadOf({ ...base, json: null, truncated: true })), truncated: true }),
+    () => ({ ...base, json: null, body: "", truncated: true }),
+    () => ({ status: result.status, ok: result.ok, truncated: true })
+  ];
+  for (const [index, build] of candidates.entries()) {
+    const serialized = JSON.stringify(build());
+    if (Buffer.byteLength(serialized, "utf8") <= maxOutputBytes) {
+      return { stdout: serialized, outputTruncated: index > 0 || result.truncated };
+    }
+  }
+  return void 0;
+}
+function overheadOf(shape) {
+  return Buffer.byteLength(JSON.stringify({ ...shape, body: "" }), "utf8");
+}
+function redactedReadError(error63) {
+  const text2 = error63 instanceof Error ? error63.message : "Provider read failed";
+  return text2.slice(0, 1e3);
+}
+function localWorkspacePath(workspace, virtualPath) {
+  const relative = import_node_path2.default.posix.relative("/workspace", import_node_path2.default.posix.normalize(virtualPath));
+  if (relative.startsWith("..") || import_node_path2.default.posix.isAbsolute(relative)) throw new Error("Shell cwd escapes /workspace");
+  const resolved = import_node_path2.default.resolve(workspace, relative);
+  if (resolved !== workspace && !resolved.startsWith(`${workspace}${import_node_path2.default.sep}`)) throw new Error("Shell cwd escapes the Actions workspace");
+  return resolved;
+}
+function safePlannerEnvironment(workspace, home) {
+  const allowed = [
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "CI",
+    "RUNNER_OS",
+    "RUNNER_ARCH",
+    "GITHUB_REPOSITORY",
+    "GITHUB_SHA",
+    "GITHUB_REF",
+    "GITHUB_EVENT_NAME"
+  ];
+  const environment = { GITHUB_WORKSPACE: workspace, HOME: home };
+  for (const name2 of allowed) if (process.env[name2] !== void 0) environment[name2] = process.env[name2];
+  return environment;
+}
+function killProcessGroup(pid, signal) {
+  try {
+    process.kill(-pid, signal);
+  } catch (error63) {
+    const code = error63.code;
+    if (code !== "ESRCH") throw error63;
+  }
+}
+function requiredEnvironment(name2) {
+  const value = process.env[name2];
+  if (!value) throw new Error(`${name2} is required`);
+  return value;
+}
+function canonicalValue(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(",")}]`;
+  const record2 = value;
+  return `{${Object.keys(record2).sort().map((key) => `${JSON.stringify(key)}:${canonicalValue(record2[key])}`).join(",")}}`;
+}
+
+// src/github-read.ts
+var GITHUB_API_ORIGIN = "https://api.github.com";
+var USER_AGENT = "gardener-read-v1";
+var GITHUB_API_VERSION = "2022-11-28";
+var REDACTED = "[redacted]";
+var REQUEST_HEADER_ALLOWLIST = /* @__PURE__ */ new Set([
+  "accept",
+  "if-none-match",
+  "if-modified-since"
+]);
+var RESPONSE_HEADER_ALLOWLIST = /* @__PURE__ */ new Set([
+  "content-type",
+  "etag",
+  "last-modified",
+  "link",
+  "retry-after",
+  "x-github-api-version-selected",
+  "x-github-media-type",
+  "x-ratelimit-limit",
+  "x-ratelimit-remaining",
+  "x-ratelimit-reset",
+  "x-ratelimit-resource",
+  "x-ratelimit-used"
+]);
+var DEFAULT_GITHUB_READ_LIMITS = Object.freeze({
+  maxRequestTargetLength: 2048,
+  maxQueryBytes: 32 * 1024,
+  maxVariablesBytes: 32 * 1024,
+  maxResponseBytes: 1024 * 1024,
+  maxRequestHeaders: 8,
+  requestTimeoutMs: 3e4
+});
+var GitHubReadClient = class {
+  #token;
+  #fetch;
+  #limits;
+  #signal;
+  constructor(options) {
+    const token = options.token;
+    if (typeof token !== "string" || token.trim().length < 8 || /[\s\u0000-\u001f\u007f]/.test(token)) {
+      throw new Error("A repository-scoped GitHub token is required");
+    }
+    this.#token = token;
+    this.#fetch = options.fetch ?? ((url2, init) => fetch(url2, init));
+    this.#limits = { ...DEFAULT_GITHUB_READ_LIMITS, ...options.limits };
+    this.#signal = options.signal;
+    for (const [name2, value] of Object.entries(this.#limits)) {
+      if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Invalid GitHub read limit ${name2}`);
+    }
+  }
+  /** Read any resource the repository-scoped token can read over REST. */
+  async rest(input2) {
+    const method = input2.method ?? "GET";
+    if (method !== "GET" && method !== "HEAD") {
+      throw new Error("The read-only GitHub API permits only GET and HEAD requests");
+    }
+    const url2 = this.#resolveRestUrl(input2.path);
+    const headers = this.#requestHeaders(input2.headers, "application/vnd.github+json");
+    const response = await this.#send(url2, { method, headers, redirect: "manual" });
+    return await this.#result("rest", response, method === "HEAD");
+  }
+  /** Execute a GraphQL query document. Mutations and subscriptions are rejected. */
+  async graphql(input2) {
+    const query = input2.query;
+    if (typeof query !== "string") throw new Error("GraphQL query must be a string");
+    const queryBytes = Buffer.byteLength(query, "utf8");
+    if (queryBytes < 1) throw new Error("GraphQL query must not be empty");
+    if (queryBytes > this.#limits.maxQueryBytes) throw new Error("GraphQL query exceeds the read size limit");
+    assertQueryOnlyDocument(query);
+    const payload = { query };
+    if (input2.variables !== void 0) {
+      if (input2.variables === null || typeof input2.variables !== "object" || Array.isArray(input2.variables)) {
+        throw new Error("GraphQL variables must be a JSON object");
+      }
+      let serialized;
+      try {
+        serialized = JSON.stringify(input2.variables);
+      } catch {
+        throw new Error("GraphQL variables must be JSON-serializable");
+      }
+      if (serialized === void 0) throw new Error("GraphQL variables must be JSON-serializable");
+      if (Buffer.byteLength(serialized, "utf8") > this.#limits.maxVariablesBytes) {
+        throw new Error("GraphQL variables exceed the read size limit");
+      }
+      payload.variables = JSON.parse(serialized);
+    }
+    if (input2.operationName !== void 0) {
+      if (typeof input2.operationName !== "string" || !/^[_A-Za-z][_0-9A-Za-z]{0,127}$/.test(input2.operationName)) {
+        throw new Error("GraphQL operationName must be a GraphQL name");
+      }
+      payload.operationName = input2.operationName;
+    }
+    const response = await this.#send(`${GITHUB_API_ORIGIN}/graphql`, {
+      method: "POST",
+      headers: {
+        ...this.#requestHeaders(void 0, "application/json"),
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      redirect: "manual"
+    });
+    return await this.#result("graphql", response, false);
+  }
+  /**
+   * Every request carries a bounded deadline composed with any caller signal,
+   * and transport failures are re-thrown as redacted Gardener errors so a
+   * runtime error string can never carry the authorization header or token.
+   */
+  async #send(url2, init) {
+    const timeout = AbortSignal.timeout(this.#limits.requestTimeoutMs);
+    const signal = this.#signal ? AbortSignal.any([this.#signal, timeout]) : timeout;
+    try {
+      return await this.#fetch(url2, { ...init, signal });
+    } catch (error63) {
+      throw this.#transportError(error63);
+    }
+  }
+  #transportError(error63) {
+    const name2 = error63 instanceof Error ? error63.name : "Error";
+    if (name2 === "TimeoutError") return new Error("GitHub read request timed out");
+    if (name2 === "AbortError") return new Error("GitHub read request was cancelled");
+    const raw = error63 instanceof Error ? error63.message : String(error63);
+    return new Error(`GitHub read request failed: ${this.#redactErrorText(raw).slice(0, 500)}`);
+  }
+  #resolveRestUrl(rawPath) {
+    if (typeof rawPath !== "string" || rawPath.length === 0) throw new Error("GitHub read path is required");
+    if (rawPath.length > this.#limits.maxRequestTargetLength) throw new Error("GitHub read path exceeds the read size limit");
+    if (/\s/.test(rawPath)) throw new Error("GitHub read path must not contain whitespace");
+    if (/[\u0000-\u0020\u007f]/.test(rawPath)) throw new Error("GitHub read path contains control characters");
+    if (rawPath.includes("#")) throw new Error("GitHub read path must not contain a fragment");
+    if (rawPath.includes("\\")) throw new Error("GitHub read path must not contain backslashes");
+    let url2;
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(rawPath)) {
+      try {
+        url2 = new URL(rawPath);
+      } catch {
+        throw new Error("GitHub read path is not a valid URL");
+      }
+    } else {
+      if (!rawPath.startsWith("/")) throw new Error("GitHub read path must start with /");
+      if (rawPath.startsWith("//")) throw new Error("GitHub read path must not be protocol-relative");
+      try {
+        url2 = new URL(rawPath, `${GITHUB_API_ORIGIN}/`);
+      } catch {
+        throw new Error("GitHub read path is not a valid URL");
+      }
+    }
+    if (url2.protocol !== "https:") throw new Error("GitHub read requests must use HTTPS");
+    if (url2.origin !== GITHUB_API_ORIGIN || url2.host !== "api.github.com") {
+      throw new Error("GitHub read requests must target api.github.com");
+    }
+    if (url2.username || url2.password) throw new Error("GitHub read path must not embed credentials");
+    if (url2.hash) throw new Error("GitHub read path must not contain a fragment");
+    const rawSegments = rawPath.split(/[?#]/, 1)[0].split("/");
+    for (const segment of [...rawSegments, ...url2.pathname.split("/")]) {
+      const normalized = segment.toLowerCase().replaceAll("%2e", ".");
+      if (normalized === "." || normalized === "..") {
+        throw new Error("GitHub read path must not contain relative segments");
+      }
+    }
+    const resolved = url2.href;
+    if (resolved.length > this.#limits.maxRequestTargetLength) throw new Error("GitHub read path exceeds the read size limit");
+    return resolved;
+  }
+  #requestHeaders(caller, defaultAccept) {
+    const headers = {
+      accept: defaultAccept,
+      "x-github-api-version": GITHUB_API_VERSION
+    };
+    if (caller !== void 0) {
+      if (caller === null || typeof caller !== "object" || Array.isArray(caller)) {
+        throw new Error("GitHub read headers must be an object");
+      }
+      const entries = Object.entries(caller);
+      if (entries.length > this.#limits.maxRequestHeaders) throw new Error("Too many GitHub read headers");
+      for (const [rawName, rawValue] of entries) {
+        const name2 = rawName.toLowerCase();
+        if (!REQUEST_HEADER_ALLOWLIST.has(name2)) throw new Error(`GitHub read header ${name2} is not permitted`);
+        if (typeof rawValue !== "string" || rawValue.length === 0 || rawValue.length > 1024) {
+          throw new Error(`GitHub read header ${name2} has an invalid value`);
+        }
+        if (/[\u0000-\u001f\u007f]/.test(rawValue)) throw new Error(`GitHub read header ${name2} has an invalid value`);
+        headers[name2] = rawValue;
+      }
+    }
+    headers.authorization = `Bearer ${this.#token}`;
+    headers["user-agent"] = USER_AGENT;
+    return headers;
+  }
+  async #result(transport, response, headOnly) {
+    const headers = {};
+    response.headers.forEach((value, name2) => {
+      const key = name2.toLowerCase();
+      if (RESPONSE_HEADER_ALLOWLIST.has(key)) headers[key] = this.#redactToken(value);
+    });
+    if (headOnly) {
+      await response.body?.cancel().catch(() => void 0);
+      return {
+        transport,
+        status: response.status,
+        ok: response.ok,
+        headers,
+        json: null,
+        body: "",
+        bodyBytes: 0,
+        truncated: false
+      };
+    }
+    let read;
+    try {
+      read = await readBoundedBody(response, this.#limits.maxResponseBytes);
+    } catch (error63) {
+      throw this.#transportError(error63);
+    }
+    const body2 = read.truncated ? stripTrailingPrefix(this.#redactToken(read.text), this.#token) : this.#redactToken(read.text);
+    let json2 = null;
+    if (!read.truncated && body2.length > 0 && isJsonContentType(headers["content-type"])) {
+      try {
+        json2 = JSON.parse(body2);
+      } catch {
+        json2 = null;
+      }
+    }
+    return {
+      transport,
+      status: response.status,
+      ok: response.ok,
+      headers,
+      json: json2,
+      body: body2,
+      bodyBytes: Buffer.byteLength(body2, "utf8"),
+      truncated: read.truncated
+    };
+  }
+  /**
+   * Content redaction for response headers and bodies. Only the exact token is
+   * replaced, so legitimate provider content that merely discusses
+   * authorization headers survives byte-for-byte and stays valid JSON.
+   */
+  #redactToken(value) {
+    return value.includes(this.#token) ? value.split(this.#token).join(REDACTED) : value;
+  }
+  /**
+   * Error-text redaction. Transport errors are free-form diagnostic strings
+   * that routinely echo the outgoing request, so in addition to the exact token
+   * any `authorization: ...` credential echo is removed.
+   *
+   * The match deliberately runs to end of line rather than to the next
+   * whitespace: a scheme-prefixed value such as `Bearer <secret>` would
+   * otherwise leave the secret behind. Losing trailing diagnostic text on that
+   * line is the fail-closed trade. This pattern is never applied to response
+   * content, where it would corrupt legitimate provider data.
+   */
+  #redactErrorText(value) {
+    return this.#redactToken(value).replace(/authorization:[^\r\n]*/gi, `authorization: ${REDACTED}`);
+  }
+};
+var DEFINITION_KEYWORDS = /* @__PURE__ */ new Set([
+  "query",
+  "mutation",
+  "subscription",
+  "fragment",
+  "schema",
+  "type",
+  "interface",
+  "union",
+  "enum",
+  "input",
+  "scalar",
+  "directive",
+  "extend"
+]);
+function assertQueryOnlyDocument(document) {
+  let index = 0;
+  let braceDepth = 0;
+  let groupDepth = 0;
+  let atDefinitionStart = true;
+  let definitions = 0;
+  const length = document.length;
+  while (index < length) {
+    const char = document[index];
+    if (char === "#") {
+      while (index < length && document[index] !== "\n" && document[index] !== "\r") index += 1;
+      continue;
+    }
+    if (char === '"') {
+      index = skipString(document, index);
+      continue;
+    }
+    if (char === "@") {
+      index += 1;
+      while (index < length && isNameContinue(document[index])) index += 1;
+      continue;
+    }
+    if (char === "(" || char === "[") {
+      groupDepth += 1;
+      index += 1;
+      continue;
+    }
+    if (char === ")" || char === "]") {
+      groupDepth -= 1;
+      if (groupDepth < 0) throw new Error("GraphQL document has unbalanced argument groups");
+      index += 1;
+      continue;
+    }
+    if (char === "{") {
+      if (groupDepth === 0) {
+        if (braceDepth === 0 && atDefinitionStart) {
+          definitions += 1;
+          atDefinitionStart = false;
+        }
+        braceDepth += 1;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === "}") {
+      if (groupDepth === 0) {
+        braceDepth -= 1;
+        if (braceDepth < 0) throw new Error("GraphQL document has unbalanced braces");
+        if (braceDepth === 0) atDefinitionStart = true;
+      }
+      index += 1;
+      continue;
+    }
+    if (isNameStart(char)) {
+      let end = index + 1;
+      while (end < length && isNameContinue(document[end])) end += 1;
+      const name2 = document.slice(index, end);
+      if (braceDepth === 0 && groupDepth === 0) {
+        if (atDefinitionStart) {
+          if (name2 !== "query" && name2 !== "fragment") {
+            throw new Error(`GraphQL document permits only query and fragment definitions, found ${name2}`);
+          }
+          definitions += 1;
+          atDefinitionStart = false;
+        } else if (DEFINITION_KEYWORDS.has(name2)) {
+          throw new Error(`GraphQL document is ambiguous: unexpected ${name2} definition keyword`);
+        }
+      }
+      index = end;
+      continue;
+    }
+    index += 1;
+  }
+  if (braceDepth !== 0) throw new Error("GraphQL document has unbalanced braces");
+  if (groupDepth !== 0) throw new Error("GraphQL document has unbalanced argument groups");
+  if (definitions === 0) throw new Error("GraphQL document contains no executable definition");
+}
+function skipString(document, start) {
+  const length = document.length;
+  if (document.startsWith('"""', start)) {
+    let index2 = start + 3;
+    while (index2 < length) {
+      if (document[index2] === "\\" && document.startsWith('"""', index2 + 1)) {
+        index2 += 4;
+        continue;
+      }
+      if (document.startsWith('"""', index2)) return index2 + 3;
+      index2 += 1;
+    }
+    throw new Error("GraphQL document has an unterminated block string");
+  }
+  let index = start + 1;
+  while (index < length) {
+    const char = document[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === '"') return index + 1;
+    if (char === "\n" || char === "\r") break;
+    index += 1;
+  }
+  throw new Error("GraphQL document has an unterminated string");
+}
+function isNameStart(char) {
+  return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_";
+}
+function isNameContinue(char) {
+  return isNameStart(char) || char >= "0" && char <= "9";
+}
+function isJsonContentType(value) {
+  if (!value) return false;
+  const type = value.split(";")[0].trim().toLowerCase();
+  return type === "application/json" || type.endsWith("+json");
+}
+function stripTrailingPrefix(text2, needle) {
+  const longest = Math.min(needle.length - 1, text2.length);
+  for (let length = longest; length > 0; length -= 1) {
+    if (text2.endsWith(needle.slice(0, length))) return text2.slice(0, text2.length - length);
+  }
+  return text2;
+}
+function trimToUtf8Boundary(buffer) {
+  for (let back = 1; back <= 4 && back <= buffer.byteLength; back += 1) {
+    const byte = buffer[buffer.byteLength - back];
+    if ((byte & 192) === 128) continue;
+    const needed = byte >= 240 ? 4 : byte >= 224 ? 3 : byte >= 192 ? 2 : 1;
+    return back < needed ? buffer.subarray(0, buffer.byteLength - back) : buffer;
+  }
+  return buffer;
+}
+async function readBoundedBody(response, maxBytes) {
+  const body2 = response.body;
+  if (!body2 || typeof body2.getReader !== "function") {
+    const raw = Buffer.from(await response.text(), "utf8");
+    if (raw.byteLength > maxBytes) {
+      return { text: trimToUtf8Boundary(raw.subarray(0, maxBytes)).toString("utf8"), truncated: true };
+    }
+    return { text: raw.toString("utf8"), truncated: false };
+  }
+  const reader = body2.getReader();
+  const chunks = [];
+  let retained = 0;
+  let truncated = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    const chunk = Buffer.from(value);
+    const remaining = maxBytes - retained;
+    if (chunk.byteLength > remaining) {
+      if (remaining > 0) {
+        chunks.push(chunk.subarray(0, remaining));
+        retained = maxBytes;
+      }
+      truncated = true;
+      await reader.cancel().catch(() => void 0);
+      break;
+    }
+    chunks.push(chunk);
+    retained += chunk.byteLength;
+  }
+  const joined = Buffer.concat(chunks);
+  const bounded = truncated ? trimToUtf8Boundary(joined) : joined;
+  return { text: bounded.toString("utf8"), truncated };
 }
 
 // ../../node_modules/.pnpm/capnweb@0.12.0/node_modules/capnweb/dist/index.js
@@ -40167,8 +44748,8 @@ var streamImpl = {
   createReadableStreamHook: streamNotLoaded
 };
 var StubHook = class {
-  stream(path3, args) {
-    let hook = this.call(path3, args);
+  stream(path4, args) {
+    let hook = this.call(path4, args);
     let pulled;
     try {
       pulled = hook.pull();
@@ -40193,15 +44774,15 @@ var ErrorStubHook = class extends StubHook {
     super();
     this.error = error63;
   }
-  call(path3, args) {
+  call(path4, args) {
     args.dispose();
     return this;
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return this;
   }
-  get(path3) {
+  get(path4) {
     return this;
   }
   dup() {
@@ -40223,8 +44804,8 @@ var ErrorStubHook = class extends StubHook {
   }
 };
 var DISPOSED_HOOK = new ErrorStubHook(/* @__PURE__ */ new Error("Attempted to use RPC stub after it has been disposed."));
-var doCall = (hook, path3, params) => {
-  return hook.call(path3, params);
+var doCall = (hook, path4, params) => {
+  return hook.call(path4, params);
 };
 function withCallInterceptor(interceptor, callback) {
   let oldValue = doCall;
@@ -40514,8 +45095,8 @@ var RpcPayload = class RpcPayload2 {
       }
       case "object": {
         let result = {};
-        let object2 = value;
-        for (let i in object2) result[i] = this.deepCopy(object2[i], object2, i, result, dupStubs, owner);
+        let object3 = value;
+        for (let i in object3) result[i] = this.deepCopy(object3[i], object3, i, result, dupStubs, owner);
         return result;
       }
       case "stub":
@@ -40713,8 +45294,8 @@ var RpcPayload = class RpcPayload2 {
         return;
       }
       case "object": {
-        let object2 = value;
-        for (let i in object2) this.disposeImpl(object2[i], object2);
+        let object3 = value;
+        for (let i in object3) this.disposeImpl(object3[i], object3);
         return;
       }
       case "stub":
@@ -40801,8 +45382,8 @@ var RpcPayload = class RpcPayload2 {
         return;
       }
       case "object": {
-        let object2 = value;
-        for (let i in object2) this.ignoreUnhandledRejectionsImpl(object2[i]);
+        let object3 = value;
+        for (let i in object3) this.ignoreUnhandledRejectionsImpl(object3[i]);
         return;
       }
       case "stub":
@@ -40819,10 +45400,10 @@ var RpcPayload = class RpcPayload2 {
     }
   }
 };
-function followPath(value, parent, path3, owner) {
-  for (let i = 0; i < path3.length; i++) {
+function followPath(value, parent, path4, owner) {
+  for (let i = 0; i < path4.length; i++) {
     parent = value;
-    let part = path3[i];
+    let part = path4[i];
     if (part in Object.prototype) {
       value = void 0;
       continue;
@@ -40848,7 +45429,7 @@ function followPath(value, parent, path3, owner) {
         let { hook, pathIfPromise } = unwrapStubAndPath(value);
         return {
           hook,
-          remainingPath: pathIfPromise ? pathIfPromise.concat(path3.slice(i)) : path3.slice(i)
+          remainingPath: pathIfPromise ? pathIfPromise.concat(path4.slice(i)) : path4.slice(i)
         };
       }
       case "writable":
@@ -40875,8 +45456,8 @@ function followPath(value, parent, path3, owner) {
       case "unsupported":
         if (i === 0) throw new TypeError(`RPC stub points at a non-serializable type.`);
         else {
-          let prefix = path3.slice(0, i).join(".");
-          let remainder = path3.slice(0, i).join(".");
+          let prefix = path4.slice(0, i).join(".");
+          let remainder = path4.slice(0, i).join(".");
           throw new TypeError(`'${prefix}' is not a serializable type, so property ${remainder} cannot be accessed.`);
         }
       default:
@@ -40897,11 +45478,11 @@ function followPath(value, parent, path3, owner) {
   };
 }
 var ValueStubHook = class extends StubHook {
-  call(path3, args) {
+  call(path4, args) {
     let followResult;
     try {
       let { value, owner } = this.getValue();
-      followResult = followPath(value, void 0, path3, owner);
+      followResult = followPath(value, void 0, path4, owner);
     } catch (err) {
       args.dispose();
       return new ErrorStubHook(err);
@@ -40909,18 +45490,18 @@ var ValueStubHook = class extends StubHook {
     if (followResult.hook) return followResult.hook.call(followResult.remainingPath, args);
     if (typeof followResult.value != "function") {
       args.dispose();
-      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path3.join(".")}' is not a function.`));
+      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path4.join(".")}' is not a function.`));
     }
     return new PromiseStubHook(args.deliverCall(followResult.value, followResult.parent).then((payload) => {
       return new PayloadStubHook(payload);
     }));
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     try {
       let followResult;
       try {
         let { value, owner } = this.getValue();
-        followResult = followPath(value, void 0, path3, owner);
+        followResult = followPath(value, void 0, path4, owner);
       } catch (err) {
         for (let cap of captures) cap.dispose();
         throw err;
@@ -40931,14 +45512,14 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  get(path3) {
+  get(path4) {
     try {
       let { value, owner } = this.getValue();
-      if (path3.length === 0 && owner === null) {
+      if (path4.length === 0 && owner === null) {
         if (value instanceof Object && "then" in value) return this.dup();
         throw new Error("Can't dup an RpcTarget stub as a promise.");
       }
-      let followResult = followPath(value, void 0, path3, owner);
+      let followResult = followPath(value, void 0, path4, owner);
       if (followResult.hook) return followResult.hook.get(followResult.remainingPath);
       return new PayloadStubHook(RpcPayload.deepCopyFrom(followResult.value, followResult.parent, followResult.owner));
     } catch (err) {
@@ -41057,28 +45638,28 @@ var PromiseStubHook = class PromiseStubHook2 extends StubHook {
       return res;
     });
   }
-  call(path3, args) {
+  call(path4, args) {
     args.ensureDeepCopied();
-    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path3, args), (err) => {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path4, args), (err) => {
       args.dispose();
       throw err;
     }));
   }
-  stream(path3, args) {
+  stream(path4, args) {
     args.ensureDeepCopied();
-    return { promise: this.promise.then((hook) => hook.stream(path3, args).promise, (err) => {
+    return { promise: this.promise.then((hook) => hook.stream(path4, args).promise, (err) => {
       args.dispose();
       throw err;
     }) };
   }
-  map(path3, captures, instructions) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path3, captures, instructions), (err) => {
+  map(path4, captures, instructions) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path4, captures, instructions), (err) => {
       for (let cap of captures) cap.dispose();
       throw err;
     }));
   }
-  get(path3) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path3)));
+  get(path4) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path4)));
   }
   dup() {
     if (this.resolution) return this.resolution.dup();
@@ -41251,9 +45832,9 @@ var Devaluator = class Devaluator2 {
           else return ["nan"];
         } else return value;
       case "object": {
-        let object2 = value;
+        let object3 = value;
         let result = {};
-        for (let key in object2) result[key] = this.devaluateImpl(object2[key], object2, depth + 1);
+        for (let key in object3) result[key] = this.devaluateImpl(object3[key], object3, depth + 1);
         return result;
       }
       case "array": {
@@ -41357,7 +45938,7 @@ var Devaluator = class Devaluator2 {
       }
       case "response": {
         let resp = value;
-        let body = this.devaluateImpl(resp.body, resp, depth + 1);
+        let body2 = this.devaluateImpl(resp.body, resp, depth + 1);
         let init = {};
         if (resp.status !== 200) init.status = resp.status;
         if (resp.statusText) init.statusText = resp.statusText;
@@ -41369,7 +45950,7 @@ var Devaluator = class Devaluator2 {
         if (cfResp.webSocket) throw new TypeError("Can't serialize a Response containing a webSocket.");
         return [
           "response",
-          body,
+          body2,
           init
         ];
       }
@@ -41492,8 +46073,8 @@ var NullImporter = class {
   }
 };
 var NULL_IMPORTER = new NullImporter();
-function fixBrokenRequestBody(request, body) {
-  return new RpcPromise$1(new PromiseStubHook(new Response(body).arrayBuffer().then((arrayBuffer) => {
+function fixBrokenRequestBody(request, body2) {
+  return new RpcPromise$1(new PromiseStubHook(new Response(body2).arrayBuffer().then((arrayBuffer) => {
     let bytes = new Uint8Array(arrayBuffer);
     let result = new Request(request, { body: bytes });
     return new PayloadStubHook(RpcPayload.fromAppReturn(result));
@@ -41673,14 +46254,14 @@ var Evaluator = class Evaluator2 {
         }
         case "response": {
           if (value.length !== 3) break;
-          let body = this.evaluateImpl(value[1], parent, property, depth + 1);
-          if (body === null || typeof body === "string" || body instanceof Uint8Array || body instanceof ReadableStream) {
+          let body2 = this.evaluateImpl(value[1], parent, property, depth + 1);
+          if (body2 === null || typeof body2 === "string" || body2 instanceof Uint8Array || body2 instanceof ReadableStream) {
           } else throw new TypeError("Response body must be of type ReadableStream.");
           let init = value[2];
           if (typeof init !== "object" || init === null) break;
           if (init.webSocket) throw new TypeError("Can't deserialize a Response containing a webSocket.");
           if (init.headers && !(init.headers instanceof Array)) throw new TypeError("Request headers must be serialized as an array of pairs.");
-          return new Response(body, init);
+          return new Response(body2, init);
         }
         case "blob": {
           if (value.length !== 3 || typeof value[1] !== "string") break;
@@ -41718,23 +46299,23 @@ var Evaluator = class Evaluator2 {
           };
           if (value.length == 2) if (isPromise) return addStub(hook.get([]));
           else return addStub(hook.dup());
-          let path3 = value[2];
-          if (!(path3 instanceof Array)) break;
-          if (!path3.every((part) => {
+          let path4 = value[2];
+          if (!(path4 instanceof Array)) break;
+          if (!path4.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
-          if (value.length == 3) return addStub(hook.get(path3));
+          if (value.length == 3) return addStub(hook.get(path4));
           let args = value[3];
           if (!(args instanceof Array)) break;
           args = new Evaluator2(this.importer).evaluateWithDepth([args], depth);
-          return addStub(hook.call(path3, args));
+          return addStub(hook.call(path4, args));
         }
         case "remap": {
           if (value.length !== 5 || typeof value[1] !== "number" || !(value[2] instanceof Array) || !(value[3] instanceof Array) || !(value[4] instanceof Array)) break;
           let hook = this.importer.getExport(value[1]);
           if (!hook) throw new Error(`no such entry on exports table: ${value[1]}`);
-          let path3 = value[2];
-          if (!path3.every((part) => {
+          let path4 = value[2];
+          if (!path4.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
           let captures = value[3].map((cap) => {
@@ -41747,7 +46328,7 @@ var Evaluator = class Evaluator2 {
             }
           });
           let instructions = value[4];
-          let promise2 = new RpcPromise$1(hook.map(path3, captures, instructions), []);
+          let promise2 = new RpcPromise$1(hook.map(path4, captures, instructions), []);
           this.promises.push({
             promise: promise2,
             parent,
@@ -41931,7 +46512,7 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
     ++entry.localRefcount;
     this.entry = entry;
   }
-  collectPath(path3) {
+  collectPath(path4) {
     return this;
   }
   getEntry() {
@@ -41946,27 +46527,27 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
       throw err;
     }
   }
-  call(path3, args) {
+  call(path4, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.call(path3, args);
-    else return entry.session.sendCall(entry.importId, path3, args);
+    if (entry.resolution) return entry.resolution.call(path4, args);
+    else return entry.session.sendCall(entry.importId, path4, args);
   }
-  stream(path3, args) {
+  stream(path4, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.stream(path3, args);
-    else return entry.session.sendStream(entry.importId, path3, args);
+    if (entry.resolution) return entry.resolution.stream(path4, args);
+    else return entry.session.sendStream(entry.importId, path4, args);
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     let entry = this.getEntryTakingOwnership(() => {
       for (let cap of captures) cap.dispose();
     });
-    if (entry.resolution) return entry.resolution.map(path3, captures, instructions);
-    else return entry.session.sendMap(entry.importId, path3, captures, instructions);
+    if (entry.resolution) return entry.resolution.map(path4, captures, instructions);
+    else return entry.session.sendMap(entry.importId, path4, captures, instructions);
   }
-  get(path3) {
+  get(path4) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.get(path3);
-    else return entry.session.sendCall(entry.importId, path3);
+    if (entry.resolution) return entry.resolution.get(path4);
+    else return entry.session.sendCall(entry.importId, path4);
   }
   dup() {
     return new RpcImportHook2(false, this.getEntry());
@@ -42075,7 +46656,7 @@ var RpcSessionImpl = class {
     return exportId;
   }
   unexport(ids) {
-    for (let id of ids) this.releaseExport(id, 1);
+    for (let id8 of ids) this.releaseExport(id8, 1);
   }
   releaseExport(exportId, refcount) {
     let entry = this.exports[exportId];
@@ -42222,15 +46803,15 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id, path3, args) {
+  sendCall(id8, path4, args) {
     if (this.abortReason) {
       args?.dispose();
       throw this.abortReason;
     }
     let value = [
       "pipeline",
-      id,
-      path3
+      id8,
+      path4
     ];
     if (args) {
       let devalue;
@@ -42247,15 +46828,15 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id, path3, args) {
+  sendStream(id8, path4, args) {
     if (this.abortReason) {
       args.dispose();
       throw this.abortReason;
     }
     let value = [
       "pipeline",
-      id,
-      path3
+      id8,
+      path4
     ];
     let devalue;
     try {
@@ -42284,15 +46865,15 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id, path3, captures, instructions) {
+  sendMap(id8, path4, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
     }
     let value = [
       "remap",
-      id,
-      path3,
+      id8,
+      path4,
       captures.map((hook) => {
         let importId = this.getImport(hook);
         if (importId !== void 0) return ["import", importId];
@@ -42305,18 +46886,18 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendPull(id) {
+  sendPull(id8) {
     if (this.abortReason) throw this.abortReason;
-    this.send(["pull", id]);
+    this.send(["pull", id8]);
   }
-  sendRelease(id, remoteRefcount) {
+  sendRelease(id8, remoteRefcount) {
     if (this.abortReason) return;
     this.send([
       "release",
-      id,
+      id8,
       remoteRefcount
     ]);
-    delete this.imports[id];
+    delete this.imports[id8];
   }
   abort(error63, trySendAbortMessage = true) {
     if (this.abortReason !== void 0) return;
@@ -42562,18 +47143,18 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject, path3) {
+  constructor(subject, path4) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
       subject: currentMapBuilder.capture(subject),
-      path: path3
+      path: path4
     };
     else this.context = {
       parent: void 0,
       captures: [],
       subject,
-      path: path3
+      path: path4
     };
     currentMapBuilder = this;
   }
@@ -42602,24 +47183,24 @@ var MapBuilder = class {
       return new MapVariableHook(this.context.parent, this.context.parent.instructions.length);
     } else return this.context.subject.map(this.context.path, this.context.captures, this.instructions);
   }
-  pushCall(hook, path3, params) {
+  pushCall(hook, path4, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path3,
+      path4,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
-  pushGet(hook, path3) {
+  pushGet(hook, path4) {
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path3
+      path4
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
@@ -42653,8 +47234,8 @@ var MapBuilder = class {
   onSendError(error63) {
   }
 };
-mapImpl.sendMap = (hook, path3, func) => {
-  let builder = new MapBuilder(hook, path3);
+mapImpl.sendMap = (hook, path4, func) => {
+  let builder = new MapBuilder(hook, path4);
   let result;
   try {
     result = RpcPayload.fromAppReturn(withCallInterceptor(builder.pushCall.bind(builder), () => {
@@ -42686,16 +47267,16 @@ var MapVariableHook = class extends StubHook {
   }
   dispose() {
   }
-  get(path3) {
-    if (path3.length == 0) return this;
-    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path3);
+  get(path4) {
+    if (path4.length == 0) return this;
+    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path4);
     else throwMapperBuilderUseError();
   }
-  call(path3, args) {
+  call(path4, args) {
     args.dispose();
     throwMapperBuilderUseError();
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     throwMapperBuilderUseError();
   }
@@ -42800,11 +47381,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
     if (this.state) return this.state;
     else throw new Error("Attempted to use a WritableStreamStubHook after it was disposed.");
   }
-  call(path3, args) {
+  call(path4, args) {
     try {
       let state = this.getState();
-      if (path3.length !== 1 || typeof path3[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
-      const method = path3[0];
+      if (path4.length !== 1 || typeof path4[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
+      const method = path4[0];
       if (method !== "write" && method !== "close" && method !== "abort") throw new Error(`Unknown WritableStream method: ${method}`);
       if (method === "close" || method === "abort") state.closed = true;
       return new PromiseStubHook((method === "write" ? args.deliverStreamWrite(state.writer) : args.deliverCall(state.writer[method], state.writer)).then((payload) => new PayloadStubHook(payload)));
@@ -42813,11 +47394,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a WritableStream"));
   }
-  get(path3) {
+  get(path4) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a WritableStream stub"));
   }
   dup() {
@@ -43010,15 +47591,15 @@ var ReadableStreamStubHook = class ReadableStreamStubHook2 extends StubHook {
     this.state = state;
     if (dupFrom) ++state.refcount;
   }
-  call(path3, args) {
+  call(path4, args) {
     args.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot call methods on a ReadableStream stub"));
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a ReadableStream"));
   }
-  get(path3) {
+  get(path4) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a ReadableStream stub"));
   }
   dup() {
@@ -43094,168 +47675,12 @@ function sessionSocketUrl(harnessUrl, hello, phase) {
   origin.hash = "";
   return origin.href;
 }
-function claim2(claims, name) {
-  const value = claims[name];
+function claim2(claims, name2) {
+  const value = claims[name2];
   if (typeof value !== "string" && typeof value !== "number" || String(value).length === 0) {
-    throw new Error(`GitHub OIDC token has no usable ${name} claim`);
+    throw new Error(`GitHub OIDC token has no usable ${name2} claim`);
   }
   return String(value);
-}
-
-// src/executor.ts
-var import_node_child_process = require("node:child_process");
-var import_promises = require("node:fs/promises");
-var import_node_path = __toESM(require("node:path"), 1);
-var PlanningShellExecutor = class {
-  #workspace;
-  #records = /* @__PURE__ */ new Map();
-  #active = /* @__PURE__ */ new Map();
-  #cancelled = /* @__PURE__ */ new Set();
-  constructor(workspace = requiredEnvironment("GITHUB_WORKSPACE")) {
-    this.#workspace = import_node_path.default.resolve(workspace);
-  }
-  async execute(input2) {
-    const action = runnerActionV1Schema.parse(input2);
-    const canonicalAction = canonicalValue(action);
-    const existing = this.#records.get(action.operationId);
-    if (existing) {
-      if (existing.canonicalAction !== canonicalAction) throw new Error("Operation ID was reused for different shell input");
-      if (existing.result) return existing.result;
-      if (existing.promise) return existing.promise;
-    }
-    const record2 = { canonicalAction };
-    const promise2 = this.#run(action).then((result) => {
-      record2.result = result;
-      delete record2.promise;
-      return result;
-    }).catch((error63) => {
-      this.#records.delete(action.operationId);
-      throw error63;
-    });
-    record2.promise = promise2;
-    this.#records.set(action.operationId, record2);
-    return promise2;
-  }
-  async cancel(operationId) {
-    const child = this.#active.get(operationId);
-    if (!child?.pid) return;
-    this.#cancelled.add(operationId);
-    killProcessGroup(child.pid, "SIGTERM");
-    const timer = setTimeout(() => {
-      if (this.#active.has(operationId)) killProcessGroup(child.pid, "SIGKILL");
-    }, 2e3);
-    timer.unref();
-  }
-  async result(operationId) {
-    const record2 = this.#records.get(operationId);
-    if (record2?.result) return record2.result;
-    return record2?.promise;
-  }
-  cursor() {
-    const completed = [...this.#records.values()].map((record2) => record2.result?.sequence ?? 0);
-    const sequence = Math.max(0, ...completed);
-    return { lastServerSequence: sequence, lastCompletedSequence: sequence };
-  }
-  async #run(action) {
-    const cwd = localWorkspacePath(this.#workspace, action.cwd);
-    const home = import_node_path.default.join(this.#workspace, ".gardener", "runner-home");
-    await (0, import_promises.mkdir)(home, { recursive: true, mode: 448 });
-    const child = (0, import_node_child_process.spawn)("/bin/bash", ["--noprofile", "--norc", "-o", "pipefail", "-c", action.command], {
-      cwd,
-      detached: true,
-      env: safePlannerEnvironment(this.#workspace, home),
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    this.#active.set(action.operationId, child);
-    const stdout = [];
-    const stderr = [];
-    let capturedBytes = 0;
-    let outputTruncated = false;
-    const capture = (target) => (chunk) => {
-      const remaining = action.maxOutputBytes - capturedBytes;
-      if (remaining > 0) {
-        const accepted = chunk.subarray(0, remaining);
-        target.push(accepted);
-        capturedBytes += accepted.byteLength;
-      }
-      if (chunk.byteLength > remaining) outputTruncated = true;
-    };
-    child.stdout.on("data", capture(stdout));
-    child.stderr.on("data", capture(stderr));
-    let timedOut = false;
-    let forceKill;
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      if (child.pid) {
-        killProcessGroup(child.pid, "SIGTERM");
-        forceKill = setTimeout(() => killProcessGroup(child.pid, "SIGKILL"), 2e3);
-        forceKill.unref();
-      }
-    }, action.timeoutMs);
-    timeout.unref();
-    const exit = await new Promise((resolve) => {
-      child.once("error", (error63) => resolve({ code: null, error: error63 }));
-      child.once("close", (code) => resolve({ code }));
-    });
-    clearTimeout(timeout);
-    if (forceKill) clearTimeout(forceKill);
-    this.#active.delete(action.operationId);
-    const cancelled = this.#cancelled.delete(action.operationId);
-    const status = timedOut ? "timed_out" : cancelled ? "cancelled" : exit.code === 0 ? "completed" : "failed";
-    return {
-      schemaVersion: "gardener.runner.action-result/v1",
-      sequence: action.sequence,
-      operationId: action.operationId,
-      status,
-      exitCode: status === "completed" || status === "failed" ? exit.code ?? 1 : null,
-      stdout: Buffer.concat(stdout).toString("utf8"),
-      stderr: Buffer.concat(stderr).toString("utf8") || exit.error?.message || "",
-      outputTruncated
-    };
-  }
-};
-function localWorkspacePath(workspace, virtualPath) {
-  const relative = import_node_path.default.posix.relative("/workspace", import_node_path.default.posix.normalize(virtualPath));
-  if (relative.startsWith("..") || import_node_path.default.posix.isAbsolute(relative)) throw new Error("Shell cwd escapes /workspace");
-  const resolved = import_node_path.default.resolve(workspace, relative);
-  if (resolved !== workspace && !resolved.startsWith(`${workspace}${import_node_path.default.sep}`)) throw new Error("Shell cwd escapes the Actions workspace");
-  return resolved;
-}
-function safePlannerEnvironment(workspace, home) {
-  const allowed = [
-    "PATH",
-    "LANG",
-    "LC_ALL",
-    "CI",
-    "RUNNER_OS",
-    "RUNNER_ARCH",
-    "GITHUB_REPOSITORY",
-    "GITHUB_SHA",
-    "GITHUB_REF",
-    "GITHUB_EVENT_NAME"
-  ];
-  const environment = { GITHUB_WORKSPACE: workspace, HOME: home };
-  for (const name of allowed) if (process.env[name] !== void 0) environment[name] = process.env[name];
-  return environment;
-}
-function killProcessGroup(pid, signal) {
-  try {
-    process.kill(-pid, signal);
-  } catch (error63) {
-    const code = error63.code;
-    if (code !== "ESRCH") throw error63;
-  }
-}
-function requiredEnvironment(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
-function canonicalValue(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(",")}]`;
-  const record2 = value;
-  return `{${Object.keys(record2).sort().map((key) => `${JSON.stringify(key)}:${canonicalValue(record2[key])}`).join(",")}}`;
 }
 
 // src/session.ts
@@ -43352,12 +47777,27 @@ var oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 var oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+var providerReadToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
+delete process.env["INPUT_GITHUB-TOKEN"];
 async function main() {
   try {
     const runtimeUrl = requiredInput("runtime-url");
     const agentHash = requiredInput("task-bundle-hash");
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
+    if (providerReadToken) setSecret(providerReadToken);
+    const executor = await createPlanningExecutor({
+      workspace: requiredEnvironment2("GITHUB_WORKSPACE"),
+      runnerTemp: process.env.RUNNER_TEMP,
+      baseSha: process.env.GITHUB_SHA,
+      ...providerReadToken ? {
+        createReadClient: (signal, maxResponseBytes) => new GitHubReadClient({
+          token: providerReadToken,
+          signal,
+          limits: { maxResponseBytes }
+        })
+      } : {}
+    });
     const event = await githubEvent();
     const cancellation = new AbortController();
     const cancel = () => cancellation.abort();
@@ -43369,6 +47809,7 @@ async function main() {
         harnessUrl: runtimeUrl,
         agentHash,
         maxReconnects,
+        executor,
         ...event === void 0 ? {} : { event },
         signal: cancellation.signal,
         getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
@@ -43381,45 +47822,42 @@ async function main() {
       process.removeListener("SIGINT", cancel);
       process.removeListener("SIGTERM", cancel);
     }
-    setOutput("status", terminal.status);
-    setOutput("summary", terminal.summary);
-    setOutput("last-server-sequence", String(terminal.lastServerSequence));
-    setOutput("last-completed-sequence", String(terminal.lastCompletedSequence));
+    const outputs = {
+      status: terminal.status,
+      summary: terminal.summary,
+      "last-server-sequence": String(terminal.lastServerSequence),
+      "last-completed-sequence": String(terminal.lastCompletedSequence)
+    };
     if (terminal.effectArtifact) {
       const bytes = Buffer.from(terminal.effectArtifact.bytesBase64, "base64");
-      const digest = (0, import_node_crypto.createHash)("sha256").update(bytes).digest("hex");
+      const digest = (0, import_node_crypto2.createHash)("sha256").update(bytes).digest("hex");
       if (digest !== terminal.effectArtifact.sha256) throw new Error("Gardener effect artifact digest mismatch");
-      const directory = import_node_path2.default.join(requiredEnvironment2("RUNNER_TEMP"), "gardener-effects");
-      await (0, import_promises2.mkdir)(directory, { recursive: true, mode: 448 });
-      const artifactPath = import_node_path2.default.join(directory, `${digest}.json`);
-      await (0, import_promises2.writeFile)(artifactPath, bytes, { mode: 384 });
-      setOutput("effect-artifact-path", artifactPath);
-      setOutput("effect-artifact-sha256", digest);
+      const directory = import_node_path3.default.join(requiredEnvironment2("RUNNER_TEMP"), "gardener-effect-plans");
+      await (0, import_promises4.mkdir)(directory, { recursive: true, mode: 448 });
+      const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
+      const artifactPath = import_node_path3.default.join(directory, `${digest}.json`);
+      await (0, import_promises4.writeFile)(artifactPath, bytes, { mode: 384 });
+      outputs["effect-artifact-path"] = artifactPath;
+      outputs["effect-artifact-sha256"] = digest;
+      outputs["effect-operation-count"] = String(plan.operations.length);
+      if (terminal.status === "completed" && terminal.effectArtifact.changesSha256) {
+        const capture = await executor.verifiedCaptureArtifact(terminal.effectArtifact.changesSha256);
+        outputs["capture-artifact-path"] = capture.directory;
+        outputs["capture-id"] = capture.ref.captureId;
+        outputs["capture-changes-sha256"] = capture.ref.changesSha256;
+      }
     }
+    for (const [name2, value] of Object.entries(outputs)) setOutput(name2, value);
     if (terminal.status !== "completed") setFailed(terminal.summary);
   } catch (error63) {
     setFailed(message2(error63));
   }
 }
 async function githubEvent() {
-  if (process.env.GITHUB_EVENT_NAME !== "issues") return void 0;
-  const raw = JSON.parse(await (0, import_promises2.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
-  if (raw.action !== "opened") throw new Error("Gardener v1 supports only issues: opened");
-  const issue3 = raw.issue;
-  const author = issue3?.user;
-  if (!issue3 || !author) throw new Error("GitHub issue event payload is incomplete");
-  return runnerEventV1Schema.parse({
-    schemaVersion: "gardener.runner.event/v1",
-    kind: "github.issue.opened",
-    issue: {
-      id: String(issue3.id ?? ""),
-      number: issue3.number,
-      title: issue3.title,
-      body: issue3.body ?? null,
-      labels: Array.isArray(issue3.labels) ? issue3.labels.map((label) => String(label.name ?? "")) : [],
-      author: { id: String(author.id ?? ""), login: author.login }
-    }
-  });
+  const eventName = process.env.GITHUB_EVENT_NAME;
+  if (!eventName) return void 0;
+  const raw = JSON.parse(await (0, import_promises4.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
+  return normalizeGitHubEvent(eventName, raw);
 }
 async function getIdTokenWithoutEnvironmentLeak(audience) {
   if (!oidcRequestUrl || !oidcRequestToken) throw new Error("GitHub Actions OIDC is unavailable; grant id-token: write");
@@ -43434,23 +47872,23 @@ async function getIdTokenWithoutEnvironmentLeak(audience) {
     delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   }
 }
-function requiredInput(name) {
-  const value = getInput(name, { required: true }).trim();
-  if (!value) throw new Error(`${name} is required`);
+function requiredInput(name2) {
+  const value = getInput(name2, { required: true }).trim();
+  if (!value) throw new Error(`${name2} is required`);
   return value;
 }
-function integerInput(name, fallback, minimum, maximum) {
-  const raw = getInput(name).trim();
+function integerInput(name2, fallback, minimum, maximum) {
+  const raw = getInput(name2).trim();
   if (!raw) return fallback;
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new Error(`${name} must be an integer from ${minimum} through ${maximum}`);
+    throw new Error(`${name2} must be an integer from ${minimum} through ${maximum}`);
   }
   return value;
 }
-function requiredEnvironment2(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
+function requiredEnvironment2(name2) {
+  const value = process.env[name2];
+  if (!value) throw new Error(`${name2} is required`);
   return value;
 }
 function message2(error63) {

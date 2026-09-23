@@ -270,6 +270,10 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
   recordEffect(_receipt: RunnerEffectReceiptV1): Promise<RunnerEffectReceiptV1> {
     return Promise.reject(new Error("The transport spike does not accept product effect receipts"));
   }
+
+  priorEffectReceipt(_planRunId: string, _artifactSha256: string): Promise<RunnerEffectReceiptV1 | null> {
+    return Promise.resolve(null);
+  }
 }
 
 function boundedSummary(value: string): string {

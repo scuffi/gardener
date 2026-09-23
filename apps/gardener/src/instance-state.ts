@@ -1,6 +1,7 @@
 import {
   agentRunSnapshotV1Schema,
   instancePolicyV1Schema,
+  isInstallationBackedRepository,
   observationCapabilitySchema,
   operationKindSchema,
   policyModeSchema,
@@ -171,6 +172,15 @@ export async function assertLiveAutomaticAuthority(env: Env, runId: string, oper
   if (globalPaused !== "false") throw new Error("Gardener is globally paused");
   if (repositoryPaused === "true") throw new Error("Repository is paused");
 
+  // Operations planned by the Actions target carry no installation identity.
+  // This is the installation-backed runtime, so a missing installation must
+  // fail loudly instead of binding `undefined` into the authority query and
+  // matching whatever row that produces.
+  if (!isInstallationBackedRepository(operation.repository)) {
+    throw new Error("The installation-backed runtime requires an installation-bound operation");
+  }
+  const installationId = operation.repository.installationId;
+
   let live: { active: number; revision_id: string | null } | null;
   try {
     live = await env.DB.prepare(`
@@ -178,7 +188,7 @@ export async function assertLiveAutomaticAuthority(env: Env, runId: string, oper
       FROM repositories r
       LEFT JOIN agent_activations aa ON aa.agent_id = ?
       WHERE r.id = ? AND r.installation_id = ?
-    `).bind(run.agentId, run.repositoryId, operation.repository.installationId)
+    `).bind(run.agentId, run.repositoryId, installationId)
       .first<{ active: number; revision_id: string | null }>();
   } catch (cause) {
     throw new LiveAuthorityReadError(cause);

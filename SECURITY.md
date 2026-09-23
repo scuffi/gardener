@@ -80,9 +80,25 @@ exposed.
 
 ## Exact effects
 
-All 29 GitHub operation schemas remain declared. Capability discovery marks exactly 12 verified
-executors available and 17 unavailable. Unsupported kinds fail before credentials or GitHub I/O.
-Gardener's currently qualified automatic runtime is narrower: `issue.comment.create` only.
+The Actions-native V1 path supports all 29 declared GitHub operation kinds automatically. GitHub
+Actions owns the trigger, checkout, token permissions, and provider calls. Gardener owns the exact
+ordered plan, operation identity, capture binding, and resumable receipts. The model-facing planning
+job has a read-only token; the checkout-free apply job inherits only the fixed read union and the
+write scopes implied by the task's declared effects. Human approval is intentionally not part of
+this release, so merge, release, check-rerun, and other destructive declarations must be treated as
+automatic authority.
+
+`repository.exec` runs as the GitHub-hosted runner user. A hostile process can discover and write the
+step's runner-command files even though their paths and variables are removed from the model shell,
+and a process that creates a new session can outlive process-group cleanup. This can corrupt bridge
+step outputs and deny application. It cannot authorize a different provider effect: the Worker
+independently re-derives the exact plan and artifact digest before apply, and mismatches fail closed.
+Use of `repository.exec` also has unrestricted network egress and is not suitable for sensitive
+private source in V1.
+
+The legacy Gateway path still declares all 29 schemas but its qualified automatic runtime remains
+narrower. Capability discovery there marks exactly 12 verified executors available and 17
+unavailable; unsupported kinds fail before credentials or GitHub I/O.
 
 Operation receipts are keyed by stable operation ID and bind canonical operation hash, exact JSON,
 run, delivered event, repository, installation, and resource. Execution and delivery use fenced

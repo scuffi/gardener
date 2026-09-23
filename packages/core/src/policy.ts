@@ -88,7 +88,12 @@ export function evaluateOperationPolicy(operationInput: Operation | unknown, pol
   if (operation.kind === "pull_request.merge") {
     if (!policy.allowedMergeMethods.includes(operation.method)) reasons.push("merge method is not allowed");
     if (current?.branchProtectionAllowsMerge !== true) reasons.push("branch protection does not currently allow merge");
-    if (current?.branchProtectionHash !== undefined && current.branchProtectionHash !== operation.expectedBranchProtectionHash) reasons.push("branch protection changed since proposal");
+    // `expectedBranchProtectionHash` is optional on the operation because the
+    // Actions target cannot read branch protection. This evaluator only runs on
+    // installation-backed boundaries, which can, so a merge that arrives here
+    // without a digest is denied rather than silently skipping the comparison.
+    if (operation.expectedBranchProtectionHash === undefined) reasons.push("merge requires an expected branch protection hash");
+    else if (current?.branchProtectionHash !== undefined && current.branchProtectionHash !== operation.expectedBranchProtectionHash) reasons.push("branch protection changed since proposal");
     const successful = new Set(current?.successfulChecks ?? []);
     for (const required of new Set([...policy.requiredChecks, ...operation.requiredChecks.map((check) => check.context)])) if (!successful.has(required)) reasons.push(`required check is not successful: ${required}`);
   }

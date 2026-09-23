@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  operationKindValues,
+  operationOutputSentinel,
+  operationOutputType,
+  operationSchema,
+  type OperationOutputType,
+} from "./operations";
 
 const identifier = z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
 const boundIdentifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
@@ -12,27 +19,181 @@ const relativePath = z.string().min(1).max(1_024).refine(
   "expected a normalized repository-relative POSIX path",
 );
 
+const taskLabelFilterV1Schema = z.array(z.string().trim().min(1).max(100)).max(20).default([]);
+
+/** GitHub branch filter pattern accepted by `on.push.branches`. */
+const branchFilterV1Schema = z.string().trim().min(1).max(255).regex(
+  /^!?[A-Za-z0-9_.\-/*?+[\]]+$/,
+  "expected a GitHub branch filter pattern",
+);
+
+/**
+ * Inclusive numeric bounds for the five POSIX cron fields GitHub Actions
+ * accepts, in field order.
+ */
+const CRON_FIELD_BOUNDS: readonly (readonly [number, number])[] = [
+  [0, 59],
+  [0, 23],
+  [1, 31],
+  [1, 12],
+  [0, 6],
+];
+
+/**
+ * Conservative validator for the cron dialect GitHub Actions actually honours:
+ * five numeric fields built from `*`, ranges, lists, and steps. Named months
+ * and weekdays, `?`, `L`, `W`, and `#` are rejected because GitHub either
+ * ignores them or refuses the workflow, and a silently-never-firing schedule is
+ * indistinguishable from a broken task.
+ */
+function cronFieldIsValid(field: string, low: number, high: number): boolean {
+  if (field.length === 0) return false;
+  return field.split(",").every((item) => {
+    if (item.length === 0) return false;
+    const [range, step, ...excess] = item.split("/");
+    if (excess.length > 0 || range === undefined) return false;
+    if (step !== undefined) {
+      if (!/^[0-9]{1,2}$/.test(step)) return false;
+      const parsed = Number(step);
+      if (parsed < 1 || parsed > high) return false;
+    }
+    if (range === "*") return true;
+    const bounds = range.split("-");
+    if (bounds.length > 2) return false;
+    if (!bounds.every((bound) => /^[0-9]{1,2}$/.test(bound))) return false;
+    const numbers = bounds.map(Number);
+    if (numbers.some((value) => value < low || value > high)) return false;
+    return numbers.length === 1 || numbers[0]! <= numbers[1]!;
+  });
+}
+
+const cronExpressionV1Schema = z.string().trim().min(1).max(100).superRefine((value, context) => {
+  const fields = value.split(" ");
+  if (fields.length !== 5) {
+    context.addIssue({ code: "custom", message: "expected a five-field cron expression" });
+    return;
+  }
+  for (const [index, field] of fields.entries()) {
+    const [low, high] = CRON_FIELD_BOUNDS[index]!;
+    if (!cronFieldIsValid(field, low, high)) {
+      context.addIssue({
+        code: "custom",
+        message: `cron field ${index + 1} must use numbers ${low}-${high}, ranges, lists, or steps`,
+      });
+    }
+  }
+});
+
+function labelGatedTrigger<Kind extends string>(kind: Kind) {
+  return z.strictObject({ kind: z.literal(kind), labelsAll: taskLabelFilterV1Schema });
+}
+
+/**
+ * Portable repository event requirements. One member per (event, action) pair so
+ * that every declared trigger compiles to an exact provider filter.
+ */
 export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
+  labelGatedTrigger("github.issue.opened"),
+  labelGatedTrigger("github.issue.edited"),
+  labelGatedTrigger("github.issue.labeled"),
+  labelGatedTrigger("github.issue.unlabeled"),
+  labelGatedTrigger("github.issue.reopened"),
+  labelGatedTrigger("github.issue_comment.created"),
+  labelGatedTrigger("github.pull_request.opened"),
+  labelGatedTrigger("github.pull_request.reopened"),
+  labelGatedTrigger("github.pull_request.synchronize"),
+  labelGatedTrigger("github.pull_request.ready_for_review"),
+  labelGatedTrigger("github.pull_request.converted_to_draft"),
+  labelGatedTrigger("github.pull_request.edited"),
+  labelGatedTrigger("github.pull_request.labeled"),
+  labelGatedTrigger("github.pull_request.unlabeled"),
+  labelGatedTrigger("github.pull_request_review.submitted"),
+  labelGatedTrigger("github.pull_request_review_comment.created"),
   z.strictObject({
-    kind: z.literal("github.issue.opened"),
-    labelsAll: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
+    kind: z.literal("github.push"),
+    /**
+     * At least one positive pattern is required. GitHub evaluates `branches`
+     * as an allowlist, so an all-negative list matches nothing and the task
+     * would never run.
+     */
+    branches: z.array(branchFilterV1Schema).min(1).max(20).refine(
+      (branches) => branches.some((branch) => !branch.startsWith("!")),
+      "push branches must include at least one positive pattern",
+    ),
   }),
   z.strictObject({ kind: z.literal("github.workflow_dispatch") }),
+  z.strictObject({ kind: z.literal("github.schedule"), cron: cronExpressionV1Schema }),
+  labelGatedTrigger("github.discussion.created"),
+  labelGatedTrigger("github.discussion.edited"),
+  labelGatedTrigger("github.discussion.answered"),
+  labelGatedTrigger("github.discussion.unanswered"),
+  labelGatedTrigger("github.discussion.labeled"),
+  labelGatedTrigger("github.discussion.unlabeled"),
+  labelGatedTrigger("github.discussion_comment.created"),
 ]);
 export type TaskTriggerV1 = z.infer<typeof taskTriggerV1Schema>;
+export type TaskTriggerKindV1 = TaskTriggerV1["kind"];
+
+/** Declaration order is canonical for compiled filters and generated workflows. */
+export const taskTriggerKindValues = [
+  "github.issue.opened",
+  "github.issue.edited",
+  "github.issue.labeled",
+  "github.issue.unlabeled",
+  "github.issue.reopened",
+  "github.issue_comment.created",
+  "github.pull_request.opened",
+  "github.pull_request.reopened",
+  "github.pull_request.synchronize",
+  "github.pull_request.ready_for_review",
+  "github.pull_request.converted_to_draft",
+  "github.pull_request.edited",
+  "github.pull_request.labeled",
+  "github.pull_request.unlabeled",
+  "github.pull_request_review.submitted",
+  "github.pull_request_review_comment.created",
+  "github.push",
+  "github.workflow_dispatch",
+  "github.schedule",
+  "github.discussion.created",
+  "github.discussion.edited",
+  "github.discussion.answered",
+  "github.discussion.unanswered",
+  "github.discussion.labeled",
+  "github.discussion.unlabeled",
+  "github.discussion_comment.created",
+] as const satisfies readonly TaskTriggerKindV1[];
+
+/**
+ * Compile-time exhaustiveness guard. If a member is added to the trigger union
+ * without being ordered here, this alias resolves to `never` and fails the
+ * build rather than silently dropping the kind from canonical ordering.
+ */
+type UnorderedTriggerKind = Exclude<TaskTriggerKindV1, (typeof taskTriggerKindValues)[number]>;
+export type TriggerOrderingIsExhaustive = UnorderedTriggerKind extends never ? true : never;
+export const triggerOrderingIsExhaustive: TriggerOrderingIsExhaustive = true;
+
+/** Canonical position of a trigger kind, used to order compiled bundles. */
+export const triggerKindOrder: ReadonlyMap<TaskTriggerKindV1, number> = new Map(
+  taskTriggerKindValues.map((kind, index) => [kind, index]),
+);
+
+/** Triggers whose provider payload can reference a fork-owned head revision. */
+export const pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
+  (kind) => kind.startsWith("github.pull_request"),
+);
 
 export const taskToolV1Schema = z.enum([
   "repository.read_file",
   "repository.list_files",
   "repository.exec",
+  "provider.api.read",
 ]);
 export type TaskToolV1 = z.infer<typeof taskToolV1Schema>;
 
-export const taskEffectKindV1Schema = z.enum([
-  "issue.comment.create",
-  "issue.labels.update",
-  "repository.draft_pr.create",
-]);
+/** Canonical effect authority vocabulary: exactly the persistent provider operations. */
+export const taskEffectKindValues = operationKindValues;
+export const taskEffectKindV1Schema = z.enum(taskEffectKindValues);
 export type TaskEffectKindV1 = z.infer<typeof taskEffectKindV1Schema>;
 
 const networkHostPattern = z.string().regex(
@@ -59,6 +220,13 @@ export const taskLimitsV1Schema = z.strictObject({
   maxToolCalls: z.number().int().positive().max(256),
   inputTokens: z.number().int().positive().max(1_000_000),
   outputTokens: z.number().int().positive().max(250_000),
+  /**
+   * Optional task-authored effect-plan ceilings. When omitted Gardener adds no
+   * product cap and only provider and runtime ceilings apply. When present both
+   * planning and application fail closed.
+   */
+  maxEffectOperations: z.number().int().positive().max(1_000).optional(),
+  maxEffectBytes: z.number().int().min(1_024).max(50_000_000).optional(),
 });
 export type TaskLimitsV1 = z.infer<typeof taskLimitsV1Schema>;
 
@@ -72,7 +240,7 @@ export const taskBundleV1Schema = z.strictObject({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(1_000),
   instructions: z.string().trim().min(1).max(100_000),
-  triggers: z.array(taskTriggerV1Schema).min(1).max(20),
+  triggers: z.array(taskTriggerV1Schema).min(1).max(taskTriggerKindValues.length),
   tools: z.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
   effects: z.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   network: taskNetworkPolicyV1Schema,
@@ -83,9 +251,15 @@ export const taskBundleV1Schema = z.strictObject({
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
     }
   }
-  const triggers = bundle.triggers.map((trigger) => JSON.stringify(trigger));
-  if (new Set(triggers).size !== triggers.length) {
+  const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
+  if (new Set(triggerKinds).size !== triggerKinds.length) {
     context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must be unique" });
+  }
+  // Canonical ordering keeps the bundle hash and the generated workflow stable
+  // regardless of the order the author listed triggers in.
+  const positions = triggerKinds.map((kind) => triggerKindOrder.get(kind)!);
+  if (positions.some((position, index) => index > 0 && position <= positions[index - 1]!)) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must use canonical declaration order" });
   }
   if (bundle.limits.outputTokens < bundle.limits.maxTurns * 16) {
     context.addIssue({ code: "custom", path: ["limits", "outputTokens"], message: "outputTokens must permit at least 16 tokens per model turn" });
@@ -102,12 +276,106 @@ const normalizedRepositoryV1Schema = z.strictObject({
   visibility: z.enum(["public", "private", "internal"]),
   commitSha: sha1,
   ref: z.string().min(1).max(1_024),
+  /**
+   * Default branch as GitHub reported it *in the triggering event payload*.
+   *
+   * Every exact operation embeds a repository identity, and that identity
+   * includes the default branch. The value is taken from the bounded event
+   * payload rather than read back from the API at apply time on purpose: the
+   * default branch is mutable, so a later fetch could return a value that was
+   * never true for this run and would silently change the canonical operation
+   * hash — the same hash that commit trailers and receipts reconcile against.
+   * Carrying the event's value keeps operation identity a function of the run.
+   */
+  defaultBranch: z.string().trim().min(1).max(255),
 });
+
+/** GitHub Actions event names Gardener admits. `pull_request_target` is excluded. */
+export const normalizedEventNameV1Schema = z.enum([
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "workflow_dispatch",
+  "schedule",
+  "discussion",
+  "discussion_comment",
+]);
+export type NormalizedEventNameV1 = z.infer<typeof normalizedEventNameV1Schema>;
+
+/**
+ * Exact GitHub event name each portable trigger compiles to. This is the single
+ * source of truth shared by the compiler, the OIDC admission check, and the
+ * runtime trigger matcher, so the three can never disagree.
+ */
+export const eventNameByTriggerKind = {
+  "github.issue.opened": "issues",
+  "github.issue.edited": "issues",
+  "github.issue.labeled": "issues",
+  "github.issue.unlabeled": "issues",
+  "github.issue.reopened": "issues",
+  "github.issue_comment.created": "issue_comment",
+  "github.pull_request.opened": "pull_request",
+  "github.pull_request.reopened": "pull_request",
+  "github.pull_request.synchronize": "pull_request",
+  "github.pull_request.ready_for_review": "pull_request",
+  "github.pull_request.converted_to_draft": "pull_request",
+  "github.pull_request.edited": "pull_request",
+  "github.pull_request.labeled": "pull_request",
+  "github.pull_request.unlabeled": "pull_request",
+  "github.pull_request_review.submitted": "pull_request_review",
+  "github.pull_request_review_comment.created": "pull_request_review_comment",
+  "github.push": "push",
+  "github.workflow_dispatch": "workflow_dispatch",
+  "github.schedule": "schedule",
+  "github.discussion.created": "discussion",
+  "github.discussion.edited": "discussion",
+  "github.discussion.answered": "discussion",
+  "github.discussion.unanswered": "discussion",
+  "github.discussion.labeled": "discussion",
+  "github.discussion.unlabeled": "discussion",
+  "github.discussion_comment.created": "discussion_comment",
+} as const satisfies Record<TaskTriggerKindV1, NormalizedEventNameV1>;
+
+/**
+ * `github.event.action` each trigger requires, when the event is
+ * action-qualified. `push`, `schedule`, and `workflow_dispatch` carry none.
+ */
+export const eventActionByTriggerKind = {
+  "github.issue.opened": "opened",
+  "github.issue.edited": "edited",
+  "github.issue.labeled": "labeled",
+  "github.issue.unlabeled": "unlabeled",
+  "github.issue.reopened": "reopened",
+  "github.issue_comment.created": "created",
+  "github.pull_request.opened": "opened",
+  "github.pull_request.reopened": "reopened",
+  "github.pull_request.synchronize": "synchronize",
+  "github.pull_request.ready_for_review": "ready_for_review",
+  "github.pull_request.converted_to_draft": "converted_to_draft",
+  "github.pull_request.edited": "edited",
+  "github.pull_request.labeled": "labeled",
+  "github.pull_request.unlabeled": "unlabeled",
+  "github.pull_request_review.submitted": "submitted",
+  "github.pull_request_review_comment.created": "created",
+  "github.push": null,
+  "github.workflow_dispatch": null,
+  "github.schedule": null,
+  "github.discussion.created": "created",
+  "github.discussion.edited": "edited",
+  "github.discussion.answered": "answered",
+  "github.discussion.unanswered": "unanswered",
+  "github.discussion.labeled": "labeled",
+  "github.discussion.unlabeled": "unlabeled",
+  "github.discussion_comment.created": "created",
+} as const satisfies Record<TaskTriggerKindV1, string | null>;
 
 const normalizedWorkflowV1Schema = z.strictObject({
   runId: githubNumericId,
   runAttempt: z.number().int().positive().max(1_000),
-  eventName: z.enum(["issues", "workflow_dispatch"]),
+  eventName: normalizedEventNameV1Schema,
   workflowRef: z.string().min(1).max(1_024),
   jobWorkflowRef: z.string().min(1).max(1_024),
   runnerEnvironment: z.literal("github-hosted"),
@@ -127,34 +395,178 @@ const normalizedEventBase = {
   actor: normalizedActorV1Schema,
 };
 
+const boundedLabels = z.array(z.string().trim().min(1).max(100)).max(100);
+const boundedBody = z.string().max(65_536).nullable();
+
+/** Opaque GraphQL node identifier, required to apply discussion operations. */
+const githubNodeId = z.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
+
+const normalizedIssueV1Schema = z.strictObject({
+  id: githubNumericId,
+  number: z.number().int().positive(),
+  title: z.string().max(1_024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+});
+
+/**
+ * Minimal repository identity for a pull-request side. `id` is the numeric
+ * repository id, which is what same-repo enforcement compares; `fullName` is
+ * carried only for messages and model context.
+ */
+const normalizedPullRequestRepositoryV1Schema = z.strictObject({
+  id: githubNumericId,
+  fullName: repositoryFullName,
+});
+
+const normalizedPullRequestV1Schema = z.strictObject({
+  id: githubNumericId,
+  number: z.number().int().positive(),
+  title: z.string().max(1_024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+  draft: z.boolean(),
+  state: z.enum(["open", "closed"]),
+  merged: z.boolean(),
+  base: z.strictObject({
+    ref: z.string().min(1).max(255),
+    sha: sha1,
+    repo: normalizedPullRequestRepositoryV1Schema,
+  }),
+  /**
+   * Head revision identity. `repo` is nullable because GitHub omits it when the
+   * fork has been deleted; a null head repository can never satisfy same-repo
+   * enforcement, so the run fails closed.
+   */
+  head: z.strictObject({
+    ref: z.string().min(1).max(255),
+    sha: sha1,
+    repo: normalizedPullRequestRepositoryV1Schema.nullable(),
+  }),
+});
+
+const normalizedCommentV1Schema = z.strictObject({
+  id: githubNumericId,
+  body: boundedBody,
+  author: normalizedActorV1Schema,
+});
+
+const normalizedReviewV1Schema = z.strictObject({
+  id: githubNumericId,
+  state: z.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
+  body: boundedBody,
+  author: normalizedActorV1Schema,
+});
+
+const normalizedDiscussionV1Schema = z.strictObject({
+  id: githubNumericId,
+  nodeId: githubNodeId,
+  number: z.number().int().positive(),
+  title: z.string().max(1_024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+  category: z.string().min(1).max(100),
+  answered: z.boolean(),
+});
+
+const normalizedDiscussionCommentV1Schema = z.strictObject({
+  id: githubNumericId,
+  nodeId: githubNodeId,
+  body: boundedBody,
+  author: normalizedActorV1Schema,
+});
+
+const normalizedPushV1Schema = z.strictObject({
+  ref: z.string().min(1).max(1_024),
+  before: sha1,
+  after: sha1,
+  forced: z.boolean(),
+  /** Bounded commit summary; the full list is never carried into model context. */
+  commits: z.array(z.strictObject({
+    sha: sha1,
+    message: z.string().max(4_096),
+    author: z.strictObject({ name: z.string().max(200), email: z.string().max(320) }),
+  })).max(20),
+  /** Number of commits present in `commits`, which is never the push total. */
+  includedCommits: z.number().int().min(0).max(20),
+  /**
+   * True when commits were dropped building this event. GitHub also caps its
+   * own push payload, so `false` does not prove the push was small; use
+   * `before`/`after` with the provider API when an exact range matters.
+   */
+  commitsTruncated: z.boolean(),
+});
+
+/** The single label GitHub attached or removed on a `labeled`/`unlabeled` event. */
+const changedLabel = z.string().trim().min(1).max(100);
+
+function eventMember<Kind extends TaskTriggerKindV1, Shape extends z.ZodRawShape>(kind: Kind, shape: Shape) {
+  return z.strictObject({ ...normalizedEventBase, kind: z.literal(kind), ...shape });
+}
+
+const issuePayload = { issue: normalizedIssueV1Schema };
+const pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+const discussionPayload = { discussion: normalizedDiscussionV1Schema };
+
 export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
-  z.strictObject({
-    ...normalizedEventBase,
-    kind: z.literal("github.issue.opened"),
-    issue: z.strictObject({
-      id: githubNumericId,
-      number: z.number().int().positive(),
-      title: z.string().max(1_024),
-      body: z.string().max(65_536).nullable(),
-      labels: z.array(z.string().trim().min(1).max(100)).max(100),
-      author: normalizedActorV1Schema,
-    }),
-  }),
-  z.strictObject({
-    ...normalizedEventBase,
-    kind: z.literal("github.workflow_dispatch"),
-    prompt: z.string().trim().min(1).max(20_000),
-  }),
+  eventMember("github.issue.opened", issuePayload),
+  eventMember("github.issue.edited", issuePayload),
+  eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
+  eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
+  eventMember("github.issue.reopened", issuePayload),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.pull_request.opened", pullRequestPayload),
+  eventMember("github.pull_request.reopened", pullRequestPayload),
+  eventMember("github.pull_request.synchronize", pullRequestPayload),
+  eventMember("github.pull_request.ready_for_review", pullRequestPayload),
+  eventMember("github.pull_request.converted_to_draft", pullRequestPayload),
+  eventMember("github.pull_request.edited", pullRequestPayload),
+  eventMember("github.pull_request.labeled", { ...pullRequestPayload, label: changedLabel }),
+  eventMember("github.pull_request.unlabeled", { ...pullRequestPayload, label: changedLabel }),
+  eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
+  eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.push", { push: normalizedPushV1Schema }),
+  eventMember("github.workflow_dispatch", { prompt: z.string().trim().min(1).max(20_000) }),
+  eventMember("github.schedule", { cron: cronExpressionV1Schema }),
+  eventMember("github.discussion.created", discussionPayload),
+  eventMember("github.discussion.edited", discussionPayload),
+  eventMember("github.discussion.answered", discussionPayload),
+  eventMember("github.discussion.unanswered", discussionPayload),
+  eventMember("github.discussion.labeled", { ...discussionPayload, label: changedLabel }),
+  eventMember("github.discussion.unlabeled", { ...discussionPayload, label: changedLabel }),
+  eventMember("github.discussion_comment.created", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema }),
 ]).superRefine((event, context) => {
   if (event.repository.fullName !== `${event.repository.owner}/${event.repository.name}`) {
     context.addIssue({ code: "custom", path: ["repository", "fullName"], message: "fullName must match repository owner and name" });
   }
-  const expectedEventName = event.kind === "github.issue.opened" ? "issues" : "workflow_dispatch";
-  if (event.workflow.eventName !== expectedEventName) {
+  if (event.workflow.eventName !== eventNameByTriggerKind[event.kind]) {
     context.addIssue({ code: "custom", path: ["workflow", "eventName"], message: "workflow eventName does not match normalized event kind" });
+  }
+  if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
+    context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
   }
 });
 export type NormalizedEventV1 = z.infer<typeof normalizedEventV1Schema>;
+export type NormalizedPullRequestV1 = z.infer<typeof normalizedPullRequestV1Schema>;
+
+/** Narrowed accessor for the pull-request payload, when the event carries one. */
+export function normalizedPullRequest(event: NormalizedEventV1): NormalizedPullRequestV1 | undefined {
+  return "pullRequest" in event ? event.pullRequest : undefined;
+}
+
+/**
+ * Same-repository enforcement. Gardener V1 never executes a head revision that
+ * is not owned by the enrolled repository, so fork pull requests fail closed
+ * with no author-facing opt-in.
+ */
+export function eventHeadIsSameRepository(event: NormalizedEventV1): boolean {
+  const pullRequest = normalizedPullRequest(event);
+  if (pullRequest === undefined) return true;
+  return pullRequest.head.repo !== null && pullRequest.head.repo.id === event.repository.id;
+}
 
 export const taskRunRequestV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-run-request/v1"),
@@ -194,63 +606,1088 @@ export const taskToolResultV1Schema = z.strictObject({
 });
 export type TaskToolResultV1 = z.infer<typeof taskToolResultV1Schema>;
 
+/* -------------------------------------------------------------------------- */
+/* Ordered effect proposals and plans                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Model-supplied name for one step of an ordered plan. Lowercase and short so
+ * it reads well in a receipt, unique within a plan, and stable enough to be
+ * folded into the derived operation id.
+ */
+export const taskStepNameV1Schema = z.string().regex(
+  /^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/,
+  "expected a lowercase step name such as \"comment\" or \"open-draft\"",
+).max(63);
+export type TaskStepNameV1 = z.infer<typeof taskStepNameV1Schema>;
+
+/** Field names an operation publishes; matches the contracts output catalog. */
+const taskOutputNameV1Schema = z.string().regex(/^[a-z][A-Za-z0-9]{0,63}$/);
+
+/**
+ * Object keys that reach `Object.prototype` when used as a plain property
+ * write. Model-authored payloads and pointers are attacker-controlled JSON, so
+ * these are rejected outright at every depth rather than stripped: silently
+ * dropping a key discards intent without telling anyone, and a dropped
+ * `__proto__` still means the model asked for something Gardener refused.
+ */
+export const prototypePollutingKeys = ["__proto__", "constructor", "prototype"] as const;
+const prototypePollutingKeySet: ReadonlySet<string> = new Set(prototypePollutingKeys);
+
+/** True when a key or pointer segment can reach the prototype chain. */
+export function isPrototypePollutingKey(key: string): boolean {
+  return prototypePollutingKeySet.has(key);
+}
+
+/**
+ * RFC 6901 JSON pointer into a step payload. Bounded and non-empty: a plan
+ * never substitutes a value for the whole payload. No segment may name a
+ * prototype-reaching key, so a reference can never be used to walk out of the
+ * payload and into `Object.prototype`.
+ */
+export const taskPayloadPointerV1Schema = z.string()
+  .min(2)
+  .max(256)
+  .regex(/^(?:\/(?:[^~/]|~[01])*)+$/, "expected an RFC 6901 JSON pointer such as \"/body\"")
+  .superRefine((pointer, context) => {
+    for (const segment of decodeJsonPointer(pointer)) {
+      if (isPrototypePollutingKey(segment)) {
+        context.addIssue({ code: "custom", message: `pointer segment "${segment}" is not addressable` });
+      }
+    }
+  });
+
+/** Payload keys a plan owns, which a model may never supply or reference. */
+const reservedPayloadKeys = ["schemaVersion", "id", "repository", "kind"] as const;
+const reservedPayloadKeySet: ReadonlySet<string> = new Set(reservedPayloadKeys);
+
+export type TaskJsonValueV1 =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly TaskJsonValueV1[]
+  | { readonly [key: string]: TaskJsonValueV1 };
+
+const MAX_PAYLOAD_DEPTH = 12;
+const MAX_PAYLOAD_BYTES = 1_024 * 1_024;
+const MAX_PAYLOAD_NODES = 100_000;
+
+const taskJsonValueV1Schema: z.ZodType<TaskJsonValueV1> = z.lazy(() => z.union([
+  z.string(),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+  z.array(taskJsonValueV1Schema),
+  z.record(z.string(), taskJsonValueV1Schema),
+]));
+
+/**
+ * Byte length of the canonical JSON encoding, which is what gets hashed and
+ * shipped. Returns `null` for anything JSON cannot encode (a cycle, or a
+ * structure deep enough to overflow the serializer) so callers can fail closed
+ * instead of catching a `RangeError` from inside a validator.
+ */
+export function canonicalJsonByteLength(value: unknown): number | null {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) return null;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Iterative structural gate run *before* any recursive schema touches the
+ * value.
+ *
+ * Zod validates a recursive union by recursing, and `JSON.stringify` recurses
+ * too, so a sufficiently nested payload throws `RangeError` out of `safeParse`
+ * before a depth check written as a `superRefine` ever executes. Walking the
+ * value with an explicit stack is what makes "too deep" a validation failure
+ * rather than a crash.
+ */
+function inspectJsonStructure(root: unknown): readonly string[] {
+  const issues: string[] = [];
+  const ancestors = new Set<object>();
+  const stack: { value: unknown; depth: number; enter: boolean }[] = [{ value: root, depth: 1, enter: true }];
+  let nodes = 0;
+
+  while (stack.length > 0) {
+    const frame = stack.pop() as { value: unknown; depth: number; enter: boolean };
+    const { value, depth } = frame;
+
+    if (!frame.enter) {
+      ancestors.delete(value as object);
+      continue;
+    }
+    if (issues.length > 0) break;
+
+    nodes += 1;
+    if (nodes > MAX_PAYLOAD_NODES) {
+      issues.push(`payload contains more than ${MAX_PAYLOAD_NODES} values`);
+      break;
+    }
+    if (depth > MAX_PAYLOAD_DEPTH) {
+      issues.push(`payload nests deeper than ${MAX_PAYLOAD_DEPTH} levels`);
+      break;
+    }
+
+    if (value === null) continue;
+    const type = typeof value;
+    if (type === "string" || type === "boolean") continue;
+    if (type === "number") {
+      if (!Number.isFinite(value)) issues.push("payload contains a non-finite number");
+      continue;
+    }
+    if (type !== "object") {
+      issues.push(`payload contains a ${type} value, which JSON cannot represent`);
+      continue;
+    }
+
+    const container = value as object;
+    if (ancestors.has(container)) {
+      issues.push("payload contains a circular reference");
+      break;
+    }
+    ancestors.add(container);
+    stack.push({ value: container, depth, enter: false });
+
+    if (Array.isArray(container)) {
+      for (const item of container) stack.push({ value: item, depth: depth + 1, enter: true });
+      continue;
+    }
+    for (const key of Reflect.ownKeys(container)) {
+      if (typeof key === "symbol") {
+        issues.push("payload contains a symbol key, which JSON cannot represent");
+        break;
+      }
+      if (isPrototypePollutingKey(key)) {
+        issues.push(`payload may not contain the key "${key}"`);
+        break;
+      }
+      stack.push({ value: (container as Record<string, unknown>)[key], depth: depth + 1, enter: true });
+    }
+  }
+  return issues;
+}
+
+/**
+ * The model-authored field set of one operation, minus everything the plan
+ * owns.
+ *
+ * The iterative gate runs first through a pipe so a hostile value is rejected
+ * before the recursive typed parse can recurse into it. File contents never
+ * travel here; they are materialized at apply time from the capture artifact.
+ */
+export const taskEffectPayloadV1Schema = z.unknown()
+  .superRefine((payload, context) => {
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+      context.addIssue({ code: "custom", message: "payload must be a JSON object" });
+      return;
+    }
+    for (const message of inspectJsonStructure(payload)) {
+      context.addIssue({ code: "custom", message });
+      return;
+    }
+    for (const key of Object.keys(payload)) {
+      if (reservedPayloadKeySet.has(key)) {
+        context.addIssue({ code: "custom", path: [key], message: `payload may not set the plan-owned field ${key}` });
+      }
+    }
+    const bytes = canonicalJsonByteLength(payload);
+    if (bytes === null) {
+      context.addIssue({ code: "custom", message: "payload cannot be canonically serialized" });
+      return;
+    }
+    if (bytes > MAX_PAYLOAD_BYTES) {
+      context.addIssue({ code: "custom", message: `payload exceeds ${MAX_PAYLOAD_BYTES} bytes` });
+    }
+  })
+  .pipe(z.record(z.string().max(64), taskJsonValueV1Schema));
+
+/** Typed pointer from an earlier step's scalar output. */
+export const taskStepOutputRefV1Schema = z.strictObject({
+  step: taskStepNameV1Schema,
+  output: taskOutputNameV1Schema,
+});
+export type TaskStepOutputRefV1 = z.infer<typeof taskStepOutputRefV1Schema>;
+
+const MAX_STEP_REFERENCES = 32;
+
+/**
+ * Substitutions applied to a payload immediately before the step runs, keyed by
+ * the JSON pointer they fill. Kept out of the payload itself so an unresolved
+ * reference can never be mistaken for a literal value.
+ */
+export const taskStepReferencesV1Schema = z.record(taskPayloadPointerV1Schema, taskStepOutputRefV1Schema)
+  .superRefine((references, context) => {
+    const pointers = Object.keys(references);
+    if (pointers.length > MAX_STEP_REFERENCES) {
+      context.addIssue({ code: "custom", message: `a step may carry at most ${MAX_STEP_REFERENCES} references` });
+    }
+    for (const pointer of pointers) {
+      const [head] = decodeJsonPointer(pointer);
+      if (head !== undefined && reservedPayloadKeySet.has(head)) {
+        context.addIssue({ code: "custom", path: [pointer], message: `references may not target the plan-owned field ${head}` });
+      }
+    }
+  });
+
+/** Splits an RFC 6901 pointer into decoded segments. */
+export function decodeJsonPointer(pointer: string): readonly string[] {
+  return pointer.split("/").slice(1).map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
+}
+
+/** Renders a Zod issue path as an RFC 6901 pointer so it can be matched against references. */
+export function encodeJsonPointer(path: readonly PropertyKey[]): string {
+  return path.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
+}
+
+/**
+ * One ordered step exactly as the model proposed it.
+ *
+ * There is deliberately no `operationId`: an id the model chose would not be
+ * derivable from the run, and a model that can choose ids can collide with a
+ * previous attempt's receipt and suppress a real effect. Gardener derives every
+ * id from the run, the step order, the step name, and the canonical payload.
+ */
+export const taskEffectProposalV1Schema = z.strictObject({
+  stepName: taskStepNameV1Schema,
+  kind: taskEffectKindV1Schema,
+  payload: taskEffectPayloadV1Schema,
+  references: taskStepReferencesV1Schema.default({}),
+  rationale: z.string().trim().min(1).max(5_000),
+}).superRefine((proposal, context) => {
+  // Repository file bytes are capture-owned. A proposal must omit them, and
+  // trying to supply them is refused here rather than silently accepted as a
+  // second, capture-free way to write a commit.
+  for (const message of captureOwnedPointerIssues(proposal.kind, proposal.payload, proposal.references)) {
+    context.addIssue({ code: "custom", path: ["payload"], message });
+  }
+  // Those same pointers are always deferred, so the probe validates every
+  // field the model did supply while staying silent about the one only a
+  // trusted capture may fill. Omission is not permission: the plan still
+  // refuses to carry such a step unless a real capture was admitted.
+  for (const issue of probeOperationShape({
+    ...proposal,
+    deferredPointers: captureDeferredPointers(proposal.kind),
+  })) {
+    context.addIssue({ code: "custom", path: ["payload"], message: issue });
+  }
+});
+export type TaskEffectProposalV1 = z.infer<typeof taskEffectProposalV1Schema>;
+
+/**
+ * Retained alias for the pre-ordered-plan name. The legacy composite kinds
+ * (`issue.labels.update`, `repository.draft_pr.create`) are gone: they mapped
+ * to several provider calls behind one identifier, so a partial failure could
+ * not be described by a single receipt. Both are now expressed as ordered
+ * steps over exact operation kinds.
+ *
+ * @deprecated Use `taskEffectProposalV1Schema`.
+ */
+export const proposedEffectV1Schema = taskEffectProposalV1Schema;
+/** @deprecated Use `TaskEffectProposalV1`. */
+export type ProposedEffectV1 = TaskEffectProposalV1;
+
+/* -------------------------------------------------------------------------- */
+/* Probe validation                                                           */
+/* -------------------------------------------------------------------------- */
+
+const PROBE_REPOSITORY = { provider: "github", id: "1", owner: "gardener", name: "probe", defaultBranch: "main" } as const;
+const PROBE_OPERATION_ID = "gardener-probe";
+const PROBE_UNTYPED_SENTINEL = "gardener-step-output";
+
+/**
+ * Highest array index a reference pointer may address.
+ *
+ * Operation payload arrays are small and already bounded by `operationSchema`:
+ * the largest are `commit.create.files`, `pull_request.review.submit.comments`,
+ * and `pull_request.merge.requiredChecks` at 100 entries, and
+ * `pull_request.reviewer.*.reviewerIds` at 15. An index past the largest of
+ * those can never address a valid location, so refusing it costs nothing.
+ *
+ * Without this bound a pointer is a memory amplifier: `/files/999999999`
+ * makes `setPointer` materialize a sparse array whose length the operation
+ * schema then walks, so a single short model-authored string turns into a
+ * multi-gigabyte parse. Measured before this guard: `/files/1000000` returned
+ * 1,000,001 issues, and `/files/999999999` exhausted the heap and killed the
+ * process from inside `safeParse`.
+ */
+const MAX_POINTER_ARRAY_INDEX = 99;
+
+/**
+ * Highest number of probe messages one step reports.
+ *
+ * A payload may legitimately carry thousands of values, and a single wrong
+ * element type can make the operation schema report an issue for every one of
+ * them. The proposal only needs enough detail to be repaired, and an unbounded
+ * issue list is itself the denial-of-service, so the list is truncated and the
+ * truncation is stated.
+ */
+const MAX_PROBE_MESSAGES = 32;
+
+/**
+ * Writes a value at a pointer inside a throwaway probe object.
+ *
+ * Every segment is refused if it can reach the prototype chain, traversal only
+ * follows *own* properties, and intermediates are created with a null
+ * prototype. A pointer is attacker-controlled text, so a plain `record[segment]`
+ * walk here would let `/__proto__/x` write to `Object.prototype` and corrupt
+ * every later parse in the process, including Zod's own internals.
+ */
+function setPointer(root: Record<string, unknown>, segments: readonly string[], value: unknown): boolean {
+  if (segments.length === 0) return false;
+  if (segments.some(isPrototypePollutingKey)) return false;
+
+  let cursor: unknown = root;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index] as string;
+    const lookahead = segments[index + 1] as string;
+    const seed: unknown = /^(?:0|[1-9][0-9]*)$/.test(lookahead) ? [] : Object.create(null);
+    if (Array.isArray(cursor)) {
+      const position = arrayIndex(segment);
+      if (position === null) return false;
+      if (cursor[position] === undefined) cursor[position] = seed;
+      cursor = cursor[position];
+      continue;
+    }
+    if (cursor === null || typeof cursor !== "object") return false;
+    const record = cursor as Record<string, unknown>;
+    if (!Object.hasOwn(record, segment)) {
+      Object.defineProperty(record, segment, { value: seed, writable: true, enumerable: true, configurable: true });
+    }
+    cursor = record[segment];
+  }
+
+  const last = segments[segments.length - 1] as string;
+  if (Array.isArray(cursor)) {
+    const position = arrayIndex(last);
+    if (position === null) return false;
+    cursor[position] = value;
+    return true;
+  }
+  if (cursor === null || typeof cursor !== "object") return false;
+  Object.defineProperty(cursor, last, { value, writable: true, enumerable: true, configurable: true });
+  return true;
+}
+
+/**
+ * Decodes an array position, refusing anything a real operation payload could
+ * not hold. A refused index makes `setPointer` report that the pointer does
+ * not address a payload location, which is the same outcome as any other
+ * unaddressable pointer.
+ */
+function arrayIndex(segment: string): number | null {
+  if (!/^(?:0|[1-9][0-9]*)$/.test(segment)) return null;
+  const position = Number(segment);
+  if (!Number.isInteger(position) || position < 0 || position > MAX_POINTER_ARRAY_INDEX) return null;
+  return position;
+}
+
+/**
+ * Deep copy that keeps only JSON-shaped own data. Used instead of
+ * `structuredClone` so the probe candidate is built from a known-safe shape
+ * and never carries an inherited or exotic property into the parser.
+ */
+function safeJsonClone(value: unknown, depth = 0): unknown {
+  if (depth > MAX_PAYLOAD_DEPTH) return null;
+  if (Array.isArray(value)) return value.map((item) => safeJsonClone(item, depth + 1));
+  if (value === null || typeof value !== "object") return value;
+  const copy: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    if (isPrototypePollutingKey(key)) continue;
+    copy[key] = safeJsonClone((value as Record<string, unknown>)[key], depth + 1);
+  }
+  return copy;
+}
+
+export interface ProbeOperationShapeInput {
+  readonly kind: TaskEffectKindV1;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly references?: Readonly<Record<string, TaskStepOutputRefV1>>;
+  /**
+   * Pointers whose value is supplied at apply time rather than by the model,
+   * such as the `commit.create` file set materialized from the capture
+   * artifact.
+   */
+  readonly deferredPointers?: readonly string[];
+  /** Resolves a reference to its output type so a correctly-typed sentinel can be used. */
+  readonly resolveOutputType?: (reference: TaskStepOutputRefV1) => OperationOutputType | undefined;
+}
+
+/**
+ * Validates a proposed step against the real operation schema without waiting
+ * for apply time.
+ *
+ * A pending reference has no value yet, so the probe fills it with a typed
+ * sentinel and then discards any issue reported at or beneath a deferred
+ * pointer. Discarding is what makes this sound: no sentinel can satisfy every
+ * validator a field might carry (`draft` is `literal(true)` for one kind and
+ * `literal(false)` for another), so correctness comes from ignoring those
+ * positions, not from guessing them. Everything the model did supply is still
+ * held to the exact contract.
+ */
+export function probeOperationShape(step: ProbeOperationShapeInput): readonly string[] {
+  const messages: string[] = [];
+  const candidate: Record<string, unknown> = {
+    ...safeJsonClone(step.payload) as Record<string, unknown>,
+    schemaVersion: "v2",
+    id: PROBE_OPERATION_ID,
+    repository: PROBE_REPOSITORY,
+    kind: step.kind,
+  };
+  const deferred = new Set<string>(step.deferredPointers ?? []);
+  for (const [pointer, reference] of Object.entries(step.references ?? {})) {
+    deferred.add(pointer);
+    const type = step.resolveOutputType?.(reference);
+    const sentinel = type === undefined ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
+    if (!setPointer(candidate, decodeJsonPointer(pointer), sentinel)) {
+      messages.push(`reference pointer ${pointer} does not address a payload location`);
+    }
+  }
+
+  // The probe runs against a model-authored value. Any throw here — a recursion
+  // limit, or a validator that assumed a shape — would escape a `safeParse`
+  // further out and turn a rejected proposal into a crashed run, so the whole
+  // parse is contained and reported as a validation failure.
+  let probed: ReturnType<typeof operationSchema.safeParse>;
+  try {
+    probed = operationSchema.safeParse(candidate);
+  } catch (cause) {
+    messages.push(`operation: payload could not be validated (${cause instanceof Error ? cause.name : "unknown error"})`);
+    return messages;
+  }
+  if (probed.success) return messages;
+  let suppressed = 0;
+  for (const issue of probed.error.issues) {
+    const pointer = encodeJsonPointer(issue.path);
+    const isDeferred = pointer !== ""
+      && [...deferred].some((prefix) => pointer === prefix || pointer.startsWith(`${prefix}/`));
+    if (isDeferred) continue;
+    if (messages.length >= MAX_PROBE_MESSAGES) {
+      suppressed += 1;
+      continue;
+    }
+    messages.push(`${pointer === "" ? "operation" : pointer}: ${issue.message}`);
+  }
+  if (suppressed > 0) messages.push(`operation: ${suppressed} further problems were not reported`);
+  return messages;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Repository change capture                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Blob modes Git records for a regular tree entry. Submodules are not capturable. */
+export const taskCaptureFileModeV1Schema = z.enum(["100644", "100755", "120000"]);
+
+/**
+ * Largest single captured file, in bytes.
+ *
+ * Every captured byte is eventually written through the Git Data blob
+ * endpoint, and GitHub refuses a blob — and a pushed file — larger than
+ * 100 MiB. A capture describing a larger file could never be applied, so the
+ * manifest refuses it at plan time instead of failing mid-apply with part of
+ * the plan already executed. This is the provider's number, not one invented
+ * here.
+ */
+export const CAPTURE_FILE_MAX_BYTES = 100 * 1_024 * 1_024;
+
+/**
+ * Largest total capture, in bytes.
+ *
+ * Derived rather than invented: the capture is applied through `commit.create`
+ * steps, whose `files` array is capped at 100 entries by `operationSchema`, and
+ * each entry is bounded by `CAPTURE_FILE_MAX_BYTES` above. The product is the
+ * largest capture a single commit could ever materialize, so it is the widest
+ * honest ceiling for the manifest and its ref.
+ *
+ * Note this intentionally does not encode a GitHub Actions artifact ceiling:
+ * GitHub bounds artifacts by the account's storage quota rather than a fixed
+ * documented per-artifact byte count, so citing one would be inventing it.
+ */
+export const CAPTURE_TOTAL_MAX_BYTES = 100 * CAPTURE_FILE_MAX_BYTES;
+
+/** Per-file byte count, bounded by what the provider will accept as one blob. */
+const fileByteCount = z.number().int().nonnegative().max(CAPTURE_FILE_MAX_BYTES);
+
+/** Aggregate byte count, bounded by the largest capture a commit could apply. */
+const captureByteCount = z.number().int().nonnegative().max(CAPTURE_TOTAL_MAX_BYTES);
+
+/**
+ * Repository paths a captured change may never write.
+ *
+ * A `commit.create` step whose `files` are materialized from the capture never
+ * lists those paths in its payload, so the instance policy's path check has
+ * nothing to inspect at plan time. Writing a workflow, a composite action, or
+ * the task definitions themselves would let a run rewrite the authority that
+ * governs the next run, so those prefixes are refused in the manifest — the
+ * one place where the full path set is known before anything is applied.
+ */
+export const protectedCapturePathPrefixes = [
+  ".git/",
+  ".github/workflows/",
+  ".github/actions/",
+  ".gardener/",
+] as const;
+
+/**
+ * Exact protected files.
+ *
+ * CODEOWNERS decides who must approve a change, so a run that could rewrite it
+ * could approve its own future work. GitHub resolves CODEOWNERS from exactly
+ * three locations, so all three are refused. `dependabot.yml` is refused for
+ * the same reason in a different guise: it directs an automation that opens
+ * pull requests, so a run that could rewrite it could arrange future writes it
+ * was never granted. Both spellings GitHub accepts are listed.
+ */
+export const protectedCapturePaths = [
+  "CODEOWNERS",
+  ".github/CODEOWNERS",
+  ".github/dependabot.yml",
+  ".github/dependabot.yaml",
+  "docs/CODEOWNERS",
+] as const;
+
+/**
+ * True when a captured path would rewrite Gardener's or Actions' own authority.
+ *
+ * Matching is case-insensitive. A checkout on a case-insensitive filesystem
+ * resolves `.GitHub/Workflows/ci.yml` to the same file as the protected path,
+ * and GitHub itself treats the CODEOWNERS filename case-insensitively, so a
+ * case-sensitive comparison here would be bypassable by changing one letter.
+ */
+export function isProtectedCapturePath(path: string): boolean {
+  const normalized = path.toLowerCase();
+  if (protectedCapturePaths.some((protectedPath) => normalized === protectedPath.toLowerCase())) return true;
+  return protectedCapturePathPrefixes.some((prefix) => {
+    const lowered = prefix.toLowerCase();
+    return normalized === lowered.slice(0, -1) || normalized.startsWith(lowered);
+  });
+}
+
+/**
+ * One captured path. File bytes are deliberately absent: the manifest travels
+ * inside the plan, which is read by the privileged apply job, while the bytes
+ * stay in the separate changes artifact that is only ever streamed to the Git
+ * Data API. A digest per file is what lets apply prove it wrote what planning
+ * captured.
+ */
+export const taskCaptureFileV1Schema = z.discriminatedUnion("status", [
+  z.strictObject({
+    path: relativePath,
+    status: z.enum(["added", "modified"]),
+    mode: taskCaptureFileModeV1Schema,
+    sizeBytes: fileByteCount,
+    sha256,
+  }),
+  z.strictObject({
+    path: relativePath,
+    status: z.literal("deleted"),
+  }),
+]);
+export type TaskCaptureFileV1 = z.infer<typeof taskCaptureFileV1Schema>;
+
+/**
+ * Per-path capture metadata, carried inside the plan.
+ *
+ * There is no file-*count* ceiling here: a number invented in this contract
+ * would cap a legitimate refactor for no security reason. The byte ceilings
+ * that do apply are the provider's own (`CAPTURE_FILE_MAX_BYTES`) and the
+ * largest capture a commit could materialize (`CAPTURE_TOTAL_MAX_BYTES`), and
+ * the manifest itself still has to fit inside the plan's canonical transport
+ * ceiling alongside the task's optional `maxEffectOperations` and
+ * `maxEffectBytes`.
+ */
+export const taskCaptureManifestV1Schema = z.strictObject({
+  schemaVersion: z.literal("gardener.task-capture-manifest/v1"),
+  captureId: boundIdentifier,
+  /** Commit the capture was taken against; apply refuses a drifted base. */
+  baseSha: sha1,
+  /**
+   * Bounded by the number of files one `commit.create` may write. A capture
+   * larger than that could never be materialized, so it is refused here — when
+   * the capture is admitted, before a plan exists — rather than partway
+   * through apply with earlier steps already written.
+   */
+  files: z.array(taskCaptureFileV1Schema).min(1),
+  totalBytes: captureByteCount,
+  /**
+   * A partial capture is never applicable, so the only representable value is
+   * `false`. Capture that hits a limit must fail the run, not ship a subset of
+   * the change the model believed it was making.
+   */
+  truncated: z.literal(false),
+}).superRefine((manifest, context) => {
+  const paths = manifest.files.map((file) => file.path);
+  if (new Set(paths).size !== paths.length) {
+    context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
+  }
+  manifest.files.forEach((file, index) => {
+    if (isProtectedCapturePath(file.path)) {
+      context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file.path}` });
+    }
+  });
+  const measured = manifest.files.reduce((total, file) => total + ("sizeBytes" in file ? file.sizeBytes : 0), 0);
+  if (measured !== manifest.totalBytes) {
+    context.addIssue({ code: "custom", path: ["totalBytes"], message: "totalBytes must equal the sum of captured file sizes" });
+  }
+});
+export type TaskCaptureManifestV1 = z.infer<typeof taskCaptureManifestV1Schema>;
+
+/**
+ * Canonical UTF-8 manifest text shared by capture, planning, and apply.
+ *
+ * Parsing first gives every participant the contract-owned shape and defaults;
+ * recursively sorting object keys then makes the serialized bytes independent
+ * of construction order. Keeping this here prevents an exact capture from
+ * failing because two trust-boundary components serialized the same manifest
+ * differently.
+ */
+export function taskCaptureManifestText(value: TaskCaptureManifestV1): string {
+  const manifest = taskCaptureManifestV1Schema.parse(value);
+  const stable = (entry: unknown): string => {
+    if (entry === null || typeof entry !== "object") return JSON.stringify(entry) ?? "null";
+    if (Array.isArray(entry)) return `[${entry.map(stable).join(",")}]`;
+    const record = entry as Record<string, unknown>;
+    return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined)
+      .map((key) => `${JSON.stringify(key)}:${stable(record[key])}`).join(",")}}`;
+  };
+  return stable(manifest);
+}
+
+/**
+ * Canonical bytes covered by `changesSha256`.
+ *
+ * This definition lives in the portable contract so the planning runner, the
+ * trusted Worker, and the checkout-free apply job cannot drift into hashing
+ * subtly different path or metadata streams. Every field is length-prefixed,
+ * making concatenation injective even when a path contains control bytes that
+ * the repository-path contract permits.
+ */
+export function taskCaptureChangesDigestInput(manifest: TaskCaptureManifestV1): Uint8Array {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  for (const file of manifest.files) {
+    const fields = file.status === "deleted"
+      ? ["delete", file.path]
+      : ["upsert", file.path, file.mode, String(file.sizeBytes), file.sha256];
+    for (const field of fields) {
+      const bytes = encoder.encode(field);
+      chunks.push(encoder.encode(`${bytes.byteLength}:`), bytes);
+    }
+  }
+  const output = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+/**
+ * Compact pointer to a capture, used where the full manifest is unnecessary
+ * (tool results, receipts, journals). Replaces `gitChangeArtifactRefV1Schema`,
+ * which carried no capture identity and so could not be bound to a plan.
+ */
+export const taskCaptureRefV1Schema = z.strictObject({
+  schemaVersion: z.literal("gardener.task-capture-ref/v1"),
+  captureId: boundIdentifier,
+  baseSha: sha1,
+  /** Digest of the canonical manifest JSON. */
+  manifestSha256: sha256,
+  /**
+   * Digest of the canonical length-prefixed change stream binding each path,
+   * status, mode, size, and content digest. This is independent of archive
+   * container bytes so packaging cannot change the plan-bound identity.
+   */
+  changesSha256: sha256,
+  fileCount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sizeBytes: captureByteCount,
+});
+export type TaskCaptureRefV1 = z.infer<typeof taskCaptureRefV1Schema>;
+
+/** @deprecated Use `taskCaptureRefV1Schema`, which binds a capture identity and base commit. */
 export const gitChangeArtifactRefV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.git-change-artifact/v1"),
   sha256,
   manifestSha256: sha256,
   sizeBytes: z.number().int().nonnegative().max(1_000_000_000),
 });
+/** @deprecated Use `TaskCaptureRefV1`. */
 export type GitChangeArtifactRefV1 = z.infer<typeof gitChangeArtifactRefV1Schema>;
 
-export const proposedEffectV1Schema = z.discriminatedUnion("kind", [
+/* -------------------------------------------------------------------------- */
+/* Event binding                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The primary resource an event carried, if any. `push`, `schedule`, and
+ * `workflow_dispatch` carry none, which is why the binding is nullable rather
+ * than invented.
+ */
+export const taskEventResourceV1Schema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("issue"), id: githubNumericId, number: z.number().int().positive() }),
+  z.strictObject({ kind: z.literal("pull_request"), id: githubNumericId, number: z.number().int().positive() }),
   z.strictObject({
-    operationId: boundIdentifier,
-    kind: z.literal("issue.comment.create"),
-    issueNumber: z.number().int().positive(),
-    body: z.string().min(1).max(65_536),
-    rationale: z.string().min(1).max(5_000),
-  }),
-  z.strictObject({
-    operationId: boundIdentifier,
-    kind: z.literal("issue.labels.update"),
-    issueNumber: z.number().int().positive(),
-    add: z.array(z.string().trim().min(1).max(100)).max(20),
-    remove: z.array(z.string().trim().min(1).max(100)).max(20),
-    rationale: z.string().min(1).max(5_000),
-  }),
-  z.strictObject({
-    operationId: boundIdentifier,
-    kind: z.literal("repository.draft_pr.create"),
-    artifact: gitChangeArtifactRefV1Schema,
-    branch: z.string().min(1).max(255),
-    base: z.string().min(1).max(255),
-    commitMessage: z.string().min(1).max(1_000),
-    title: z.string().min(1).max(1_024),
-    body: z.string().max(65_536),
-    draft: z.literal(true),
-    rationale: z.string().min(1).max(5_000),
+    kind: z.literal("discussion"),
+    id: githubNumericId,
+    number: z.number().int().positive(),
+    nodeId: githubNodeId,
   }),
 ]);
-export type ProposedEffectV1 = z.infer<typeof proposedEffectV1Schema>;
+export type TaskEventResourceV1 = z.infer<typeof taskEventResourceV1Schema>;
 
-/** Exact, hashable handoff consumed by the checkout-free effects job. */
+/**
+ * Exactly what the triggering event was, carried into the plan so the apply job
+ * can refuse a plan that does not belong to the event it was handed. The apply
+ * job is checkout-free and cannot re-derive this itself.
+ */
+export const taskEventBindingV1Schema = z.strictObject({
+  kind: z.enum(taskTriggerKindValues),
+  eventName: normalizedEventNameV1Schema,
+  action: z.string().min(1).max(64).nullable(),
+  resource: taskEventResourceV1Schema.nullable(),
+  /** Comment the event carried, when it carried one. */
+  commentId: githubNumericId.nullable(),
+}).superRefine((binding, context) => {
+  if (eventNameByTriggerKind[binding.kind] !== binding.eventName) {
+    context.addIssue({ code: "custom", path: ["eventName"], message: "eventName does not match the trigger kind" });
+  }
+  if ((eventActionByTriggerKind[binding.kind] ?? null) !== binding.action) {
+    context.addIssue({ code: "custom", path: ["action"], message: "action does not match the trigger kind" });
+  }
+});
+export type TaskEventBindingV1 = z.infer<typeof taskEventBindingV1Schema>;
+
+/**
+ * The structural subset of an event a binding is derived from.
+ *
+ * Stated as a shape rather than as `NormalizedEventV1` so the apply job can
+ * derive the identical binding from the bounded wire event it re-reads from
+ * `GITHUB_EVENT_PATH`. Apply is checkout-free and never sees a normalized
+ * event, and a second copy of this mapping living in the runner is exactly the
+ * drift that would let a plan be applied against the wrong resource.
+ */
+export interface TaskEventBindingSourceV1 {
+  readonly kind: TaskTriggerKindV1;
+  readonly issue?: { readonly id: string; readonly number: number };
+  readonly pullRequest?: { readonly id: string; readonly number: number };
+  readonly discussion?: { readonly id: string; readonly number: number; readonly nodeId: string };
+  readonly comment?: { readonly id: string };
+}
+
+/**
+ * Derives the binding from any event carrying the identifying subset, so
+ * planning, apply, and tests all produce byte-identical bindings instead of
+ * each reimplementing the mapping.
+ */
+export function taskEventBindingFromEvent(event: TaskEventBindingSourceV1): TaskEventBindingV1 {
+  return taskEventBindingFromNormalizedEvent(event as unknown as NormalizedEventV1);
+}
+
+/**
+ * Derives the binding from a normalized event so planning, apply, and tests all
+ * produce byte-identical bindings instead of each reimplementing the mapping.
+ */
+export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): TaskEventBindingV1 {
+  const base = {
+    kind: event.kind,
+    eventName: eventNameByTriggerKind[event.kind],
+    action: eventActionByTriggerKind[event.kind] ?? null,
+  } as const;
+  if ("issue" in event) {
+    return {
+      ...base,
+      resource: { kind: "issue", id: event.issue.id, number: event.issue.number },
+      commentId: "comment" in event ? event.comment.id : null,
+    };
+  }
+  if ("pullRequest" in event) {
+    return {
+      ...base,
+      resource: { kind: "pull_request", id: event.pullRequest.id, number: event.pullRequest.number },
+      commentId: "comment" in event ? event.comment.id : null,
+    };
+  }
+  if ("discussion" in event) {
+    return {
+      ...base,
+      resource: {
+        kind: "discussion",
+        id: event.discussion.id,
+        number: event.discussion.number,
+        nodeId: event.discussion.nodeId,
+      },
+      commentId: "comment" in event ? event.comment.id : null,
+    };
+  }
+  return { ...base, resource: null, commentId: null };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ordered effect plan                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pointers the trusted apply job fills from the run's capture artifact.
+ *
+ * These are repository file bytes. They never travel through the model, the
+ * planning prompt, or the Worker: the unprivileged job captures the working
+ * tree it produced, and the privileged checkout-free job streams those exact
+ * bytes to the Git Data API. A model that could supply `/files` could commit
+ * content no capture ever proved was in the repository, which is the whole
+ * reason the write boundary exists.
+ */
+export const captureMaterializedPointers = {
+  "commit.create": ["/files"],
+} as const satisfies Partial<Record<TaskEffectKindV1, readonly string[]>>;
+
+/**
+ * Pointers this kind always defers to the capture.
+ *
+ * Unconditional by design. An earlier shape made deferral depend on whether
+ * the payload happened to omit the field, which quietly made a model-inlined
+ * file set a legitimate, capture-free commit. There is no such mode: the
+ * pointer is capture-owned for every `commit.create`, and supplying it is an
+ * error rather than an alternative.
+ *
+ * Exported because the proposal schema, the plan schema, and the runtime all
+ * have to agree; two copies of this rule would eventually disagree about
+ * whether a step needs a capture.
+ */
+export function captureDeferredPointers(kind: TaskEffectKindV1): readonly string[] {
+  return (captureMaterializedPointers as Record<string, readonly string[]>)[kind] ?? [];
+}
+
+/**
+ * Reports any attempt to supply a capture-owned pointer.
+ *
+ * Both routes are closed: writing the field into the payload, and pointing a
+ * step reference at it. A reference would be just as effective at smuggling a
+ * value into a location only the capture may fill, and the probe deliberately
+ * suppresses issues beneath referenced pointers, so it cannot catch this.
+ */
+function captureOwnedPointerIssues(
+  kind: TaskEffectKindV1,
+  payload: unknown,
+  references: Readonly<Record<string, TaskStepOutputRefV1>> = {},
+): readonly string[] {
+  const pointers = captureDeferredPointers(kind);
+  if (pointers.length === 0) return [];
+  const messages: string[] = [];
+  const record = payload !== null && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
+  const referenced = new Set(Object.keys(references).map((pointer) => decodeJsonPointer(pointer)[0]));
+  for (const pointer of pointers) {
+    const [head] = decodeJsonPointer(pointer);
+    if (head === undefined) continue;
+    if (Object.hasOwn(record, head)) {
+      messages.push(
+        `${pointer} is materialized from the trusted repository capture and may not be supplied by the task`,
+      );
+    }
+    if (referenced.has(head)) {
+      messages.push(`${pointer} is materialized from the trusted repository capture and may not be referenced`);
+    }
+  }
+  return messages;
+}
+
+/** One step of an ordered plan, with the id Gardener derived for it. */
+export const taskEffectPlanOperationV1Schema = z.strictObject({
+  stepName: taskStepNameV1Schema,
+  /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
+  operationId: boundIdentifier,
+  kind: taskEffectKindV1Schema,
+  payload: taskEffectPayloadV1Schema,
+  references: taskStepReferencesV1Schema.default({}),
+  rationale: z.string().trim().min(1).max(5_000),
+});
+export type TaskEffectPlanOperationV1 = z.infer<typeof taskEffectPlanOperationV1Schema>;
+
+/**
+ * Single serialized-byte ceiling shared by the effect plan and its receipt.
+ *
+ * This is the one technical bound on how much a run may hand across the
+ * planning/apply boundary. There is deliberately no ceiling on the *number* of
+ * operations: a task that legitimately needs forty labelled steps should not be
+ * truncated by a count invented here, and a byte ceiling bounds the same
+ * resource honestly. `@gardener/protocol` restates this value for the wire
+ * artifact; the two are asserted equal by test because the protocol package has
+ * no dependency on contracts.
+ */
+export const EFFECT_TRANSPORT_MAX_BYTES = 4 * 1_024 * 1_024;
+
+/**
+ * Exact, hashable, ordered handoff consumed by the checkout-free effects job.
+ *
+ * There is no Gardener-imposed ceiling on the number of operations. The bounds
+ * that apply are the task's own optional `maxEffectOperations` and
+ * `maxEffectBytes`, the unconditional `EFFECT_TRANSPORT_MAX_BYTES` transport
+ * ceiling enforced below, and the provider's own rate limits. A plan with zero
+ * operations is valid and normal: an inspect-only run produces one.
+ *
+ * Shape note: this replaced a single-`issue.comment.create` plan. Stored plans
+ * and receipts written by the previous shape cannot be read by this schema, so
+ * the cutover is a fresh redeploy rather than a migration.
+ */
 export const taskEffectPlanV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-effect-plan/v1"),
   runId: boundIdentifier,
   taskId: identifier,
   taskName: z.string().trim().min(1).max(100),
   bundleHash: sha256,
-  repository: z.strictObject({ id: githubNumericId, fullName: repositoryFullName }),
+  /**
+   * Repository identity every operation in this plan is constructed from.
+   *
+   * `defaultBranch` travels in the plan rather than being read back at apply
+   * time because it is part of the canonical operation hash. Re-fetching a
+   * mutable value would let the same plan hash differently on a retry.
+   */
+  repository: z.strictObject({
+    id: githubNumericId,
+    fullName: repositoryFullName,
+    defaultBranch: z.string().trim().min(1).max(255),
+  }),
   provenance: z.strictObject({
     sourcePath: relativePath,
     commitSha: sha1,
     workflowRunId: githubNumericId,
     workflowRunAttempt: z.number().int().positive(),
   }),
-  issueNumber: z.number().int().positive(),
-  operationId: boundIdentifier,
-  kind: z.literal("issue.comment.create"),
-  body: z.string().min(1).max(65_536),
+  event: taskEventBindingV1Schema,
+  /** Copied from the bundle so apply enforces the same ceilings planning did. */
+  limits: z.strictObject({
+    maxEffectOperations: z.number().int().positive().max(1_000).optional(),
+    maxEffectBytes: z.number().int().min(1_024).max(50_000_000).optional(),
+  }),
+  /** Present only when a step materializes repository changes at apply time. */
+  capture: taskCaptureManifestV1Schema.optional(),
+  /** Digest of the changes artifact the capture manifest describes. */
+  changesSha256: sha256.optional(),
+  operations: z.array(taskEffectPlanOperationV1Schema),
+}).superRefine((plan, context) => {
+  const indexByStepName = new Map<string, number>();
+  plan.operations.forEach((operation, index) => {
+    if (indexByStepName.has(operation.stepName)) {
+      context.addIssue({ code: "custom", path: ["operations", index, "stepName"], message: "step names must be unique within a plan" });
+      return;
+    }
+    indexByStepName.set(operation.stepName, index);
+  });
+
+  const operationIds = plan.operations.map((operation) => operation.operationId);
+  if (new Set(operationIds).size !== operationIds.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a plan" });
+  }
+
+  let anyStepDefersToCapture = false;
+
+  plan.operations.forEach((operation, index) => {
+    const path = ["operations", index] as const;
+    const resolvedTypes = new Map<string, OperationOutputType>();
+
+    for (const [pointer, reference] of Object.entries(operation.references)) {
+      const targetIndex = indexByStepName.get(reference.step);
+      if (reference.step === operation.stepName) {
+        context.addIssue({ code: "custom", path: [...path, "references", pointer], message: "a step cannot reference its own output" });
+        continue;
+      }
+      if (targetIndex === undefined) {
+        context.addIssue({ code: "custom", path: [...path, "references", pointer], message: `unknown step "${reference.step}"` });
+        continue;
+      }
+      if (targetIndex >= index) {
+        context.addIssue({ code: "custom", path: [...path, "references", pointer], message: `step "${reference.step}" does not run before this step` });
+        continue;
+      }
+      const targetKind = (plan.operations[targetIndex] as TaskEffectPlanOperationV1).kind;
+      const outputType = operationOutputType(targetKind, reference.output);
+      if (outputType === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: [...path, "references", pointer],
+          message: `${targetKind} does not publish a scalar output named "${reference.output}"`,
+        });
+        continue;
+      }
+      resolvedTypes.set(pointer, outputType);
+    }
+
+    for (const message of captureOwnedPointerIssues(operation.kind, operation.payload, operation.references)) {
+      context.addIssue({ code: "custom", path: [...path, "payload"], message });
+    }
+    const deferredPointers = captureDeferredPointers(operation.kind);
+    if (deferredPointers.length > 0) anyStepDefersToCapture = true;
+
+    for (const message of probeOperationShape({
+      kind: operation.kind,
+      payload: operation.payload,
+      references: operation.references,
+      deferredPointers,
+      resolveOutputType: (reference) => {
+        for (const [pointer, type] of resolvedTypes) {
+          const candidate = operation.references[pointer];
+          if (candidate?.step === reference.step && candidate.output === reference.output) return type;
+        }
+        return undefined;
+      },
+    })) {
+      context.addIssue({ code: "custom", path: [...path, "payload"], message });
+    }
+  });
+
+  const { maxEffectOperations, maxEffectBytes } = plan.limits;
+  if (maxEffectOperations !== undefined && plan.operations.length > maxEffectOperations) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `plan has ${plan.operations.length} operations but the task allows at most ${maxEffectOperations}`,
+    });
+  }
+  const operationBytes = canonicalJsonByteLength(plan.operations);
+  if (operationBytes === null) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "plan operations cannot be canonically serialized" });
+  } else if (maxEffectBytes !== undefined && operationBytes > maxEffectBytes) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `plan operations serialize to ${operationBytes} bytes but the task allows at most ${maxEffectBytes}`,
+    });
+  }
+
+  // The transport ceiling is unconditional. A task that declares no
+  // `maxEffectBytes` still cannot emit a plan the effect artifact could not
+  // carry, and there is no operation-count cap standing in for it, so this is
+  // the single technical bound on plan size.
+  const planBytes = canonicalJsonByteLength(plan);
+  if (planBytes === null) {
+    context.addIssue({ code: "custom", message: "plan cannot be canonically serialized" });
+  } else if (planBytes > EFFECT_TRANSPORT_MAX_BYTES) {
+    context.addIssue({
+      code: "custom",
+      message: `plan serializes to ${planBytes} bytes but the effect artifact carries at most ${EFFECT_TRANSPORT_MAX_BYTES}`,
+    });
+  }
+
+  if ((plan.capture === undefined) !== (plan.changesSha256 === undefined)) {
+    context.addIssue({ code: "custom", path: ["changesSha256"], message: "capture manifest and changes digest must be present together" });
+  }
+  if (anyStepDefersToCapture && plan.capture === undefined) {
+    context.addIssue({ code: "custom", path: ["capture"], message: "a step materializes repository changes but the plan carries no capture manifest" });
+  }
+  if (!anyStepDefersToCapture && plan.capture !== undefined) {
+    context.addIssue({ code: "custom", path: ["capture"], message: "the plan carries a capture manifest that no step materializes" });
+  }
+  if (plan.capture !== undefined && plan.capture.baseSha !== plan.provenance.commitSha) {
+    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
+  }
 });
 export type TaskEffectPlanV1 = z.infer<typeof taskEffectPlanV1Schema>;
 
@@ -274,7 +1711,13 @@ export const taskOutcomeV1Schema = z.discriminatedUnion("status", [
     status: z.literal("completed"),
     summary: z.string().trim().min(1).max(32_000),
     observations: z.array(taskObservationV1Schema).max(200),
-    proposedEffects: z.array(proposedEffectV1Schema).max(100),
+    /**
+     * Ordered steps the model proposes, in the order it wants them applied.
+     * Unbounded by count for the same reason the plan is: the task's own
+     * `maxEffectOperations` is the ceiling that matters, and an empty list is
+     * the normal result of an inspect-only run.
+     */
+    proposedEffects: z.array(taskEffectProposalV1Schema),
   }),
   z.strictObject({
     ...taskOutcomeBase,

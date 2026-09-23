@@ -15,6 +15,7 @@
     "@actions/core": "3.0.1",
     "@gardener/contracts": "workspace:*",
     "@gardener/protocol": "workspace:*",
+    "@gardener/provider-github": "workspace:*",
     "capnweb": "0.12.0"
   },
   "devDependencies": {

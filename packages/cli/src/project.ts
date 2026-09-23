@@ -5,7 +5,9 @@ import { z } from "zod";
 import {
   compileGitHubActionsTask,
   GITHUB_ACTIONS_TARGET,
+  GITHUB_PERMISSION_KEYS,
   type GitHubActionsTaskPlanV1,
+  type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
 import { compileTaskSource, type CompiledTask } from "./task-authoring.js";
 
@@ -32,7 +34,19 @@ interface BuiltTask extends CompiledTask {
 export interface ProjectBuildResult {
   lockPath: string;
   tasks: Array<{ taskId: string; bundleHash: string; workflow: string }>;
+  /** Operator-facing warnings. Present but empty when nothing needs attention. */
+  warnings: string[];
 }
+
+/**
+ * Emitted for every task that declares `repository.exec`. Gardener does not
+ * sandbox the GitHub-hosted runner, so such a task can reach any host and can
+ * exfiltrate private source. This is a demo capability, not production-ready.
+ */
+export const UNRESTRICTED_EGRESS_WARNING =
+  "declares repository.exec, which runs task-controlled commands with the GitHub-hosted runner's "
+  + "unrestricted network egress. Gardener does not sandbox or filter that traffic, so the task can "
+  + "reach any host and can exfiltrate private source. This is demo-only and is not production-ready.";
 
 const BUG_INTAKE_TASK = `---
 schema: gardener.task/v1
@@ -242,7 +256,11 @@ export async function buildProject(input: { repositoryRoot: string }): Promise<P
   };
   const lockPath = join(gardenerDirectory, "gardener.lock.json");
   await atomicWrite(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+  const warnings = tasks
+    .filter((task) => task.bundle.tools.includes("repository.exec"))
+    .map((task) => `Task ${task.bundle.taskId} ${UNRESTRICTED_EGRESS_WARNING}`);
   return {
+    warnings,
     lockPath,
     tasks: tasks.map((task) => ({
       taskId: task.bundle.taskId,
@@ -252,13 +270,97 @@ export async function buildProject(input: { repositoryRoot: string }): Promise<P
   };
 }
 
+/** Canonical GitHub event ordering so regenerated workflows stay byte-identical. */
+const WORKFLOW_EVENT_ORDER = [
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "discussion",
+  "discussion_comment",
+  "schedule",
+  "workflow_dispatch",
+] as const;
+
+function renderWorkflowTriggers(task: BuiltTask): string {
+  const bindings = task.actionsPlan.triggers;
+  const lines: string[] = [];
+  for (const event of WORKFLOW_EVENT_ORDER) {
+    const matching = bindings.filter((binding) => binding.event === event);
+    if (matching.length === 0) continue;
+    if (event === "schedule") {
+      lines.push("  schedule:");
+      const crons = task.bundle.triggers
+        .filter((trigger) => trigger.kind === "github.schedule")
+        .map((trigger) => (trigger as { cron: string }).cron);
+      for (const cron of crons) lines.push(`    - cron: ${yamlString(cron)}`);
+      continue;
+    }
+    if (event === "push") {
+      const branches = task.bundle.triggers
+        .filter((trigger) => trigger.kind === "github.push")
+        .flatMap((trigger) => (trigger as { branches: string[] }).branches);
+      lines.push("  push:");
+      lines.push("    branches:");
+      for (const branch of branches) lines.push(`      - ${yamlString(branch)}`);
+      continue;
+    }
+    if (event === "workflow_dispatch") {
+      // The runner requires a non-empty `prompt` input and rejects anything
+      // longer than 20,000 characters, so the generated form declares it
+      // required with no default. A default would let an empty dispatch start
+      // a run that the parser then fails, which reads as a Gardener bug.
+      lines.push("  workflow_dispatch:");
+      lines.push("    inputs:");
+      lines.push("      prompt:");
+      lines.push("        description: What this run should do. Required, 1 to 20000 characters.");
+      lines.push("        required: true");
+      lines.push("        type: string");
+      continue;
+    }
+    const types = matching
+      .map((binding) => binding.action)
+      .filter((action): action is string => action !== undefined);
+    lines.push(`  ${event}:`);
+    lines.push(`    types: [${types.join(", ")}]`);
+  }
+  return lines.join("\n");
+}
+
+function renderTriggerCondition(binding: GitHubActionsTriggerBindingV1, task: BuiltTask): string {
+  const clauses = [`github.event_name == '${binding.event}'`];
+  if (binding.action !== undefined) clauses.push(`github.event.action == '${binding.action}'`);
+  if (binding.forkSensitive) {
+    // Unconditional in V1: fork-owned head revisions are never planned, and the
+    // runtime re-checks head repository identity even if this file is edited.
+    clauses.push("github.event.pull_request.head.repo.full_name == github.repository");
+  }
+  const trigger = task.bundle.triggers.find((candidate) => candidate.kind === binding.kind);
+  const labels = trigger && "labelsAll" in trigger ? trigger.labelsAll : [];
+  if (binding.labelsExpression !== undefined) {
+    for (const label of labels) {
+      clauses.push(`contains(${binding.labelsExpression}, ${yamlSingleQuoted(label)})`);
+    }
+  }
+  return clauses.length === 1 ? clauses[0]! : `(${clauses.join(" && ")})`;
+}
+
+function renderJobCondition(task: BuiltTask): string {
+  const conditions = task.actionsPlan.triggers.map((binding) => renderTriggerCondition(binding, task));
+  return conditions.join("\n        || ");
+}
+
+function renderPermissions(task: BuiltTask): string {
+  const permissions = task.actionsPlan.callerPermissions;
+  return GITHUB_PERMISSION_KEYS
+    .filter((key) => permissions[key] !== undefined)
+    .map((key) => `      ${key}: ${permissions[key]}`)
+    .join("\n");
+}
+
 function renderTaskWorkflow(task: BuiltTask, workflowRef: string): string {
-  const labels = task.bundle.triggers[0]?.kind === "github.issue.opened"
-    ? task.bundle.triggers[0].labelsAll
-    : [];
-  const condition = labels.length
-    ? labels.map((label) => `contains(github.event.issue.labels.*.name, '${label}')`).join(" && ")
-    : "true";
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -269,18 +371,18 @@ function renderTaskWorkflow(task: BuiltTask, workflowRef: string): string {
 name: ${yamlString(`Gardener · ${task.bundle.name}`)}
 
 on:
-  issues:
-    types: [opened]
+${renderWorkflowTriggers(task)}
 
 permissions: {}
 
 jobs:
   gardener:
-    if: \${{ ${condition} }}
+    if: >-
+      \${{
+        ${renderJobCondition(task)}
+      }}
     permissions:
-      contents: ${task.actionsPlan.planningPermissions.contents}
-      issues: ${task.actionsPlan.effectsPermissions.issues}
-      id-token: ${task.actionsPlan.planningPermissions.idToken}
+${renderPermissions(task)}
     uses: ${workflowRef}
     with:
       runtime-url: \${{ vars.GARDENER_RUNTIME_URL }}
@@ -293,6 +395,11 @@ jobs:
 
 function yamlString(value: string): string {
   return JSON.stringify(value);
+}
+
+/** GitHub expression string literal. Labels are constrained to a safe character set. */
+function yamlSingleQuoted(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }
 
 function workflowSlug(taskId: string): string {

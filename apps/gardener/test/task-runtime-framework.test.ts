@@ -34,6 +34,7 @@ function event(kind: "github.workflow_dispatch" | "github.issue.opened" = "githu
       visibility: "public" as const,
       commitSha: "b".repeat(40),
       ref: "refs/heads/main",
+      defaultBranch: "main",
     },
     workflow: {
       runId: "35256179260",
@@ -161,10 +162,10 @@ describe("canonical task runtime framework", () => {
       summary: "The repository contains a README and a smoke workflow.",
       observations: [{ kind: "repository", summary: "README.md was inspected.", paths: ["README.md"] }],
       proposedEffects: [{
-        operationId: "operation:comment:1",
+        stepName: "comment",
         kind: "issue.comment.create",
-        issueNumber: 1,
-        body: "Thanks for the report. The next step is a focused regression test.",
+        payload: { issueNumber: 1, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z", body: "Thanks for the report. The next step is a focused regression test." },
+        references: {},
         rationale: "The repository evidence identifies the affected area.",
       }],
     };
@@ -184,16 +185,40 @@ describe("canonical task runtime framework", () => {
       summary: "Proposed an effect without authority.",
       observations: [],
       proposedEffects: [{
-        operationId: "operation:1",
-        kind: "issue.labels.update",
-        issueNumber: 1,
-        add: ["not-allowed"],
-        remove: [],
+        stepName: "label",
+        kind: "issue.label.add",
+        payload: { issueNumber: 1, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z", label: "not-allowed" },
+        references: {},
         rationale: "Fixture declares only comment creation.",
       }],
     };
     expect(() => translateHarnessOutcome(input, completedHarnessOutcome(undeclared))).toThrow(/undeclared effect/);
     expect(() => translateHarnessOutcome(input, completedHarnessOutcome({ ...undeclared, proposedEffects: [], runId: "run:other" }))).toThrow(/not bound/);
+  });
+
+  it("rejects a reused step name, which would make a later reference ambiguous", async () => {
+    const input = await runRequest();
+    const duplicated: TaskOutcomeV1 = {
+      schemaVersion: "gardener.task-outcome/v1",
+      runId: input.runId,
+      taskId: input.bundle.taskId,
+      bundleHash: input.bundleHash,
+      status: "completed",
+      summary: "Proposed the same step name twice.",
+      observations: [],
+      proposedEffects: [
+        { stepName: "comment", kind: "issue.comment.create", payload: { issueNumber: 1, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z", body: "first" }, references: {}, rationale: "first" },
+        { stepName: "comment", kind: "issue.comment.create", payload: { issueNumber: 1, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z", body: "second" }, references: {}, rationale: "second" },
+      ],
+    };
+    expect(() => translateHarnessOutcome(input, completedHarnessOutcome(duplicated))).toThrow(/reused step name/);
+  });
+
+  it("states this run's exact effect allowlist in the trusted prompt", async () => {
+    const request = await createTaskHarnessRequest(await runRequest());
+    expect(request.prompt).toContain("Effect kinds this task is allowed to propose");
+    expect(request.prompt).toContain("issue.comment.create");
+    expect(request.prompt).not.toContain("pull_request.merge");
   });
 
   it("rejects events that do not match the bundle's declared trigger filters", async () => {

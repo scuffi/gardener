@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { operationKindValues } from "../src/operations";
 import {
   normalizedEventV1Schema,
+  pullRequestFamilyTriggerKindValues,
   taskBundleV1Schema,
+  taskEffectKindV1Schema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
   taskToolResultV1Schema,
+  taskToolV1Schema,
+  taskTriggerKindValues,
+  taskTriggerV1Schema,
   type NormalizedEventV1,
   type TaskBundleV1,
 } from "../src/task";
@@ -47,6 +53,7 @@ function fixtureEvent(): NormalizedEventV1 {
       visibility: "public",
       commitSha: "b".repeat(40),
       ref: "refs/heads/main",
+      defaultBranch: "main",
     },
     workflow: {
       runId: "35256179260",
@@ -103,6 +110,112 @@ describe("Actions-native task v1 contracts", () => {
       ...fixtureBundle(),
       triggers: [{ kind: "github.workflow_dispatch" }, { kind: "github.workflow_dispatch" }],
     })).toThrow(/unique/);
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      triggers: [
+        { kind: "github.issue.opened", labelsAll: ["a"] },
+        { kind: "github.issue.opened", labelsAll: ["b"] },
+      ],
+    })).toThrow(/unique/);
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      effects: ["issue.comment.create", "issue.comment.create"],
+    })).toThrow(/unique/);
+  });
+
+  it("exposes exactly the persistent provider operations as effect authority", () => {
+    expect(taskEffectKindV1Schema.options).toEqual([...operationKindValues]);
+    expect(taskEffectKindV1Schema.options).toHaveLength(29);
+    expect(taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      effects: [...operationKindValues],
+    }).effects).toEqual([...operationKindValues]);
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      effects: ["issue.labels.update"],
+    })).toThrow();
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      effects: ["issue.*"],
+    })).toThrow();
+  });
+
+  it("declares the read-only provider API tool alongside repository tools", () => {
+    expect(taskToolV1Schema.options).toEqual([
+      "repository.read_file",
+      "repository.list_files",
+      "repository.exec",
+      "provider.api.read",
+    ]);
+    expect(taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      tools: ["provider.api.read"],
+    }).tools).toEqual(["provider.api.read"]);
+  });
+
+  it("keeps the declared trigger kind list aligned with the discriminated union", () => {
+    const unionKinds = taskTriggerV1Schema.options.map((option) => option.shape.kind.value);
+    expect([...taskTriggerKindValues]).toEqual(unionKinds);
+    expect(taskTriggerKindValues).toHaveLength(26);
+    expect(taskTriggerKindValues).not.toContain("github.pull_request_target");
+    expect(pullRequestFamilyTriggerKindValues).toEqual([
+      "github.pull_request.opened",
+      "github.pull_request.reopened",
+      "github.pull_request.synchronize",
+      "github.pull_request.ready_for_review",
+      "github.pull_request.converted_to_draft",
+      "github.pull_request.edited",
+      "github.pull_request.labeled",
+      "github.pull_request.unlabeled",
+      "github.pull_request_review.submitted",
+      "github.pull_request_review_comment.created",
+    ]);
+  });
+
+  it("validates push branch filters and schedule cron expressions", () => {
+    expect(taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      triggers: [{ kind: "github.push", branches: ["main", "release/*"] }],
+    }).triggers).toEqual([{ kind: "github.push", branches: ["main", "release/*"] }]);
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      triggers: [{ kind: "github.push", branches: [] }],
+    })).toThrow();
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      triggers: [{ kind: "github.push" }],
+    })).toThrow();
+    expect(taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      triggers: [{ kind: "github.schedule", cron: "0 3 * * 1" }],
+    }).triggers).toEqual([{ kind: "github.schedule", cron: "0 3 * * 1" }]);
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      triggers: [{ kind: "github.schedule", cron: "0 3 * *" }],
+    })).toThrow(/cron/);
+  });
+
+  it("carries no fork-execution opt-in and fails closed on fork head revisions", () => {
+    expect(Object.keys(fixtureBundle())).not.toContain("allowForkExecution");
+    expect(() => taskBundleV1Schema.parse({ ...fixtureBundle(), allowForkExecution: true })).toThrow();
+  });
+
+
+  it("treats effect-plan ceilings as optional and omits them when unset", () => {
+    expect(fixtureBundle().limits.maxEffectOperations).toBeUndefined();
+    const bounded = taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      limits: { ...fixtureBundle().limits, maxEffectOperations: 12, maxEffectBytes: 262_144 },
+    });
+    expect(bounded.limits).toMatchObject({ maxEffectOperations: 12, maxEffectBytes: 262_144 });
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      limits: { ...fixtureBundle().limits, maxEffectOperations: 0 },
+    })).toThrow();
+    expect(() => taskBundleV1Schema.parse({
+      ...fixtureBundle(),
+      limits: { ...fixtureBundle().limits, maxEffectBytes: 512 },
+    })).toThrow();
   });
 
   it("binds normalized events to numeric GitHub identity and hosted workflow context", () => {

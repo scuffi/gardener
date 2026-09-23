@@ -49,7 +49,7 @@ export type AgentTaskV1 = z.infer<typeof agentTaskV1Schema>;
 
 export const agentStepV1Schema = z.object({
   schemaVersion: z.literal("v1"), id, runId: id, taskId: id, parentStepId: id.nullable(), kind: stepKindSchema, state: stepStateSchema,
-  ordinal: z.number().int().nonnegative(), attempt: z.number().int().positive().max(20), inputHash: hash, outputHash: hash.nullable(),
+  ordinal: z.number().int().nonnegative(), attempt: z.number().int().positive(), inputHash: hash, outputHash: hash.nullable(),
   artifactIds: z.array(id).max(100), startedAt: timestamp.nullable(), completedAt: timestamp.nullable(), retryable: z.boolean().nullable(), errorCode: z.string().max(100).nullable(),
 }).strict().superRefine((step, context) => {
   if (step.state === "pending" && (step.startedAt !== null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "pending step cannot have lifecycle timestamps" });

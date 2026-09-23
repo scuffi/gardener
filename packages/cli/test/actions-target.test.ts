@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { TaskBundleV1 } from "@gardener/contracts";
+import { operationKindValues, taskBundleV1Schema, type TaskBundleV1 } from "@gardener/contracts";
 import { compileGitHubActionsTask } from "../src/actions-target";
 
 function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
-  return {
+  return taskBundleV1Schema.parse({
     schemaVersion: "gardener.task-bundle/v1",
     taskId: "demo.task",
     name: "Demo task",
@@ -21,30 +21,219 @@ function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
       outputTokens: 4_000,
     },
     ...overrides,
-  };
+  });
 }
 
 describe("github-actions/v1 target adapter", () => {
-  it("derives the fixed least-privilege planning and effects permissions", () => {
-    expect(compileGitHubActionsTask(bundle())).toEqual({
+  it("derives least-privilege permissions for a comment-only task", () => {
+    const plan = compileGitHubActionsTask(bundle());
+    expect(plan).toMatchObject({
       schemaVersion: "gardener.github-actions-task-plan/v1",
       target: "github-actions/v1",
       taskId: "demo.task",
-      planningPermissions: { contents: "read", idToken: "write" },
-      effectsPermissions: { issues: "write", idToken: "write" },
+      planningPermissions: {
+        checks: "read",
+        contents: "read",
+        discussions: "read",
+        "id-token": "write",
+        issues: "read",
+        "pull-requests": "read",
+        statuses: "read",
+      },
+      effectsPermissions: { "id-token": "write", issues: "write" },
+      callerPermissions: {
+        checks: "read",
+        contents: "read",
+        discussions: "read",
+        "id-token": "write",
+        issues: "write",
+        "pull-requests": "read",
+        statuses: "read",
+      },
     });
+    expect(plan.triggers).toEqual([{
+      kind: "github.issue.opened",
+      event: "issues",
+      action: "opened",
+      labelsExpression: "github.event.issue.labels.*.name",
+      forkSensitive: false,
+    }]);
+    expect(plan.effectLimits).toEqual({});
   });
 
-  it("rejects unsupported tools, effects, triggers, and unenforceable network rules", () => {
-    expect(() => compileGitHubActionsTask(bundle({ tools: ["repository.exec"] })))
-      .toThrow(/repository\.exec/);
-    expect(() => compileGitHubActionsTask(bundle({ effects: ["issue.labels.update"] })))
-      .toThrow(/issue\.comment\.create/);
-    expect(() => compileGitHubActionsTask(bundle({ triggers: [{ kind: "github.workflow_dispatch" }] })))
-      .toThrow(/trigger/);
+  it("compiles every operation kind and unions the required write scopes", () => {
+    const plan = compileGitHubActionsTask(bundle({ effects: [...operationKindValues] }));
+    expect(plan.effectsPermissions).toEqual({
+      checks: "write",
+      contents: "write",
+      discussions: "write",
+      "id-token": "write",
+      issues: "write",
+      "pull-requests": "write",
+      statuses: "read",
+    });
+    // No operation's executor calls the Actions API, so the union must never
+    // contain an `actions` scope even when every kind is declared at once.
+    expect(plan.effectsPermissions.actions).toBeUndefined();
+  });
+
+  it("maps each operation family to its exact apply scope", () => {
+    const scopeFor = (effect: string) =>
+      compileGitHubActionsTask(bundle({ effects: [effect] as TaskBundleV1["effects"] })).effectsPermissions;
+    expect(scopeFor("issue.label.add")).toEqual({ "id-token": "write", issues: "write" });
+    expect(scopeFor("pull_request.comment.create")).toEqual({ "id-token": "write", "pull-requests": "write" });
+    expect(scopeFor("branch.create")).toEqual({ contents: "write", "id-token": "write" });
+    expect(scopeFor("commit.create")).toEqual({ contents: "write", "id-token": "write" });
+    expect(scopeFor("pull_request.open_draft")).toEqual({
+      contents: "read",
+      "id-token": "write",
+      "pull-requests": "write",
+    });
+    expect(scopeFor("discussion.close")).toEqual({ discussions: "write", "id-token": "write" });
+    // check.rerun uses the Checks API only; granting `actions` would be excess
+    // authority on the privileged apply job.
+    expect(scopeFor("check.rerun")).toEqual({ checks: "write", "id-token": "write" });
+    expect(scopeFor("pull_request.merge")).toEqual({
+      checks: "read",
+      contents: "write",
+      "id-token": "write",
+      "pull-requests": "write",
+      statuses: "read",
+    });
+    expect(scopeFor("release.create")).toEqual({ contents: "write", "id-token": "write" });
+  });
+
+  it("grants the fixed planning read union for every task", () => {
+    const expected = {
+      checks: "read",
+      contents: "read",
+      discussions: "read",
+      "id-token": "write",
+      issues: "read",
+      "pull-requests": "read",
+      statuses: "read",
+    };
+    for (const candidate of [
+      bundle(),
+      bundle({
+        tools: ["repository.list_files", "provider.api.read"],
+        effects: ["pull_request.merge", "discussion.close"],
+        triggers: [{ kind: "github.issue_comment.created", labelsAll: [] }],
+      }),
+      bundle({ effects: [], triggers: [{ kind: "github.workflow_dispatch" }] }),
+    ]) {
+      expect(compileGitHubActionsTask(candidate).planningPermissions).toEqual(expected);
+    }
+  });
+
+  it("requires repository.exec tasks to declare unrestricted egress honestly", () => {
+    const plan = compileGitHubActionsTask(bundle({
+      tools: ["repository.list_files", "repository.exec"],
+      network: { default: "allow", allow: [], deny: [] },
+    }));
+    expect(plan.network).toEqual({ default: "allow", allow: [], deny: [] });
+
+    // An exec task claiming deny is refused: Gardener cannot deliver it.
     expect(() => compileGitHubActionsTask(bundle({
-      network: { default: "deny", allow: ["api.github.com"], deny: [] },
-    }))).toThrow(/network rules/);
+      tools: ["repository.list_files", "repository.exec"],
+      network: { default: "deny", allow: [], deny: [] },
+    }))).toThrow(/must declare network default allow/);
+  });
+
+  it("keeps non-exec tasks at deny and refuses unenforceable host rules", () => {
+    expect(compileGitHubActionsTask(bundle()).network).toEqual({ default: "deny", allow: [], deny: [] });
+    expect(() => compileGitHubActionsTask(bundle({
+      network: { default: "allow", allow: [], deny: [] },
+    }))).toThrow(/must use network default deny/);
+
+    // Host rules are rejected rather than compiled into a filter that this
+    // target cannot actually enforce.
+    for (const network of [
+      { default: "allow" as const, allow: ["registry.npmjs.org"], deny: [] },
+      { default: "allow" as const, allow: [], deny: ["telemetry.example.com"] },
+    ]) {
+      expect(() => compileGitHubActionsTask(bundle({
+        tools: ["repository.list_files", "repository.exec"],
+        network,
+      }))).toThrow(/cannot enforce host rules/);
+    }
+  });
+
+  it("binds every common trigger to an exact provider filter and excludes pull_request_target", () => {
+    const plan = compileGitHubActionsTask(bundle({
+      triggers: [
+        { kind: "github.issue.opened", labelsAll: [] },
+        { kind: "github.issue_comment.created", labelsAll: [] },
+        { kind: "github.pull_request.synchronize", labelsAll: [] },
+        { kind: "github.pull_request_review.submitted", labelsAll: [] },
+        { kind: "github.pull_request_review_comment.created", labelsAll: [] },
+        { kind: "github.push", branches: ["main"] },
+        { kind: "github.workflow_dispatch" },
+        { kind: "github.schedule", cron: "0 3 * * 1" },
+        { kind: "github.discussion.answered", labelsAll: [] },
+        { kind: "github.discussion_comment.created", labelsAll: [] },
+      ],
+    }));
+    expect(plan.triggers.map((trigger) => trigger.event)).toEqual([
+      "issues",
+      "issue_comment",
+      "pull_request",
+      "pull_request_review",
+      "pull_request_review_comment",
+      "push",
+      "workflow_dispatch",
+      "schedule",
+      "discussion",
+      "discussion_comment",
+    ]);
+    expect(plan.triggers.filter((trigger) => trigger.forkSensitive).map((trigger) => trigger.kind)).toEqual([
+      "github.pull_request.synchronize",
+      "github.pull_request_review.submitted",
+      "github.pull_request_review_comment.created",
+    ]);
+    expect(JSON.stringify(plan)).not.toContain("pull_request_target");
+  });
+
+  it("records optional effect-plan ceilings and rejects unusable combinations", () => {
+    expect(compileGitHubActionsTask(bundle({
+      limits: { ...bundle().limits, maxEffectOperations: 10, maxEffectBytes: 262_144 },
+    })).effectLimits).toEqual({ maxOperations: 10, maxBytes: 262_144 });
+    expect(() => compileGitHubActionsTask(bundle({
+      effects: [],
+      limits: { ...bundle().limits, maxEffectOperations: 10 },
+    }))).toThrow(/without declaring any effect/);
+  });
+
+  it("keeps an effect-free inspection task free of apply write scopes", () => {
+    const plan = compileGitHubActionsTask(bundle({ effects: [] }));
+    expect(plan.effectsPermissions).toEqual({ "id-token": "write" });
+    expect(plan.callerPermissions).toEqual(plan.planningPermissions);
+  });
+
+  it("flags pull-request tasks for the same-repository guard with no opt-in", () => {
+    expect(compileGitHubActionsTask(bundle()).requiresSameRepositoryGuard).toBe(false);
+    expect(compileGitHubActionsTask(bundle({
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+    })).requiresSameRepositoryGuard).toBe(true);
+    expect("allowForkExecution" in compileGitHubActionsTask(bundle())).toBe(false);
+  });
+
+  it("rejects non-canonical trigger order and unsupported limits", () => {
+    // The contract rejects it first, and the compiler re-checks independently
+    // so a bundle reaching it from any other path cannot skip the ordering.
+    expect(() => bundle({
+      triggers: [
+        { kind: "github.pull_request.opened", labelsAll: [] },
+        { kind: "github.issue.opened", labelsAll: [] },
+      ],
+    })).toThrow(/canonical/);
+    expect(() => compileGitHubActionsTask({
+      ...bundle(),
+      triggers: [
+        { kind: "github.pull_request.opened", labelsAll: [] },
+        { kind: "github.issue.opened", labelsAll: [] },
+      ],
+    })).toThrow(/canonical order/);
     expect(() => compileGitHubActionsTask(bundle({
       limits: { ...bundle().limits, runtimeSeconds: 600 },
     }))).toThrow(/runtime-seconds/);

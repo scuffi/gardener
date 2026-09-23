@@ -39,6 +39,7 @@ class LocalRunner extends RpcTarget implements RunnerCapability {
 
   async execute(input: RunnerActionV1): Promise<RunnerActionResultV1> {
     const action = runnerActionV1Schema.parse(input);
+    if (action.kind !== "shell.exec") throw new Error(`The spike client executes only shell.exec, not ${action.kind}`);
     let result: RunnerActionResultV1;
     try {
       const executed = await executeFile("/bin/sh", ["-lc", action.command], {

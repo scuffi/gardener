@@ -92,6 +92,31 @@ function operation(id = "comment-operation-1") {
 }
 
 describe("Gateway operation receipts", () => {
+  it("refuses an operation that carries no installation identity", async () => {
+    const { sqlite, db, event } = await seeded();
+    try {
+      github.execute.mockReset();
+      const { installationId: _omitted, ...repository } = operation().repository;
+      const input = {
+        runId: "run-1234567890123456",
+        eventId: event.id,
+        operation: { ...operation(), repository },
+      };
+      // `installationId` is optional in the contract because an
+      // Actions-planned operation genuinely has none. This gateway mints
+      // installation tokens and binds `installation_id` into its lease and
+      // receipt rows, so it must refuse before any of that, rather than
+      // binding `undefined` into a query and matching whatever row results.
+      await expect(executeBoundedOperation({ DB: db } as Env, input)).rejects.toThrow(GitHubOperationError);
+      await expect(executeBoundedOperation({ DB: db } as Env, input)).rejects.toThrow(/installation-bound operation/);
+      expect(github.execute).not.toHaveBeenCalled();
+      const leases = await db.prepare("SELECT COUNT(*) AS total FROM operation_receipts").first<{ total: number }>();
+      expect(leases?.total).toBe(0);
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("executes an event-bound operation once and replays its hash-bound receipt", async () => {
     const { sqlite, db, event } = await seeded();
     try {

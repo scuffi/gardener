@@ -69,11 +69,12 @@ describe("product Actions OIDC enrollment", () => {
     })).rejects.toThrow(/full commit SHA/);
   });
 
-  it("cryptographically separates planning from the effects environment", async () => {
+  it("rejects environment-bound identities for both planning and automatic effects", async () => {
     await expect(verifyActionsOidc(await token({ environment: "gardener-effects" }), hello, policy)).rejects.toThrow(/Planning/);
     const effects = { ...hello, phase: "effects" as const };
-    await expect(verifyActionsOidc(await token(), effects, policy)).rejects.toThrow(/Effects/);
-    await expect(verifyActionsOidc(await token({ environment: "gardener-effects" }), effects, policy)).resolves.toBeDefined();
+    await expect(verifyActionsOidc(await token(), effects, policy)).resolves.toMatchObject({ actorLogin: "scuffi" });
+    await expect(verifyActionsOidc(await token({ environment: "gardener-effects" }), effects, policy))
+      .rejects.toThrow(/Effects.*must not be bound/);
   });
 });
 

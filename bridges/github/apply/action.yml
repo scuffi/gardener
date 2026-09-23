@@ -14,13 +14,25 @@ inputs:
   runtime-url:
     description: HTTPS origin of the customer-deployed Gardener runtime.
     required: true
+  deadline-at:
+    description: Immutable UTC deadline for the effects job.
+    required: true
+  capture-artifact-path:
+    description: Downloaded trusted capture directory for capture-backed plans.
+    required: false
 outputs:
-  comment-id:
-    description: GitHub comment identifier.
-  comment-url:
-    description: URL of the created or reconciled comment.
+  status:
+    description: Applied or stopped plan status.
+  completed-operations:
+    description: Number of operation receipts recorded.
   operation-id:
-    description: Stable Gardener operation identifier.
+    description: Stable identifier of the last attempted operation.
+  resource-url:
+    description: GitHub URL produced by the last attempted operation, when any.
+  comment-id:
+    description: GitHub comment identifier, retained for qualification compatibility.
+  comment-url:
+    description: URL of the created or reconciled comment, retained for qualification compatibility.
 runs:
   using: node24
   main: dist/index.cjs

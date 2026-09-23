@@ -217,6 +217,7 @@ async function main(argv: string[]): Promise<void> {
     try {
       const project = await upgradeProjectRelease({ repositoryRoot });
       const build = await buildProject({ repositoryRoot });
+      printBuildWarnings(build);
       const connection = await connectActions({ workspace, repository, repositoryRoot, sourceRoot });
       const doctor = await doctorActions(workspace, sourceRoot);
       warnStaleBridgeRepositories(doctor);
@@ -386,9 +387,20 @@ function printInit(result: { created: string[]; preserved: string[] }): void {
 function printBuild(result: {
   lockPath: string;
   tasks: Array<{ taskId: string; bundleHash: string; workflow: string }>;
+  warnings: string[];
 }): void {
   console.log(`wrote ${result.lockPath}`);
   for (const task of result.tasks) console.log(`${task.taskId} ${task.bundleHash} ${task.workflow}`);
+  printBuildWarnings(result);
+}
+
+/**
+ * Surfaces every build warning on stderr. A capability as consequential as
+ * unrestricted runner egress must be visible at the moment it is compiled in,
+ * not only to whoever later reads the task source.
+ */
+function printBuildWarnings(result: { warnings: string[] }): void {
+  for (const warning of result.warnings) terminal.warn(warning);
 }
 
 function requiredStringFlag(flags: Map<string, string | true>, name: string): string {

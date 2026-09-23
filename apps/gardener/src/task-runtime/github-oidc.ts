@@ -17,7 +17,6 @@ export interface ActionsEnrollmentPolicy {
   repositoryName: string;
   visibility: "public" | "private" | "internal";
   jobWorkflowRef: string;
-  effectsEnvironment?: string;
   key?: JWTVerifyGetKey;
   now?: Date;
 }
@@ -71,13 +70,15 @@ export async function verifyActionsOidc(
   for (const [name, expectedValue] of Object.entries(expected)) {
     if (String(payload[name] ?? "") !== expectedValue) throw new Error(`OIDC claim ${name} does not match the authenticated runner`);
   }
-  if (hello.phase === "plan" && payload.environment !== undefined) {
-    throw new Error("Planning OIDC token must not be bound to an effects environment");
+  if (payload.environment !== undefined) {
+    throw new Error(`${hello.phase === "plan" ? "Planning" : "Effects"} OIDC token must not be bound to an environment`);
   }
-  if (hello.phase === "effects" && payload.environment !== (policy.effectsEnvironment ?? "gardener-effects")) {
-    throw new Error("Effects OIDC token is not bound to the trusted effects environment");
-  }
-  return { jti, expiresAt: payload.exp!, actorId, actorLogin };
+  return {
+    jti,
+    expiresAt: payload.exp!,
+    actorId,
+    actorLogin,
+  };
 }
 
 function requiredClaim(payload: JWTPayload, name: string): string {

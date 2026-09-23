@@ -21,7 +21,17 @@ function paint(code: string, value: string): string {
   return colorsEnabled() ? `${code}${value}${ANSI.reset}` : value;
 }
 
+/**
+ * Writes an operator warning to stderr. Warnings go to stderr so that piping
+ * stdout into a file or a JSON parser never silently discards them, and never
+ * corrupts the JSON the command emits on stdout.
+ */
+export function warn(message: string): void {
+  process.stderr.write(`${paint(ANSI.yellow, `warning: ${message}`)}\n`);
+}
+
 export const terminal = {
+  warn,
   title: (value: string): string => paint(`${ANSI.bold}${ANSI.green}`, value),
   heading: (value: string): string => paint(`${ANSI.bold}${ANSI.green}`, value),
   strong: (value: string): string => paint(ANSI.bold, value),

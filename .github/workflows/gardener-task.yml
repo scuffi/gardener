@@ -19,18 +19,24 @@ on:
         required: true
         type: string
 
-permissions: {}
-
 jobs:
   plan:
     name: Plan · ${{ inputs.task-name }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      checks: read
       contents: read
+      discussions: read
+      issues: read
+      pull-requests: read
+      statuses: read
       id-token: write
     outputs:
       effect-sha256: ${{ steps.gardener.outputs.effect-artifact-sha256 }}
+      capture-sha256: ${{ steps.gardener.outputs.capture-changes-sha256 }}
+      effect-artifact-name: gardener-effect-${{ github.run_id }}-${{ github.run_attempt }}
+      capture-artifact-name: gardener-capture-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out without persisted credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -42,6 +48,7 @@ jobs:
         with:
           runtime-url: ${{ inputs.runtime-url }}
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload exact effect plan
         if: ${{ steps.gardener.outputs.effect-artifact-sha256 != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -50,27 +57,47 @@ jobs:
           path: ${{ steps.gardener.outputs.effect-artifact-path }}
           if-no-files-found: error
           retention-days: 1
+      - name: Upload trusted repository capture
+        if: ${{ steps.gardener.outputs.capture-changes-sha256 != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gardener-capture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.gardener.outputs.capture-artifact-path }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
   apply:
-    name: Apply exact task effect
+    name: Apply exact task plan
     needs: plan
     if: ${{ needs.plan.outputs.effect-sha256 != '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    environment: gardener-effects
-    permissions:
-      issues: write
-      id-token: write
+    # No job-level permissions block: this checkout-free trusted job inherits
+    # the generated caller's fixed read union and task-exact write grants. The
+    # planning job above always downgrades that grant to read-only.
     steps:
       - name: Download exact effect plan
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: gardener-effect-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ needs.plan.outputs.effect-artifact-name }}
           path: ${{ runner.temp }}/gardener-effect
-      - name: Apply exact Gardener effect
+      - name: Download trusted repository capture
+        if: ${{ needs.plan.outputs.capture-sha256 != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ needs.plan.outputs.capture-artifact-name }}
+          path: ${{ runner.temp }}/gardener-capture
+      - name: Derive immutable effects deadline
+        id: deadline
+        shell: bash
+        run: echo "value=$(date -u -d '+4 minutes' '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Apply exact Gardener plan
         uses: scuffi/gardener/bridges/github/apply@01c5749c5eb05398e8488b743a10c36c1b517fc2
         with:
           artifact-path: ${{ runner.temp }}/gardener-effect/${{ needs.plan.outputs.effect-sha256 }}.json
           expected-sha256: ${{ needs.plan.outputs.effect-sha256 }}
+          capture-artifact-path: ${{ needs.plan.outputs.capture-sha256 != '' && format('{0}/gardener-capture', runner.temp) || '' }}
+          deadline-at: ${{ steps.deadline.outputs.value }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           runtime-url: ${{ inputs.runtime-url }}

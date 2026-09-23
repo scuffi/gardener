@@ -9,7 +9,7 @@ import {
   type RepositoryEventV2,
 } from "@gardener/provider-github";
 import { canonicalOperationHash } from "@gardener/core";
-import { operationReceiptSchema, repositoryEventV2Schema } from "@gardener/contracts";
+import { isInstallationBackedRepository, operationReceiptSchema, repositoryEventV2Schema } from "@gardener/contracts";
 import { canonicalSha256, nowSeconds, randomToken } from "./database";
 import type { Env } from "./env";
 import { executeGitHubOperation, GitHubOperationError } from "./github-client";
@@ -46,6 +46,18 @@ export async function executeBoundedOperation(
       `GitHub Gateway does not implement verified execution for ${operation.kind}`,
     );
   }
+  // An operation's installation identity is optional in the contract because an
+  // Actions-planned operation genuinely has none. This gateway mints
+  // installation tokens and binds `installation_id` into the lease and receipt
+  // rows, so it refuses such an operation up front rather than binding
+  // `undefined` into those queries further down.
+  if (!isInstallationBackedRepository(operation.repository)) {
+    throw new GitHubOperationError(
+      "installation_required",
+      "GitHub Gateway requires an installation-bound operation",
+    );
+  }
+  const installationId = operation.repository.installationId;
 
   const eventRow = await env.DB.prepare(
     "SELECT normalized_event_json, normalized_event_hash FROM webhook_deliveries " +
@@ -68,7 +80,7 @@ export async function executeBoundedOperation(
     "AND r.active = 1 AND i.suspended_at IS NULL AND i.revoked_at IS NULL",
   ).bind(
     operation.repository.id,
-    operation.repository.installationId,
+    installationId,
     operation.repository.owner,
     operation.repository.name,
   ).first();
@@ -113,7 +125,7 @@ export async function executeBoundedOperation(
       input.runId,
       input.eventId,
       operation.repository.id,
-      operation.repository.installationId,
+      installationId,
       resourceNumber,
       attemptToken,
       now + EXECUTION_LEASE_SECONDS,

@@ -36,7 +36,11 @@ describe("runner OIDC context", () => {
 
   it("rejects absent claims and unsupported runner/event values", () => {
     expect(() => helloFromOidcToken(jwt({ ...claims, repository_id: undefined }), "b".repeat(64), "plan")).toThrow(/repository_id/);
-    expect(() => helloFromOidcToken(jwt({ ...claims, event_name: "push" }), "b".repeat(64), "plan")).toThrow();
+    // pull_request_target is excluded by design; it would run fork-authored
+    // code against the base repository's write-capable token.
+    expect(() => helloFromOidcToken(jwt({ ...claims, event_name: "pull_request_target" }), "b".repeat(64), "plan")).toThrow();
+    expect(() => helloFromOidcToken(jwt({ ...claims, event_name: "release" }), "b".repeat(64), "plan")).toThrow();
+    expect(helloFromOidcToken(jwt({ ...claims, event_name: "push" }), "b".repeat(64), "plan").eventName).toBe("push");
     expect(() => helloFromOidcToken(jwt({ ...claims, runner_environment: "self-hosted" }), "b".repeat(64), "plan")).toThrow();
   });
 });

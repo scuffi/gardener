@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { githubNumericIdSchema } from "./identity";
-import { repositoryRefSchema } from "./repository";
+import { operationRepositoryRefSchema } from "./repository";
 
 export const operationKindValues = [
   "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove",
@@ -33,11 +33,81 @@ export const branchNameSchema = z.string().trim().min(1).max(255).refine(isValid
 export const gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
 
 const operationIdSchema = z.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
+/**
+ * Largest commit a single operation may write.
+ *
+ * One blob POST per added or modified path, executed sequentially, so this is
+ * a bound on the work a single step can take rather than on any provider
+ * limit. `taskCaptureManifestV1Schema` carries the same bound, which is what
+ * makes a verified capture always materializable: an oversized change set is
+ * refused when the capture is admitted — before a plan exists, and therefore
+ * long before the first write — instead of failing partway through apply.
+ */
+export const COMMIT_FILE_LIMIT = 1_000;
+
+/**
+ * Encoded-byte budget for commit content carried *inside* the operation.
+ *
+ * Capture-backed content is exempt because it never enters the operation; see
+ * the `commit.create` refinement.
+ */
+export const INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES = 7_000_000;
+
 const canonicalBase64Schema = z.string().regex(
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
   "expected canonical base64 content",
 );
-const operationBase = z.object({ schemaVersion: z.literal("v2"), id: operationIdSchema, repository: repositoryRefSchema });
+
+const commitFilePathSchema = z.string().min(1).max(1_024).refine(
+  (path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\")
+    && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  "invalid repository path",
+);
+
+/**
+ * A commit file whose bytes travel inside the operation.
+ *
+ * `null` content deletes the path. This is the shape an installation-backed
+ * boundary uses, where the planner and the writer are the same process.
+ */
+const inlineCommitFileSchema = z.object({
+  path: commitFilePathSchema,
+  contentBase64: canonicalBase64Schema.max(1_400_000).nullable(),
+}).strict();
+
+/**
+ * A commit file whose bytes stay in the verified capture artifact.
+ *
+ * Gardener's planning job runs unprivileged with a checkout; the apply job is
+ * privileged and has no checkout. Content therefore cannot travel with the
+ * operation: it would have to pass through the model's reach, and the plan
+ * itself is stored and forwarded in places a 100 MiB file cannot go. Instead
+ * the operation carries only the metadata the capture artifact already proved
+ * — path, status, mode, size, and content digest — and apply streams each
+ * blob out of the artifact one at a time after verifying it.
+ *
+ * That metadata is exactly what canonical operation identity needs: the
+ * digests pin the content as tightly as the bytes would, so the operation hash
+ * (and the commit trailer derived from it) stays a function of what is written
+ * without ever holding what is written.
+ */
+const capturedCommitFileSchema = z.object({
+  path: commitFilePathSchema,
+  captured: z.discriminatedUnion("status", [
+    z.object({
+      status: z.enum(["added", "modified"]),
+      mode: z.enum(["100644", "100755", "120000"]),
+      /** Bounded by GitHub's per-blob maximum, so an inapplicable capture is refused before apply. */
+      sizeBytes: z.number().int().nonnegative().max(100 * 1_024 * 1_024),
+      sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict(),
+    z.object({ status: z.literal("deleted") }).strict(),
+  ]),
+}).strict();
+
+const commitFileSchema = z.union([inlineCommitFileSchema, capturedCommitFileSchema]);
+
+const operationBase = z.object({ schemaVersion: z.literal("v2"), id: operationIdSchema, repository: operationRepositoryRefSchema });
 const expectedTimestamp = z.iso.datetime();
 const body = z.string().min(1).max(65_536);
 const issueBase = operationBase.extend({ issueNumber: z.number().int().positive(), expectedIssueState: z.enum(["open", "closed"]), expectedIssueUpdatedAt: expectedTimestamp });
@@ -78,11 +148,27 @@ const operationOptions = [
   operationBase.extend({ kind: z.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
   operationBase.extend({
     kind: z.literal("commit.create"), branch: gardenerBranchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
-    files: z.array(z.object({ path: z.string().min(1).max(1_024).refine((path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "invalid repository path"), contentBase64: canonicalBase64Schema.max(1_400_000).nullable() }).strict()).min(1).max(100),
+    files: z.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
   }).strict().superRefine((value, context) => {
-    const paths = new Set<string>(); let encodedBytes = 0;
-    value.files.forEach((file, index) => { if (paths.has(file.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" }); paths.add(file.path); encodedBytes += file.contentBase64?.length ?? 0; });
-    if (encodedBytes > 7_000_000) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
+    const paths = new Set<string>(); let encodedBytes = 0; let inlineFiles = 0;
+    value.files.forEach((file, index) => {
+      if (paths.has(file.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file.path);
+      if ("contentBase64" in file) { inlineFiles += 1; encodedBytes += file.contentBase64?.length ?? 0; }
+    });
+    // The inline budget is unchanged and still applies to inline entries. It
+    // exists because those bytes travel inside the operation itself, through
+    // every boundary that stores or forwards the operation. Capture-backed
+    // entries carry no bytes at all, so the budget has nothing to bound; their
+    // limit is the provider's per-blob maximum, already enforced by
+    // `sizeBytes`.
+    if (encodedBytes > INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
+    // A commit is either the caller's own bytes or a verified capture, never a
+    // blend. Mixing them would let a plan smuggle model-authored content into
+    // a commit whose provenance reads as "materialized from the capture".
+    if (inlineFiles > 0 && inlineFiles !== value.files.length) {
+      context.addIssue({ code: "custom", path: ["files"], message: "a commit may not mix inline content with capture-backed content" });
+    }
   }),
   operationBase.extend({
     kind: z.literal("pull_request.open_draft"), head: gardenerBranchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
@@ -90,7 +176,21 @@ const operationOptions = [
   }).strict(),
   pullBase.extend({
     kind: z.literal("pull_request.merge"), expectedState: z.literal("open"), expectedDraft: z.literal(false), method: z.enum(["merge", "squash", "rebase"]),
-    requiredChecks: z.array(requiredCheckSchema).min(1).max(100), expectedBranchProtectionHash: z.string().regex(/^[a-f0-9]{64}$/),
+    /**
+     * The real gate. Merging with zero verified checks is not something this
+     * contract can express, in any target.
+     */
+    requiredChecks: z.array(requiredCheckSchema).min(1).max(100),
+    /**
+     * Digest of the branch-protection configuration observed when the merge was
+     * proposed. Optional because the Actions target cannot read branch
+     * protection with a repository `GITHUB_TOKEN` and must not fabricate a
+     * digest it never computed; GitHub itself remains the authoritative
+     * enforcement point there. Installation-backed boundaries that *can* read
+     * protection still require it — see `evaluateOperationPolicy`, which denies
+     * a merge whose expected digest is absent.
+     */
+    expectedBranchProtectionHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   }).strict(),
 
   discussionBase.extend({ kind: z.literal("discussion.comment.create"), body }).strict(),
@@ -149,7 +249,7 @@ export type Operation = z.infer<typeof operationSchema>;
 
 export const operationReceiptSchema = z.object({
   schemaVersion: z.literal("v2"), operationId: operationIdSchema, operationHash: z.string().regex(/^[a-f0-9]{64}$/), kind: operationKindSchema,
-  status: z.enum(["succeeded", "failed", "skipped", "conflicted"]), attempt: z.number().int().positive().max(20), attemptedAt: z.iso.datetime(), completedAt: z.iso.datetime(),
+  status: z.enum(["succeeded", "failed", "skipped", "conflicted"]), attempt: z.number().int().positive(), attemptedAt: z.iso.datetime(), completedAt: z.iso.datetime(),
   providerRequestId: z.string().min(1).max(255).optional(), resourceUrl: z.url().optional(),
   error: z.object({ code: z.string().min(1).max(100), message: z.string().min(1).max(2_000), retryable: z.boolean() }).strict().optional(),
 }).strict().superRefine((receipt, context) => {
@@ -158,3 +258,130 @@ export const operationReceiptSchema = z.object({
   if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
 });
 export type OperationReceipt = z.infer<typeof operationReceiptSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Scalar operation outputs                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Value shapes a later step may consume. The type drives the typed sentinel
+ * used to probe-validate a payload before the real value exists, so it has to
+ * describe the value precisely enough to satisfy the consuming validator.
+ */
+export const operationOutputTypeValues = [
+  "string",
+  "resourceNumber",
+  "boolean",
+  "commitSha",
+  "githubId",
+  "nullableGithubId",
+  "gardenerBranch",
+  "gitRef",
+  "url",
+  "nodeId",
+  "openClosedState",
+] as const;
+export type OperationOutputType = typeof operationOutputTypeValues[number];
+
+const issueOutputs = { issueNumber: "resourceNumber" } as const;
+const pullOutputs = { pullNumber: "resourceNumber" } as const;
+const discussionOutputs = { discussionNumber: "resourceNumber" } as const;
+const commentOutputs = { commentId: "githubId", commentUrl: "url" } as const;
+const releaseOutputs = {
+  releaseId: "githubId",
+  tagName: "string",
+  releaseUrl: "url",
+  draft: "boolean",
+  prerelease: "boolean",
+} as const;
+
+/**
+ * Scalar outputs each operation kind publishes for later steps to reference.
+ *
+ * Deliberately scalar-only. The executor also returns collections such as the
+ * resulting label or reviewer sets, but a plan cannot splice a list into a
+ * typed operation field, so exposing them would create references that can
+ * never validate. `kind` is excluded too: it is the discriminator, not a
+ * produced value.
+ */
+export const operationOutputCatalog = {
+  "issue.label.add": { ...issueOutputs, label: "string" },
+  "issue.label.remove": { ...issueOutputs, label: "string" },
+  "issue.comment.create": { ...issueOutputs, ...commentOutputs },
+  "issue.comment.update": { ...issueOutputs, ...commentOutputs },
+  "issue.close": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
+  "issue.reopen": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
+  "issue.assignee.add": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "issue.assignee.remove": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "pull_request.comment.create": { ...pullOutputs, ...commentOutputs },
+  "pull_request.comment.update": { ...pullOutputs, ...commentOutputs },
+  "pull_request.review.submit": { ...pullOutputs, reviewId: "githubId", reviewUrl: "url", reviewState: "string" },
+  "pull_request.reviewer.request": { ...pullOutputs },
+  "pull_request.reviewer.remove": { ...pullOutputs },
+  "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
+  "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
+  "commit.create": {
+    branch: "gardenerBranch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    parentSha: "commitSha",
+    commitUrl: "url",
+  },
+  "pull_request.open_draft": {
+    ...pullOutputs,
+    pullUrl: "url",
+    pullNodeId: "nodeId",
+    headRef: "gardenerBranch",
+    headSha: "commitSha",
+    baseRef: "string",
+  },
+  "pull_request.merge": { ...pullOutputs, mergeCommitSha: "commitSha", pullUrl: "url" },
+  "discussion.comment.create": { ...discussionOutputs, ...commentOutputs, commentNodeId: "nodeId" },
+  "discussion.comment.update": { ...discussionOutputs, ...commentOutputs, commentNodeId: "nodeId" },
+  "discussion.answer.mark": { ...discussionOutputs, answerCommentId: "nullableGithubId" },
+  "discussion.answer.unmark": { ...discussionOutputs, answerCommentId: "nullableGithubId" },
+  "discussion.close": { ...discussionOutputs, state: "openClosedState", discussionUrl: "url" },
+  "discussion.reopen": { ...discussionOutputs, state: "openClosedState", discussionUrl: "url" },
+  "check.rerun": { checkRunId: "githubId", headSha: "commitSha", status: "string" },
+  "release.create": { ...releaseOutputs },
+  "release.update": { ...releaseOutputs },
+  "release.publish": { ...releaseOutputs },
+  "release.delete": { releaseId: "githubId", tagName: "string" },
+} as const satisfies Record<OperationKind, Readonly<Record<string, OperationOutputType>>>;
+
+export type OperationOutputCatalog = typeof operationOutputCatalog;
+
+/** Name of a scalar output a given kind publishes, or `undefined` if it has none such. */
+export function operationOutputType(kind: OperationKind, output: string): OperationOutputType | undefined {
+  const outputs: Readonly<Record<string, OperationOutputType>> = operationOutputCatalog[kind];
+  return Object.hasOwn(outputs, output) ? outputs[output] : undefined;
+}
+
+/** Sorted scalar output names a kind publishes. */
+export function operationOutputNames(kind: OperationKind): readonly string[] {
+  return Object.keys(operationOutputCatalog[kind]).sort();
+}
+
+const outputSentinels = {
+  string: "gardener-step-output",
+  resourceNumber: 1,
+  boolean: true,
+  commitSha: "0".repeat(40),
+  githubId: "1",
+  nullableGithubId: "1",
+  gardenerBranch: "gardener/step-output",
+  gitRef: "refs/heads/gardener/step-output",
+  url: "https://github.com/gardener/step-output",
+  nodeId: "GardenerStepOutput",
+  openClosedState: "open",
+} as const satisfies Record<OperationOutputType, string | number | boolean>;
+
+/**
+ * Stand-in value used while probe-validating a payload whose real value is only
+ * produced at apply time. A sentinel is a best-effort convenience: probe
+ * validation additionally discards issues reported at a referenced pointer, so
+ * correctness never depends on a sentinel satisfying every possible validator.
+ */
+export function operationOutputSentinel(type: OperationOutputType): string | number | boolean {
+  return outputSentinels[type];
+}

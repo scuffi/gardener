@@ -322,4 +322,21 @@ describe("operation policy", () => {
     const commitCapabilities: EffectiveCapabilitySet = { observation: [], workspace: [], effects: [{ capability: "commit.create", mode: "automatic" }] };
     expect(evaluateOperationPolicy(commitOperation, policy(), { effectiveCapabilities: commitCapabilities, current: { headSha: sha } }).reasons.join(" ")).toMatch(/denied by policy/);
   });
+
+  it("denies a merge that carries no expected branch protection hash", () => {
+    const hash = "c".repeat(64);
+    const mergeCapabilities: EffectiveCapabilitySet = { observation: [], workspace: [], effects: [{ capability: "pull_request.merge", mode: "automatic" }] };
+    const merge = { schemaVersion: "v2", id: "op:merge", kind: "pull_request.merge", repository, pullNumber: 3, expectedHeadSha: sha, expectedBaseRef: "main", expectedBaseSha: sha, expectedState: "open", expectedDraft: false, expectedPullUpdatedAt: now, method: "squash", requiredChecks: [{ context: "test", appId: 1 }] } as const;
+    const current = { repositoryId: repository.id, pullState: "open", pullUpdatedAt: now, headSha: sha, baseRef: "main", baseSha: sha, draft: false, successfulChecks: ["test"], branchProtectionAllowsMerge: true, branchProtectionHash: hash } as const;
+
+    // The field is optional on the operation because the Actions target cannot
+    // read branch protection. This evaluator is an installation-backed path, so
+    // it must refuse rather than skip the comparison.
+    expect(evaluateOperationPolicy(merge, policy(), { effectiveCapabilities: mergeCapabilities, current }).reasons.join(" "))
+      .toMatch(/requires an expected branch protection hash/);
+    expect(evaluateOperationPolicy({ ...merge, expectedBranchProtectionHash: hash }, policy(), { effectiveCapabilities: mergeCapabilities, current }).outcome)
+      .toBe("authorized");
+    expect(evaluateOperationPolicy({ ...merge, expectedBranchProtectionHash: "d".repeat(64) }, policy(), { effectiveCapabilities: mergeCapabilities, current }).reasons.join(" "))
+      .toMatch(/branch protection changed since proposal/);
+  });
 });

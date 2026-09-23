@@ -32,6 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // ../../node_modules/.pnpm/tunnel@0.0.6/node_modules/tunnel/lib/tunnel.js
 var require_tunnel = __commonJS({
@@ -1011,16 +1012,16 @@ var require_util = __commonJS({
     function isStream(obj) {
       return obj && typeof obj === "object" && typeof obj.pipe === "function" && typeof obj.on === "function";
     }
-    function isBlobLike(object2) {
-      if (object2 === null) {
+    function isBlobLike(object3) {
+      if (object3 === null) {
         return false;
-      } else if (object2 instanceof Blob2) {
+      } else if (object3 instanceof Blob2) {
         return true;
-      } else if (typeof object2 !== "object") {
+      } else if (typeof object3 !== "object") {
         return false;
       } else {
-        const sTag = object2[Symbol.toStringTag];
-        return (sTag === "Blob" || sTag === "File") && ("stream" in object2 && typeof object2.stream === "function" || "arrayBuffer" in object2 && typeof object2.arrayBuffer === "function");
+        const sTag = object3[Symbol.toStringTag];
+        return (sTag === "Blob" || sTag === "File") && ("stream" in object3 && typeof object3.stream === "function" || "arrayBuffer" in object3 && typeof object3.arrayBuffer === "function");
       }
     }
     function buildURL(url2, queryParams) {
@@ -1072,14 +1073,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path3 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path && path[0] !== "/") {
-          path = `/${path}`;
+        if (path3 && path3[0] !== "/") {
+          path3 = `/${path3}`;
         }
-        return new URL(`${origin}${path}`);
+        return new URL(`${origin}${path3}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1302,8 +1303,8 @@ var require_util = __commonJS({
         }
       );
     }
-    function isFormDataLike(object2) {
-      return object2 && typeof object2 === "object" && typeof object2.append === "function" && typeof object2.delete === "function" && typeof object2.get === "function" && typeof object2.getAll === "function" && typeof object2.has === "function" && typeof object2.set === "function" && object2[Symbol.toStringTag] === "FormData";
+    function isFormDataLike(object3) {
+      return object3 && typeof object3 === "object" && typeof object3.append === "function" && typeof object3.delete === "function" && typeof object3.get === "function" && typeof object3.getAll === "function" && typeof object3.has === "function" && typeof object3.set === "function" && object3[Symbol.toStringTag] === "FormData";
     }
     function addAbortListener(signal, listener) {
       if ("addEventListener" in signal) {
@@ -1530,39 +1531,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path, origin }
+          request: { method, path: path3, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path);
+        debuglog("sending request to %s %s/%s", method, origin, path3);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path, origin },
+          request: { method, path: path3, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path,
+          path3,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path, origin }
+          request: { method, path: path3, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path);
+        debuglog("trailers received from %s %s/%s", method, origin, path3);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path, origin },
+          request: { method, path: path3, origin },
           error: error63
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path,
+          path3,
           error63.message
         );
       });
@@ -1611,9 +1612,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path, origin }
+            request: { method, path: path3, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path);
+          debuglog("sending request to %s %s/%s", method, origin, path3);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1676,7 +1677,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path,
+        path: path3,
         method,
         body: body2,
         headers,
@@ -1691,11 +1692,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path !== "string") {
+        if (typeof path3 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path[0] !== "/" && !(path.startsWith("http://") || path.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path)) {
+        } else if (invalidPathRegex.test(path3)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1761,7 +1762,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path, query) : path;
+        this.path = query ? buildURL(path3, query) : path3;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -2004,7 +2005,7 @@ var require_dispatcher = __commonJS({
       }
       compose(...args) {
         const interceptors = Array.isArray(args[0]) ? args[0] : args;
-        let dispatch = this.dispatch.bind(this);
+        let dispatch2 = this.dispatch.bind(this);
         for (const interceptor of interceptors) {
           if (interceptor == null) {
             continue;
@@ -2012,21 +2013,21 @@ var require_dispatcher = __commonJS({
           if (typeof interceptor !== "function") {
             throw new TypeError(`invalid interceptor, expected function received ${typeof interceptor}`);
           }
-          dispatch = interceptor(dispatch);
-          if (dispatch == null || typeof dispatch !== "function" || dispatch.length !== 2) {
+          dispatch2 = interceptor(dispatch2);
+          if (dispatch2 == null || typeof dispatch2 !== "function" || dispatch2.length !== 2) {
             throw new TypeError("invalid interceptor");
           }
         }
-        return new ComposedDispatcher(this, dispatch);
+        return new ComposedDispatcher(this, dispatch2);
       }
     };
     var ComposedDispatcher = class extends Dispatcher {
       #dispatcher = null;
       #dispatch = null;
-      constructor(dispatcher, dispatch) {
+      constructor(dispatcher, dispatch2) {
         super();
         this.#dispatcher = dispatcher;
-        this.#dispatch = dispatch;
+        this.#dispatch = dispatch2;
       }
       dispatch(...args) {
         this.#dispatch(...args);
@@ -2176,12 +2177,12 @@ var require_dispatcher_base = __commonJS({
           this[kInterceptedDispatch] = this[kDispatch];
           return this[kDispatch](opts, handler);
         }
-        let dispatch = this[kDispatch].bind(this);
+        let dispatch2 = this[kDispatch].bind(this);
         for (let i = this[kInterceptors].length - 1; i >= 0; i--) {
-          dispatch = this[kInterceptors][i](dispatch);
+          dispatch2 = this[kInterceptors][i](dispatch2);
         }
-        this[kInterceptedDispatch] = dispatch;
-        return dispatch(opts, handler);
+        this[kInterceptedDispatch] = dispatch2;
+        return dispatch2(opts, handler);
       }
       dispatch(opts, handler) {
         if (!handler || typeof handler !== "object") {
@@ -4010,7 +4011,7 @@ var require_webidl = __commonJS({
 var require_util2 = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/fetch/util.js"(exports2, module2) {
     "use strict";
-    var { Transform } = require("node:stream");
+    var { Transform: Transform2 } = require("node:stream");
     var zlib = require("node:zlib");
     var { redirectStatusSet, referrerPolicySet: referrerPolicyTokens, badPortsSet } = require_constants3();
     var { getGlobalOrigin } = require_global();
@@ -4072,8 +4073,8 @@ var require_util2 = __commonJS({
       }
       return "allowed";
     }
-    function isErrorLike(object2) {
-      return object2 instanceof Error || (object2?.constructor?.name === "Error" || object2?.constructor?.name === "DOMException");
+    function isErrorLike(object3) {
+      return object3 instanceof Error || (object3?.constructor?.name === "Error" || object3?.constructor?.name === "DOMException");
     }
     function isValidReasonPhrase(statusText) {
       for (let i = 0; i < statusText.length; ++i) {
@@ -4498,7 +4499,7 @@ var require_util2 = __commonJS({
         return new FastIterableIterator(target, kind);
       };
     }
-    function iteratorMixin(name2, object2, kInternalIterator, keyIndex = 0, valueIndex = 1) {
+    function iteratorMixin(name2, object3, kInternalIterator, keyIndex = 0, valueIndex = 1) {
       const makeIterator = createIterator(name2, kInternalIterator, keyIndex, valueIndex);
       const properties = {
         keys: {
@@ -4506,7 +4507,7 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function keys() {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             return makeIterator(this, "key");
           }
         },
@@ -4515,7 +4516,7 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function values() {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             return makeIterator(this, "value");
           }
         },
@@ -4524,7 +4525,7 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function entries() {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             return makeIterator(this, "key+value");
           }
         },
@@ -4533,7 +4534,7 @@ var require_util2 = __commonJS({
           enumerable: true,
           configurable: true,
           value: function forEach(callbackfn, thisArg = globalThis) {
-            webidl.brandCheck(this, object2);
+            webidl.brandCheck(this, object3);
             webidl.argumentLengthCheck(arguments, 1, `${name2}.forEach`);
             if (typeof callbackfn !== "function") {
               throw new TypeError(
@@ -4546,7 +4547,7 @@ var require_util2 = __commonJS({
           }
         }
       };
-      return Object.defineProperties(object2.prototype, {
+      return Object.defineProperties(object3.prototype, {
         ...properties,
         [Symbol.iterator]: {
           writable: true,
@@ -4698,7 +4699,7 @@ var require_util2 = __commonJS({
       contentRange += isomorphicEncode(`${fullLength}`);
       return contentRange;
     }
-    var InflateStream = class extends Transform {
+    var InflateStream = class extends Transform2 {
       #zlibOptions;
       /** @param {zlib.ZlibOptions} [zlibOptions] */
       constructor(zlibOptions) {
@@ -4946,8 +4947,8 @@ var require_file = __commonJS({
       }
     };
     webidl.converters.Blob = webidl.interfaceConverter(Blob2);
-    function isFileLike(object2) {
-      return object2 instanceof File2 || object2 && (typeof object2.stream === "function" || typeof object2.arrayBuffer === "function") && object2[Symbol.toStringTag] === "File";
+    function isFileLike(object3) {
+      return object3 instanceof File2 || object3 && (typeof object3.stream === "function" || typeof object3.arrayBuffer === "function") && object3[Symbol.toStringTag] === "File";
     }
     module2.exports = { FileLike, isFileLike };
   }
@@ -5395,12 +5396,12 @@ var require_body = __commonJS({
         }
       });
     }
-    function extractBody(object2, keepalive = false) {
+    function extractBody(object3, keepalive = false) {
       let stream = null;
-      if (object2 instanceof ReadableStream) {
-        stream = object2;
-      } else if (isBlobLike(object2)) {
-        stream = object2.stream();
+      if (object3 instanceof ReadableStream) {
+        stream = object3;
+      } else if (isBlobLike(object3)) {
+        stream = object3.stream();
       } else {
         stream = new ReadableStream({
           async pull(controller) {
@@ -5420,17 +5421,17 @@ var require_body = __commonJS({
       let source = null;
       let length = null;
       let type = null;
-      if (typeof object2 === "string") {
-        source = object2;
+      if (typeof object3 === "string") {
+        source = object3;
         type = "text/plain;charset=UTF-8";
-      } else if (object2 instanceof URLSearchParams) {
-        source = object2.toString();
+      } else if (object3 instanceof URLSearchParams) {
+        source = object3.toString();
         type = "application/x-www-form-urlencoded;charset=UTF-8";
-      } else if (isArrayBuffer(object2)) {
-        source = new Uint8Array(object2.slice());
-      } else if (ArrayBuffer.isView(object2)) {
-        source = new Uint8Array(object2.buffer.slice(object2.byteOffset, object2.byteOffset + object2.byteLength));
-      } else if (util.isFormDataLike(object2)) {
+      } else if (isArrayBuffer(object3)) {
+        source = new Uint8Array(object3.slice());
+      } else if (ArrayBuffer.isView(object3)) {
+        source = new Uint8Array(object3.buffer.slice(object3.byteOffset, object3.byteOffset + object3.byteLength));
+      } else if (util.isFormDataLike(object3)) {
         const boundary = `----formdata-undici-0${`${random(1e11)}`.padStart(11, "0")}`;
         const prefix = `--${boundary}\r
 Content-Disposition: form-data`;
@@ -5440,7 +5441,7 @@ Content-Disposition: form-data`;
         const rn = new Uint8Array([13, 10]);
         length = 0;
         let hasUnknownSizeValue = false;
-        for (const [name2, value] of object2) {
+        for (const [name2, value] of object3) {
           if (typeof value === "string") {
             const chunk2 = textEncoder.encode(prefix + `; name="${escape(normalizeLinefeeds(name2))}"\r
 \r
@@ -5468,7 +5469,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
         if (hasUnknownSizeValue) {
           length = null;
         }
-        source = object2;
+        source = object3;
         action = async function* () {
           for (const part of blobParts) {
             if (part.stream) {
@@ -5479,22 +5480,22 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           }
         };
         type = `multipart/form-data; boundary=${boundary}`;
-      } else if (isBlobLike(object2)) {
-        source = object2;
-        length = object2.size;
-        if (object2.type) {
-          type = object2.type;
+      } else if (isBlobLike(object3)) {
+        source = object3;
+        length = object3.size;
+        if (object3.type) {
+          type = object3.type;
         }
-      } else if (typeof object2[Symbol.asyncIterator] === "function") {
+      } else if (typeof object3[Symbol.asyncIterator] === "function") {
         if (keepalive) {
           throw new TypeError("keepalive");
         }
-        if (util.isDisturbed(object2) || object2.locked) {
+        if (util.isDisturbed(object3) || object3.locked) {
           throw new TypeError(
             "Response body object should not be disturbed or locked"
           );
         }
-        stream = object2 instanceof ReadableStream ? object2 : ReadableStreamFrom(object2);
+        stream = object3 instanceof ReadableStream ? object3 : ReadableStreamFrom(object3);
       }
       if (typeof source === "string" || util.isBuffer(source)) {
         length = Buffer.byteLength(source);
@@ -5503,7 +5504,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
         let iterator;
         stream = new ReadableStream({
           async start() {
-            iterator = action(object2)[Symbol.asyncIterator]();
+            iterator = action(object3)[Symbol.asyncIterator]();
           },
           async pull(controller) {
             const { value, done } = await iterator.next();
@@ -5531,12 +5532,12 @@ Content-Type: ${value.type || "application/octet-stream"}\r
       const body2 = { stream, source, length };
       return [body2, type];
     }
-    function safelyExtractBody(object2, keepalive = false) {
-      if (object2 instanceof ReadableStream) {
-        assert2(!util.isDisturbed(object2), "The body has already been consumed.");
-        assert2(!object2.locked, "The stream is locked.");
+    function safelyExtractBody(object3, keepalive = false) {
+      if (object3 instanceof ReadableStream) {
+        assert2(!util.isDisturbed(object3), "The body has already been consumed.");
+        assert2(!object3.locked, "The stream is locked.");
       }
-      return extractBody(object2, keepalive);
+      return extractBody(object3, keepalive);
     }
     function cloneBody(instance, body2) {
       const [out1, out2] = body2.stream.tee();
@@ -5616,12 +5617,12 @@ Content-Type: ${value.type || "application/octet-stream"}\r
     function mixinBody(prototype) {
       Object.assign(prototype.prototype, bodyMixinMethods(prototype));
     }
-    async function consumeBody(object2, convertBytesToJSValue, instance) {
-      webidl.brandCheck(object2, instance);
-      if (bodyUnusable(object2)) {
+    async function consumeBody(object3, convertBytesToJSValue, instance) {
+      webidl.brandCheck(object3, instance);
+      if (bodyUnusable(object3)) {
         throw new TypeError("Body is unusable: Body has already been read");
       }
-      throwIfAborted(object2[kState]);
+      throwIfAborted(object3[kState]);
       const promise2 = createDeferredPromise();
       const errorSteps = (error63) => promise2.reject(error63);
       const successSteps = (data) => {
@@ -5631,15 +5632,15 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           errorSteps(e);
         }
       };
-      if (object2[kState].body == null) {
+      if (object3[kState].body == null) {
         successSteps(Buffer.allocUnsafe(0));
         return promise2.promise;
       }
-      await fullyReadBody(object2[kState].body, successSteps, errorSteps);
+      await fullyReadBody(object3[kState].body, successSteps, errorSteps);
       return promise2.promise;
     }
-    function bodyUnusable(object2) {
-      const body2 = object2[kState].body;
+    function bodyUnusable(object3) {
+      const body2 = object3[kState].body;
       return body2 != null && (body2.stream.locked || util.isDisturbed(body2.stream));
     }
     function parseJSONFromBytes(bytes) {
@@ -6390,7 +6391,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path, host, upgrade, blocking, reset } = request;
+      const { method, path: path3, host, upgrade, blocking, reset } = request;
       let { body: body2, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body2)) {
@@ -6465,7 +6466,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path} HTTP/1.1\r
+      let header = `${method} ${path3} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6794,7 +6795,7 @@ var require_client_h2 = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/dispatcher/client-h2.js"(exports2, module2) {
     "use strict";
     var assert2 = require("node:assert");
-    var { pipeline } = require("node:stream");
+    var { pipeline: pipeline2 } = require("node:stream");
     var util = require_util();
     var {
       RequestContentLengthMismatchError,
@@ -6991,7 +6992,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body: body2 } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -7058,7 +7059,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path;
+      headers[HTTP2_HEADER_PATH] = path3;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
@@ -7241,7 +7242,7 @@ var require_client_h2 = __commonJS({
     }
     function writeStream(abort, socket, expectsPayload, h2stream, body2, client, request, contentLength) {
       assert2(contentLength !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
-      const pipe2 = pipeline(
+      const pipe2 = pipeline2(
         body2,
         h2stream,
         (err) => {
@@ -7353,12 +7354,12 @@ var require_redirect_handler = __commonJS({
       }
     };
     var RedirectHandler = class {
-      constructor(dispatch, maxRedirections, opts, handler) {
+      constructor(dispatch2, maxRedirections, opts, handler) {
         if (maxRedirections != null && (!Number.isInteger(maxRedirections) || maxRedirections < 0)) {
           throw new InvalidArgumentError("maxRedirections must be a positive number");
         }
         util.validateHandler(handler, opts.method, opts.upgrade);
-        this.dispatch = dispatch;
+        this.dispatch = dispatch2;
         this.location = null;
         this.abort = null;
         this.opts = { ...opts, maxRedirections: 0 };
@@ -7411,9 +7412,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path = search ? `${pathname}${search}` : pathname;
+        const path3 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path;
+        this.opts.path = path3;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7495,15 +7496,15 @@ var require_redirect_interceptor = __commonJS({
     "use strict";
     var RedirectHandler = require_redirect_handler();
     function createRedirectInterceptor({ maxRedirections: defaultMaxRedirections }) {
-      return (dispatch) => {
+      return (dispatch2) => {
         return function Intercept(opts, handler) {
           const { maxRedirections = defaultMaxRedirections } = opts;
           if (!maxRedirections) {
-            return dispatch(opts, handler);
+            return dispatch2(opts, handler);
           }
-          const redirectHandler = new RedirectHandler(dispatch, maxRedirections, opts, handler);
+          const redirectHandler = new RedirectHandler(dispatch2, maxRedirections, opts, handler);
           opts = { ...opts, maxRedirections: 0 };
-          return dispatch(opts, redirectHandler);
+          return dispatch2(opts, redirectHandler);
         };
       };
     }
@@ -8648,10 +8649,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path = "/",
+          path: path3 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path;
+        opts.path = origin + path3;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -10282,7 +10283,7 @@ var require_api_pipeline = __commonJS({
         util.destroy(ret, err);
       }
     };
-    function pipeline(opts, handler) {
+    function pipeline2(opts, handler) {
       try {
         const pipelineHandler = new PipelineHandler(opts, handler);
         this.dispatch({ ...opts, body: pipelineHandler.req }, pipelineHandler);
@@ -10291,7 +10292,7 @@ var require_api_pipeline = __commonJS({
         return new PassThrough().destroy(err);
       }
     }
-    module2.exports = pipeline;
+    module2.exports = pipeline2;
   }
 });
 
@@ -10623,20 +10624,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path) {
-      if (typeof path !== "string") {
-        return path;
+    function safeUrl(path3) {
+      if (typeof path3 !== "string") {
+        return path3;
       }
-      const pathSegments = path.split("?");
+      const pathSegments = path3.split("?");
       if (pathSegments.length !== 2) {
-        return path;
+        return path3;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path, method, body: body2, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path);
+    function matchKey(mockDispatch2, { path: path3, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path3);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10658,7 +10659,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path }) => matchValue(safeUrl(path), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10685,20 +10686,20 @@ var require_mock_utils = __commonJS({
       return newMockDispatch;
     }
     function deleteMockDispatch(mockDispatches, key) {
-      const index = mockDispatches.findIndex((dispatch) => {
-        if (!dispatch.consumed) {
+      const index = mockDispatches.findIndex((dispatch2) => {
+        if (!dispatch2.consumed) {
           return false;
         }
-        return matchKey(dispatch, key);
+        return matchKey(dispatch2, key);
       });
       if (index !== -1) {
         mockDispatches.splice(index, 1);
       }
     }
     function buildKey(opts) {
-      const { path, method, body: body2, headers, query } = opts;
+      const { path: path3, method, body: body2, headers, query } = opts;
       return {
-        path,
+        path: path3,
         method,
         body: body2,
         headers,
@@ -10779,7 +10780,7 @@ var require_mock_utils = __commonJS({
       const agent = this[kMockAgent];
       const origin = this[kOrigin];
       const originalDispatch = this[kOriginalDispatch];
-      return function dispatch(opts, handler) {
+      return function dispatch2(opts, handler) {
         if (agent.isMockActive) {
           try {
             mockDispatch.call(this, opts, handler);
@@ -11141,13 +11142,13 @@ var require_pluralizer = __commonJS({
 var require_pending_interceptors_formatter = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/mock/pending-interceptors-formatter.js"(exports2, module2) {
     "use strict";
-    var { Transform } = require("node:stream");
+    var { Transform: Transform2 } = require("node:stream");
     var { Console } = require("node:console");
     var PERSISTENT = process.versions.icu ? "\u2705" : "Y ";
     var NOT_PERSISTENT = process.versions.icu ? "\u274C" : "N ";
     module2.exports = class PendingInterceptorsFormatter {
       constructor({ disableColors } = {}) {
-        this.transform = new Transform({
+        this.transform = new Transform2({
           transform(chunk, _enc, cb) {
             cb(null, chunk);
           }
@@ -11161,10 +11162,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path,
+            Path: path3,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -11289,7 +11290,7 @@ var require_mock_agent = __commonJS({
       }
       pendingInterceptors() {
         const mockAgentClients = this[kClients];
-        return Array.from(mockAgentClients.entries()).flatMap(([origin, scope]) => scope[kDispatches].map((dispatch) => ({ ...dispatch, origin }))).filter(({ pending }) => pending);
+        return Array.from(mockAgentClients.entries()).flatMap(([origin, scope]) => scope[kDispatches].map((dispatch2) => ({ ...dispatch2, origin }))).filter(({ pending }) => pending);
       }
       assertNoPendingInterceptors({ pendingInterceptorsFormatter = new PendingInterceptorsFormatter() } = {}) {
         const pending = this.pendingInterceptors();
@@ -11386,19 +11387,19 @@ var require_redirect = __commonJS({
     var RedirectHandler = require_redirect_handler();
     module2.exports = (opts) => {
       const globalMaxRedirections = opts?.maxRedirections;
-      return (dispatch) => {
+      return (dispatch2) => {
         return function redirectInterceptor(opts2, handler) {
           const { maxRedirections = globalMaxRedirections, ...baseOpts } = opts2;
           if (!maxRedirections) {
-            return dispatch(opts2, handler);
+            return dispatch2(opts2, handler);
           }
           const redirectHandler = new RedirectHandler(
-            dispatch,
+            dispatch2,
             maxRedirections,
             opts2,
             handler
           );
-          return dispatch(baseOpts, redirectHandler);
+          return dispatch2(baseOpts, redirectHandler);
         };
       };
     };
@@ -11411,15 +11412,15 @@ var require_retry = __commonJS({
     "use strict";
     var RetryHandler = require_retry_handler();
     module2.exports = (globalOpts) => {
-      return (dispatch) => {
+      return (dispatch2) => {
         return function retryInterceptor(opts, handler) {
-          return dispatch(
+          return dispatch2(
             opts,
             new RetryHandler(
               { ...opts, retryOptions: { ...globalOpts, ...opts.retryOptions } },
               {
                 handler,
-                dispatch
+                dispatch: dispatch2
               }
             )
           );
@@ -11512,14 +11513,14 @@ var require_dump = __commonJS({
     function createDumpInterceptor({ maxSize: defaultMaxSize } = {
       maxSize: 1024 * 1024
     }) {
-      return (dispatch) => {
+      return (dispatch2) => {
         return function Intercept(opts, handler) {
           const { dumpMaxSize = defaultMaxSize } = opts;
           const dumpHandler = new DumpHandler(
             { maxSize: dumpMaxSize },
             handler
           );
-          return dispatch(opts, dumpHandler);
+          return dispatch2(opts, dumpHandler);
         };
       };
     }
@@ -11685,16 +11686,16 @@ var require_dns = __commonJS({
       setRecords(origin, addresses) {
         const timestamp5 = Date.now();
         const records = { records: { 4: null, 6: null } };
-        for (const record2 of addresses) {
-          record2.timestamp = timestamp5;
-          if (typeof record2.ttl === "number") {
-            record2.ttl = Math.min(record2.ttl, this.#maxTTL);
+        for (const record3 of addresses) {
+          record3.timestamp = timestamp5;
+          if (typeof record3.ttl === "number") {
+            record3.ttl = Math.min(record3.ttl, this.#maxTTL);
           } else {
-            record2.ttl = this.#maxTTL;
+            record3.ttl = this.#maxTTL;
           }
-          const familyRecords = records.records[record2.family] ?? { ips: [] };
-          familyRecords.ips.push(record2);
-          records.records[record2.family] = familyRecords;
+          const familyRecords = records.records[record3.family] ?? { ips: [] };
+          familyRecords.ips.push(record3);
+          records.records[record3.family] = familyRecords;
         }
         this.#records.set(origin.hostname, records);
       }
@@ -11708,13 +11709,13 @@ var require_dns = __commonJS({
       #dispatch = null;
       #handler = null;
       #origin = null;
-      constructor(state, { origin, handler, dispatch }, opts) {
+      constructor(state, { origin, handler, dispatch: dispatch2 }, opts) {
         super(handler);
         this.#origin = origin;
         this.#handler = handler;
         this.#opts = { ...opts };
         this.#state = state;
-        this.#dispatch = dispatch;
+        this.#dispatch = dispatch2;
       }
       onError(err) {
         switch (err.code) {
@@ -11783,11 +11784,11 @@ var require_dns = __commonJS({
         maxItems: interceptorOpts?.maxItems ?? Infinity
       };
       const instance = new DNSInstance(opts);
-      return (dispatch) => {
+      return (dispatch2) => {
         return function dnsInterceptor(origDispatchOpts, handler) {
           const origin = origDispatchOpts.origin.constructor === URL ? origDispatchOpts.origin : new URL(origDispatchOpts.origin);
           if (isIP(origin.hostname) !== 0) {
-            return dispatch(origDispatchOpts, handler);
+            return dispatch2(origDispatchOpts, handler);
           }
           instance.runLookup(origin, origDispatchOpts, (err, newOrigin) => {
             if (err) {
@@ -11804,9 +11805,9 @@ var require_dns = __commonJS({
                 ...origDispatchOpts.headers
               }
             };
-            dispatch(
+            dispatch2(
               dispatchOpts,
-              instance.getHandler({ origin, dispatch, handler }, origDispatchOpts)
+              instance.getHandler({ origin, dispatch: dispatch2, handler }, origDispatchOpts)
             );
           });
           return true;
@@ -11842,10 +11843,10 @@ var require_headers = __commonJS({
       while (j > i && isHTTPWhiteSpaceCharCode(potentialValue.charCodeAt(i))) ++i;
       return i === 0 && j === potentialValue.length ? potentialValue : potentialValue.substring(i, j);
     }
-    function fill(headers, object2) {
-      if (Array.isArray(object2)) {
-        for (let i = 0; i < object2.length; ++i) {
-          const header = object2[i];
+    function fill(headers, object3) {
+      if (Array.isArray(object3)) {
+        for (let i = 0; i < object3.length; ++i) {
+          const header = object3[i];
           if (header.length !== 2) {
             throw webidl.errors.exception({
               header: "Headers constructor",
@@ -11854,10 +11855,10 @@ var require_headers = __commonJS({
           }
           appendHeader(headers, header[0], header[1]);
         }
-      } else if (typeof object2 === "object" && object2 !== null) {
-        const keys = Object.keys(object2);
+      } else if (typeof object3 === "object" && object3 !== null) {
+        const keys = Object.keys(object3);
         for (let i = 0; i < keys.length; ++i) {
-          appendHeader(headers, keys[i], object2[keys[i]]);
+          appendHeader(headers, keys[i], object3[keys[i]]);
         }
       } else {
         throw webidl.errors.conversionFailed({
@@ -13456,7 +13457,7 @@ var require_fetch = __commonJS({
       subresourceSet
     } = require_constants3();
     var EE = require("node:events");
-    var { Readable, pipeline, finished } = require("node:stream");
+    var { Readable, pipeline: pipeline2, finished } = require("node:stream");
     var { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = require_util();
     var { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = require_data_url();
     var { getGlobalDispatcher } = require_global2();
@@ -14218,7 +14219,7 @@ var require_fetch = __commonJS({
         })();
       }
       try {
-        const { body: body2, status, statusText, headersList, socket } = await dispatch({ body: requestBody });
+        const { body: body2, status, statusText, headersList, socket } = await dispatch2({ body: requestBody });
         if (socket) {
           response = makeResponse({ status, statusText, headersList, socket });
         } else {
@@ -14317,7 +14318,7 @@ var require_fetch = __commonJS({
         fetchParams.controller.connection.destroy();
       }
       return response;
-      function dispatch({ body: body2 }) {
+      function dispatch2({ body: body2 }) {
         const url2 = requestCurrentURL(request);
         const agent = fetchParams.controller.dispatcher;
         return new Promise((resolve, reject) => agent.dispatch(
@@ -14400,7 +14401,7 @@ var require_fetch = __commonJS({
                 status,
                 statusText,
                 headersList,
-                body: decoders.length ? pipeline(this.body, ...decoders, (err) => {
+                body: decoders.length ? pipeline2(this.body, ...decoders, (err) => {
                   if (err) {
                     this.onError(err);
                   }
@@ -16045,9 +16046,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path) {
-      for (let i = 0; i < path.length; ++i) {
-        const code = path.charCodeAt(i);
+    function validateCookiePath(path3) {
+      for (let i = 0; i < path3.length; ++i) {
+        const code = path3.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code > 126 || // exclude DEL and non-ascii
         code === 59) {
@@ -17318,7 +17319,7 @@ var require_permessage_deflate = __commonJS({
 var require_receiver = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/websocket/receiver.js"(exports2, module2) {
     "use strict";
-    var { Writable } = require("node:stream");
+    var { Writable: Writable2 } = require("node:stream");
     var assert2 = require("node:assert");
     var { parserStates, opcodes, states, emptyBuffer, sentCloseFrameState } = require_constants5();
     var { kReadyState, kSentClose, kResponse, kReceivedClose } = require_symbols5();
@@ -17341,7 +17342,7 @@ var require_receiver = __commonJS({
       closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
       failWebsocketConnection(ws, reason);
     }
-    var ByteParser = class extends Writable {
+    var ByteParser = class extends Writable2 {
       #buffers = [];
       #fragmentsBytes = 0;
       #byteOffset = 0;
@@ -18189,7 +18190,7 @@ var require_util8 = __commonJS({
 var require_eventsource_stream = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/eventsource/eventsource-stream.js"(exports2, module2) {
     "use strict";
-    var { Transform } = require("node:stream");
+    var { Transform: Transform2 } = require("node:stream");
     var { isASCIINumber, isValidLastEventId } = require_util8();
     var BOM = [239, 187, 191];
     var LF = 10;
@@ -18230,7 +18231,7 @@ var require_eventsource_stream = __commonJS({
       }
       return true;
     }
-    var EventSourceStream = class extends Transform {
+    var EventSourceStream = class extends Transform2 {
       /**
        * @type {eventSourceSettings}
        */
@@ -18529,7 +18530,7 @@ ${value}`;
 var require_eventsource = __commonJS({
   "../../node_modules/.pnpm/undici@6.28.1/node_modules/undici/lib/web/eventsource/eventsource.js"(exports2, module2) {
     "use strict";
-    var { pipeline } = require("node:stream");
+    var { pipeline: pipeline2 } = require("node:stream");
     var { fetching } = require_fetch();
     var { makeRequest } = require_request2();
     var { webidl } = require_webidl();
@@ -18687,7 +18688,7 @@ var require_eventsource = __commonJS({
               ));
             }
           });
-          pipeline(
+          pipeline2(
             response.body.stream,
             eventSourceStream,
             (error63) => {
@@ -18889,11 +18890,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path = opts.path;
+          let path3 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path = `/${path}`;
+            path3 = `/${path3}`;
           }
-          url2 = new URL(util.parseOrigin(url2).origin + path);
+          url2 = new URL(util.parseOrigin(url2).origin + path3);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -18963,6 +18964,14 @@ var require_undici = __commonJS({
     module2.exports.EventSource = EventSource;
   }
 });
+
+// src/effects-main.ts
+var effects_main_exports = {};
+__export(effects_main_exports, {
+  applyOrderedPlan: () => applyOrderedPlan,
+  runEffectsMain: () => runEffectsMain
+});
+module.exports = __toCommonJS(effects_main_exports);
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
 var os = __toESM(require("os"), 1);
@@ -20283,8 +20292,9 @@ function getIDToken(aud) {
 }
 
 // src/effects-main.ts
-var import_node_crypto = require("node:crypto");
-var import_promises = require("node:fs/promises");
+var import_node_crypto3 = require("node:crypto");
+var import_promises3 = require("node:fs/promises");
+var import_node_path2 = __toESM(require("node:path"), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -21008,9 +21018,9 @@ function floatSafeRemainder(val, step) {
   return ratio - roundedRatio;
 }
 var EVALUATING = /* @__PURE__ */ Symbol("evaluating");
-function defineLazy(object2, key, getter) {
+function defineLazy(object3, key, getter) {
   let value = void 0;
-  Object.defineProperty(object2, key, {
+  Object.defineProperty(object3, key, {
     get() {
       if (value === EVALUATING) {
         return void 0;
@@ -21022,7 +21032,7 @@ function defineLazy(object2, key, getter) {
       return value;
     },
     set(v) {
-      Object.defineProperty(object2, key, {
+      Object.defineProperty(object3, key, {
         value: v
         // configurable: true,
       });
@@ -21102,10 +21112,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path) {
-  if (!path)
+function getElementAtPath(obj, path3) {
+  if (!path3)
     return obj;
-  return path.reduce((acc, key) => acc?.[key], obj);
+  return path3.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -21445,11 +21455,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path, issues) {
+function prefixIssues(path3, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path);
+    iss.path.unshift(path3);
     return iss;
   });
 }
@@ -21899,16 +21909,16 @@ function flattenError(error63, mapper = (issue3) => issue3.message) {
 }
 function formatError(error63, mapper = (issue3) => issue3.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error64, path = []) => {
+  const processError = (error64, path3 = []) => {
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
       } else {
-        const fullpath = [...path, ...issue3.path];
+        const fullpath = [...path3, ...issue3.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue3));
         } else {
@@ -21947,17 +21957,17 @@ function formatError(error63, mapper = (issue3) => issue3.message) {
 }
 function treeifyError(error63, mapper = (issue3) => issue3.message) {
   const result = { errors: [] };
-  const processError = (error64, path = []) => {
+  const processError = (error64, path3 = []) => {
     var _a3;
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
       } else {
-        const fullpath = [...path, ...issue3.path];
+        const fullpath = [...path3, ...issue3.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue3));
           continue;
@@ -21996,8 +22006,8 @@ function treeifyError(error63, mapper = (issue3) => issue3.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path) {
+  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path3) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -36089,8 +36099,8 @@ function foldObjects(members2) {
   }
   const properties = {};
   const required2 = /* @__PURE__ */ new Set();
-  for (const object2 of objects) {
-    for (const key in object2.properties) {
+  for (const object3 of objects) {
+    for (const key in object3.properties) {
       if (Object.prototype.hasOwnProperty.call(properties, key))
         continue;
       const parts = [];
@@ -36104,18 +36114,18 @@ function foldObjects(members2) {
       const merged = parts.length === 1 ? parts[0] : foldObjects(parts) ?? { allOf: parts };
       assignProp(properties, key, merged);
     }
-    for (const key of object2.required ?? [])
+    for (const key of object3.required ?? [])
       required2.add(key);
   }
   const folded = { type: "object", properties };
   if (required2.size)
     folded.required = [...required2];
-  if (objects.every((object2) => object2.additionalProperties === false)) {
+  if (objects.every((object3) => object3.additionalProperties === false)) {
     folded.additionalProperties = false;
   } else {
     const constraints = [];
-    for (const object2 of objects) {
-      const constraint = undeclaredConstraint(object2);
+    for (const object3 of objects) {
+      const constraint = undeclaredConstraint(object3);
       if (constraint && !constraints.some((seen) => JSON.stringify(seen) === JSON.stringify(constraint)))
         constraints.push(constraint);
     }
@@ -36890,8 +36900,8 @@ function rewriteKeyNames(ctx) {
       bySchema.set(entry.schema, entry);
   }
   const rewrites = /* @__PURE__ */ new Map();
-  for (const record2 of pendingRecords.get(ctx) ?? []) {
-    const seen = ctx.seen.get(record2);
+  for (const record3 of pendingRecords.get(ctx) ?? []) {
+    const seen = ctx.seen.get(record3);
     const names = (seen?.def ?? seen?.schema)?.propertyNames;
     if (!names || names === true || rewrites.has(names))
       continue;
@@ -39099,13 +39109,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path = ref.slice(1).split("/").filter(Boolean);
-  if (path.length === 0) {
+  const path3 = ref.slice(1).split("/").filter(Boolean);
+  if (path3.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path[0] === defsKey) {
-    const key = path[1] === void 0 ? void 0 : decodeJSONPointerSegment(path[1]);
+  if (path3[0] === defsKey) {
+    const key = path3[1] === void 0 ? void 0 : decodeJSONPointerSegment(path3[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -39975,13 +39985,16 @@ var authoringPrincipalSchema = external_exports.discriminatedUnion("provider", [
 
 // ../contracts/src/repository.ts
 var name = external_exports.string().trim().min(1).max(255).regex(/^[A-Za-z0-9_.-]+$/);
-var repositoryRefSchema = external_exports.object({
+var operationRepositoryRefSchema = external_exports.object({
   provider: external_exports.literal("github"),
   id: githubNumericIdSchema,
-  installationId: githubNumericIdSchema,
+  installationId: githubNumericIdSchema.optional(),
   owner: name,
   name,
   defaultBranch: external_exports.string().trim().min(1).max(255)
+}).strict();
+var repositoryRefSchema = operationRepositoryRefSchema.extend({
+  installationId: githubNumericIdSchema
 }).strict();
 var issueRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
 var pullRequestRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
@@ -40159,11 +40172,35 @@ function isValidGitBranchName(value) {
 var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(isValidGitBranchName, "invalid Git branch name");
 var gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
 var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
+var COMMIT_FILE_LIMIT = 1e3;
+var INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES = 7e6;
 var canonicalBase64Schema = external_exports.string().regex(
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
   "expected canonical base64 content"
 );
-var operationBase = external_exports.object({ schemaVersion: external_exports.literal("v2"), id: operationIdSchema, repository: repositoryRefSchema });
+var commitFilePathSchema = external_exports.string().min(1).max(1024).refine(
+  (path3) => !path3.startsWith("/") && !path3.endsWith("/") && !path3.includes("\\") && path3.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  "invalid repository path"
+);
+var inlineCommitFileSchema = external_exports.object({
+  path: commitFilePathSchema,
+  contentBase64: canonicalBase64Schema.max(14e5).nullable()
+}).strict();
+var capturedCommitFileSchema = external_exports.object({
+  path: commitFilePathSchema,
+  captured: external_exports.discriminatedUnion("status", [
+    external_exports.object({
+      status: external_exports.enum(["added", "modified"]),
+      mode: external_exports.enum(["100644", "100755", "120000"]),
+      /** Bounded by GitHub's per-blob maximum, so an inapplicable capture is refused before apply. */
+      sizeBytes: external_exports.number().int().nonnegative().max(100 * 1024 * 1024),
+      sha256: external_exports.string().regex(/^[a-f0-9]{64}$/)
+    }).strict(),
+    external_exports.object({ status: external_exports.literal("deleted") }).strict()
+  ])
+}).strict();
+var commitFileSchema = external_exports.union([inlineCommitFileSchema, capturedCommitFileSchema]);
+var operationBase = external_exports.object({ schemaVersion: external_exports.literal("v2"), id: operationIdSchema, repository: operationRepositoryRefSchema });
 var expectedTimestamp = external_exports.iso.datetime();
 var body = external_exports.string().min(1).max(65536);
 var issueBase = operationBase.extend({ issueNumber: external_exports.number().int().positive(), expectedIssueState: external_exports.enum(["open", "closed"]), expectedIssueUpdatedAt: expectedTimestamp });
@@ -40213,16 +40250,23 @@ var operationOptions = [
     branch: gardenerBranchNameSchema,
     expectedHeadSha: shaSchema,
     message: external_exports.string().trim().min(1).max(1e3),
-    files: external_exports.array(external_exports.object({ path: external_exports.string().min(1).max(1024).refine((path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "invalid repository path"), contentBase64: canonicalBase64Schema.max(14e5).nullable() }).strict()).min(1).max(100)
+    files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT)
   }).strict().superRefine((value, context) => {
     const paths = /* @__PURE__ */ new Set();
     let encodedBytes = 0;
+    let inlineFiles = 0;
     value.files.forEach((file2, index) => {
       if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file2.path);
-      encodedBytes += file2.contentBase64?.length ?? 0;
+      if ("contentBase64" in file2) {
+        inlineFiles += 1;
+        encodedBytes += file2.contentBase64?.length ?? 0;
+      }
     });
-    if (encodedBytes > 7e6) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
+    if (encodedBytes > INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
+    if (inlineFiles > 0 && inlineFiles !== value.files.length) {
+      context.addIssue({ code: "custom", path: ["files"], message: "a commit may not mix inline content with capture-backed content" });
+    }
   }),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open_draft"),
@@ -40239,8 +40283,21 @@ var operationOptions = [
     expectedState: external_exports.literal("open"),
     expectedDraft: external_exports.literal(false),
     method: external_exports.enum(["merge", "squash", "rebase"]),
+    /**
+     * The real gate. Merging with zero verified checks is not something this
+     * contract can express, in any target.
+     */
     requiredChecks: external_exports.array(requiredCheckSchema).min(1).max(100),
-    expectedBranchProtectionHash: external_exports.string().regex(/^[a-f0-9]{64}$/)
+    /**
+     * Digest of the branch-protection configuration observed when the merge was
+     * proposed. Optional because the Actions target cannot read branch
+     * protection with a repository `GITHUB_TOKEN` and must not fabricate a
+     * digest it never computed; GitHub itself remains the authoritative
+     * enforcement point there. Installation-backed boundaries that *can* read
+     * protection still require it — see `evaluateOperationPolicy`, which denies
+     * a merge whose expected digest is absent.
+     */
+    expectedBranchProtectionHash: external_exports.string().regex(/^[a-f0-9]{64}$/).optional()
   }).strict(),
   discussionBase.extend({ kind: external_exports.literal("discussion.comment.create"), body }).strict(),
   discussionBase.extend({ kind: external_exports.literal("discussion.comment.update"), ...commentUpdate }).strict(),
@@ -40305,7 +40362,7 @@ var operationReceiptSchema = external_exports.object({
   operationHash: external_exports.string().regex(/^[a-f0-9]{64}$/),
   kind: operationKindSchema,
   status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
-  attempt: external_exports.number().int().positive().max(20),
+  attempt: external_exports.number().int().positive(),
   attemptedAt: external_exports.iso.datetime(),
   completedAt: external_exports.iso.datetime(),
   providerRequestId: external_exports.string().min(1).max(255).optional(),
@@ -40316,6 +40373,84 @@ var operationReceiptSchema = external_exports.object({
   if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
   if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
 });
+var issueOutputs = { issueNumber: "resourceNumber" };
+var pullOutputs = { pullNumber: "resourceNumber" };
+var discussionOutputs = { discussionNumber: "resourceNumber" };
+var commentOutputs = { commentId: "githubId", commentUrl: "url" };
+var releaseOutputs = {
+  releaseId: "githubId",
+  tagName: "string",
+  releaseUrl: "url",
+  draft: "boolean",
+  prerelease: "boolean"
+};
+var operationOutputCatalog = {
+  "issue.label.add": { ...issueOutputs, label: "string" },
+  "issue.label.remove": { ...issueOutputs, label: "string" },
+  "issue.comment.create": { ...issueOutputs, ...commentOutputs },
+  "issue.comment.update": { ...issueOutputs, ...commentOutputs },
+  "issue.close": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
+  "issue.reopen": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
+  "issue.assignee.add": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "issue.assignee.remove": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "pull_request.comment.create": { ...pullOutputs, ...commentOutputs },
+  "pull_request.comment.update": { ...pullOutputs, ...commentOutputs },
+  "pull_request.review.submit": { ...pullOutputs, reviewId: "githubId", reviewUrl: "url", reviewState: "string" },
+  "pull_request.reviewer.request": { ...pullOutputs },
+  "pull_request.reviewer.remove": { ...pullOutputs },
+  "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
+  "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
+  "commit.create": {
+    branch: "gardenerBranch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    parentSha: "commitSha",
+    commitUrl: "url"
+  },
+  "pull_request.open_draft": {
+    ...pullOutputs,
+    pullUrl: "url",
+    pullNodeId: "nodeId",
+    headRef: "gardenerBranch",
+    headSha: "commitSha",
+    baseRef: "string"
+  },
+  "pull_request.merge": { ...pullOutputs, mergeCommitSha: "commitSha", pullUrl: "url" },
+  "discussion.comment.create": { ...discussionOutputs, ...commentOutputs, commentNodeId: "nodeId" },
+  "discussion.comment.update": { ...discussionOutputs, ...commentOutputs, commentNodeId: "nodeId" },
+  "discussion.answer.mark": { ...discussionOutputs, answerCommentId: "nullableGithubId" },
+  "discussion.answer.unmark": { ...discussionOutputs, answerCommentId: "nullableGithubId" },
+  "discussion.close": { ...discussionOutputs, state: "openClosedState", discussionUrl: "url" },
+  "discussion.reopen": { ...discussionOutputs, state: "openClosedState", discussionUrl: "url" },
+  "check.rerun": { checkRunId: "githubId", headSha: "commitSha", status: "string" },
+  "release.create": { ...releaseOutputs },
+  "release.update": { ...releaseOutputs },
+  "release.publish": { ...releaseOutputs },
+  "release.delete": { releaseId: "githubId", tagName: "string" }
+};
+function operationOutputType(kind, output2) {
+  const outputs = operationOutputCatalog[kind];
+  return Object.hasOwn(outputs, output2) ? outputs[output2] : void 0;
+}
+function operationOutputNames(kind) {
+  return Object.keys(operationOutputCatalog[kind]).sort();
+}
+var outputSentinels = {
+  string: "gardener-step-output",
+  resourceNumber: 1,
+  boolean: true,
+  commitSha: "0".repeat(40),
+  githubId: "1",
+  nullableGithubId: "1",
+  gardenerBranch: "gardener/step-output",
+  gitRef: "refs/heads/gardener/step-output",
+  url: "https://github.com/gardener/step-output",
+  nodeId: "GardenerStepOutput",
+  openClosedState: "open"
+};
+function operationOutputSentinel(type) {
+  return outputSentinels[type];
+}
 
 // ../contracts/src/capabilities.ts
 var observationCapabilityValues = [
@@ -40345,8 +40480,8 @@ var workspaceCapabilityValues = [
 ];
 var workspaceCapabilitySchema = external_exports.enum(workspaceCapabilityValues);
 var effectCapabilitySchema = operationKindSchema;
-function uniqueValues(values, context, path) {
-  if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path, message: "capabilities must be unique" });
+function uniqueValues(values, context, path3) {
+  if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path: path3, message: "capabilities must be unique" });
 }
 var requestedCapabilitySetSchema = external_exports.object({
   observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length).default([]),
@@ -40699,7 +40834,7 @@ var runGrantV2Schema = external_exports.object({
 var hash4 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var identifier = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
 var entityId = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var relativePath = external_exports.string().min(1).max(1024).refine((path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "package paths must be normalized POSIX-relative paths");
+var relativePath = external_exports.string().min(1).max(1024).refine((path3) => !path3.startsWith("/") && !path3.endsWith("/") && !path3.includes("\\") && path3.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "package paths must be normalized POSIX-relative paths");
 var base643 = external_exports.string().max(28e5).regex(
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
   "expected canonical base64 bytes"
@@ -40947,7 +41082,7 @@ var agentStepV1Schema = external_exports.object({
   kind: stepKindSchema,
   state: stepStateSchema,
   ordinal: external_exports.number().int().nonnegative(),
-  attempt: external_exports.number().int().positive().max(20),
+  attempt: external_exports.number().int().positive(),
   inputHash: hash5,
   outputHash: hash5.nullable(),
   artifactIds: external_exports.array(id5).max(100),
@@ -41120,26 +41255,141 @@ var sha1 = external_exports.string().regex(/^[a-f0-9]{40}$/);
 var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var repositoryFullName = external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201);
 var relativePath2 = external_exports.string().min(1).max(1024).refine(
-  (path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\") && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  (path3) => !path3.startsWith("/") && !path3.endsWith("/") && !path3.includes("\\") && path3.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "expected a normalized repository-relative POSIX path"
 );
+var taskLabelFilterV1Schema = external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([]);
+var branchFilterV1Schema = external_exports.string().trim().min(1).max(255).regex(
+  /^!?[A-Za-z0-9_.\-/*?+[\]]+$/,
+  "expected a GitHub branch filter pattern"
+);
+var CRON_FIELD_BOUNDS = [
+  [0, 59],
+  [0, 23],
+  [1, 31],
+  [1, 12],
+  [0, 6]
+];
+function cronFieldIsValid(field, low, high) {
+  if (field.length === 0) return false;
+  return field.split(",").every((item) => {
+    if (item.length === 0) return false;
+    const [range, step, ...excess] = item.split("/");
+    if (excess.length > 0 || range === void 0) return false;
+    if (step !== void 0) {
+      if (!/^[0-9]{1,2}$/.test(step)) return false;
+      const parsed = Number(step);
+      if (parsed < 1 || parsed > high) return false;
+    }
+    if (range === "*") return true;
+    const bounds = range.split("-");
+    if (bounds.length > 2) return false;
+    if (!bounds.every((bound) => /^[0-9]{1,2}$/.test(bound))) return false;
+    const numbers = bounds.map(Number);
+    if (numbers.some((value) => value < low || value > high)) return false;
+    return numbers.length === 1 || numbers[0] <= numbers[1];
+  });
+}
+var cronExpressionV1Schema = external_exports.string().trim().min(1).max(100).superRefine((value, context) => {
+  const fields = value.split(" ");
+  if (fields.length !== 5) {
+    context.addIssue({ code: "custom", message: "expected a five-field cron expression" });
+    return;
+  }
+  for (const [index, field] of fields.entries()) {
+    const [low, high] = CRON_FIELD_BOUNDS[index];
+    if (!cronFieldIsValid(field, low, high)) {
+      context.addIssue({
+        code: "custom",
+        message: `cron field ${index + 1} must use numbers ${low}-${high}, ranges, lists, or steps`
+      });
+    }
+  }
+});
+function labelGatedTrigger(kind) {
+  return external_exports.strictObject({ kind: external_exports.literal(kind), labelsAll: taskLabelFilterV1Schema });
+}
 var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
+  labelGatedTrigger("github.issue.opened"),
+  labelGatedTrigger("github.issue.edited"),
+  labelGatedTrigger("github.issue.labeled"),
+  labelGatedTrigger("github.issue.unlabeled"),
+  labelGatedTrigger("github.issue.reopened"),
+  labelGatedTrigger("github.issue_comment.created"),
+  labelGatedTrigger("github.pull_request.opened"),
+  labelGatedTrigger("github.pull_request.reopened"),
+  labelGatedTrigger("github.pull_request.synchronize"),
+  labelGatedTrigger("github.pull_request.ready_for_review"),
+  labelGatedTrigger("github.pull_request.converted_to_draft"),
+  labelGatedTrigger("github.pull_request.edited"),
+  labelGatedTrigger("github.pull_request.labeled"),
+  labelGatedTrigger("github.pull_request.unlabeled"),
+  labelGatedTrigger("github.pull_request_review.submitted"),
+  labelGatedTrigger("github.pull_request_review_comment.created"),
   external_exports.strictObject({
-    kind: external_exports.literal("github.issue.opened"),
-    labelsAll: external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([])
+    kind: external_exports.literal("github.push"),
+    /**
+     * At least one positive pattern is required. GitHub evaluates `branches`
+     * as an allowlist, so an all-negative list matches nothing and the task
+     * would never run.
+     */
+    branches: external_exports.array(branchFilterV1Schema).min(1).max(20).refine(
+      (branches) => branches.some((branch) => !branch.startsWith("!")),
+      "push branches must include at least one positive pattern"
+    )
   }),
-  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") })
+  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") }),
+  external_exports.strictObject({ kind: external_exports.literal("github.schedule"), cron: cronExpressionV1Schema }),
+  labelGatedTrigger("github.discussion.created"),
+  labelGatedTrigger("github.discussion.edited"),
+  labelGatedTrigger("github.discussion.answered"),
+  labelGatedTrigger("github.discussion.unanswered"),
+  labelGatedTrigger("github.discussion.labeled"),
+  labelGatedTrigger("github.discussion.unlabeled"),
+  labelGatedTrigger("github.discussion_comment.created")
 ]);
+var taskTriggerKindValues = [
+  "github.issue.opened",
+  "github.issue.edited",
+  "github.issue.labeled",
+  "github.issue.unlabeled",
+  "github.issue.reopened",
+  "github.issue_comment.created",
+  "github.pull_request.opened",
+  "github.pull_request.reopened",
+  "github.pull_request.synchronize",
+  "github.pull_request.ready_for_review",
+  "github.pull_request.converted_to_draft",
+  "github.pull_request.edited",
+  "github.pull_request.labeled",
+  "github.pull_request.unlabeled",
+  "github.pull_request_review.submitted",
+  "github.pull_request_review_comment.created",
+  "github.push",
+  "github.workflow_dispatch",
+  "github.schedule",
+  "github.discussion.created",
+  "github.discussion.edited",
+  "github.discussion.answered",
+  "github.discussion.unanswered",
+  "github.discussion.labeled",
+  "github.discussion.unlabeled",
+  "github.discussion_comment.created"
+];
+var triggerKindOrder = new Map(
+  taskTriggerKindValues.map((kind, index) => [kind, index])
+);
+var pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
+  (kind) => kind.startsWith("github.pull_request")
+);
 var taskToolV1Schema = external_exports.enum([
   "repository.read_file",
   "repository.list_files",
-  "repository.exec"
+  "repository.exec",
+  "provider.api.read"
 ]);
-var taskEffectKindV1Schema = external_exports.enum([
-  "issue.comment.create",
-  "issue.labels.update",
-  "repository.draft_pr.create"
-]);
+var taskEffectKindValues = operationKindValues;
+var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   "expected a lowercase DNS hostname or leading-wildcard hostname"
@@ -41160,7 +41410,14 @@ var taskLimitsV1Schema = external_exports.strictObject({
   maxTurns: external_exports.number().int().positive().max(32),
   maxToolCalls: external_exports.number().int().positive().max(256),
   inputTokens: external_exports.number().int().positive().max(1e6),
-  outputTokens: external_exports.number().int().positive().max(25e4)
+  outputTokens: external_exports.number().int().positive().max(25e4),
+  /**
+   * Optional task-authored effect-plan ceilings. When omitted Gardener adds no
+   * product cap and only provider and runtime ceilings apply. When present both
+   * planning and application fail closed.
+   */
+  maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
+  maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
 });
 var taskBundleV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-bundle/v1"),
@@ -41168,7 +41425,7 @@ var taskBundleV1Schema = external_exports.strictObject({
   name: external_exports.string().trim().min(1).max(100),
   description: external_exports.string().trim().min(1).max(1e3),
   instructions: external_exports.string().trim().min(1).max(1e5),
-  triggers: external_exports.array(taskTriggerV1Schema).min(1).max(20),
+  triggers: external_exports.array(taskTriggerV1Schema).min(1).max(taskTriggerKindValues.length),
   tools: external_exports.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
   effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   network: taskNetworkPolicyV1Schema,
@@ -41179,9 +41436,13 @@ var taskBundleV1Schema = external_exports.strictObject({
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
     }
   }
-  const triggers = bundle.triggers.map((trigger) => JSON.stringify(trigger));
-  if (new Set(triggers).size !== triggers.length) {
+  const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
+  if (new Set(triggerKinds).size !== triggerKinds.length) {
     context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must be unique" });
+  }
+  const positions = triggerKinds.map((kind) => triggerKindOrder.get(kind));
+  if (positions.some((position, index) => index > 0 && position <= positions[index - 1])) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must use canonical declaration order" });
   }
   if (bundle.limits.outputTokens < bundle.limits.maxTurns * 16) {
     context.addIssue({ code: "custom", path: ["limits", "outputTokens"], message: "outputTokens must permit at least 16 tokens per model turn" });
@@ -41195,12 +41456,92 @@ var normalizedRepositoryV1Schema = external_exports.strictObject({
   fullName: repositoryFullName,
   visibility: external_exports.enum(["public", "private", "internal"]),
   commitSha: sha1,
-  ref: external_exports.string().min(1).max(1024)
+  ref: external_exports.string().min(1).max(1024),
+  /**
+   * Default branch as GitHub reported it *in the triggering event payload*.
+   *
+   * Every exact operation embeds a repository identity, and that identity
+   * includes the default branch. The value is taken from the bounded event
+   * payload rather than read back from the API at apply time on purpose: the
+   * default branch is mutable, so a later fetch could return a value that was
+   * never true for this run and would silently change the canonical operation
+   * hash — the same hash that commit trailers and receipts reconcile against.
+   * Carrying the event's value keeps operation identity a function of the run.
+   */
+  defaultBranch: external_exports.string().trim().min(1).max(255)
 });
+var normalizedEventNameV1Schema = external_exports.enum([
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "workflow_dispatch",
+  "schedule",
+  "discussion",
+  "discussion_comment"
+]);
+var eventNameByTriggerKind = {
+  "github.issue.opened": "issues",
+  "github.issue.edited": "issues",
+  "github.issue.labeled": "issues",
+  "github.issue.unlabeled": "issues",
+  "github.issue.reopened": "issues",
+  "github.issue_comment.created": "issue_comment",
+  "github.pull_request.opened": "pull_request",
+  "github.pull_request.reopened": "pull_request",
+  "github.pull_request.synchronize": "pull_request",
+  "github.pull_request.ready_for_review": "pull_request",
+  "github.pull_request.converted_to_draft": "pull_request",
+  "github.pull_request.edited": "pull_request",
+  "github.pull_request.labeled": "pull_request",
+  "github.pull_request.unlabeled": "pull_request",
+  "github.pull_request_review.submitted": "pull_request_review",
+  "github.pull_request_review_comment.created": "pull_request_review_comment",
+  "github.push": "push",
+  "github.workflow_dispatch": "workflow_dispatch",
+  "github.schedule": "schedule",
+  "github.discussion.created": "discussion",
+  "github.discussion.edited": "discussion",
+  "github.discussion.answered": "discussion",
+  "github.discussion.unanswered": "discussion",
+  "github.discussion.labeled": "discussion",
+  "github.discussion.unlabeled": "discussion",
+  "github.discussion_comment.created": "discussion_comment"
+};
+var eventActionByTriggerKind = {
+  "github.issue.opened": "opened",
+  "github.issue.edited": "edited",
+  "github.issue.labeled": "labeled",
+  "github.issue.unlabeled": "unlabeled",
+  "github.issue.reopened": "reopened",
+  "github.issue_comment.created": "created",
+  "github.pull_request.opened": "opened",
+  "github.pull_request.reopened": "reopened",
+  "github.pull_request.synchronize": "synchronize",
+  "github.pull_request.ready_for_review": "ready_for_review",
+  "github.pull_request.converted_to_draft": "converted_to_draft",
+  "github.pull_request.edited": "edited",
+  "github.pull_request.labeled": "labeled",
+  "github.pull_request.unlabeled": "unlabeled",
+  "github.pull_request_review.submitted": "submitted",
+  "github.pull_request_review_comment.created": "created",
+  "github.push": null,
+  "github.workflow_dispatch": null,
+  "github.schedule": null,
+  "github.discussion.created": "created",
+  "github.discussion.edited": "edited",
+  "github.discussion.answered": "answered",
+  "github.discussion.unanswered": "unanswered",
+  "github.discussion.labeled": "labeled",
+  "github.discussion.unlabeled": "unlabeled",
+  "github.discussion_comment.created": "created"
+};
 var normalizedWorkflowV1Schema = external_exports.strictObject({
   runId: githubNumericId,
   runAttempt: external_exports.number().int().positive().max(1e3),
-  eventName: external_exports.enum(["issues", "workflow_dispatch"]),
+  eventName: normalizedEventNameV1Schema,
   workflowRef: external_exports.string().min(1).max(1024),
   jobWorkflowRef: external_exports.string().min(1).max(1024),
   runnerEnvironment: external_exports.literal("github-hosted")
@@ -41217,31 +41558,138 @@ var normalizedEventBase = {
   workflow: normalizedWorkflowV1Schema,
   actor: normalizedActorV1Schema
 };
-var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
-  external_exports.strictObject({
-    ...normalizedEventBase,
-    kind: external_exports.literal("github.issue.opened"),
-    issue: external_exports.strictObject({
-      id: githubNumericId,
-      number: external_exports.number().int().positive(),
-      title: external_exports.string().max(1024),
-      body: external_exports.string().max(65536).nullable(),
-      labels: external_exports.array(external_exports.string().trim().min(1).max(100)).max(100),
-      author: normalizedActorV1Schema
-    })
+var boundedLabels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100);
+var boundedBody = external_exports.string().max(65536).nullable();
+var githubNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
+var normalizedIssueV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema
+});
+var normalizedPullRequestRepositoryV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  fullName: repositoryFullName
+});
+var normalizedPullRequestV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+  draft: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  merged: external_exports.boolean(),
+  base: external_exports.strictObject({
+    ref: external_exports.string().min(1).max(255),
+    sha: sha1,
+    repo: normalizedPullRequestRepositoryV1Schema
   }),
-  external_exports.strictObject({
-    ...normalizedEventBase,
-    kind: external_exports.literal("github.workflow_dispatch"),
-    prompt: external_exports.string().trim().min(1).max(2e4)
+  /**
+   * Head revision identity. `repo` is nullable because GitHub omits it when the
+   * fork has been deleted; a null head repository can never satisfy same-repo
+   * enforcement, so the run fails closed.
+   */
+  head: external_exports.strictObject({
+    ref: external_exports.string().min(1).max(255),
+    sha: sha1,
+    repo: normalizedPullRequestRepositoryV1Schema.nullable()
   })
+});
+var normalizedCommentV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  body: boundedBody,
+  author: normalizedActorV1Schema
+});
+var normalizedReviewV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
+  body: boundedBody,
+  author: normalizedActorV1Schema
+});
+var normalizedDiscussionV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  nodeId: githubNodeId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: boundedBody,
+  labels: boundedLabels,
+  author: normalizedActorV1Schema,
+  category: external_exports.string().min(1).max(100),
+  answered: external_exports.boolean()
+});
+var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
+  id: githubNumericId,
+  nodeId: githubNodeId,
+  body: boundedBody,
+  author: normalizedActorV1Schema
+});
+var normalizedPushV1Schema = external_exports.strictObject({
+  ref: external_exports.string().min(1).max(1024),
+  before: sha1,
+  after: sha1,
+  forced: external_exports.boolean(),
+  /** Bounded commit summary; the full list is never carried into model context. */
+  commits: external_exports.array(external_exports.strictObject({
+    sha: sha1,
+    message: external_exports.string().max(4096),
+    author: external_exports.strictObject({ name: external_exports.string().max(200), email: external_exports.string().max(320) })
+  })).max(20),
+  /** Number of commits present in `commits`, which is never the push total. */
+  includedCommits: external_exports.number().int().min(0).max(20),
+  /**
+   * True when commits were dropped building this event. GitHub also caps its
+   * own push payload, so `false` does not prove the push was small; use
+   * `before`/`after` with the provider API when an exact range matters.
+   */
+  commitsTruncated: external_exports.boolean()
+});
+var changedLabel = external_exports.string().trim().min(1).max(100);
+function eventMember(kind, shape) {
+  return external_exports.strictObject({ ...normalizedEventBase, kind: external_exports.literal(kind), ...shape });
+}
+var issuePayload = { issue: normalizedIssueV1Schema };
+var pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+var discussionPayload = { discussion: normalizedDiscussionV1Schema };
+var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
+  eventMember("github.issue.opened", issuePayload),
+  eventMember("github.issue.edited", issuePayload),
+  eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
+  eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
+  eventMember("github.issue.reopened", issuePayload),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.pull_request.opened", pullRequestPayload),
+  eventMember("github.pull_request.reopened", pullRequestPayload),
+  eventMember("github.pull_request.synchronize", pullRequestPayload),
+  eventMember("github.pull_request.ready_for_review", pullRequestPayload),
+  eventMember("github.pull_request.converted_to_draft", pullRequestPayload),
+  eventMember("github.pull_request.edited", pullRequestPayload),
+  eventMember("github.pull_request.labeled", { ...pullRequestPayload, label: changedLabel }),
+  eventMember("github.pull_request.unlabeled", { ...pullRequestPayload, label: changedLabel }),
+  eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
+  eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.push", { push: normalizedPushV1Schema }),
+  eventMember("github.workflow_dispatch", { prompt: external_exports.string().trim().min(1).max(2e4) }),
+  eventMember("github.schedule", { cron: cronExpressionV1Schema }),
+  eventMember("github.discussion.created", discussionPayload),
+  eventMember("github.discussion.edited", discussionPayload),
+  eventMember("github.discussion.answered", discussionPayload),
+  eventMember("github.discussion.unanswered", discussionPayload),
+  eventMember("github.discussion.labeled", { ...discussionPayload, label: changedLabel }),
+  eventMember("github.discussion.unlabeled", { ...discussionPayload, label: changedLabel }),
+  eventMember("github.discussion_comment.created", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema })
 ]).superRefine((event, context) => {
   if (event.repository.fullName !== `${event.repository.owner}/${event.repository.name}`) {
     context.addIssue({ code: "custom", path: ["repository", "fullName"], message: "fullName must match repository owner and name" });
   }
-  const expectedEventName = event.kind === "github.issue.opened" ? "issues" : "workflow_dispatch";
-  if (event.workflow.eventName !== expectedEventName) {
+  if (event.workflow.eventName !== eventNameByTriggerKind[event.kind]) {
     context.addIssue({ code: "custom", path: ["workflow", "eventName"], message: "workflow eventName does not match normalized event kind" });
+  }
+  if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
+    context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
   }
 });
 var taskRunRequestV1Schema = external_exports.strictObject({
@@ -41278,58 +41726,616 @@ var taskToolResultV1Schema = external_exports.strictObject({
     context.addIssue({ code: "custom", path: ["exitCode"], message: "exitCode must match process completion status" });
   }
 });
+var taskStepNameV1Schema = external_exports.string().regex(
+  /^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/,
+  'expected a lowercase step name such as "comment" or "open-draft"'
+).max(63);
+var taskOutputNameV1Schema = external_exports.string().regex(/^[a-z][A-Za-z0-9]{0,63}$/);
+var prototypePollutingKeys = ["__proto__", "constructor", "prototype"];
+var prototypePollutingKeySet = new Set(prototypePollutingKeys);
+function isPrototypePollutingKey(key) {
+  return prototypePollutingKeySet.has(key);
+}
+var taskPayloadPointerV1Schema = external_exports.string().min(2).max(256).regex(/^(?:\/(?:[^~/]|~[01])*)+$/, 'expected an RFC 6901 JSON pointer such as "/body"').superRefine((pointer, context) => {
+  for (const segment of decodeJsonPointer(pointer)) {
+    if (isPrototypePollutingKey(segment)) {
+      context.addIssue({ code: "custom", message: `pointer segment "${segment}" is not addressable` });
+    }
+  }
+});
+var reservedPayloadKeys = ["schemaVersion", "id", "repository", "kind"];
+var reservedPayloadKeySet = new Set(reservedPayloadKeys);
+var MAX_PAYLOAD_DEPTH = 12;
+var MAX_PAYLOAD_BYTES = 1024 * 1024;
+var MAX_PAYLOAD_NODES = 1e5;
+var taskJsonValueV1Schema = external_exports.lazy(() => external_exports.union([
+  external_exports.string(),
+  external_exports.number().finite(),
+  external_exports.boolean(),
+  external_exports.null(),
+  external_exports.array(taskJsonValueV1Schema),
+  external_exports.record(external_exports.string(), taskJsonValueV1Schema)
+]));
+function canonicalJsonByteLength(value) {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === void 0) return null;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return null;
+  }
+}
+function inspectJsonStructure(root) {
+  const issues = [];
+  const ancestors = /* @__PURE__ */ new Set();
+  const stack = [{ value: root, depth: 1, enter: true }];
+  let nodes = 0;
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    const { value, depth } = frame;
+    if (!frame.enter) {
+      ancestors.delete(value);
+      continue;
+    }
+    if (issues.length > 0) break;
+    nodes += 1;
+    if (nodes > MAX_PAYLOAD_NODES) {
+      issues.push(`payload contains more than ${MAX_PAYLOAD_NODES} values`);
+      break;
+    }
+    if (depth > MAX_PAYLOAD_DEPTH) {
+      issues.push(`payload nests deeper than ${MAX_PAYLOAD_DEPTH} levels`);
+      break;
+    }
+    if (value === null) continue;
+    const type = typeof value;
+    if (type === "string" || type === "boolean") continue;
+    if (type === "number") {
+      if (!Number.isFinite(value)) issues.push("payload contains a non-finite number");
+      continue;
+    }
+    if (type !== "object") {
+      issues.push(`payload contains a ${type} value, which JSON cannot represent`);
+      continue;
+    }
+    const container = value;
+    if (ancestors.has(container)) {
+      issues.push("payload contains a circular reference");
+      break;
+    }
+    ancestors.add(container);
+    stack.push({ value: container, depth, enter: false });
+    if (Array.isArray(container)) {
+      for (const item of container) stack.push({ value: item, depth: depth + 1, enter: true });
+      continue;
+    }
+    for (const key of Reflect.ownKeys(container)) {
+      if (typeof key === "symbol") {
+        issues.push("payload contains a symbol key, which JSON cannot represent");
+        break;
+      }
+      if (isPrototypePollutingKey(key)) {
+        issues.push(`payload may not contain the key "${key}"`);
+        break;
+      }
+      stack.push({ value: container[key], depth: depth + 1, enter: true });
+    }
+  }
+  return issues;
+}
+var taskEffectPayloadV1Schema = external_exports.unknown().superRefine((payload, context) => {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    context.addIssue({ code: "custom", message: "payload must be a JSON object" });
+    return;
+  }
+  for (const message of inspectJsonStructure(payload)) {
+    context.addIssue({ code: "custom", message });
+    return;
+  }
+  for (const key of Object.keys(payload)) {
+    if (reservedPayloadKeySet.has(key)) {
+      context.addIssue({ code: "custom", path: [key], message: `payload may not set the plan-owned field ${key}` });
+    }
+  }
+  const bytes = canonicalJsonByteLength(payload);
+  if (bytes === null) {
+    context.addIssue({ code: "custom", message: "payload cannot be canonically serialized" });
+    return;
+  }
+  if (bytes > MAX_PAYLOAD_BYTES) {
+    context.addIssue({ code: "custom", message: `payload exceeds ${MAX_PAYLOAD_BYTES} bytes` });
+  }
+}).pipe(external_exports.record(external_exports.string().max(64), taskJsonValueV1Schema));
+var taskStepOutputRefV1Schema = external_exports.strictObject({
+  step: taskStepNameV1Schema,
+  output: taskOutputNameV1Schema
+});
+var MAX_STEP_REFERENCES = 32;
+var taskStepReferencesV1Schema = external_exports.record(taskPayloadPointerV1Schema, taskStepOutputRefV1Schema).superRefine((references, context) => {
+  const pointers = Object.keys(references);
+  if (pointers.length > MAX_STEP_REFERENCES) {
+    context.addIssue({ code: "custom", message: `a step may carry at most ${MAX_STEP_REFERENCES} references` });
+  }
+  for (const pointer of pointers) {
+    const [head] = decodeJsonPointer(pointer);
+    if (head !== void 0 && reservedPayloadKeySet.has(head)) {
+      context.addIssue({ code: "custom", path: [pointer], message: `references may not target the plan-owned field ${head}` });
+    }
+  }
+});
+function decodeJsonPointer(pointer) {
+  return pointer.split("/").slice(1).map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
+}
+function encodeJsonPointer(path3) {
+  return path3.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
+}
+var taskEffectProposalV1Schema = external_exports.strictObject({
+  stepName: taskStepNameV1Schema,
+  kind: taskEffectKindV1Schema,
+  payload: taskEffectPayloadV1Schema,
+  references: taskStepReferencesV1Schema.default({}),
+  rationale: external_exports.string().trim().min(1).max(5e3)
+}).superRefine((proposal, context) => {
+  for (const message of captureOwnedPointerIssues(proposal.kind, proposal.payload, proposal.references)) {
+    context.addIssue({ code: "custom", path: ["payload"], message });
+  }
+  for (const issue3 of probeOperationShape({
+    ...proposal,
+    deferredPointers: captureDeferredPointers(proposal.kind)
+  })) {
+    context.addIssue({ code: "custom", path: ["payload"], message: issue3 });
+  }
+});
+var PROBE_REPOSITORY = { provider: "github", id: "1", owner: "gardener", name: "probe", defaultBranch: "main" };
+var PROBE_OPERATION_ID = "gardener-probe";
+var PROBE_UNTYPED_SENTINEL = "gardener-step-output";
+var MAX_POINTER_ARRAY_INDEX = 99;
+var MAX_PROBE_MESSAGES = 32;
+function setPointer(root, segments, value) {
+  if (segments.length === 0) return false;
+  if (segments.some(isPrototypePollutingKey)) return false;
+  let cursor = root;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    const lookahead = segments[index + 1];
+    const seed = /^(?:0|[1-9][0-9]*)$/.test(lookahead) ? [] : /* @__PURE__ */ Object.create(null);
+    if (Array.isArray(cursor)) {
+      const position = arrayIndex(segment);
+      if (position === null) return false;
+      if (cursor[position] === void 0) cursor[position] = seed;
+      cursor = cursor[position];
+      continue;
+    }
+    if (cursor === null || typeof cursor !== "object") return false;
+    const record3 = cursor;
+    if (!Object.hasOwn(record3, segment)) {
+      Object.defineProperty(record3, segment, { value: seed, writable: true, enumerable: true, configurable: true });
+    }
+    cursor = record3[segment];
+  }
+  const last = segments[segments.length - 1];
+  if (Array.isArray(cursor)) {
+    const position = arrayIndex(last);
+    if (position === null) return false;
+    cursor[position] = value;
+    return true;
+  }
+  if (cursor === null || typeof cursor !== "object") return false;
+  Object.defineProperty(cursor, last, { value, writable: true, enumerable: true, configurable: true });
+  return true;
+}
+function arrayIndex(segment) {
+  if (!/^(?:0|[1-9][0-9]*)$/.test(segment)) return null;
+  const position = Number(segment);
+  if (!Number.isInteger(position) || position < 0 || position > MAX_POINTER_ARRAY_INDEX) return null;
+  return position;
+}
+function safeJsonClone(value, depth = 0) {
+  if (depth > MAX_PAYLOAD_DEPTH) return null;
+  if (Array.isArray(value)) return value.map((item) => safeJsonClone(item, depth + 1));
+  if (value === null || typeof value !== "object") return value;
+  const copy = {};
+  for (const key of Object.keys(value)) {
+    if (isPrototypePollutingKey(key)) continue;
+    copy[key] = safeJsonClone(value[key], depth + 1);
+  }
+  return copy;
+}
+function probeOperationShape(step) {
+  const messages = [];
+  const candidate = {
+    ...safeJsonClone(step.payload),
+    schemaVersion: "v2",
+    id: PROBE_OPERATION_ID,
+    repository: PROBE_REPOSITORY,
+    kind: step.kind
+  };
+  const deferred = new Set(step.deferredPointers ?? []);
+  for (const [pointer, reference] of Object.entries(step.references ?? {})) {
+    deferred.add(pointer);
+    const type = step.resolveOutputType?.(reference);
+    const sentinel = type === void 0 ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
+    if (!setPointer(candidate, decodeJsonPointer(pointer), sentinel)) {
+      messages.push(`reference pointer ${pointer} does not address a payload location`);
+    }
+  }
+  let probed;
+  try {
+    probed = operationSchema.safeParse(candidate);
+  } catch (cause) {
+    messages.push(`operation: payload could not be validated (${cause instanceof Error ? cause.name : "unknown error"})`);
+    return messages;
+  }
+  if (probed.success) return messages;
+  let suppressed = 0;
+  for (const issue3 of probed.error.issues) {
+    const pointer = encodeJsonPointer(issue3.path);
+    const isDeferred = pointer !== "" && [...deferred].some((prefix) => pointer === prefix || pointer.startsWith(`${prefix}/`));
+    if (isDeferred) continue;
+    if (messages.length >= MAX_PROBE_MESSAGES) {
+      suppressed += 1;
+      continue;
+    }
+    messages.push(`${pointer === "" ? "operation" : pointer}: ${issue3.message}`);
+  }
+  if (suppressed > 0) messages.push(`operation: ${suppressed} further problems were not reported`);
+  return messages;
+}
+var taskCaptureFileModeV1Schema = external_exports.enum(["100644", "100755", "120000"]);
+var CAPTURE_FILE_MAX_BYTES = 100 * 1024 * 1024;
+var CAPTURE_TOTAL_MAX_BYTES = 100 * CAPTURE_FILE_MAX_BYTES;
+var fileByteCount = external_exports.number().int().nonnegative().max(CAPTURE_FILE_MAX_BYTES);
+var captureByteCount = external_exports.number().int().nonnegative().max(CAPTURE_TOTAL_MAX_BYTES);
+var protectedCapturePathPrefixes = [
+  ".git/",
+  ".github/workflows/",
+  ".github/actions/",
+  ".gardener/"
+];
+var protectedCapturePaths = [
+  "CODEOWNERS",
+  ".github/CODEOWNERS",
+  ".github/dependabot.yml",
+  ".github/dependabot.yaml",
+  "docs/CODEOWNERS"
+];
+function isProtectedCapturePath(path3) {
+  const normalized = path3.toLowerCase();
+  if (protectedCapturePaths.some((protectedPath) => normalized === protectedPath.toLowerCase())) return true;
+  return protectedCapturePathPrefixes.some((prefix) => {
+    const lowered = prefix.toLowerCase();
+    return normalized === lowered.slice(0, -1) || normalized.startsWith(lowered);
+  });
+}
+var taskCaptureFileV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    path: relativePath2,
+    status: external_exports.enum(["added", "modified"]),
+    mode: taskCaptureFileModeV1Schema,
+    sizeBytes: fileByteCount,
+    sha256
+  }),
+  external_exports.strictObject({
+    path: relativePath2,
+    status: external_exports.literal("deleted")
+  })
+]);
+var taskCaptureManifestV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-manifest/v1"),
+  captureId: boundIdentifier,
+  /** Commit the capture was taken against; apply refuses a drifted base. */
+  baseSha: sha1,
+  /**
+   * Bounded by the number of files one `commit.create` may write. A capture
+   * larger than that could never be materialized, so it is refused here — when
+   * the capture is admitted, before a plan exists — rather than partway
+   * through apply with earlier steps already written.
+   */
+  files: external_exports.array(taskCaptureFileV1Schema).min(1),
+  totalBytes: captureByteCount,
+  /**
+   * A partial capture is never applicable, so the only representable value is
+   * `false`. Capture that hits a limit must fail the run, not ship a subset of
+   * the change the model believed it was making.
+   */
+  truncated: external_exports.literal(false)
+}).superRefine((manifest, context) => {
+  const paths = manifest.files.map((file2) => file2.path);
+  if (new Set(paths).size !== paths.length) {
+    context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
+  }
+  manifest.files.forEach((file2, index) => {
+    if (isProtectedCapturePath(file2.path)) {
+      context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file2.path}` });
+    }
+  });
+  const measured = manifest.files.reduce((total, file2) => total + ("sizeBytes" in file2 ? file2.sizeBytes : 0), 0);
+  if (measured !== manifest.totalBytes) {
+    context.addIssue({ code: "custom", path: ["totalBytes"], message: "totalBytes must equal the sum of captured file sizes" });
+  }
+});
+function taskCaptureManifestText(value) {
+  const manifest = taskCaptureManifestV1Schema.parse(value);
+  const stable = (entry) => {
+    if (entry === null || typeof entry !== "object") return JSON.stringify(entry) ?? "null";
+    if (Array.isArray(entry)) return `[${entry.map(stable).join(",")}]`;
+    const record3 = entry;
+    return `{${Object.keys(record3).sort().filter((key) => record3[key] !== void 0).map((key) => `${JSON.stringify(key)}:${stable(record3[key])}`).join(",")}}`;
+  };
+  return stable(manifest);
+}
+function taskCaptureChangesDigestInput(manifest) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  for (const file2 of manifest.files) {
+    const fields = file2.status === "deleted" ? ["delete", file2.path] : ["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256];
+    for (const field of fields) {
+      const bytes = encoder.encode(field);
+      chunks.push(encoder.encode(`${bytes.byteLength}:`), bytes);
+    }
+  }
+  const output2 = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    output2.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output2;
+}
+var taskCaptureRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
+  captureId: boundIdentifier,
+  baseSha: sha1,
+  /** Digest of the canonical manifest JSON. */
+  manifestSha256: sha256,
+  /**
+   * Digest of the canonical length-prefixed change stream binding each path,
+   * status, mode, size, and content digest. This is independent of archive
+   * container bytes so packaging cannot change the plan-bound identity.
+   */
+  changesSha256: sha256,
+  fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sizeBytes: captureByteCount
+});
 var gitChangeArtifactRefV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.git-change-artifact/v1"),
   sha256,
   manifestSha256: sha256,
   sizeBytes: external_exports.number().int().nonnegative().max(1e9)
 });
-var proposedEffectV1Schema = external_exports.discriminatedUnion("kind", [
+var taskEventResourceV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({ kind: external_exports.literal("issue"), id: githubNumericId, number: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), id: githubNumericId, number: external_exports.number().int().positive() }),
   external_exports.strictObject({
-    operationId: boundIdentifier,
-    kind: external_exports.literal("issue.comment.create"),
-    issueNumber: external_exports.number().int().positive(),
-    body: external_exports.string().min(1).max(65536),
-    rationale: external_exports.string().min(1).max(5e3)
-  }),
-  external_exports.strictObject({
-    operationId: boundIdentifier,
-    kind: external_exports.literal("issue.labels.update"),
-    issueNumber: external_exports.number().int().positive(),
-    add: external_exports.array(external_exports.string().trim().min(1).max(100)).max(20),
-    remove: external_exports.array(external_exports.string().trim().min(1).max(100)).max(20),
-    rationale: external_exports.string().min(1).max(5e3)
-  }),
-  external_exports.strictObject({
-    operationId: boundIdentifier,
-    kind: external_exports.literal("repository.draft_pr.create"),
-    artifact: gitChangeArtifactRefV1Schema,
-    branch: external_exports.string().min(1).max(255),
-    base: external_exports.string().min(1).max(255),
-    commitMessage: external_exports.string().min(1).max(1e3),
-    title: external_exports.string().min(1).max(1024),
-    body: external_exports.string().max(65536),
-    draft: external_exports.literal(true),
-    rationale: external_exports.string().min(1).max(5e3)
+    kind: external_exports.literal("discussion"),
+    id: githubNumericId,
+    number: external_exports.number().int().positive(),
+    nodeId: githubNodeId
   })
 ]);
+var taskEventBindingV1Schema = external_exports.strictObject({
+  kind: external_exports.enum(taskTriggerKindValues),
+  eventName: normalizedEventNameV1Schema,
+  action: external_exports.string().min(1).max(64).nullable(),
+  resource: taskEventResourceV1Schema.nullable(),
+  /** Comment the event carried, when it carried one. */
+  commentId: githubNumericId.nullable()
+}).superRefine((binding, context) => {
+  if (eventNameByTriggerKind[binding.kind] !== binding.eventName) {
+    context.addIssue({ code: "custom", path: ["eventName"], message: "eventName does not match the trigger kind" });
+  }
+  if ((eventActionByTriggerKind[binding.kind] ?? null) !== binding.action) {
+    context.addIssue({ code: "custom", path: ["action"], message: "action does not match the trigger kind" });
+  }
+});
+function taskEventBindingFromNormalizedEvent(event) {
+  const base = {
+    kind: event.kind,
+    eventName: eventNameByTriggerKind[event.kind],
+    action: eventActionByTriggerKind[event.kind] ?? null
+  };
+  if ("issue" in event) {
+    return {
+      ...base,
+      resource: { kind: "issue", id: event.issue.id, number: event.issue.number },
+      commentId: "comment" in event ? event.comment.id : null
+    };
+  }
+  if ("pullRequest" in event) {
+    return {
+      ...base,
+      resource: { kind: "pull_request", id: event.pullRequest.id, number: event.pullRequest.number },
+      commentId: "comment" in event ? event.comment.id : null
+    };
+  }
+  if ("discussion" in event) {
+    return {
+      ...base,
+      resource: {
+        kind: "discussion",
+        id: event.discussion.id,
+        number: event.discussion.number,
+        nodeId: event.discussion.nodeId
+      },
+      commentId: "comment" in event ? event.comment.id : null
+    };
+  }
+  return { ...base, resource: null, commentId: null };
+}
+var captureMaterializedPointers = {
+  "commit.create": ["/files"]
+};
+function captureDeferredPointers(kind) {
+  return captureMaterializedPointers[kind] ?? [];
+}
+function captureOwnedPointerIssues(kind, payload, references = {}) {
+  const pointers = captureDeferredPointers(kind);
+  if (pointers.length === 0) return [];
+  const messages = [];
+  const record3 = payload !== null && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const referenced = new Set(Object.keys(references).map((pointer) => decodeJsonPointer(pointer)[0]));
+  for (const pointer of pointers) {
+    const [head] = decodeJsonPointer(pointer);
+    if (head === void 0) continue;
+    if (Object.hasOwn(record3, head)) {
+      messages.push(
+        `${pointer} is materialized from the trusted repository capture and may not be supplied by the task`
+      );
+    }
+    if (referenced.has(head)) {
+      messages.push(`${pointer} is materialized from the trusted repository capture and may not be referenced`);
+    }
+  }
+  return messages;
+}
+var taskEffectPlanOperationV1Schema = external_exports.strictObject({
+  stepName: taskStepNameV1Schema,
+  /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
+  operationId: boundIdentifier,
+  kind: taskEffectKindV1Schema,
+  payload: taskEffectPayloadV1Schema,
+  references: taskStepReferencesV1Schema.default({}),
+  rationale: external_exports.string().trim().min(1).max(5e3)
+});
+var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
 var taskEffectPlanV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-effect-plan/v1"),
   runId: boundIdentifier,
   taskId: identifier2,
   taskName: external_exports.string().trim().min(1).max(100),
   bundleHash: sha256,
-  repository: external_exports.strictObject({ id: githubNumericId, fullName: repositoryFullName }),
+  /**
+   * Repository identity every operation in this plan is constructed from.
+   *
+   * `defaultBranch` travels in the plan rather than being read back at apply
+   * time because it is part of the canonical operation hash. Re-fetching a
+   * mutable value would let the same plan hash differently on a retry.
+   */
+  repository: external_exports.strictObject({
+    id: githubNumericId,
+    fullName: repositoryFullName,
+    defaultBranch: external_exports.string().trim().min(1).max(255)
+  }),
   provenance: external_exports.strictObject({
     sourcePath: relativePath2,
     commitSha: sha1,
     workflowRunId: githubNumericId,
     workflowRunAttempt: external_exports.number().int().positive()
   }),
-  issueNumber: external_exports.number().int().positive(),
-  operationId: boundIdentifier,
-  kind: external_exports.literal("issue.comment.create"),
-  body: external_exports.string().min(1).max(65536)
+  event: taskEventBindingV1Schema,
+  /** Copied from the bundle so apply enforces the same ceilings planning did. */
+  limits: external_exports.strictObject({
+    maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
+    maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
+  }),
+  /** Present only when a step materializes repository changes at apply time. */
+  capture: taskCaptureManifestV1Schema.optional(),
+  /** Digest of the changes artifact the capture manifest describes. */
+  changesSha256: sha256.optional(),
+  operations: external_exports.array(taskEffectPlanOperationV1Schema)
+}).superRefine((plan, context) => {
+  const indexByStepName = /* @__PURE__ */ new Map();
+  plan.operations.forEach((operation, index) => {
+    if (indexByStepName.has(operation.stepName)) {
+      context.addIssue({ code: "custom", path: ["operations", index, "stepName"], message: "step names must be unique within a plan" });
+      return;
+    }
+    indexByStepName.set(operation.stepName, index);
+  });
+  const operationIds = plan.operations.map((operation) => operation.operationId);
+  if (new Set(operationIds).size !== operationIds.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a plan" });
+  }
+  let anyStepDefersToCapture = false;
+  plan.operations.forEach((operation, index) => {
+    const path3 = ["operations", index];
+    const resolvedTypes = /* @__PURE__ */ new Map();
+    for (const [pointer, reference] of Object.entries(operation.references)) {
+      const targetIndex = indexByStepName.get(reference.step);
+      if (reference.step === operation.stepName) {
+        context.addIssue({ code: "custom", path: [...path3, "references", pointer], message: "a step cannot reference its own output" });
+        continue;
+      }
+      if (targetIndex === void 0) {
+        context.addIssue({ code: "custom", path: [...path3, "references", pointer], message: `unknown step "${reference.step}"` });
+        continue;
+      }
+      if (targetIndex >= index) {
+        context.addIssue({ code: "custom", path: [...path3, "references", pointer], message: `step "${reference.step}" does not run before this step` });
+        continue;
+      }
+      const targetKind = plan.operations[targetIndex].kind;
+      const outputType = operationOutputType(targetKind, reference.output);
+      if (outputType === void 0) {
+        context.addIssue({
+          code: "custom",
+          path: [...path3, "references", pointer],
+          message: `${targetKind} does not publish a scalar output named "${reference.output}"`
+        });
+        continue;
+      }
+      resolvedTypes.set(pointer, outputType);
+    }
+    for (const message of captureOwnedPointerIssues(operation.kind, operation.payload, operation.references)) {
+      context.addIssue({ code: "custom", path: [...path3, "payload"], message });
+    }
+    const deferredPointers = captureDeferredPointers(operation.kind);
+    if (deferredPointers.length > 0) anyStepDefersToCapture = true;
+    for (const message of probeOperationShape({
+      kind: operation.kind,
+      payload: operation.payload,
+      references: operation.references,
+      deferredPointers,
+      resolveOutputType: (reference) => {
+        for (const [pointer, type] of resolvedTypes) {
+          const candidate = operation.references[pointer];
+          if (candidate?.step === reference.step && candidate.output === reference.output) return type;
+        }
+        return void 0;
+      }
+    })) {
+      context.addIssue({ code: "custom", path: [...path3, "payload"], message });
+    }
+  });
+  const { maxEffectOperations, maxEffectBytes } = plan.limits;
+  if (maxEffectOperations !== void 0 && plan.operations.length > maxEffectOperations) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `plan has ${plan.operations.length} operations but the task allows at most ${maxEffectOperations}`
+    });
+  }
+  const operationBytes = canonicalJsonByteLength(plan.operations);
+  if (operationBytes === null) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "plan operations cannot be canonically serialized" });
+  } else if (maxEffectBytes !== void 0 && operationBytes > maxEffectBytes) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `plan operations serialize to ${operationBytes} bytes but the task allows at most ${maxEffectBytes}`
+    });
+  }
+  const planBytes = canonicalJsonByteLength(plan);
+  if (planBytes === null) {
+    context.addIssue({ code: "custom", message: "plan cannot be canonically serialized" });
+  } else if (planBytes > EFFECT_TRANSPORT_MAX_BYTES) {
+    context.addIssue({
+      code: "custom",
+      message: `plan serializes to ${planBytes} bytes but the effect artifact carries at most ${EFFECT_TRANSPORT_MAX_BYTES}`
+    });
+  }
+  if (plan.capture === void 0 !== (plan.changesSha256 === void 0)) {
+    context.addIssue({ code: "custom", path: ["changesSha256"], message: "capture manifest and changes digest must be present together" });
+  }
+  if (anyStepDefersToCapture && plan.capture === void 0) {
+    context.addIssue({ code: "custom", path: ["capture"], message: "a step materializes repository changes but the plan carries no capture manifest" });
+  }
+  if (!anyStepDefersToCapture && plan.capture !== void 0) {
+    context.addIssue({ code: "custom", path: ["capture"], message: "the plan carries a capture manifest that no step materializes" });
+  }
+  if (plan.capture !== void 0 && plan.capture.baseSha !== plan.provenance.commitSha) {
+    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
+  }
 });
 var taskObservationV1Schema = external_exports.strictObject({
   kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
@@ -41348,7 +42354,13 @@ var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
     status: external_exports.literal("completed"),
     summary: external_exports.string().trim().min(1).max(32e3),
     observations: external_exports.array(taskObservationV1Schema).max(200),
-    proposedEffects: external_exports.array(proposedEffectV1Schema).max(100)
+    /**
+     * Ordered steps the model proposes, in the order it wants them applied.
+     * Unbounded by count for the same reason the plan is: the task's own
+     * `maxEffectOperations` is the ceiling that matters, and an empty list is
+     * the normal result of an inspect-only run.
+     */
+    proposedEffects: external_exports.array(taskEffectProposalV1Schema)
   }),
   external_exports.strictObject({
     ...taskOutcomeBase,
@@ -41361,6 +42373,434 @@ var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
     reason: external_exports.string().min(1).max(8e3)
   })
 ]);
+
+// ../protocol/src/schema.ts
+var identifier3 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var sha12 = external_exports.string().regex(/^[a-f0-9]{40}$/);
+var githubNumericId2 = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
+var EFFECT_TRANSPORT_MAX_BYTES2 = 4 * 1024 * 1024;
+function canonicalJsonByteLength2(value) {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === void 0) return null;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return null;
+  }
+}
+var runnerEventNameV1Schema = external_exports.enum([
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "workflow_dispatch",
+  "schedule",
+  "discussion",
+  "discussion_comment"
+]);
+var runnerHelloV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
+  protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
+  phase: external_exports.enum(["plan", "effects"]),
+  repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  runId: identifier3,
+  runAttempt: external_exports.number().int().positive().max(1e3),
+  workflowRef: external_exports.string().min(1).max(1024),
+  jobWorkflowRef: external_exports.string().min(1).max(1024),
+  eventName: runnerEventNameV1Schema,
+  ref: external_exports.string().min(1).max(1024),
+  runnerEnvironment: external_exports.literal("github-hosted"),
+  commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
+  agentHash: sha2562
+});
+var runnerActionBaseFields = {
+  schemaVersion: external_exports.literal("gardener.runner.action/v1"),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  operationId: identifier3,
+  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3)
+};
+var githubReadRequestV1Schema = external_exports.discriminatedUnion("transport", [
+  external_exports.strictObject({
+    transport: external_exports.literal("rest"),
+    method: external_exports.enum(["GET", "HEAD"]),
+    path: external_exports.string().min(1).max(2048)
+  }),
+  external_exports.strictObject({
+    transport: external_exports.literal("graphql"),
+    query: external_exports.string().min(1).max(32 * 1024),
+    /**
+     * Bounded by count and serialized size. Actions are canonicalized into
+     * Durable Object storage, so an unbounded variables map would let a model
+     * grow durable state without limit.
+     */
+    variables: external_exports.record(external_exports.string().min(1).max(128), external_exports.unknown()).refine((value) => Object.keys(value).length <= 64, "too many GraphQL variables").refine((value) => {
+      const serialized = JSON.stringify(value);
+      return serialized !== void 0 && new TextEncoder().encode(serialized).byteLength <= 32 * 1024;
+    }, "GraphQL variables exceed the size limit").optional(),
+    operationName: external_exports.string().regex(/^[_A-Za-z][_0-9A-Za-z]{0,127}$/).optional()
+  })
+]);
+var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("shell.exec"),
+    command: external_exports.string().min(1).max(64 * 1024),
+    cwd: external_exports.string().min(1).max(4096),
+    maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
+  }),
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("github.read"),
+    request: githubReadRequestV1Schema,
+    maxOutputBytes: external_exports.number().int().positive().max(1024 * 1024)
+  }),
+  /**
+   * Trusted working-tree capture.
+   *
+   * Only the runtime issues this, and only once it holds a durable proposal
+   * that materializes repository changes. There is deliberately no field a
+   * model could fill: no paths, no directory, no content, no filters. The
+   * whole tree is captured, judged by Git against a baseline the runner took
+   * before the first task command ran, so what lands in a commit is what the
+   * runner observed rather than what the model claimed.
+   *
+   * `baseSha` is the commit the runtime bound the run to. The runner refuses
+   * the action unless its own pre-execution baseline was taken against the
+   * same commit, so neither side can drift alone.
+   */
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("repository.capture"),
+    baseSha: sha12,
+    maxOutputBytes: external_exports.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES2)
+  })
+]);
+var runnerCaptureRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
+  captureId: identifier3,
+  baseSha: sha12,
+  manifestSha256: sha2562,
+  changesSha256: sha2562,
+  fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+});
+var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
+    /** The working tree matched the checked-out commit; there is nothing to commit. */
+    status: external_exports.literal("unchanged")
+  }),
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
+    status: external_exports.literal("captured"),
+    ref: runnerCaptureRefV1Schema,
+    manifestJson: external_exports.string().min(2).max(EFFECT_TRANSPORT_MAX_BYTES2)
+  })
+]);
+var runnerActionResultV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  operationId: identifier3,
+  status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
+  exitCode: external_exports.number().int().min(0).max(255).nullable(),
+  stdout: external_exports.string().max(4 * 1024 * 1024),
+  stderr: external_exports.string().max(4 * 1024 * 1024),
+  outputTruncated: external_exports.boolean()
+}).superRefine((result, context) => {
+  const processExited = result.status === "completed" || result.status === "failed";
+  if (processExited !== (result.exitCode !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["exitCode"],
+      message: processExited ? "Completed and failed commands require an exit code" : "Cancelled and timed-out commands cannot have an exit code"
+    });
+  }
+});
+var eventActor = external_exports.strictObject({
+  id: githubNumericId2,
+  login: external_exports.string().min(1).max(100)
+});
+var eventLabels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100);
+var eventBody = external_exports.string().max(65536).nullable();
+var eventNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
+var eventChangedLabel = external_exports.string().trim().min(1).max(100);
+var eventIssue = external_exports.strictObject({
+  id: githubNumericId2,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor
+});
+var eventPullRequestRepository = external_exports.strictObject({
+  id: githubNumericId2,
+  fullName: external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201)
+});
+var eventPullRequest = external_exports.strictObject({
+  id: githubNumericId2,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor,
+  draft: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  merged: external_exports.boolean(),
+  base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
+  head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
+});
+var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, author: eventActor });
+var eventReview = external_exports.strictObject({
+  id: githubNumericId2,
+  state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
+  body: eventBody,
+  author: eventActor
+});
+var eventDiscussion = external_exports.strictObject({
+  id: githubNumericId2,
+  nodeId: eventNodeId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor,
+  category: external_exports.string().min(1).max(100),
+  answered: external_exports.boolean()
+});
+var eventDiscussionComment = external_exports.strictObject({
+  id: githubNumericId2,
+  nodeId: eventNodeId,
+  body: eventBody,
+  author: eventActor
+});
+var eventPush = external_exports.strictObject({
+  ref: external_exports.string().min(1).max(1024),
+  before: sha12,
+  after: sha12,
+  forced: external_exports.boolean(),
+  commits: external_exports.array(external_exports.strictObject({
+    sha: sha12,
+    message: external_exports.string().max(4096),
+    author: external_exports.strictObject({ name: external_exports.string().max(200), email: external_exports.string().max(320) })
+  })).max(20),
+  /** Count present in `commits`; never claimed to be the push total. */
+  includedCommits: external_exports.number().int().min(0).max(20),
+  commitsTruncated: external_exports.boolean()
+});
+var eventRepository = external_exports.strictObject({ defaultBranch: external_exports.string().trim().min(1).max(255) });
+function runnerEventMember(kind, shape) {
+  return external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.event/v1"),
+    kind: external_exports.literal(kind),
+    repository: eventRepository,
+    ...shape
+  });
+}
+var issuePayload2 = { issue: eventIssue };
+var pullRequestPayload2 = { pullRequest: eventPullRequest };
+var discussionPayload2 = { discussion: eventDiscussion };
+var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
+  runnerEventMember("github.issue.opened", issuePayload2),
+  runnerEventMember("github.issue.edited", issuePayload2),
+  runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
+  runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
+  runnerEventMember("github.issue.reopened", issuePayload2),
+  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
+  runnerEventMember("github.pull_request.opened", pullRequestPayload2),
+  runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
+  runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
+  runnerEventMember("github.pull_request.ready_for_review", pullRequestPayload2),
+  runnerEventMember("github.pull_request.converted_to_draft", pullRequestPayload2),
+  runnerEventMember("github.pull_request.edited", pullRequestPayload2),
+  runnerEventMember("github.pull_request.labeled", { ...pullRequestPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.pull_request.unlabeled", { ...pullRequestPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload2, review: eventReview }),
+  runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload2, comment: eventComment }),
+  runnerEventMember("github.push", { push: eventPush }),
+  runnerEventMember("github.workflow_dispatch", { prompt: external_exports.string().trim().min(1).max(2e4) }),
+  runnerEventMember("github.schedule", { cron: external_exports.string().trim().min(1).max(100) }),
+  runnerEventMember("github.discussion.created", discussionPayload2),
+  runnerEventMember("github.discussion.edited", discussionPayload2),
+  runnerEventMember("github.discussion.answered", discussionPayload2),
+  runnerEventMember("github.discussion.unanswered", discussionPayload2),
+  runnerEventMember("github.discussion.labeled", { ...discussionPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment })
+]);
+var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
+var githubUrl = external_exports.url().refine(
+  (value) => new URL(value).origin === "https://github.com",
+  "Expected an HTTPS github.com URL"
+);
+var runnerOperationReceiptV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("v2"),
+  operationId: identifier3,
+  operationHash: sha2562,
+  kind: external_exports.string().min(1).max(100).regex(/^[a-z][a-z_]*(?:\.[a-z][a-z_]*)+$/),
+  status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
+  attempt: external_exports.number().int().positive(),
+  attemptedAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime(),
+  providerRequestId: external_exports.string().min(1).max(255).optional(),
+  resourceUrl: githubUrl.optional(),
+  error: external_exports.strictObject({
+    code: external_exports.string().min(1).max(100),
+    message: external_exports.string().min(1).max(2e3),
+    retryable: external_exports.boolean()
+  }).optional()
+}).superRefine((receipt, context) => {
+  if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) {
+    context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
+  }
+  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) {
+    context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
+  }
+  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) {
+    context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
+  }
+});
+var runnerScalarOutputV1Schema = external_exports.union([
+  external_exports.string().max(65536),
+  external_exports.number().safe(),
+  external_exports.boolean(),
+  external_exports.null()
+]);
+var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
+  stepName,
+  receipt: runnerOperationReceiptV1Schema,
+  /** Scalar provider outputs needed to resolve references after a retry. */
+  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({})
+});
+var runnerEffectReceiptV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
+  planRunId: identifier3,
+  bundleHash: sha2562,
+  artifactSha256: sha2562,
+  /** Digest of the changes artifact, when the plan materialized repository changes. */
+  changesSha256: sha2562.optional(),
+  /**
+   * Number of operations the plan this receipt answers contained. Without it a
+   * receipt cannot be shown to be complete: `operations.length` alone says
+   * nothing about how many steps were supposed to run, so a truncated apply
+   * would read as a successful one.
+   */
+  plannedOperations: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  status: external_exports.enum(["running", "applied", "stopped"]),
+  /** The step that halted the plan, or null when every step in the plan ran. */
+  stoppedAtStep: stepName.nullable(),
+  /**
+   * Recorded steps, in plan order. No count ceiling here either — the bound is
+   * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
+   */
+  operations: external_exports.array(runnerPlanStepReceiptV1Schema).min(1)
+}).superRefine((receipt, context) => {
+  const bytes = canonicalJsonByteLength2(receipt);
+  if (bytes === null) {
+    context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });
+  } else if (bytes > EFFECT_TRANSPORT_MAX_BYTES2) {
+    context.addIssue({
+      code: "custom",
+      message: `receipt serializes to ${bytes} bytes but the transport carries at most ${EFFECT_TRANSPORT_MAX_BYTES2}`
+    });
+  }
+  if (receipt.operations.length > receipt.plannedOperations) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `receipt records ${receipt.operations.length} steps but the plan contained ${receipt.plannedOperations}`
+    });
+  }
+  const stepNames = receipt.operations.map((entry) => entry.stepName);
+  if (new Set(stepNames).size !== stepNames.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "step names must be unique within a receipt" });
+  }
+  const operationIds = receipt.operations.map((entry) => entry.receipt.operationId);
+  if (new Set(operationIds).size !== operationIds.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a receipt" });
+  }
+  const halted = receipt.operations.filter((entry) => entry.receipt.status === "failed" || entry.receipt.status === "conflicted");
+  if (receipt.status === "running" || receipt.status === "applied") {
+    if (halted.length > 0) {
+      context.addIssue({ code: "custom", path: ["status"], message: `${receipt.status} plans cannot contain a failed or conflicted step` });
+    }
+    if (receipt.stoppedAtStep !== null) {
+      context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: `${receipt.status} plans did not stop at a step` });
+    }
+    if (receipt.status === "applied" && receipt.operations.length !== receipt.plannedOperations) {
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: `an applied plan must record all ${receipt.plannedOperations} planned steps, not ${receipt.operations.length}`
+      });
+    }
+    if (receipt.status === "running" && receipt.operations.length >= receipt.plannedOperations) {
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "a running receipt must be an incomplete successful prefix"
+      });
+    }
+    return;
+  }
+  const last = receipt.operations.at(-1);
+  if (last === void 0 || halted.length !== 1 || halted[0] !== last) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: "a stopped plan halts at exactly one failed or conflicted step, which must be the last recorded step"
+    });
+    return;
+  }
+  if (receipt.stoppedAtStep !== last.stepName) {
+    context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: "stoppedAtStep must name the halting step" });
+  }
+});
+function base64EncodedLength(bytes) {
+  return 4 * Math.ceil(bytes / 3);
+}
+function base64DecodedLength(encoded) {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return encoded.length / 4 * 3 - padding;
+}
+var runnerEffectArtifactV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
+  sha256: sha2562,
+  bytesBase64: external_exports.string().min(1).max(base64EncodedLength(EFFECT_TRANSPORT_MAX_BYTES2)).regex(/^[A-Za-z0-9+/]*={0,2}$/).refine(
+    (value) => value.length % 4 === 0,
+    "Expected a padded base64 string"
+  ).refine(
+    (value) => base64DecodedLength(value) <= EFFECT_TRANSPORT_MAX_BYTES2,
+    `Expected at most ${EFFECT_TRANSPORT_MAX_BYTES2} decoded bytes`
+  ),
+  /**
+   * Digest of the repository-changes artifact this plan materializes, when it
+   * materializes one. Bound here so apply can refuse a plan/changes mismatch
+   * before it writes anything.
+   */
+  changesSha256: sha2562.optional()
+});
+var runnerTerminalV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
+  status: external_exports.enum(["completed", "failed", "cancelled"]),
+  summary: external_exports.string().min(1).max(16 * 1024),
+  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  effectArtifact: runnerEffectArtifactV1Schema.optional()
+});
+var resumeCursorV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.cursor/v1"),
+  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+});
+
+// ../protocol/src/session-id.ts
+function runnerSessionId(hello) {
+  return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
+}
 
 // ../../node_modules/.pnpm/capnweb@0.12.0/node_modules/capnweb/dist/index.js
 var WORKERS_MODULE_SYMBOL = /* @__PURE__ */ Symbol("workers-module");
@@ -41471,8 +42911,8 @@ var streamImpl = {
   createReadableStreamHook: streamNotLoaded
 };
 var StubHook = class {
-  stream(path, args) {
-    let hook = this.call(path, args);
+  stream(path3, args) {
+    let hook = this.call(path3, args);
     let pulled;
     try {
       pulled = hook.pull();
@@ -41497,15 +42937,15 @@ var ErrorStubHook = class extends StubHook {
     super();
     this.error = error63;
   }
-  call(path, args) {
+  call(path3, args) {
     args.dispose();
     return this;
   }
-  map(path, captures, instructions) {
+  map(path3, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return this;
   }
-  get(path) {
+  get(path3) {
     return this;
   }
   dup() {
@@ -41527,8 +42967,8 @@ var ErrorStubHook = class extends StubHook {
   }
 };
 var DISPOSED_HOOK = new ErrorStubHook(/* @__PURE__ */ new Error("Attempted to use RPC stub after it has been disposed."));
-var doCall = (hook, path, params) => {
-  return hook.call(path, params);
+var doCall = (hook, path3, params) => {
+  return hook.call(path3, params);
 };
 function withCallInterceptor(interceptor, callback) {
   let oldValue = doCall;
@@ -41818,8 +43258,8 @@ var RpcPayload = class RpcPayload2 {
       }
       case "object": {
         let result = {};
-        let object2 = value;
-        for (let i in object2) result[i] = this.deepCopy(object2[i], object2, i, result, dupStubs, owner);
+        let object3 = value;
+        for (let i in object3) result[i] = this.deepCopy(object3[i], object3, i, result, dupStubs, owner);
         return result;
       }
       case "stub":
@@ -41916,7 +43356,7 @@ var RpcPayload = class RpcPayload2 {
     if (this.value instanceof RpcPromise$1) RpcPayload2.deliverRpcPromiseTo(this.value, parent, property, promises3);
     else {
       parent[property] = this.value;
-      for (let record2 of this.promises) RpcPayload2.deliverRpcPromiseTo(record2.promise, record2.parent, record2.property, promises3);
+      for (let record3 of this.promises) RpcPayload2.deliverRpcPromiseTo(record3.promise, record3.parent, record3.property, promises3);
     }
   }
   static deliverRpcPromiseTo(promise2, parent, property, promises3) {
@@ -42017,8 +43457,8 @@ var RpcPayload = class RpcPayload2 {
         return;
       }
       case "object": {
-        let object2 = value;
-        for (let i in object2) this.disposeImpl(object2[i], object2);
+        let object3 = value;
+        for (let i in object3) this.disposeImpl(object3[i], object3);
         return;
       }
       case "stub":
@@ -42105,8 +43545,8 @@ var RpcPayload = class RpcPayload2 {
         return;
       }
       case "object": {
-        let object2 = value;
-        for (let i in object2) this.ignoreUnhandledRejectionsImpl(object2[i]);
+        let object3 = value;
+        for (let i in object3) this.ignoreUnhandledRejectionsImpl(object3[i]);
         return;
       }
       case "stub":
@@ -42123,10 +43563,10 @@ var RpcPayload = class RpcPayload2 {
     }
   }
 };
-function followPath(value, parent, path, owner) {
-  for (let i = 0; i < path.length; i++) {
+function followPath(value, parent, path3, owner) {
+  for (let i = 0; i < path3.length; i++) {
     parent = value;
-    let part = path[i];
+    let part = path3[i];
     if (part in Object.prototype) {
       value = void 0;
       continue;
@@ -42152,7 +43592,7 @@ function followPath(value, parent, path, owner) {
         let { hook, pathIfPromise } = unwrapStubAndPath(value);
         return {
           hook,
-          remainingPath: pathIfPromise ? pathIfPromise.concat(path.slice(i)) : path.slice(i)
+          remainingPath: pathIfPromise ? pathIfPromise.concat(path3.slice(i)) : path3.slice(i)
         };
       }
       case "writable":
@@ -42179,8 +43619,8 @@ function followPath(value, parent, path, owner) {
       case "unsupported":
         if (i === 0) throw new TypeError(`RPC stub points at a non-serializable type.`);
         else {
-          let prefix = path.slice(0, i).join(".");
-          let remainder = path.slice(0, i).join(".");
+          let prefix = path3.slice(0, i).join(".");
+          let remainder = path3.slice(0, i).join(".");
           throw new TypeError(`'${prefix}' is not a serializable type, so property ${remainder} cannot be accessed.`);
         }
       default:
@@ -42201,11 +43641,11 @@ function followPath(value, parent, path, owner) {
   };
 }
 var ValueStubHook = class extends StubHook {
-  call(path, args) {
+  call(path3, args) {
     let followResult;
     try {
       let { value, owner } = this.getValue();
-      followResult = followPath(value, void 0, path, owner);
+      followResult = followPath(value, void 0, path3, owner);
     } catch (err) {
       args.dispose();
       return new ErrorStubHook(err);
@@ -42213,18 +43653,18 @@ var ValueStubHook = class extends StubHook {
     if (followResult.hook) return followResult.hook.call(followResult.remainingPath, args);
     if (typeof followResult.value != "function") {
       args.dispose();
-      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path.join(".")}' is not a function.`));
+      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path3.join(".")}' is not a function.`));
     }
     return new PromiseStubHook(args.deliverCall(followResult.value, followResult.parent).then((payload) => {
       return new PayloadStubHook(payload);
     }));
   }
-  map(path, captures, instructions) {
+  map(path3, captures, instructions) {
     try {
       let followResult;
       try {
         let { value, owner } = this.getValue();
-        followResult = followPath(value, void 0, path, owner);
+        followResult = followPath(value, void 0, path3, owner);
       } catch (err) {
         for (let cap of captures) cap.dispose();
         throw err;
@@ -42235,14 +43675,14 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  get(path) {
+  get(path3) {
     try {
       let { value, owner } = this.getValue();
-      if (path.length === 0 && owner === null) {
+      if (path3.length === 0 && owner === null) {
         if (value instanceof Object && "then" in value) return this.dup();
         throw new Error("Can't dup an RpcTarget stub as a promise.");
       }
-      let followResult = followPath(value, void 0, path, owner);
+      let followResult = followPath(value, void 0, path3, owner);
       if (followResult.hook) return followResult.hook.get(followResult.remainingPath);
       return new PayloadStubHook(RpcPayload.deepCopyFrom(followResult.value, followResult.parent, followResult.owner));
     } catch (err) {
@@ -42361,28 +43801,28 @@ var PromiseStubHook = class PromiseStubHook2 extends StubHook {
       return res;
     });
   }
-  call(path, args) {
+  call(path3, args) {
     args.ensureDeepCopied();
-    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path, args), (err) => {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path3, args), (err) => {
       args.dispose();
       throw err;
     }));
   }
-  stream(path, args) {
+  stream(path3, args) {
     args.ensureDeepCopied();
-    return { promise: this.promise.then((hook) => hook.stream(path, args).promise, (err) => {
+    return { promise: this.promise.then((hook) => hook.stream(path3, args).promise, (err) => {
       args.dispose();
       throw err;
     }) };
   }
-  map(path, captures, instructions) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path, captures, instructions), (err) => {
+  map(path3, captures, instructions) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path3, captures, instructions), (err) => {
       for (let cap of captures) cap.dispose();
       throw err;
     }));
   }
-  get(path) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path)));
+  get(path3) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path3)));
   }
   dup() {
     if (this.resolution) return this.resolution.dup();
@@ -42555,9 +43995,9 @@ var Devaluator = class Devaluator2 {
           else return ["nan"];
         } else return value;
       case "object": {
-        let object2 = value;
+        let object3 = value;
         let result = {};
-        for (let key in object2) result[key] = this.devaluateImpl(object2[key], object2, depth + 1);
+        for (let key in object3) result[key] = this.devaluateImpl(object3[key], object3, depth + 1);
         return result;
       }
       case "array": {
@@ -43022,23 +44462,23 @@ var Evaluator = class Evaluator2 {
           };
           if (value.length == 2) if (isPromise) return addStub(hook.get([]));
           else return addStub(hook.dup());
-          let path = value[2];
-          if (!(path instanceof Array)) break;
-          if (!path.every((part) => {
+          let path3 = value[2];
+          if (!(path3 instanceof Array)) break;
+          if (!path3.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
-          if (value.length == 3) return addStub(hook.get(path));
+          if (value.length == 3) return addStub(hook.get(path3));
           let args = value[3];
           if (!(args instanceof Array)) break;
           args = new Evaluator2(this.importer).evaluateWithDepth([args], depth);
-          return addStub(hook.call(path, args));
+          return addStub(hook.call(path3, args));
         }
         case "remap": {
           if (value.length !== 5 || typeof value[1] !== "number" || !(value[2] instanceof Array) || !(value[3] instanceof Array) || !(value[4] instanceof Array)) break;
           let hook = this.importer.getExport(value[1]);
           if (!hook) throw new Error(`no such entry on exports table: ${value[1]}`);
-          let path = value[2];
-          if (!path.every((part) => {
+          let path3 = value[2];
+          if (!path3.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
           let captures = value[3].map((cap) => {
@@ -43051,7 +44491,7 @@ var Evaluator = class Evaluator2 {
             }
           });
           let instructions = value[4];
-          let promise2 = new RpcPromise$1(hook.map(path, captures, instructions), []);
+          let promise2 = new RpcPromise$1(hook.map(path3, captures, instructions), []);
           this.promises.push({
             promise: promise2,
             parent,
@@ -43235,7 +44675,7 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
     ++entry.localRefcount;
     this.entry = entry;
   }
-  collectPath(path) {
+  collectPath(path3) {
     return this;
   }
   getEntry() {
@@ -43250,27 +44690,27 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
       throw err;
     }
   }
-  call(path, args) {
+  call(path3, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.call(path, args);
-    else return entry.session.sendCall(entry.importId, path, args);
+    if (entry.resolution) return entry.resolution.call(path3, args);
+    else return entry.session.sendCall(entry.importId, path3, args);
   }
-  stream(path, args) {
+  stream(path3, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.stream(path, args);
-    else return entry.session.sendStream(entry.importId, path, args);
+    if (entry.resolution) return entry.resolution.stream(path3, args);
+    else return entry.session.sendStream(entry.importId, path3, args);
   }
-  map(path, captures, instructions) {
+  map(path3, captures, instructions) {
     let entry = this.getEntryTakingOwnership(() => {
       for (let cap of captures) cap.dispose();
     });
-    if (entry.resolution) return entry.resolution.map(path, captures, instructions);
-    else return entry.session.sendMap(entry.importId, path, captures, instructions);
+    if (entry.resolution) return entry.resolution.map(path3, captures, instructions);
+    else return entry.session.sendMap(entry.importId, path3, captures, instructions);
   }
-  get(path) {
+  get(path3) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.get(path);
-    else return entry.session.sendCall(entry.importId, path);
+    if (entry.resolution) return entry.resolution.get(path3);
+    else return entry.session.sendCall(entry.importId, path3);
   }
   dup() {
     return new RpcImportHook2(false, this.getEntry());
@@ -43526,7 +44966,7 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id8, path, args) {
+  sendCall(id8, path3, args) {
     if (this.abortReason) {
       args?.dispose();
       throw this.abortReason;
@@ -43534,7 +44974,7 @@ var RpcSessionImpl = class {
     let value = [
       "pipeline",
       id8,
-      path
+      path3
     ];
     if (args) {
       let devalue;
@@ -43551,7 +44991,7 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id8, path, args) {
+  sendStream(id8, path3, args) {
     if (this.abortReason) {
       args.dispose();
       throw this.abortReason;
@@ -43559,7 +44999,7 @@ var RpcSessionImpl = class {
     let value = [
       "pipeline",
       id8,
-      path
+      path3
     ];
     let devalue;
     try {
@@ -43588,7 +45028,7 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id8, path, captures, instructions) {
+  sendMap(id8, path3, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
@@ -43596,7 +45036,7 @@ var RpcSessionImpl = class {
     let value = [
       "remap",
       id8,
-      path,
+      path3,
       captures.map((hook) => {
         let importId = this.getImport(hook);
         if (importId !== void 0) return ["import", importId];
@@ -43866,18 +45306,18 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject, path) {
+  constructor(subject, path3) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
       subject: currentMapBuilder.capture(subject),
-      path
+      path: path3
     };
     else this.context = {
       parent: void 0,
       captures: [],
       subject,
-      path
+      path: path3
     };
     currentMapBuilder = this;
   }
@@ -43906,24 +45346,24 @@ var MapBuilder = class {
       return new MapVariableHook(this.context.parent, this.context.parent.instructions.length);
     } else return this.context.subject.map(this.context.path, this.context.captures, this.instructions);
   }
-  pushCall(hook, path, params) {
+  pushCall(hook, path3, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path,
+      path3,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
-  pushGet(hook, path) {
+  pushGet(hook, path3) {
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path
+      path3
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
@@ -43957,8 +45397,8 @@ var MapBuilder = class {
   onSendError(error63) {
   }
 };
-mapImpl.sendMap = (hook, path, func) => {
-  let builder = new MapBuilder(hook, path);
+mapImpl.sendMap = (hook, path3, func) => {
+  let builder = new MapBuilder(hook, path3);
   let result;
   try {
     result = RpcPayload.fromAppReturn(withCallInterceptor(builder.pushCall.bind(builder), () => {
@@ -43990,16 +45430,16 @@ var MapVariableHook = class extends StubHook {
   }
   dispose() {
   }
-  get(path) {
-    if (path.length == 0) return this;
-    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path);
+  get(path3) {
+    if (path3.length == 0) return this;
+    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path3);
     else throwMapperBuilderUseError();
   }
-  call(path, args) {
+  call(path3, args) {
     args.dispose();
     throwMapperBuilderUseError();
   }
-  map(path, captures, instructions) {
+  map(path3, captures, instructions) {
     for (let cap of captures) cap.dispose();
     throwMapperBuilderUseError();
   }
@@ -44104,11 +45544,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
     if (this.state) return this.state;
     else throw new Error("Attempted to use a WritableStreamStubHook after it was disposed.");
   }
-  call(path, args) {
+  call(path3, args) {
     try {
       let state = this.getState();
-      if (path.length !== 1 || typeof path[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
-      const method = path[0];
+      if (path3.length !== 1 || typeof path3[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
+      const method = path3[0];
       if (method !== "write" && method !== "close" && method !== "abort") throw new Error(`Unknown WritableStream method: ${method}`);
       if (method === "close" || method === "abort") state.closed = true;
       return new PromiseStubHook((method === "write" ? args.deliverStreamWrite(state.writer) : args.deliverCall(state.writer[method], state.writer)).then((payload) => new PayloadStubHook(payload)));
@@ -44117,11 +45557,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path, captures, instructions) {
+  map(path3, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a WritableStream"));
   }
-  get(path) {
+  get(path3) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a WritableStream stub"));
   }
   dup() {
@@ -44314,15 +45754,15 @@ var ReadableStreamStubHook = class ReadableStreamStubHook2 extends StubHook {
     this.state = state;
     if (dupFrom) ++state.refcount;
   }
-  call(path, args) {
+  call(path3, args) {
     args.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot call methods on a ReadableStream stub"));
   }
-  map(path, captures, instructions) {
+  map(path3, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a ReadableStream"));
   }
-  get(path) {
+  get(path3) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a ReadableStream stub"));
   }
   dup() {
@@ -44357,104 +45797,115 @@ streamImpl.createReadableStreamHook = ReadableStreamStubHook.create;
 var RpcTarget = RpcTarget$1;
 var newWebSocketRpcSession = newWebSocketRpcSession$1;
 
-// ../protocol/src/schema.ts
-var identifier3 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
-var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var runnerHelloV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
-  protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
-  phase: external_exports.enum(["plan", "effects"]),
-  repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  runId: identifier3,
-  runAttempt: external_exports.number().int().positive().max(1e3),
-  workflowRef: external_exports.string().min(1).max(1024),
-  jobWorkflowRef: external_exports.string().min(1).max(1024),
-  eventName: external_exports.enum(["issues", "workflow_dispatch"]),
-  ref: external_exports.string().min(1).max(1024),
-  runnerEnvironment: external_exports.literal("github-hosted"),
-  commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
-  agentHash: sha2562
-});
-var runnerActionV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.action/v1"),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier3,
-  kind: external_exports.literal("shell.exec"),
-  command: external_exports.string().min(1).max(64 * 1024),
-  cwd: external_exports.string().min(1).max(4096),
-  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3),
-  maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
-});
-var runnerActionResultV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier3,
-  status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
-  exitCode: external_exports.number().int().min(0).max(255).nullable(),
-  stdout: external_exports.string().max(4 * 1024 * 1024),
-  stderr: external_exports.string().max(4 * 1024 * 1024),
-  outputTruncated: external_exports.boolean()
-}).superRefine((result, context) => {
-  const processExited = result.status === "completed" || result.status === "failed";
-  if (processExited !== (result.exitCode !== null)) {
-    context.addIssue({
-      code: "custom",
-      path: ["exitCode"],
-      message: processExited ? "Completed and failed commands require an exit code" : "Cancelled and timed-out commands cannot have an exit code"
-    });
+// src/capture.ts
+var import_node_crypto = require("node:crypto");
+var import_node_fs = require("node:fs");
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_stream = require("node:stream");
+var import_promises2 = require("node:stream/promises");
+var RUNNER_HOME_PATH = ".gardener/runner-home";
+var RUNNER_HOME_PREFIX = `${RUNNER_HOME_PATH}/`;
+var GIT_MAX_OUTPUT = 64 * 1024 * 1024;
+async function verifyCaptureArtifact(directory, expected) {
+  const reference = taskCaptureRefV1Schema.parse(expected);
+  const manifestBytes = await readBoundedFile(import_node_path.default.join(directory, "manifest.json"), GIT_MAX_OUTPUT);
+  const manifestSha256 = sha256Hex(manifestBytes);
+  if (!equalsConstantTime(manifestSha256, reference.manifestSha256)) {
+    throw new Error("Capture manifest digest mismatch");
   }
-});
-var runnerEventV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.event/v1"),
-  kind: external_exports.literal("github.issue.opened"),
-  issue: external_exports.strictObject({
-    id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-    number: external_exports.number().int().positive(),
-    title: external_exports.string().max(1024),
-    body: external_exports.string().max(65536).nullable(),
-    labels: external_exports.array(external_exports.string().trim().min(1).max(100)).max(100),
-    author: external_exports.strictObject({
-      id: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-      login: external_exports.string().min(1).max(100)
-    })
-  })
-});
-var runnerEffectReceiptV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
-  planRunId: identifier3,
-  bundleHash: sha2562,
-  artifactSha256: sha2562,
-  operationId: identifier3,
-  kind: external_exports.literal("issue.comment.create"),
-  commentId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  commentUrl: external_exports.url().refine(
-    (value) => new URL(value).origin === "https://github.com",
-    "Expected an HTTPS github.com comment URL"
-  )
-});
-var runnerEffectArtifactV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
-  sha256: sha2562,
-  bytesBase64: external_exports.string().min(1).max(128 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
-});
-var runnerTerminalV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
-  status: external_exports.enum(["completed", "failed", "cancelled"]),
-  summary: external_exports.string().min(1).max(16 * 1024),
-  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  effectArtifact: runnerEffectArtifactV1Schema.optional()
-});
-var resumeCursorV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.cursor/v1"),
-  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-});
-
-// ../protocol/src/session-id.ts
-function runnerSessionId(hello) {
-  return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
+  const manifest = parseManifest(JSON.parse(manifestBytes.toString("utf8")));
+  if (taskCaptureManifestText(manifest) !== manifestBytes.toString("utf8")) throw new Error("Capture manifest is not canonical");
+  const totalBytes = manifest.files.reduce((total, file2) => total + (file2.status === "deleted" ? 0 : file2.sizeBytes), 0);
+  const expectations = [
+    ["capture id", manifest.captureId, reference.captureId],
+    ["base commit", manifest.baseSha, reference.baseSha],
+    ["file count", String(manifest.files.length), String(reference.fileCount)],
+    ["size", String(totalBytes), String(reference.sizeBytes)],
+    ["changes digest", sha256Hex(changesStream(manifest)), reference.changesSha256],
+    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest.files))}`, reference.captureId]
+  ];
+  for (const [label, actual, want] of expectations) {
+    if (!equalsConstantTime(actual, want)) throw new Error(`Capture ${label} mismatch`);
+  }
+  for (const file2 of manifest.files) {
+    if (file2.status === "deleted") continue;
+    const measured = await measureContent(import_node_path.default.join(directory, "content", file2.sha256), file2.sizeBytes);
+    if (measured === void 0) throw new Error(`Captured content size mismatch for ${file2.path}`);
+    if (!equalsConstantTime(measured, file2.sha256)) throw new Error(`Captured content digest mismatch for ${file2.path}`);
+  }
+  return { ref: reference, manifest };
+}
+function changesStream(manifest) {
+  return Buffer.from(taskCaptureChangesDigestInput(manifest));
+}
+function identityStream(baseSha, files) {
+  return Buffer.concat([framed(["gardener.task-capture/v1", baseSha]), ...files.map(fileRecord)]);
+}
+function fileRecord(file2) {
+  return file2.status === "deleted" ? framed(["delete", file2.path]) : framed(["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256]);
+}
+function framed(fields) {
+  return Buffer.concat(fields.map((field) => {
+    const bytes = Buffer.from(field, "utf8");
+    return Buffer.concat([Buffer.from(`${bytes.byteLength}:`, "utf8"), bytes]);
+  }));
+}
+function parseManifest(value) {
+  const parsed = taskCaptureManifestV1Schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const detail = parsed.error.issues.map((issue3) => `${issue3.path.join("/") || "manifest"}: ${issue3.message}`).join("; ");
+  throw new Error(`Capture manifest is invalid: ${detail}`);
+}
+async function readBoundedFile(absolute, limit) {
+  const handle = await (0, import_promises.open)(absolute, import_node_fs.constants.O_RDONLY | import_node_fs.constants.O_NOFOLLOW);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) throw new Error(`Capture artifact ${import_node_path.default.basename(absolute)} is not a regular file`);
+    if (stats.size > limit) throw new Error(`Capture artifact ${import_node_path.default.basename(absolute)} exceeds ${limit} bytes`);
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+}
+async function measureContent(absolute, expectedSize) {
+  const handle = await (0, import_promises.open)(absolute, import_node_fs.constants.O_RDONLY | import_node_fs.constants.O_NOFOLLOW);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile() || stats.size !== expectedSize) return void 0;
+    const hash8 = (0, import_node_crypto.createHash)("sha256");
+    let seen = 0;
+    await (0, import_promises2.pipeline)(
+      handle.createReadStream({ autoClose: false }),
+      new import_node_stream.Transform({
+        transform(chunk, _encoding, callback) {
+          seen += chunk.byteLength;
+          if (seen > expectedSize) {
+            callback(new Error("Capture content grew while it was being verified"));
+            return;
+          }
+          hash8.update(chunk);
+          callback(null, chunk);
+        }
+      }),
+      async function* (source) {
+        for await (const _chunk of source) {
+        }
+      }
+    );
+    return seen === expectedSize ? hash8.digest("hex") : void 0;
+  } finally {
+    await handle.close();
+  }
+}
+function sha256Hex(content) {
+  return (0, import_node_crypto.createHash)("sha256").update(content).digest("hex");
+}
+function equalsConstantTime(left, right) {
+  const first = Buffer.from(left, "utf8");
+  const second = Buffer.from(right, "utf8");
+  if (first.byteLength !== second.byteLength) return false;
+  return (0, import_node_crypto.timingSafeEqual)(first, second);
 }
 
 // src/context.ts
@@ -44506,48 +45957,2281 @@ function claim2(claims, name2) {
   return String(value);
 }
 
+// src/event.ts
+function object2(value, what) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`GitHub event payload is missing ${what}`);
+  }
+  return value;
+}
+function actor(value, what) {
+  const user = object2(value, what);
+  return { id: String(user.id ?? ""), login: user.login };
+}
+function labelNames(value) {
+  return Array.isArray(value) ? value.map((label) => String(object2(label, "a label").name ?? "")).filter((name2) => name2.length > 0) : [];
+}
+function changedLabel2(raw) {
+  return String(object2(raw.label, "the changed label").name ?? "");
+}
+function issuePayload3(raw) {
+  const issue3 = object2(raw.issue, "an issue");
+  return {
+    id: String(issue3.id ?? ""),
+    number: issue3.number,
+    title: issue3.title,
+    body: issue3.body ?? null,
+    labels: labelNames(issue3.labels),
+    author: actor(issue3.user, "an issue author")
+  };
+}
+function repositoryRef(value) {
+  if (value === null || value === void 0) return null;
+  const repository = object2(value, "a pull-request repository");
+  return { id: String(repository.id ?? ""), fullName: repository.full_name };
+}
+function pullRequestPayload3(raw) {
+  const pullRequest = object2(raw.pull_request, "a pull request");
+  const base = object2(pullRequest.base, "a pull-request base");
+  const head = object2(pullRequest.head, "a pull-request head");
+  return {
+    id: String(pullRequest.id ?? ""),
+    number: pullRequest.number,
+    title: pullRequest.title,
+    body: pullRequest.body ?? null,
+    labels: labelNames(pullRequest.labels),
+    author: actor(pullRequest.user, "a pull-request author"),
+    draft: Boolean(pullRequest.draft),
+    state: pullRequest.state === "closed" ? "closed" : "open",
+    merged: Boolean(pullRequest.merged),
+    base: { ref: base.ref, sha: base.sha, repo: repositoryRef(base.repo) },
+    head: { ref: head.ref, sha: head.sha, repo: repositoryRef(head.repo) }
+  };
+}
+function commentPayload(raw) {
+  const comment = object2(raw.comment, "a comment");
+  return {
+    id: String(comment.id ?? ""),
+    body: comment.body ?? null,
+    author: actor(comment.user, "a comment author")
+  };
+}
+function discussionPayload3(raw) {
+  const discussion = object2(raw.discussion, "a discussion");
+  return {
+    id: String(discussion.id ?? ""),
+    nodeId: discussion.node_id,
+    number: discussion.number,
+    title: discussion.title,
+    body: discussion.body ?? null,
+    labels: labelNames(discussion.labels),
+    author: actor(discussion.user, "a discussion author"),
+    category: object2(discussion.category, "a discussion category").name,
+    answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url)
+  };
+}
+var MAX_INCLUDED_COMMITS = 20;
+function pushPayload(raw) {
+  const commits = Array.isArray(raw.commits) ? raw.commits : [];
+  const included = commits.slice(0, MAX_INCLUDED_COMMITS);
+  return {
+    ref: raw.ref,
+    before: raw.before,
+    after: raw.after,
+    forced: Boolean(raw.forced),
+    commits: included.map((entry) => {
+      const commit = object2(entry, "a pushed commit");
+      const author = object2(commit.author, "a commit author");
+      return {
+        sha: commit.id,
+        message: String(commit.message ?? "").slice(0, 4096),
+        author: { name: String(author.name ?? ""), email: String(author.email ?? "") }
+      };
+    }),
+    includedCommits: included.length,
+    // GitHub caps its own push payload, so this only reports truncation we can
+    // observe. It is never a claim about the true size of the push.
+    commitsTruncated: commits.length > MAX_INCLUDED_COMMITS
+  };
+}
+function repositoryPayload(raw) {
+  const repository = object2(raw.repository, "the repository");
+  const defaultBranch = typeof repository.default_branch === "string" ? repository.default_branch.trim() : "";
+  if (!defaultBranch) throw new Error("GitHub event payload is missing the repository default branch");
+  return { defaultBranch };
+}
+function normalizeGitHubEvent(eventName, source) {
+  const raw = object2(source, "an event payload");
+  const action = typeof raw.action === "string" ? raw.action : void 0;
+  const unsupported = () => {
+    throw new Error(`Gardener does not support ${eventName}${action ? `: ${action}` : ""}`);
+  };
+  const payload = (() => {
+    switch (eventName) {
+      case "issues": {
+        if (!action || !["opened", "edited", "labeled", "unlabeled", "reopened"].includes(action)) unsupported();
+        const issue3 = { issue: issuePayload3(raw) };
+        return action === "labeled" || action === "unlabeled" ? { kind: `github.issue.${action}`, ...issue3, label: changedLabel2(raw) } : { kind: `github.issue.${action}`, ...issue3 };
+      }
+      case "issue_comment": {
+        if (action !== "created") unsupported();
+        return { kind: "github.issue_comment.created", issue: issuePayload3(raw), comment: commentPayload(raw) };
+      }
+      case "pull_request": {
+        const supported = ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "edited", "labeled", "unlabeled"];
+        if (!action || !supported.includes(action)) unsupported();
+        const pullRequest = { pullRequest: pullRequestPayload3(raw) };
+        return action === "labeled" || action === "unlabeled" ? { kind: `github.pull_request.${action}`, ...pullRequest, label: changedLabel2(raw) } : { kind: `github.pull_request.${action}`, ...pullRequest };
+      }
+      case "pull_request_review": {
+        if (action !== "submitted") unsupported();
+        const review = object2(raw.review, "a review");
+        return {
+          kind: "github.pull_request_review.submitted",
+          pullRequest: pullRequestPayload3(raw),
+          review: {
+            id: String(review.id ?? ""),
+            state: String(review.state ?? "").toLowerCase(),
+            body: review.body ?? null,
+            author: actor(review.user, "a review author")
+          }
+        };
+      }
+      case "pull_request_review_comment": {
+        if (action !== "created") unsupported();
+        return {
+          kind: "github.pull_request_review_comment.created",
+          pullRequest: pullRequestPayload3(raw),
+          comment: commentPayload(raw)
+        };
+      }
+      case "push":
+        return { kind: "github.push", push: pushPayload(raw) };
+      case "workflow_dispatch": {
+        const inputs = raw.inputs === void 0 ? {} : object2(raw.inputs, "dispatch inputs");
+        const prompt = typeof inputs.prompt === "string" ? inputs.prompt.trim() : "";
+        if (!prompt) throw new Error("workflow_dispatch requires a non-empty prompt input");
+        return { kind: "github.workflow_dispatch", prompt };
+      }
+      case "schedule": {
+        const cron = typeof raw.schedule === "string" ? raw.schedule.trim() : "";
+        if (!cron) throw new Error("schedule event payload is missing its cron expression");
+        return { kind: "github.schedule", cron };
+      }
+      case "discussion": {
+        const supported = ["created", "edited", "answered", "unanswered", "labeled", "unlabeled"];
+        if (!action || !supported.includes(action)) unsupported();
+        const discussion = { discussion: discussionPayload3(raw) };
+        return action === "labeled" || action === "unlabeled" ? { kind: `github.discussion.${action}`, ...discussion, label: changedLabel2(raw) } : { kind: `github.discussion.${action}`, ...discussion };
+      }
+      case "discussion_comment": {
+        if (action !== "created") unsupported();
+        const comment = object2(raw.comment, "a discussion comment");
+        return {
+          kind: "github.discussion_comment.created",
+          discussion: discussionPayload3(raw),
+          comment: {
+            id: String(comment.id ?? ""),
+            nodeId: comment.node_id,
+            body: comment.body ?? null,
+            author: actor(comment.user, "a discussion comment author")
+          }
+        };
+      }
+      default:
+        return unsupported();
+    }
+  })();
+  return runnerEventV1Schema.parse({
+    schemaVersion: "gardener.runner.event/v1",
+    repository: repositoryPayload(raw),
+    ...payload
+  });
+}
+
+// src/github-effects.ts
+var import_node_crypto2 = require("node:crypto");
+
+// ../provider-github/src/contracts.ts
+var GITHUB_GATEWAY_CONTRACT_VERSION = "github-gateway/v1";
+var availableGitHubOperationKinds = [
+  "issue.label.add",
+  "issue.label.remove",
+  "issue.comment.create",
+  "issue.comment.update",
+  "issue.close",
+  "issue.reopen",
+  "pull_request.review.submit",
+  "pull_request.update",
+  "branch.create",
+  "commit.create",
+  "pull_request.open_draft",
+  "pull_request.merge"
+];
+var availableOperations = new Set(availableGitHubOperationKinds);
+var unavailableGitHubOperationKinds = operationKindValues.filter(
+  (kind) => !availableOperations.has(kind)
+);
+var opaqueId = external_exports.string().min(16).max(255).regex(/^[A-Za-z0-9:_-]+$/);
+var githubNumericId3 = external_exports.string().regex(/^[1-9][0-9]{0,31}$/);
+var githubLogin = external_exports.string().min(1).max(39).regex(
+  /^(?!.*--)[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
+);
+var githubProviderIdentitySchema = external_exports.object({
+  provider: external_exports.literal("github"),
+  subject: githubNumericId3,
+  login: githubLogin
+}).strict();
+var githubGatewayHealthSchema = external_exports.object({
+  contractVersion: external_exports.literal(GITHUB_GATEWAY_CONTRACT_VERSION),
+  ready: external_exports.boolean(),
+  database: external_exports.boolean(),
+  githubApp: external_exports.boolean(),
+  gardenerBinding: external_exports.boolean()
+}).strict();
+var beginGitHubLoginResultSchema = external_exports.object({
+  authorizationUrl: external_exports.url()
+}).strict();
+var completeGitHubLoginSchema = external_exports.object({
+  handoffId: opaqueId,
+  identity: githubProviderIdentitySchema,
+  expiresAt: external_exports.number().int().positive()
+}).strict();
+var completeGitHubLoginResultSchema = external_exports.object({
+  accepted: external_exports.literal(true)
+}).strict();
+var githubInstallationRequestSchema = external_exports.object({
+  requestId: opaqueId,
+  requestedBy: githubProviderIdentitySchema
+}).strict();
+var beginGitHubInstallationResultSchema = external_exports.object({
+  installationUrl: external_exports.url()
+}).strict();
+var githubInstallationSchema = external_exports.object({
+  id: githubNumericId3,
+  accountId: githubNumericId3,
+  accountLogin: external_exports.string().min(1).max(255),
+  accountType: external_exports.enum(["User", "Organization"]),
+  active: external_exports.boolean()
+}).strict();
+var connectedGitHubRepositorySchema = repositoryRefSchema.extend({
+  provider: external_exports.literal("github")
+}).strict();
+var finalizeGitHubInstallationResultSchema = external_exports.object({
+  installation: githubInstallationSchema,
+  repositories: external_exports.array(connectedGitHubRepositorySchema)
+}).strict();
+var githubRepositorySyncResultSchema = external_exports.object({
+  repositories: external_exports.array(connectedGitHubRepositorySchema)
+}).strict();
+var resolveGitHubUsernameSchema = external_exports.object({
+  login: githubLogin
+}).strict();
+var resolveGitHubUsernameResultSchema = external_exports.object({
+  identity: githubProviderIdentitySchema.nullable()
+}).strict();
+var githubOperationCapabilitySchema = external_exports.object({
+  kind: operationKindSchema,
+  available: external_exports.boolean()
+}).strict();
+var githubGatewayCapabilitiesSchema = external_exports.object({
+  contractVersion: external_exports.literal(GITHUB_GATEWAY_CONTRACT_VERSION),
+  operations: external_exports.array(githubOperationCapabilitySchema).length(operationKindValues.length)
+}).strict().superRefine((value, context) => {
+  const kinds = value.operations.map((operation) => operation.kind);
+  if (new Set(kinds).size !== operationKindValues.length) {
+    context.addIssue({ code: "custom", message: "Each GitHub operation kind must appear exactly once" });
+    return;
+  }
+  for (const kind of operationKindValues) {
+    if (!kinds.includes(kind)) {
+      context.addIssue({ code: "custom", message: `Missing GitHub operation capability: ${kind}` });
+    }
+  }
+});
+var executeGitHubOperationRequestSchema = external_exports.object({
+  runId: opaqueId,
+  eventId: external_exports.string().min(1).max(255),
+  operation: operationSchema
+}).strict().superRefine((value, context) => {
+  if (![
+    "issue.comment.create",
+    "pull_request.review.submit",
+    "pull_request.open_draft"
+  ].includes(value.operation.kind)) return;
+  const operation = value.operation;
+  const marker = `<!-- gardener-operation:${operation.id} -->`;
+  if (operation.body !== marker && !operation.body.endsWith(`
+${marker}`)) {
+    context.addIssue({
+      code: "custom",
+      path: ["operation", "body"],
+      message: "Gateway rendered content requires the exact host operation marker"
+    });
+  }
+});
+var executeGitHubOperationResultSchema = external_exports.object({
+  receipt: operationReceiptSchema
+}).strict();
+var deliverGitHubEventSchema = external_exports.object({
+  event: repositoryEventV2Schema,
+  eventHash: external_exports.string().regex(/^[a-f0-9]{64}$/)
+}).strict();
+var deliverGitHubEventResultSchema = external_exports.object({
+  accepted: external_exports.literal(true),
+  duplicate: external_exports.boolean(),
+  runIds: external_exports.array(external_exports.string().min(1).max(255))
+}).strict();
+var gatewayDeliverySummarySchema = external_exports.object({
+  deliveryId: external_exports.string().min(1).max(255),
+  eventName: external_exports.string().min(1).max(100),
+  repository: external_exports.string().min(1).max(256).nullable(),
+  status: external_exports.enum(["received", "delivering", "delivered", "failed"]),
+  attempts: external_exports.number().int().nonnegative(),
+  lastError: external_exports.string().max(500).nullable(),
+  receivedAt: external_exports.string(),
+  deliveredAt: external_exports.string().nullable()
+}).strict();
+var gatewayDoctorResultSchema = external_exports.object({
+  health: githubGatewayHealthSchema,
+  capabilities: githubGatewayCapabilitiesSchema,
+  failedDeliveries: external_exports.array(gatewayDeliverySummarySchema),
+  staleDeliveries: external_exports.array(gatewayDeliverySummarySchema)
+}).strict();
+var retryGatewayDeliverySchema = external_exports.object({
+  deliveryId: external_exports.string().min(1).max(255)
+}).strict();
+var retryGatewayDeliveryResultSchema = external_exports.object({
+  delivery: gatewayDeliverySummarySchema
+}).strict();
+
+// ../provider-github/src/permissions.ts
+var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
+  "issue.label.add": ["issues:write"],
+  "issue.label.remove": ["issues:write"],
+  "issue.comment.create": ["issues:write"],
+  "issue.comment.update": ["issues:write"],
+  "issue.close": ["issues:write"],
+  "issue.reopen": ["issues:write"],
+  "issue.assignee.add": ["issues:write"],
+  "issue.assignee.remove": ["issues:write"],
+  "pull_request.comment.create": ["pull-requests:write"],
+  "pull_request.comment.update": ["pull-requests:write"],
+  "pull_request.review.submit": ["pull-requests:write"],
+  "pull_request.reviewer.request": ["pull-requests:write"],
+  "pull_request.reviewer.remove": ["pull-requests:write"],
+  "pull_request.update": ["pull-requests:write"],
+  "branch.create": ["contents:write"],
+  "commit.create": ["contents:write"],
+  "pull_request.open_draft": ["contents:read", "pull-requests:write"],
+  "pull_request.merge": ["contents:write", "pull-requests:write", "checks:read", "statuses:read"],
+  "discussion.comment.create": ["discussions:write"],
+  "discussion.comment.update": ["discussions:write"],
+  "discussion.answer.mark": ["discussions:write"],
+  "discussion.answer.unmark": ["discussions:write"],
+  "discussion.close": ["discussions:write"],
+  "discussion.reopen": ["discussions:write"],
+  "check.rerun": ["checks:write"],
+  "release.create": ["contents:write"],
+  "release.update": ["contents:write"],
+  "release.publish": ["contents:write"],
+  "release.delete": ["contents:write"]
+});
+var OPERATION_PLANNING_READ_PERMISSIONS = Object.freeze(Object.fromEntries(
+  operationKindValues.map((kind) => [kind, planningReadScopes(kind)])
+));
+function planningReadScopes(kind) {
+  const downgraded = OPERATION_TOKEN_PERMISSIONS[kind].map(
+    (scope) => `${scopeKey(scope)}:read`
+  );
+  return [...new Set(downgraded)].filter((scope) => scopeKey(scope) !== "id-token");
+}
+function scopeKey(scope) {
+  return scope.slice(0, scope.lastIndexOf(":"));
+}
+
+// src/github-effects.ts
+var DEFAULT_API_BASE_URL = "https://api.github.com";
+var DEFAULT_ACTOR_LOGIN = "github-actions[bot]";
+var DEFAULT_ACTOR_APP_SLUG = "github-actions";
+var DEFAULT_TIMEOUT_MS = 1e4;
+var DEFAULT_BUDGET_MS = 12e4;
+var DEFAULT_MAX_PAGES = 100;
+var USER_AGENT = "gardener-actions-effects/1";
+var COMMIT_MARKER_PREFIX = "Gardener-Operation:";
+var ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+var GIT_SHA = /^[a-fA-F0-9]{40}$/;
+var REPOSITORY_FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+var MAX_INLINE_COMMIT_CONTENT_BYTES = 5e6;
+var GitHubEffectError = class extends Error {
+  constructor(code, message, classification, retryable = false, providerRequestId) {
+    super(message);
+    this.code = code;
+    this.classification = classification;
+    this.retryable = retryable;
+    this.providerRequestId = providerRequestId;
+    this.name = "GitHubEffectError";
+  }
+  code;
+  classification;
+  retryable;
+  providerRequestId;
+};
+function conflict(code, message, providerRequestId) {
+  return new GitHubEffectError(code, message, "conflicted", false, providerRequestId);
+}
+function failure2(code, message, retryable = false, providerRequestId) {
+  return new GitHubEffectError(code, message, "failed", retryable, providerRequestId);
+}
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.entries(value).filter(([, item]) => item !== void 0).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+}
+function canonicalOperationHash(operation) {
+  return (0, import_node_crypto2.createHash)("sha256").update(canonicalJson(operation), "utf8").digest("hex");
+}
+function isMutatingMethod(method) {
+  const normalized = (method ?? "GET").toUpperCase();
+  return normalized !== "GET" && normalized !== "HEAD";
+}
+function record2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function positiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function sameInstant(left, right) {
+  if (typeof left !== "string" || !ISO_INSTANT.test(left) || !ISO_INSTANT.test(right)) return false;
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+function operationMarker(id8) {
+  return `<!-- gardener-operation:${id8} -->`;
+}
+function hasExactOperationMarker(body2, id8) {
+  const marker = operationMarker(id8);
+  return body2 === marker || body2.endsWith(`
+${marker}`);
+}
+function commitMarker(operationId, operationHash) {
+  return `${COMMIT_MARKER_PREFIX} ${operationId}:${operationHash}`;
+}
+function encodeSegment(value, label) {
+  if (value === "" || value === "." || value === "..") {
+    throw failure2("unsafe_path_segment", `${label} cannot be "${value}": it would rewrite the GitHub request path`);
+  }
+  return encodeURIComponent(value);
+}
+function encodeRefPath(value) {
+  return value.split("/").map((segment) => encodeSegment(segment, "Git ref segment")).join("/");
+}
+function isSafeFilePath(value) {
+  const lower = value.toLowerCase();
+  return lower !== ".git" && !lower.startsWith(".git/") && !value.startsWith("/") && !value.includes("\\") && !value.includes("\0") && value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+}
+function decodedBase64Length(value) {
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(value.length * 3 / 4) - padding);
+}
+function htmlUrl(value, field = "html_url") {
+  const candidate = value[field];
+  if (typeof candidate !== "string" || !candidate.startsWith("https://")) {
+    throw failure2("github_response_invalid", "GitHub response omitted a usable resource URL");
+  }
+  return candidate;
+}
+function numericId(value, label) {
+  if (!positiveInteger(value)) throw failure2("github_response_invalid", `GitHub response omitted a numeric ${label}`);
+  return String(value);
+}
+var GitHubApi = class {
+  #token;
+  #fetch;
+  #baseUrl;
+  #timeoutMs;
+  #maxPages;
+  #clock;
+  #deadline;
+  #lastRequestId;
+  #mutated = false;
+  constructor(context, deadline) {
+    this.#token = context.token;
+    this.#fetch = context.fetch ?? globalThis.fetch;
+    this.#baseUrl = (context.apiBaseUrl ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+    this.#timeoutMs = context.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.#maxPages = context.maxPages ?? DEFAULT_MAX_PAGES;
+    this.#clock = context.now ?? (() => /* @__PURE__ */ new Date());
+    this.#deadline = deadline;
+  }
+  get baseUrl() {
+    return this.#baseUrl;
+  }
+  get lastRequestId() {
+    return this.#lastRequestId;
+  }
+  /** True once any non-idempotent request has been issued during this attempt. */
+  get mutated() {
+    return this.#mutated;
+  }
+  /**
+   * Issues a request and classifies it.
+   *
+   * Every request funnels through here so no caller can bypass mutation
+   * tracking: a state-changing request that went unrecorded would be reported
+   * as `skipped` rather than `succeeded`. Only GraphQL needs to override the
+   * method-based classification, because a GraphQL mutation and a GraphQL query
+   * are both HTTP POSTs.
+   */
+  async raw(path3, init = {}, mutating = isMutatingMethod(init.method)) {
+    if (mutating) this.#mutated = true;
+    const remaining = this.#deadline - this.#clock().getTime();
+    if (remaining <= 0) {
+      throw failure2(
+        "operation_budget_exhausted",
+        "Operation exceeded its cumulative GitHub request budget before completing",
+        true
+      );
+    }
+    const response = await this.#fetch(`${this.#baseUrl}${path3}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${this.#token}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": USER_AGENT,
+        "content-type": "application/json",
+        ...init.headers ?? {}
+      },
+      signal: AbortSignal.timeout(Math.min(this.#timeoutMs, remaining))
+    });
+    const header = response.headers?.get?.("x-github-request-id") ?? void 0;
+    this.#lastRequestId = header ? header.slice(0, 255) : void 0;
+    return this.#lastRequestId === void 0 ? { response } : { response, requestId: this.#lastRequestId };
+  }
+  /** Performs a request and throws a classified error for any non-2xx status. */
+  async rest(path3, label, init = {}) {
+    const { response, requestId: requestId2 } = await this.raw(path3, init);
+    if (!response.ok) throw await httpError(response, label, requestId2);
+    if (response.status === 204) {
+      await response.body?.cancel();
+      return { status: response.status, data: null, ...requestId2 === void 0 ? {} : { requestId: requestId2 } };
+    }
+    return { status: response.status, data: await response.json(), ...requestId2 === void 0 ? {} : { requestId: requestId2 } };
+  }
+  /** Performs a request, returning `null` for 404 instead of throwing. */
+  async restOptional(path3, label, init = {}) {
+    const { response, requestId: requestId2 } = await this.raw(path3, init);
+    if (response.status === 404) {
+      await response.body?.cancel();
+      return null;
+    }
+    if (!response.ok) throw await httpError(response, label, requestId2);
+    if (response.status === 204) {
+      await response.body?.cancel();
+      return { status: response.status, data: null, ...requestId2 === void 0 ? {} : { requestId: requestId2 } };
+    }
+    return { status: response.status, data: await response.json(), ...requestId2 === void 0 ? {} : { requestId: requestId2 } };
+  }
+  /**
+   * Scans a paginated collection for an exact match. Pagination follows the
+   * `link` rel="next" marker and falls back to a short-page check, with a hard
+   * page ceiling so a hostile or enormous collection cannot hang the job.
+   */
+  async findPaginated(path3, label, matches, envelopeKey) {
+    for (let page = 1; page <= this.#maxPages; page++) {
+      const separator = path3.includes("?") ? "&" : "?";
+      const { response, requestId: requestId2 } = await this.raw(`${path3}${separator}per_page=100&page=${page}`);
+      if (!response.ok) throw await httpError(response, label, requestId2);
+      const payload = await response.json();
+      const data = envelopeKey === void 0 ? payload : record2(payload) ? payload[envelopeKey] : void 0;
+      if (!Array.isArray(data)) throw failure2("github_response_invalid", `${label} response was not a collection`);
+      const match = data.filter(record2).find(matches);
+      if (match) return match;
+      const link = response.headers?.get?.("link") ?? "";
+      const hasNext = /(?:^|,)\s*<[^>]+>\s*;\s*rel="next"/.test(link);
+      if (!hasNext && data.length < 100) return null;
+      if (!hasNext && data.length === 100 && link !== "") return null;
+    }
+    throw failure2("github_pagination_exhausted", `${label} exceeded the ${this.#maxPages}-page idempotency scan`);
+  }
+  async graphql(query, variables, label) {
+    const { response, requestId: requestId2 } = await this.raw(
+      "/graphql",
+      { method: "POST", body: JSON.stringify({ query, variables }) },
+      // A GraphQL query and a GraphQL mutation are both POSTs, so the document
+      // decides rather than the HTTP method.
+      /^\s*mutation\b/.test(query)
+    );
+    if (!response.ok) throw await httpError(response, label, requestId2);
+    const payload = await response.json();
+    if (!record2(payload)) throw failure2("github_response_invalid", `${label} returned a non-object response`);
+    if (Array.isArray(payload.errors) && payload.errors.length > 0) {
+      const first = payload.errors.find(record2) ?? {};
+      const type = typeof first.type === "string" ? first.type : "GRAPHQL_ERROR";
+      const message = typeof first.message === "string" ? first.message : `${label} failed`;
+      const retryable = type === "RATE_LIMITED";
+      if (type === "NOT_FOUND" || type === "FORBIDDEN" || type === "UNPROCESSABLE") {
+        throw conflict(`github_graphql_${type.toLowerCase()}`, `${label}: ${message}`, requestId2);
+      }
+      throw failure2(`github_graphql_${type.toLowerCase()}`, `${label}: ${message}`, retryable, requestId2);
+    }
+    if (!record2(payload.data)) throw failure2("github_response_invalid", `${label} returned no data`);
+    return payload.data;
+  }
+};
+async function httpError(response, label, requestId2) {
+  let detail = "";
+  try {
+    const text2 = await response.text();
+    const parsed = text2 ? JSON.parse(text2) : null;
+    if (record2(parsed) && typeof parsed.message === "string") detail = `: ${parsed.message}`;
+  } catch {
+  }
+  const status = response.status;
+  if (status === 409 || status === 422) {
+    return conflict("github_precondition_rejected", `${label} was rejected by GitHub (${status})${detail}`, requestId2);
+  }
+  if (status === 429 || status >= 500) {
+    return failure2("github_unavailable", `${label} failed (${status})${detail}`, true, requestId2);
+  }
+  return failure2("github_http_error", `${label} failed (${status})${detail}`, false, requestId2);
+}
+function isActorLogin(login, scope) {
+  const candidate = login.toLowerCase();
+  const rest = scope.actorLogin.toLowerCase();
+  return candidate === rest || candidate === rest.replace(/\[bot\]$/, "");
+}
+function authoredByActor(value, scope) {
+  if (record2(value.performed_via_github_app) && typeof value.performed_via_github_app.slug === "string") {
+    if (value.performed_via_github_app.slug.toLowerCase() === scope.actorAppSlug.toLowerCase()) return true;
+  }
+  return record2(value.user) && typeof value.user.login === "string" && value.user.login.toLowerCase() === scope.actorLogin.toLowerCase();
+}
+async function loadIssue(scope, issueNumber, expectPull) {
+  const { data } = await scope.api.rest(`${scope.repoPath}/issues/${issueNumber}`, "Issue precondition lookup");
+  if (!record2(data) || data.state !== "open" && data.state !== "closed") {
+    throw failure2("github_response_invalid", "GitHub issue response was invalid");
+  }
+  const isPull = data.pull_request !== void 0;
+  if (isPull !== expectPull) {
+    throw conflict(
+      "resource_kind_mismatch",
+      expectPull ? "Referenced resource is an issue, not a pull request" : "Referenced resource is a pull request, not an issue"
+    );
+  }
+  return data;
+}
+function assertIssueState(issue3, expectedState, expectedUpdatedAt) {
+  if (issue3.state !== expectedState) {
+    throw conflict("issue_state_changed", `Precondition failed: issue state is ${String(issue3.state)}`);
+  }
+  if (!sameInstant(issue3.updated_at, expectedUpdatedAt)) {
+    throw conflict("issue_changed", "Precondition failed: issue changed after the operation was planned");
+  }
+}
+async function loadPull(scope, pullNumber) {
+  const { data } = await scope.api.rest(`${scope.repoPath}/pulls/${pullNumber}`, "Pull request precondition lookup");
+  if (!record2(data) || !positiveInteger(data.number) || !record2(data.head) || !record2(data.base)) {
+    throw failure2("github_response_invalid", "GitHub pull request response was invalid");
+  }
+  return data;
+}
+function assertPullRevision(pull, expected) {
+  const head = record2(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : null;
+  if (head !== expected.expectedHeadSha) {
+    throw conflict("pull_head_changed", `Precondition failed: pull request head is ${String(head)}`);
+  }
+  if (!record2(pull.base) || typeof pull.base.ref !== "string" || typeof pull.base.sha !== "string") {
+    throw failure2("github_response_invalid", "Pull request base revision was missing");
+  }
+  if (pull.base.ref !== expected.expectedBaseRef || pull.base.sha !== expected.expectedBaseSha) {
+    throw conflict("pull_base_changed", `Precondition failed: pull request base is ${pull.base.ref} at ${pull.base.sha}`);
+  }
+}
+function assertPullState(pull, expected) {
+  if (pull.state !== expected.expectedState) {
+    throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
+  }
+  if (pull.draft !== expected.expectedDraft) {
+    throw conflict("pull_draft_changed", "Precondition failed: pull request draft state changed");
+  }
+  if (!sameInstant(pull.updated_at, expected.expectedPullUpdatedAt)) {
+    throw conflict("pull_changed", "Precondition failed: pull request changed after the operation was planned");
+  }
+}
+async function loadRef(scope, ref) {
+  const result = await scope.api.restOptional(`${scope.repoPath}/git/ref/${ref}`, "Git reference lookup");
+  if (result === null) return null;
+  const { data } = result;
+  if (!record2(data) || !record2(data.object) || typeof data.object.sha !== "string") {
+    throw failure2("github_response_invalid", "GitHub reference response was invalid");
+  }
+  return data.object.sha;
+}
+async function resolveLogin(scope, accountId) {
+  const result = await scope.api.restOptional(`/user/${encodeURIComponent(accountId)}`, "GitHub account lookup");
+  if (result === null) throw conflict("account_not_found", `GitHub account ${accountId} no longer exists`);
+  const { data } = result;
+  if (!record2(data) || typeof data.login !== "string" || String(data.id) !== accountId) {
+    throw failure2("github_response_invalid", "GitHub account response was invalid");
+  }
+  return data.login;
+}
+function accountIds(value) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => record2(item) && positiveInteger(item.id) ? [String(item.id)] : []);
+}
+function labelNames2(issue3) {
+  if (!Array.isArray(issue3.labels)) return [];
+  return issue3.labels.flatMap((label) => record2(label) && typeof label.name === "string" ? [label.name] : []);
+}
+async function executeLabel(scope, operation) {
+  const encodedLabel = encodeSegment(operation.label, "Label name");
+  const issue3 = await loadIssue(scope, operation.issueNumber, false);
+  const labels2 = labelNames2(issue3);
+  const present = labels2.some((label) => label.toLowerCase() === operation.label.toLowerCase());
+  const desired = operation.kind === "issue.label.add";
+  if (present === desired) {
+    return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels: labels2 };
+  }
+  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  if (desired) {
+    const defined = await scope.api.restOptional(
+      `${scope.repoPath}/labels/${encodedLabel}`,
+      "Repository label lookup"
+    );
+    if (defined === null) {
+      throw conflict("label_not_defined", `Label ${operation.label} is not defined in this repository`);
+    }
+  }
+  const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}`;
+  const { data } = desired ? await scope.api.rest(`${issuePath}/labels`, "Issue label add", {
+    method: "POST",
+    body: JSON.stringify({ labels: [operation.label] })
+  }) : await scope.api.rest(`${issuePath}/labels/${encodedLabel}`, "Issue label remove", {
+    method: "DELETE"
+  });
+  const applied = Array.isArray(data) ? data.flatMap((label) => record2(label) && typeof label.name === "string" ? [label.name] : []) : labels2;
+  return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels: applied };
+}
+async function executeIssueCommentCreate(scope, operation) {
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure2("canonical_marker_missing", "Exact issue comment body is missing its operation marker");
+  }
+  const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}`;
+  const existing = await scope.api.findPaginated(
+    `${issuePath}/comments?sort=created&direction=desc`,
+    "Issue comment idempotency lookup",
+    (candidate) => authoredByActor(candidate, scope) && candidate.body === operation.body
+  );
+  if (existing) {
+    return {
+      kind: operation.kind,
+      issueNumber: operation.issueNumber,
+      commentId: numericId(existing.id, "comment id"),
+      commentUrl: htmlUrl(existing)
+    };
+  }
+  const issue3 = await loadIssue(scope, operation.issueNumber, false);
+  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  const { data } = await scope.api.rest(`${issuePath}/comments`, "Issue comment creation", {
+    method: "POST",
+    body: JSON.stringify({ body: operation.body })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Issue comment response was invalid");
+  return {
+    kind: operation.kind,
+    issueNumber: operation.issueNumber,
+    commentId: numericId(data.id, "comment id"),
+    commentUrl: htmlUrl(data)
+  };
+}
+async function executeCommentUpdate(scope, operation, containerNumber, assertContainer) {
+  const commentPath = `${scope.repoPath}/issues/comments/${operation.commentId}`;
+  const existingResult = await scope.api.restOptional(commentPath, "Comment lookup");
+  if (existingResult === null) throw conflict("comment_missing", "Target comment no longer exists");
+  const existing = existingResult.data;
+  if (!record2(existing)) throw failure2("github_response_invalid", "Comment response was invalid");
+  const expectedIssueUrl = `${scope.api.baseUrl}${scope.repoPath}/issues/${containerNumber}`;
+  if (existing.issue_url !== expectedIssueUrl) {
+    throw conflict("comment_out_of_scope", "Comment does not belong to the bound issue or pull request");
+  }
+  if (!authoredByActor(existing, scope)) {
+    throw conflict("comment_not_owned", `Only comments authored by ${scope.actorLogin} may be updated`);
+  }
+  if (existing.body === operation.body) {
+    return { commentId: numericId(existing.id, "comment id"), commentUrl: htmlUrl(existing) };
+  }
+  await assertContainer();
+  if (!sameInstant(existing.updated_at, operation.expectedCommentUpdatedAt)) {
+    throw conflict("comment_changed", "Precondition failed: comment changed after the operation was planned");
+  }
+  const { data } = await scope.api.rest(commentPath, "Comment update", {
+    method: "PATCH",
+    body: JSON.stringify({ body: operation.body })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Comment update response was invalid");
+  return { commentId: numericId(data.id, "comment id"), commentUrl: htmlUrl(data) };
+}
+async function executeIssueState(scope, operation) {
+  const desired = operation.kind === "issue.close" ? "closed" : "open";
+  const issue3 = await loadIssue(scope, operation.issueNumber, false);
+  if (issue3.state === desired) {
+    return { kind: operation.kind, issueNumber: operation.issueNumber, state: desired, issueUrl: htmlUrl(issue3) };
+  }
+  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  const { data } = await scope.api.rest(`${scope.repoPath}/issues/${operation.issueNumber}`, "Issue state mutation", {
+    method: "PATCH",
+    body: JSON.stringify({ state: desired })
+  });
+  if (!record2(data) || data.state !== desired) {
+    throw conflict("issue_state_not_applied", "GitHub did not apply the exact issue state");
+  }
+  return { kind: operation.kind, issueNumber: operation.issueNumber, state: desired, issueUrl: htmlUrl(data) };
+}
+async function executeAssignee(scope, operation) {
+  const issue3 = await loadIssue(scope, operation.issueNumber, false);
+  const current = accountIds(issue3.assignees);
+  const desired = operation.kind === "issue.assignee.add";
+  const login = await resolveLogin(scope, operation.assigneeId);
+  if (current.includes(operation.assigneeId) === desired) {
+    return {
+      kind: operation.kind,
+      issueNumber: operation.issueNumber,
+      assigneeId: operation.assigneeId,
+      assigneeLogin: login,
+      assigneeIds: current
+    };
+  }
+  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}/assignees`;
+  const { data } = await scope.api.rest(issuePath, desired ? "Issue assignee add" : "Issue assignee remove", {
+    method: desired ? "POST" : "DELETE",
+    body: JSON.stringify({ assignees: [login] })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Issue assignee response was invalid");
+  const applied = accountIds(data.assignees);
+  if (applied.includes(operation.assigneeId) !== desired) {
+    throw conflict(
+      "assignee_not_applied",
+      `GitHub did not ${desired ? "add" : "remove"} assignee ${login}; the account may lack repository write access`
+    );
+  }
+  return {
+    kind: operation.kind,
+    issueNumber: operation.issueNumber,
+    assigneeId: operation.assigneeId,
+    assigneeLogin: login,
+    assigneeIds: applied
+  };
+}
+async function executePullCommentCreate(scope, operation) {
+  const issuePath = `${scope.repoPath}/issues/${operation.pullNumber}`;
+  const existing = await scope.api.findPaginated(
+    `${issuePath}/comments?sort=created&direction=desc`,
+    "Pull request comment idempotency lookup",
+    (candidate) => authoredByActor(candidate, scope) && candidate.body === operation.body
+  );
+  if (existing) {
+    return {
+      kind: operation.kind,
+      pullNumber: operation.pullNumber,
+      commentId: numericId(existing.id, "comment id"),
+      commentUrl: htmlUrl(existing)
+    };
+  }
+  const pull = await loadPull(scope, operation.pullNumber);
+  assertPullRevision(pull, operation);
+  assertPullState(pull, operation);
+  const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
+    method: "POST",
+    body: JSON.stringify({ body: operation.body })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Pull request comment response was invalid");
+  return {
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    commentId: numericId(data.id, "comment id"),
+    commentUrl: htmlUrl(data)
+  };
+}
+async function executePullCommentUpdate(scope, operation) {
+  const result = await executeCommentUpdate(scope, operation, operation.pullNumber, async () => {
+    const pull = await loadPull(scope, operation.pullNumber);
+    assertPullRevision(pull, operation);
+    assertPullState(pull, operation);
+  });
+  return { kind: operation.kind, pullNumber: operation.pullNumber, ...result };
+}
+async function executeReviewSubmit(scope, operation) {
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure2("canonical_marker_missing", "Exact review body is missing its operation marker");
+  }
+  const expectedState = operation.event === "approve" ? "APPROVED" : operation.event === "request_changes" ? "CHANGES_REQUESTED" : "COMMENTED";
+  const existing = await scope.api.findPaginated(
+    `${scope.repoPath}/pulls/${operation.pullNumber}/reviews`,
+    "Review idempotency lookup",
+    (candidate) => authoredByActor(candidate, scope) && candidate.state === expectedState && candidate.commit_id === operation.expectedHeadSha && candidate.body === operation.body
+  );
+  if (existing) {
+    return {
+      kind: operation.kind,
+      pullNumber: operation.pullNumber,
+      reviewId: numericId(existing.id, "review id"),
+      reviewUrl: htmlUrl(existing),
+      reviewState: expectedState
+    };
+  }
+  const pull = await loadPull(scope, operation.pullNumber);
+  assertPullRevision(pull, operation);
+  assertPullState(pull, operation);
+  const { data } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}/reviews`, "Pull request review", {
+    method: "POST",
+    body: JSON.stringify({
+      commit_id: operation.expectedHeadSha,
+      event: operation.event.toUpperCase(),
+      body: operation.body,
+      comments: operation.comments.map((comment) => ({
+        path: comment.path,
+        line: comment.line,
+        side: comment.side,
+        body: comment.body
+      }))
+    })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "GitHub review response was invalid");
+  return {
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    reviewId: numericId(data.id, "review id"),
+    reviewUrl: htmlUrl(data),
+    reviewState: typeof data.state === "string" ? data.state : expectedState
+  };
+}
+async function executeReviewer(scope, operation) {
+  const desired = operation.kind === "pull_request.reviewer.request";
+  const pull = await loadPull(scope, operation.pullNumber);
+  const current = accountIds(pull.requested_reviewers);
+  const logins = [];
+  for (const reviewerId of operation.reviewerIds) logins.push(await resolveLogin(scope, reviewerId));
+  const settled = operation.reviewerIds.every((reviewerId) => current.includes(reviewerId) === desired);
+  if (settled) {
+    return { kind: operation.kind, pullNumber: operation.pullNumber, reviewerIds: operation.reviewerIds, reviewerLogins: logins };
+  }
+  assertPullRevision(pull, operation);
+  assertPullState(pull, operation);
+  const { data } = await scope.api.rest(
+    `${scope.repoPath}/pulls/${operation.pullNumber}/requested_reviewers`,
+    desired ? "Reviewer request" : "Reviewer removal",
+    { method: desired ? "POST" : "DELETE", body: JSON.stringify({ reviewers: logins }) }
+  );
+  if (!record2(data)) throw failure2("github_response_invalid", "Reviewer mutation response was invalid");
+  const applied = accountIds(data.requested_reviewers);
+  const unsatisfied = operation.reviewerIds.filter((reviewerId) => applied.includes(reviewerId) !== desired);
+  if (unsatisfied.length > 0) {
+    throw conflict(
+      "reviewer_not_applied",
+      `GitHub did not ${desired ? "request" : "remove"} reviewers ${unsatisfied.join(", ")}; they may not be collaborators`
+    );
+  }
+  return { kind: operation.kind, pullNumber: operation.pullNumber, reviewerIds: operation.reviewerIds, reviewerLogins: logins };
+}
+function pullMatchesUpdate(pull, operation) {
+  return (operation.title === void 0 || pull.title === operation.title) && (operation.body === void 0 || pull.body === operation.body) && (operation.state === void 0 || pull.state === operation.state) && (operation.draft === void 0 || pull.draft === operation.draft);
+}
+function pullUpdateOutputs(operation, pull) {
+  if (typeof pull.title !== "string" || pull.state !== "open" && pull.state !== "closed") {
+    throw failure2("github_response_invalid", "GitHub pull request response omitted its title or state");
+  }
+  return {
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    pullUrl: htmlUrl(pull),
+    title: pull.title,
+    state: pull.state,
+    draft: pull.draft === true
+  };
+}
+async function setPullDraft(scope, nodeId, draft) {
+  const mutation = draft ? "mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft}}}" : "mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}";
+  const field = draft ? "convertPullRequestToDraft" : "markPullRequestReadyForReview";
+  const data = await scope.api.graphql(mutation, { id: nodeId }, "Pull request draft transition");
+  const payload = data[field];
+  if (!record2(payload) || !record2(payload.pullRequest) || payload.pullRequest.isDraft !== draft) {
+    throw conflict("pull_draft_not_applied", "GitHub did not update the pull request draft state");
+  }
+}
+async function executePullUpdate(scope, operation) {
+  let current = await loadPull(scope, operation.pullNumber);
+  if (pullMatchesUpdate(current, operation)) return pullUpdateOutputs(operation, current);
+  assertPullRevision(current, operation);
+  const resumedAfterDraft = operation.draft !== void 0 && operation.draft !== operation.expectedDraft && current.draft === operation.draft;
+  if (!resumedAfterDraft) assertPullState(current, operation);
+  if (operation.draft !== void 0 && current.draft !== operation.draft) {
+    if (typeof current.node_id !== "string") throw failure2("github_response_invalid", "Pull request node id was missing");
+    await setPullDraft(scope, current.node_id, operation.draft);
+    current = await loadPull(scope, operation.pullNumber);
+    assertPullRevision(current, operation);
+    if (current.draft !== operation.draft) {
+      throw conflict("pull_draft_not_applied", "GitHub did not apply the exact pull request draft state");
+    }
+  }
+  const patch = {};
+  if (operation.title !== void 0 && current.title !== operation.title) patch.title = operation.title;
+  if (operation.body !== void 0 && current.body !== operation.body) patch.body = operation.body;
+  if (operation.state !== void 0 && current.state !== operation.state) patch.state = operation.state;
+  if (Object.keys(patch).length > 0) {
+    const { data } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}`, "Pull request update", {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    });
+    if (!record2(data)) throw failure2("github_response_invalid", "Pull request update response was invalid");
+    current = data;
+    assertPullRevision(current, operation);
+  }
+  if (!pullMatchesUpdate(current, operation)) {
+    throw conflict("pull_update_not_applied", "GitHub did not apply the exact pull request update");
+  }
+  return pullUpdateOutputs(operation, current);
+}
+async function executeBranchCreate(scope, operation) {
+  if (!isValidGitBranchName(operation.branch) || !operation.branch.startsWith("gardener/")) {
+    throw failure2("branch_namespace_violation", "Branch name must use the gardener/ namespace");
+  }
+  const branchUrl = `https://github.com/${scope.owner}/${scope.name}/tree/${encodeRefPath(operation.branch)}`;
+  const existing = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
+  if (existing !== null) {
+    if (existing === operation.fromSha) {
+      return {
+        kind: operation.kind,
+        branch: operation.branch,
+        ref: `refs/heads/${operation.branch}`,
+        commitSha: existing,
+        branchUrl
+      };
+    }
+    throw conflict("branch_exists", `Branch already exists at ${existing}, not ${operation.fromSha}`);
+  }
+  const { data } = await scope.api.rest(`${scope.repoPath}/git/refs`, "Branch creation", {
+    method: "POST",
+    body: JSON.stringify({ ref: `refs/heads/${operation.branch}`, sha: operation.fromSha })
+  });
+  if (!record2(data) || !record2(data.object) || typeof data.object.sha !== "string") {
+    throw failure2("github_response_invalid", "Branch creation response was invalid");
+  }
+  return {
+    kind: operation.kind,
+    branch: operation.branch,
+    ref: `refs/heads/${operation.branch}`,
+    commitSha: data.object.sha,
+    branchUrl
+  };
+}
+function isCapturedFile(file2) {
+  return "captured" in file2;
+}
+function requestedMode(file2) {
+  if (!isCapturedFile(file2)) return null;
+  return file2.captured.status === "deleted" ? null : file2.captured.mode;
+}
+async function readVerifiedCapturedContent(scope, file2) {
+  if (file2.captured.status === "deleted") throw new Error("A deleted capture entry has no content to read");
+  const reader = scope.readCapturedFile;
+  if (reader === void 0) throw new Error("No capture reader was provided");
+  const { sha256: sha2563, sizeBytes } = file2.captured;
+  let bytes;
+  try {
+    bytes = await reader({ path: file2.path, sha256: sha2563, sizeBytes });
+  } catch (cause) {
+    throw failure2("capture_content_unreadable", `Captured content for ${file2.path} could not be read: ${cause instanceof Error ? cause.message : "unknown error"}`);
+  }
+  if (bytes.byteLength !== sizeBytes) {
+    throw failure2("capture_content_mismatch", `Captured content for ${file2.path} is ${bytes.byteLength} bytes, not the recorded ${sizeBytes}`);
+  }
+  const digest = (0, import_node_crypto2.createHash)("sha256").update(bytes).digest("hex");
+  if (digest !== sha2563) {
+    throw failure2("capture_content_mismatch", `Captured content for ${file2.path} does not match its recorded digest`);
+  }
+  return Buffer.from(bytes).toString("base64");
+}
+async function executeCommitCreate(scope, operation) {
+  if (!isValidGitBranchName(operation.branch) || !operation.branch.startsWith("gardener/")) {
+    throw failure2("branch_namespace_violation", "Commit target must use the gardener/ branch namespace");
+  }
+  if (operation.files.some((file2) => !isSafeFilePath(file2.path))) {
+    throw failure2("invalid_commit_path", "Commit contains an invalid file path");
+  }
+  if (operation.files.some((file2) => isProtectedCapturePath(file2.path))) {
+    throw failure2("protected_commit_path", "Commit touches a protected repository path");
+  }
+  const captured = operation.files.filter(isCapturedFile);
+  if (captured.length > 0 && scope.readCapturedFile === void 0) {
+    throw new Error("commit.create requires capture-backed content but no capture reader was provided");
+  }
+  const inlineBytes = operation.files.reduce(
+    (total, file2) => total + (isCapturedFile(file2) || file2.contentBase64 === null ? 0 : decodedBase64Length(file2.contentBase64)),
+    0
+  );
+  if (inlineBytes > MAX_INLINE_COMMIT_CONTENT_BYTES) {
+    throw failure2("commit_too_large", "Inline commit content exceeds the 5 MB operation limit");
+  }
+  const marker = commitMarker(operation.id, scope.operationHash);
+  const head = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
+  if (head === null) throw conflict("branch_missing", "Target branch does not exist");
+  if (head !== operation.expectedHeadSha) {
+    const matched = await scope.api.findPaginated(
+      `${scope.repoPath}/commits?sha=${encodeURIComponent(operation.branch)}`,
+      "Commit idempotency lookup",
+      (candidate) => {
+        const message = record2(candidate.commit) ? candidate.commit.message : void 0;
+        const parent2 = Array.isArray(candidate.parents) && record2(candidate.parents[0]) ? candidate.parents[0].sha : void 0;
+        return typeof candidate.sha === "string" && typeof message === "string" && message.split(/\r?\n/).includes(marker) && parent2 === operation.expectedHeadSha;
+      }
+    );
+    if (matched && typeof matched.sha === "string") {
+      if (!record2(matched.commit) || !record2(matched.commit.tree) || typeof matched.commit.tree.sha !== "string") {
+        throw failure2("github_response_invalid", "Reconciled commit response omitted its tree sha");
+      }
+      const treeSha = matched.commit.tree.sha;
+      return {
+        kind: operation.kind,
+        branch: operation.branch,
+        commitSha: matched.sha,
+        treeSha,
+        parentSha: operation.expectedHeadSha,
+        commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${matched.sha}`
+      };
+    }
+    throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
+  }
+  const { data: parent } = await scope.api.rest(
+    `${scope.repoPath}/git/commits/${encodeURIComponent(operation.expectedHeadSha)}`,
+    "Parent commit lookup"
+  );
+  if (!record2(parent) || !record2(parent.tree) || typeof parent.tree.sha !== "string") {
+    throw failure2("github_response_invalid", "Parent commit response was invalid");
+  }
+  const { data: parentTree } = await scope.api.rest(
+    `${scope.repoPath}/git/trees/${encodeURIComponent(parent.tree.sha)}?recursive=1`,
+    "Parent tree lookup"
+  );
+  if (!record2(parentTree) || !Array.isArray(parentTree.tree) || parentTree.truncated === true) {
+    throw failure2("github_tree_truncated", "Parent tree response was invalid or truncated");
+  }
+  const existingEntries = new Map(parentTree.tree.flatMap(
+    (entry) => record2(entry) && typeof entry.path === "string" ? [[entry.path, entry]] : []
+  ));
+  const tree = [];
+  for (const file2 of operation.files) {
+    const existing = existingEntries.get(file2.path);
+    const existingMode = existing?.mode;
+    const supportedModes = ["100644", "100755", "120000"];
+    if (existing && (existing.type !== "blob" || typeof existingMode !== "string" || !supportedModes.includes(existingMode))) {
+      throw conflict("unsupported_git_object", `Commit cannot replace unsupported Git object: ${file2.path}`);
+    }
+    const mode = requestedMode(file2) ?? (existingMode === "100755" || existingMode === "120000" ? existingMode : "100644");
+    const deletes = isCapturedFile(file2) ? file2.captured.status === "deleted" : file2.contentBase64 === null;
+    if (deletes) {
+      if (!existing) throw conflict("delete_target_missing", `Commit cannot delete absent path: ${file2.path}`);
+      tree.push({ path: file2.path, mode, type: "blob", sha: null });
+      continue;
+    }
+    const content = isCapturedFile(file2) ? await readVerifiedCapturedContent(scope, file2) : file2.contentBase64;
+    const { data: blob } = await scope.api.rest(`${scope.repoPath}/git/blobs`, "Git blob creation", {
+      method: "POST",
+      body: JSON.stringify({ content, encoding: "base64" })
+    });
+    if (!record2(blob) || typeof blob.sha !== "string") throw failure2("github_response_invalid", "Git blob response was invalid");
+    tree.push({ path: file2.path, mode, type: "blob", sha: blob.sha });
+  }
+  const { data: createdTree } = await scope.api.rest(`${scope.repoPath}/git/trees`, "Git tree creation", {
+    method: "POST",
+    body: JSON.stringify({ base_tree: parent.tree.sha, tree })
+  });
+  if (!record2(createdTree) || typeof createdTree.sha !== "string") {
+    throw failure2("github_response_invalid", "Git tree response was invalid");
+  }
+  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
+    method: "POST",
+    body: JSON.stringify({
+      message: `${operation.message}
+
+${marker}`,
+      tree: createdTree.sha,
+      parents: [operation.expectedHeadSha]
+    })
+  });
+  if (!record2(createdCommit) || typeof createdCommit.sha !== "string") {
+    throw failure2("github_response_invalid", "Git commit response was invalid");
+  }
+  await scope.api.rest(
+    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
+    "Branch fast-forward",
+    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) }
+  );
+  return {
+    kind: operation.kind,
+    branch: operation.branch,
+    commitSha: createdCommit.sha,
+    treeSha: createdTree.sha,
+    parentSha: operation.expectedHeadSha,
+    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${createdCommit.sha}`
+  };
+}
+function draftPullOutputs(operation, pull) {
+  if (!positiveInteger(pull.number)) {
+    throw failure2("github_response_invalid", "GitHub pull request response omitted its number");
+  }
+  if (typeof pull.node_id !== "string" || pull.node_id === "") {
+    throw failure2("github_response_invalid", "GitHub pull request response omitted its node id");
+  }
+  return {
+    kind: operation.kind,
+    pullNumber: pull.number,
+    pullUrl: htmlUrl(pull),
+    pullNodeId: pull.node_id,
+    headRef: operation.head,
+    headSha: operation.expectedHeadSha,
+    baseRef: operation.base
+  };
+}
+async function executePullOpenDraft(scope, operation) {
+  if (!isValidGitBranchName(operation.head) || !isValidGitBranchName(operation.base) || !operation.head.startsWith("gardener/")) {
+    throw failure2("branch_namespace_violation", "Pull request head must use the gardener/ namespace");
+  }
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure2("canonical_marker_missing", "Exact pull request body is missing its operation marker");
+  }
+  const query = new URLSearchParams({ state: "all", head: `${scope.owner}:${operation.head}`, base: operation.base });
+  const existing = await scope.api.findPaginated(
+    `${scope.repoPath}/pulls?${query.toString()}`,
+    "Pull request idempotency lookup",
+    (candidate) => authoredByActor(candidate, scope) && candidate.body === operation.body
+  );
+  if (existing) {
+    if (existing.state !== "open") {
+      throw conflict(
+        "pull_request_not_open",
+        `A matching Gardener pull request exists but is ${String(existing.state)}, so the draft was not opened`
+      );
+    }
+    const headMatches = record2(existing.head) && existing.head.sha === operation.expectedHeadSha;
+    const baseMatches = record2(existing.base) && existing.base.ref === operation.base;
+    if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== operation.draft) {
+      throw conflict("pull_request_mismatch", "Existing Gardener pull request does not match the planned operation");
+    }
+    return draftPullOutputs(operation, existing);
+  }
+  const head = await loadRef(scope, `heads/${encodeRefPath(operation.head)}`);
+  const base = await loadRef(scope, `heads/${encodeRefPath(operation.base)}`);
+  if (head === null) throw conflict("head_branch_missing", "Pull request head branch does not exist");
+  if (base === null) throw conflict("base_branch_missing", "Pull request base branch does not exist");
+  if (head !== operation.expectedHeadSha) throw conflict("head_branch_changed", "Precondition failed: head branch changed");
+  if (base !== operation.expectedBaseSha) throw conflict("base_branch_changed", "Precondition failed: base branch changed");
+  const { data } = await scope.api.rest(`${scope.repoPath}/pulls`, "Pull request creation", {
+    method: "POST",
+    body: JSON.stringify({
+      head: operation.head,
+      base: operation.base,
+      title: operation.title,
+      body: operation.body,
+      draft: operation.draft
+    })
+  });
+  if (!record2(data) || !positiveInteger(data.number) || !record2(data.head) || !record2(data.base)) {
+    throw failure2("github_response_invalid", "GitHub pull request creation response was invalid");
+  }
+  if (data.head.sha !== operation.expectedHeadSha || data.base.ref !== operation.base || data.base.sha !== operation.expectedBaseSha) {
+    const { response } = await scope.api.raw(`${scope.repoPath}/pulls/${data.number}`, {
+      method: "PATCH",
+      body: JSON.stringify({ state: "closed" })
+    });
+    await response.body?.cancel();
+    if (!response.ok) {
+      throw conflict(
+        "pull_request_revision_race",
+        `Pull request revision changed during creation and cleanup failed for #${data.number} (${response.status})`
+      );
+    }
+    throw conflict("pull_request_revision_race", "Pull request revision changed during creation; the new pull request was closed");
+  }
+  return draftPullOutputs(operation, data);
+}
+function successfulChecks(checks, statuses) {
+  const names = /* @__PURE__ */ new Set();
+  const appChecks = /* @__PURE__ */ new Set();
+  if (record2(checks) && Array.isArray(checks.check_runs)) {
+    for (const check2 of checks.check_runs) {
+      if (!record2(check2) || !["success", "neutral", "skipped"].includes(String(check2.conclusion)) || typeof check2.name !== "string") continue;
+      names.add(check2.name);
+      if (record2(check2.app) && positiveInteger(check2.app.id)) appChecks.add(`${check2.app.id}:${check2.name}`);
+    }
+  }
+  if (record2(statuses) && Array.isArray(statuses.statuses)) {
+    for (const status of statuses.statuses) {
+      if (record2(status) && status.state === "success" && typeof status.context === "string") names.add(status.context);
+    }
+  }
+  return { names, appChecks };
+}
+async function executePullMerge(scope, operation) {
+  let pull = await loadPull(scope, operation.pullNumber);
+  if (pull.merged === true || typeof pull.merged_at === "string") {
+    assertPullRevision(pull, operation);
+    const sha2 = typeof pull.merge_commit_sha === "string" ? pull.merge_commit_sha : operation.expectedHeadSha;
+    return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: sha2, pullUrl: htmlUrl(pull) };
+  }
+  assertPullRevision(pull, operation);
+  assertPullState(pull, operation);
+  if (!record2(pull.base) || typeof pull.base.ref !== "string") {
+    throw failure2("github_response_invalid", "Pull request base branch was missing");
+  }
+  const { data: repository } = await scope.api.rest(scope.repoPath, "Repository merge settings lookup");
+  const methodField = operation.method === "merge" ? "allow_merge_commit" : operation.method === "squash" ? "allow_squash_merge" : "allow_rebase_merge";
+  if (!record2(repository) || repository[methodField] !== true) {
+    throw conflict("merge_method_disabled", `Merge method ${operation.method} is not enabled for this repository`);
+  }
+  const { data: checks } = await scope.api.rest(
+    `${scope.repoPath}/commits/${encodeURIComponent(operation.expectedHeadSha)}/check-runs?per_page=100&filter=latest`,
+    "Check run lookup"
+  );
+  const { data: statuses } = await scope.api.rest(
+    `${scope.repoPath}/commits/${encodeURIComponent(operation.expectedHeadSha)}/status?per_page=100`,
+    "Commit status lookup"
+  );
+  const successful = successfulChecks(checks, statuses);
+  const missing = operation.requiredChecks.filter(
+    (check2) => !successful.appChecks.has(`${check2.appId}:${check2.context}`)
+  );
+  if (missing.length > 0) {
+    const detail = missing.map((check2) => successful.names.has(check2.context) ? `${check2.context} (succeeded, but not from App ${check2.appId})` : `${check2.context} (App ${check2.appId})`).join(", ");
+    throw conflict("required_checks_incomplete", `Required checks are not successful: ${detail}`);
+  }
+  pull = await loadPull(scope, operation.pullNumber);
+  if (pull.merged === true || typeof pull.merged_at === "string") {
+    assertPullRevision(pull, operation);
+    const sha2 = typeof pull.merge_commit_sha === "string" ? pull.merge_commit_sha : operation.expectedHeadSha;
+    return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: sha2, pullUrl: htmlUrl(pull) };
+  }
+  assertPullRevision(pull, operation);
+  assertPullState(pull, operation);
+  const { data: merge2 } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}/merge`, "Pull request merge", {
+    method: "PUT",
+    body: JSON.stringify({ sha: operation.expectedHeadSha, merge_method: operation.method })
+  });
+  if (!record2(merge2) || merge2.merged !== true || typeof merge2.sha !== "string") {
+    throw conflict("merge_not_applied", "GitHub did not merge the pull request");
+  }
+  const merged = await loadPull(scope, operation.pullNumber);
+  const mergedHead = record2(merged.head) && typeof merged.head.sha === "string" ? merged.head.sha : null;
+  const mergedBase = record2(merged.base) && typeof merged.base.ref === "string" ? merged.base.ref : null;
+  if (mergedHead !== operation.expectedHeadSha || mergedBase !== operation.expectedBaseRef) {
+    throw failure2("merge_target_changed", "Security incident: pull request target changed during merge");
+  }
+  return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: merge2.sha, pullUrl: htmlUrl(merged) };
+}
+var DISCUSSION_QUERY = `query($owner:String!,$name:String!,$number:Int!){
+  repository(owner:$owner,name:$name){
+    discussion(number:$number){
+      id number url closed updatedAt
+      answer{ id databaseId }
+    }
+  }
+}`;
+var DISCUSSION_COMMENT_QUERY = `query($owner:String!,$name:String!,$number:Int!,$cursor:String){
+  repository(owner:$owner,name:$name){
+    discussion(number:$number){
+      comments(first:100,after:$cursor){
+        pageInfo{ hasNextPage endCursor }
+        nodes{ id databaseId body url updatedAt author{ login } }
+      }
+    }
+  }
+}`;
+async function loadDiscussion(scope, number4) {
+  const data = await scope.api.graphql(
+    DISCUSSION_QUERY,
+    { owner: scope.owner, name: scope.name, number: number4 },
+    "Discussion precondition lookup"
+  );
+  const repository = data.repository;
+  if (!record2(repository) || !record2(repository.discussion)) {
+    throw conflict("discussion_missing", `Discussion #${number4} is unavailable; discussions may be disabled`);
+  }
+  const discussion = repository.discussion;
+  if (typeof discussion.id !== "string" || typeof discussion.updatedAt !== "string" || typeof discussion.url !== "string") {
+    throw failure2("github_response_invalid", "Discussion response was invalid");
+  }
+  const answer = record2(discussion.answer) ? discussion.answer : null;
+  return {
+    id: discussion.id,
+    number: number4,
+    url: discussion.url,
+    closed: discussion.closed === true,
+    updatedAt: discussion.updatedAt,
+    answerCommentId: answer && positiveInteger(answer.databaseId) ? String(answer.databaseId) : null,
+    answerNodeId: answer && typeof answer.id === "string" ? answer.id : null
+  };
+}
+function assertDiscussionState(discussion, expectedState, expectedUpdatedAt) {
+  const state = discussion.closed ? "closed" : "open";
+  if (state !== expectedState) {
+    throw conflict("discussion_state_changed", `Precondition failed: discussion state is ${state}`);
+  }
+  if (!sameInstant(discussion.updatedAt, expectedUpdatedAt)) {
+    throw conflict("discussion_changed", "Precondition failed: discussion changed after the operation was planned");
+  }
+}
+async function findDiscussionComment(scope, number4, matches) {
+  let cursor = null;
+  for (let page = 0; page < DEFAULT_MAX_PAGES; page++) {
+    const data = await scope.api.graphql(
+      DISCUSSION_COMMENT_QUERY,
+      { owner: scope.owner, name: scope.name, number: number4, cursor },
+      "Discussion comment lookup"
+    );
+    const repository = data.repository;
+    if (!record2(repository) || !record2(repository.discussion) || !record2(repository.discussion.comments)) {
+      throw conflict("discussion_missing", `Discussion #${number4} is unavailable`);
+    }
+    const comments = repository.discussion.comments;
+    const nodes = Array.isArray(comments.nodes) ? comments.nodes : [];
+    for (const node2 of nodes) {
+      if (!record2(node2) || typeof node2.id !== "string" || !positiveInteger(node2.databaseId)) continue;
+      const comment = {
+        nodeId: node2.id,
+        databaseId: String(node2.databaseId),
+        body: typeof node2.body === "string" ? node2.body : "",
+        url: typeof node2.url === "string" ? node2.url : "",
+        updatedAt: typeof node2.updatedAt === "string" ? node2.updatedAt : "",
+        authorLogin: record2(node2.author) && typeof node2.author.login === "string" ? node2.author.login : ""
+      };
+      if (matches(comment)) return comment;
+    }
+    const pageInfo = record2(comments.pageInfo) ? comments.pageInfo : {};
+    if (pageInfo.hasNextPage !== true || typeof pageInfo.endCursor !== "string") return null;
+    cursor = pageInfo.endCursor;
+  }
+  throw failure2("github_pagination_exhausted", "Discussion comment scan exceeded its page ceiling");
+}
+async function executeDiscussionCommentCreate(scope, operation) {
+  const existing = await findDiscussionComment(
+    scope,
+    operation.discussionNumber,
+    (comment) => isActorLogin(comment.authorLogin, scope) && comment.body === operation.body
+  );
+  if (existing) {
+    return {
+      kind: operation.kind,
+      discussionNumber: operation.discussionNumber,
+      commentId: existing.databaseId,
+      commentNodeId: existing.nodeId,
+      commentUrl: existing.url
+    };
+  }
+  const discussion = await loadDiscussion(scope, operation.discussionNumber);
+  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  const data = await scope.api.graphql(
+    `mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id databaseId url}}}`,
+    { id: discussion.id, body: operation.body },
+    "Discussion comment creation"
+  );
+  const payload = data.addDiscussionComment;
+  if (!record2(payload) || !record2(payload.comment) || typeof payload.comment.id !== "string") {
+    throw failure2("github_response_invalid", "Discussion comment creation response was invalid");
+  }
+  if (typeof payload.comment.url !== "string" || !payload.comment.url.startsWith("https://")) {
+    throw failure2("github_response_invalid", "Discussion comment response omitted its URL");
+  }
+  return {
+    kind: operation.kind,
+    discussionNumber: operation.discussionNumber,
+    commentId: numericId(payload.comment.databaseId, "discussion comment id"),
+    commentNodeId: payload.comment.id,
+    commentUrl: payload.comment.url
+  };
+}
+async function executeDiscussionCommentUpdate(scope, operation) {
+  const target = await findDiscussionComment(
+    scope,
+    operation.discussionNumber,
+    (comment) => comment.databaseId === operation.commentId
+  );
+  if (!target) throw conflict("comment_missing", "Target discussion comment no longer exists");
+  if (!isActorLogin(target.authorLogin, scope)) {
+    throw conflict("comment_not_owned", `Only discussion comments authored by ${scope.actorLogin} may be updated`);
+  }
+  if (target.body === operation.body) {
+    return {
+      kind: operation.kind,
+      discussionNumber: operation.discussionNumber,
+      commentId: target.databaseId,
+      commentNodeId: target.nodeId,
+      commentUrl: target.url
+    };
+  }
+  if (!sameInstant(target.updatedAt, operation.expectedCommentUpdatedAt)) {
+    throw conflict("comment_changed", "Precondition failed: discussion comment changed after the operation was planned");
+  }
+  const discussion = await loadDiscussion(scope, operation.discussionNumber);
+  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  const data = await scope.api.graphql(
+    `mutation($id:ID!,$body:String!){updateDiscussionComment(input:{commentId:$id,body:$body}){comment{id databaseId url body}}}`,
+    { id: target.nodeId, body: operation.body },
+    "Discussion comment update"
+  );
+  const payload = data.updateDiscussionComment;
+  if (!record2(payload) || !record2(payload.comment) || payload.comment.body !== operation.body) {
+    throw conflict("comment_update_not_applied", "GitHub did not apply the exact discussion comment update");
+  }
+  return {
+    kind: operation.kind,
+    discussionNumber: operation.discussionNumber,
+    commentId: target.databaseId,
+    commentNodeId: target.nodeId,
+    commentUrl: typeof payload.comment.url === "string" ? payload.comment.url : target.url
+  };
+}
+async function executeDiscussionAnswer(scope, operation) {
+  const discussion = await loadDiscussion(scope, operation.discussionNumber);
+  const mark = operation.kind === "discussion.answer.mark";
+  const desired = mark ? operation.answerCommentId : null;
+  if (discussion.answerCommentId === desired) {
+    return { kind: operation.kind, discussionNumber: operation.discussionNumber, answerCommentId: desired };
+  }
+  if (discussion.answerCommentId !== operation.expectedAnswerCommentId) {
+    throw conflict(
+      "discussion_answer_changed",
+      `Precondition failed: discussion answer is ${discussion.answerCommentId ?? "unset"}`
+    );
+  }
+  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  if (mark) {
+    const target = await findDiscussionComment(
+      scope,
+      operation.discussionNumber,
+      (comment) => comment.databaseId === operation.answerCommentId
+    );
+    if (!target) throw conflict("comment_missing", "Answer comment does not exist on this discussion");
+    const data2 = await scope.api.graphql(
+      `mutation($id:ID!){markDiscussionCommentAsAnswer(input:{id:$id}){discussion{id}}}`,
+      { id: target.nodeId },
+      "Discussion answer mark"
+    );
+    if (!record2(data2.markDiscussionCommentAsAnswer)) {
+      throw conflict("discussion_answer_not_applied", "GitHub did not mark the discussion answer");
+    }
+    return { kind: operation.kind, discussionNumber: operation.discussionNumber, answerCommentId: operation.answerCommentId };
+  }
+  if (!discussion.answerNodeId) throw conflict("discussion_answer_missing", "Discussion has no chosen answer to unmark");
+  const data = await scope.api.graphql(
+    `mutation($id:ID!){unmarkDiscussionCommentAsAnswer(input:{id:$id}){discussion{id}}}`,
+    { id: discussion.answerNodeId },
+    "Discussion answer unmark"
+  );
+  if (!record2(data.unmarkDiscussionCommentAsAnswer)) {
+    throw conflict("discussion_answer_not_applied", "GitHub did not unmark the discussion answer");
+  }
+  return { kind: operation.kind, discussionNumber: operation.discussionNumber, answerCommentId: null };
+}
+async function executeDiscussionState(scope, operation) {
+  const close = operation.kind === "discussion.close";
+  const discussion = await loadDiscussion(scope, operation.discussionNumber);
+  if (discussion.closed === close) {
+    return {
+      kind: operation.kind,
+      discussionNumber: operation.discussionNumber,
+      state: close ? "closed" : "open",
+      discussionUrl: discussion.url
+    };
+  }
+  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  const mutation = close ? "mutation($id:ID!){closeDiscussion(input:{discussionId:$id}){discussion{id closed url}}}" : "mutation($id:ID!){reopenDiscussion(input:{discussionId:$id}){discussion{id closed url}}}";
+  const field = close ? "closeDiscussion" : "reopenDiscussion";
+  const data = await scope.api.graphql(mutation, { id: discussion.id }, "Discussion state transition");
+  const payload = data[field];
+  if (!record2(payload) || !record2(payload.discussion) || payload.discussion.closed !== close) {
+    throw conflict("discussion_state_not_applied", "GitHub did not apply the exact discussion state");
+  }
+  return {
+    kind: operation.kind,
+    discussionNumber: operation.discussionNumber,
+    state: close ? "closed" : "open",
+    discussionUrl: typeof payload.discussion.url === "string" ? payload.discussion.url : discussion.url
+  };
+}
+async function executeCheckRerun(scope, operation) {
+  const result = await scope.api.restOptional(
+    `${scope.repoPath}/check-runs/${encodeURIComponent(operation.checkRunId)}`,
+    "Check run lookup"
+  );
+  if (result === null) throw conflict("check_run_missing", `Check run ${operation.checkRunId} no longer exists`);
+  const check2 = result.data;
+  if (!record2(check2) || typeof check2.status !== "string" || typeof check2.name !== "string") {
+    throw failure2("github_response_invalid", "Check run response was invalid");
+  }
+  if (check2.head_sha !== operation.expectedHeadSha) {
+    throw conflict("check_head_changed", `Precondition failed: check run head is ${String(check2.head_sha)}`);
+  }
+  const appSlug = record2(check2.app) && typeof check2.app.slug === "string" ? check2.app.slug : null;
+  if (appSlug === null || appSlug.toLowerCase() !== scope.actorAppSlug.toLowerCase()) {
+    throw conflict(
+      "check_not_owned",
+      `Check run ${operation.checkRunId} was produced by ${appSlug ?? "an unknown app"}; GITHUB_TOKEN can only re-request checks created by the ${scope.actorAppSlug} app`
+    );
+  }
+  if (check2.status !== "completed") {
+    return { kind: operation.kind, checkRunId: operation.checkRunId, headSha: operation.expectedHeadSha, status: check2.status };
+  }
+  const startedAt = typeof check2.started_at === "string" ? Date.parse(check2.started_at) : Number.NaN;
+  const newer = Number.isFinite(startedAt) ? await scope.api.findPaginated(
+    `${scope.repoPath}/commits/${encodeURIComponent(operation.expectedHeadSha)}/check-runs?check_name=${encodeURIComponent(check2.name)}`,
+    "Check rerun reconciliation",
+    (candidate) => {
+      if (String(candidate.id) === operation.checkRunId) return false;
+      const candidateStartedAt = typeof candidate.started_at === "string" ? Date.parse(candidate.started_at) : Number.NaN;
+      return Number.isFinite(candidateStartedAt) && candidateStartedAt > startedAt;
+    },
+    "check_runs"
+  ) : null;
+  if (newer) {
+    return {
+      kind: operation.kind,
+      checkRunId: numericId(newer.id, "check run id"),
+      headSha: operation.expectedHeadSha,
+      status: typeof newer.status === "string" ? newer.status : "queued"
+    };
+  }
+  if (check2.status !== operation.expectedStatus) {
+    throw conflict("check_status_changed", `Precondition failed: check run status is ${check2.status}`);
+  }
+  const conclusion = check2.conclusion === void 0 || check2.conclusion === null ? null : String(check2.conclusion);
+  if (conclusion !== operation.expectedConclusion) {
+    throw conflict("check_conclusion_changed", `Precondition failed: check run conclusion is ${conclusion ?? "null"}`);
+  }
+  await scope.api.rest(
+    `${scope.repoPath}/check-runs/${encodeURIComponent(operation.checkRunId)}/rerequest`,
+    "Check run rerequest",
+    { method: "POST" }
+  );
+  return { kind: operation.kind, checkRunId: operation.checkRunId, headSha: operation.expectedHeadSha, status: "queued" };
+}
+var RELEASE_UPDATED_AT_QUERY = `query($id:ID!){ node(id:$id){ ... on Release { updatedAt } } }`;
+async function releaseUpdatedAt(scope, nodeId) {
+  const data = await scope.api.graphql(RELEASE_UPDATED_AT_QUERY, { id: nodeId }, "Release revision lookup");
+  if (!record2(data.node) || typeof data.node.updatedAt !== "string") {
+    throw failure2("github_response_invalid", "Release revision response was invalid");
+  }
+  return data.node.updatedAt;
+}
+function releaseOutputs2(kind, release) {
+  if (typeof release.tag_name !== "string" || release.tag_name === "") {
+    throw failure2("github_response_invalid", "GitHub release response omitted its tag name");
+  }
+  return {
+    kind,
+    releaseId: numericId(release.id, "release id"),
+    tagName: release.tag_name,
+    releaseUrl: htmlUrl(release),
+    draft: release.draft === true,
+    prerelease: release.prerelease === true
+  };
+}
+async function resolveReleaseTargetSha(scope, release) {
+  const target = typeof release.target_commitish === "string" ? release.target_commitish : "";
+  if (GIT_SHA.test(target)) return target.toLowerCase();
+  const tagName = typeof release.tag_name === "string" ? release.tag_name : "";
+  if (release.draft === false && tagName !== "") {
+    const tagged = await resolveTagCommit(scope, tagName);
+    if (tagged !== null) return tagged;
+  }
+  if (target === "") {
+    throw conflict("release_target_unresolved", "Release does not record a target commit");
+  }
+  const head = await loadRef(scope, `heads/${encodeRefPath(target)}`);
+  if (head === null) {
+    throw conflict("release_target_unresolved", `Release target ${target} could not be resolved to a commit`);
+  }
+  return head.toLowerCase();
+}
+async function resolveTagCommit(scope, tagName) {
+  const result = await scope.api.restOptional(
+    `${scope.repoPath}/git/ref/tags/${encodeRefPath(tagName)}`,
+    "Release tag lookup"
+  );
+  if (result === null) return null;
+  const { data } = result;
+  if (!record2(data) || !record2(data.object) || typeof data.object.sha !== "string") {
+    throw failure2("github_response_invalid", "Tag reference response was invalid");
+  }
+  if (data.object.type !== "tag") return data.object.sha.toLowerCase();
+  const { data: annotated } = await scope.api.rest(
+    `${scope.repoPath}/git/tags/${encodeURIComponent(data.object.sha)}`,
+    "Annotated tag lookup"
+  );
+  if (!record2(annotated) || !record2(annotated.object) || typeof annotated.object.sha !== "string") {
+    throw failure2("github_response_invalid", "Annotated tag response was invalid");
+  }
+  return annotated.object.sha.toLowerCase();
+}
+async function executeReleaseCreate(scope, operation) {
+  const existing = await scope.api.findPaginated(
+    `${scope.repoPath}/releases`,
+    "Release idempotency lookup",
+    (candidate) => candidate.tag_name === operation.tagName
+  );
+  if (existing) {
+    const targetSha = await resolveReleaseTargetSha(scope, existing);
+    const matches = existing.draft === true && existing.name === operation.name && existing.body === operation.body && existing.prerelease === operation.prerelease && targetSha === operation.targetCommitSha.toLowerCase();
+    if (!matches) throw conflict("release_exists", `A different release already uses tag ${operation.tagName}`);
+    return releaseOutputs2(operation.kind, existing);
+  }
+  const tagRef = await loadRef(scope, `tags/${encodeRefPath(operation.tagName)}`);
+  if (tagRef !== null) throw conflict("tag_exists", `Precondition failed: tag ${operation.tagName} already exists`);
+  const { data } = await scope.api.rest(`${scope.repoPath}/releases`, "Release creation", {
+    method: "POST",
+    body: JSON.stringify({
+      tag_name: operation.tagName,
+      target_commitish: operation.targetCommitSha,
+      name: operation.name,
+      body: operation.body,
+      draft: operation.draft,
+      prerelease: operation.prerelease
+    })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Release creation response was invalid");
+  return releaseOutputs2(operation.kind, data);
+}
+async function loadRelease(scope, releaseId) {
+  const result = await scope.api.restOptional(
+    `${scope.repoPath}/releases/${encodeURIComponent(releaseId)}`,
+    "Release lookup"
+  );
+  if (result === null) return null;
+  if (!record2(result.data)) throw failure2("github_response_invalid", "Release response was invalid");
+  return result.data;
+}
+async function assertReleaseIdentity(scope, release, operation) {
+  if (release.tag_name !== operation.expectedTagName) {
+    throw conflict("release_tag_changed", `Precondition failed: release tag is ${String(release.tag_name)}`);
+  }
+  const targetSha = await resolveReleaseTargetSha(scope, release);
+  if (targetSha !== operation.expectedTargetCommitSha.toLowerCase()) {
+    throw conflict("release_target_changed", `Precondition failed: release target resolves to ${targetSha}`);
+  }
+}
+async function assertReleaseRevision(scope, release, expectedUpdatedAt) {
+  if (typeof release.node_id !== "string") throw failure2("github_response_invalid", "Release node id was missing");
+  const updatedAt = await releaseUpdatedAt(scope, release.node_id);
+  if (!sameInstant(updatedAt, expectedUpdatedAt)) {
+    throw conflict("release_changed", "Precondition failed: release changed after the operation was planned");
+  }
+}
+async function executeReleaseUpdate(scope, operation) {
+  const release = await loadRelease(scope, operation.releaseId);
+  if (release === null) throw conflict("release_missing", `Release ${operation.releaseId} no longer exists`);
+  await assertReleaseIdentity(scope, release, operation);
+  const settled = (operation.name === void 0 || release.name === operation.name) && (operation.body === void 0 || release.body === operation.body) && (operation.prerelease === void 0 || release.prerelease === operation.prerelease);
+  if (settled) return releaseOutputs2(operation.kind, release);
+  if (release.draft !== operation.expectedDraft) {
+    throw conflict("release_draft_changed", "Precondition failed: release draft state changed");
+  }
+  if (release.prerelease !== operation.expectedPrerelease && operation.prerelease === void 0) {
+    throw conflict("release_prerelease_changed", "Precondition failed: release prerelease state changed");
+  }
+  await assertReleaseRevision(scope, release, operation.expectedReleaseUpdatedAt);
+  const patch = {};
+  if (operation.name !== void 0) patch.name = operation.name;
+  if (operation.body !== void 0) patch.body = operation.body;
+  if (operation.prerelease !== void 0) patch.prerelease = operation.prerelease;
+  const { data } = await scope.api.rest(
+    `${scope.repoPath}/releases/${encodeURIComponent(operation.releaseId)}`,
+    "Release update",
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+  if (!record2(data)) throw failure2("github_response_invalid", "Release update response was invalid");
+  const applied = (operation.name === void 0 || data.name === operation.name) && (operation.body === void 0 || data.body === operation.body) && (operation.prerelease === void 0 || data.prerelease === operation.prerelease);
+  if (!applied) throw conflict("release_update_not_applied", "GitHub did not apply the exact release update");
+  return releaseOutputs2(operation.kind, data);
+}
+async function executeReleasePublish(scope, operation) {
+  const release = await loadRelease(scope, operation.releaseId);
+  if (release === null) throw conflict("release_missing", `Release ${operation.releaseId} no longer exists`);
+  await assertReleaseIdentity(scope, release, operation);
+  if (release.draft === false) return releaseOutputs2(operation.kind, release);
+  if (release.prerelease !== operation.expectedPrerelease) {
+    throw conflict("release_prerelease_changed", "Precondition failed: release prerelease state changed");
+  }
+  await assertReleaseRevision(scope, release, operation.expectedReleaseUpdatedAt);
+  const { data } = await scope.api.rest(
+    `${scope.repoPath}/releases/${encodeURIComponent(operation.releaseId)}`,
+    "Release publish",
+    { method: "PATCH", body: JSON.stringify({ draft: false }) }
+  );
+  if (!record2(data) || data.draft !== false) {
+    throw conflict("release_publish_not_applied", "GitHub did not publish the release");
+  }
+  return releaseOutputs2(operation.kind, data);
+}
+async function executeReleaseDelete(scope, operation) {
+  const release = await loadRelease(scope, operation.releaseId);
+  if (release === null) {
+    return { kind: operation.kind, releaseId: operation.releaseId, tagName: operation.expectedTagName };
+  }
+  await assertReleaseIdentity(scope, release, operation);
+  if (release.draft !== operation.expectedDraft) {
+    throw conflict("release_draft_changed", "Precondition failed: release draft state changed");
+  }
+  const published = release.draft === false;
+  if (published !== operation.expectedPublished) {
+    throw conflict("release_published_changed", "Precondition failed: release published state changed");
+  }
+  await assertReleaseRevision(scope, release, operation.expectedReleaseUpdatedAt);
+  await scope.api.rest(
+    `${scope.repoPath}/releases/${encodeURIComponent(operation.releaseId)}`,
+    "Release deletion",
+    { method: "DELETE" }
+  );
+  return { kind: operation.kind, releaseId: operation.releaseId, tagName: operation.expectedTagName };
+}
+async function dispatch(scope, operation) {
+  switch (operation.kind) {
+    case "issue.label.add":
+    case "issue.label.remove":
+      return executeLabel(scope, operation);
+    case "issue.comment.create":
+      return executeIssueCommentCreate(scope, operation);
+    case "issue.comment.update": {
+      const result = await executeCommentUpdate(scope, operation, operation.issueNumber, async () => {
+        const issue3 = await loadIssue(scope, operation.issueNumber, false);
+        assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+      });
+      return { kind: operation.kind, issueNumber: operation.issueNumber, ...result };
+    }
+    case "issue.close":
+    case "issue.reopen":
+      return executeIssueState(scope, operation);
+    case "issue.assignee.add":
+    case "issue.assignee.remove":
+      return executeAssignee(scope, operation);
+    case "pull_request.comment.create":
+      return executePullCommentCreate(scope, operation);
+    case "pull_request.comment.update":
+      return executePullCommentUpdate(scope, operation);
+    case "pull_request.review.submit":
+      return executeReviewSubmit(scope, operation);
+    case "pull_request.reviewer.request":
+    case "pull_request.reviewer.remove":
+      return executeReviewer(scope, operation);
+    case "pull_request.update":
+      return executePullUpdate(scope, operation);
+    case "branch.create":
+      return executeBranchCreate(scope, operation);
+    case "commit.create":
+      return executeCommitCreate(scope, operation);
+    case "pull_request.open_draft":
+      return executePullOpenDraft(scope, operation);
+    case "pull_request.merge":
+      return executePullMerge(scope, operation);
+    case "discussion.comment.create":
+      return executeDiscussionCommentCreate(scope, operation);
+    case "discussion.comment.update":
+      return executeDiscussionCommentUpdate(scope, operation);
+    case "discussion.answer.mark":
+    case "discussion.answer.unmark":
+      return executeDiscussionAnswer(scope, operation);
+    case "discussion.close":
+    case "discussion.reopen":
+      return executeDiscussionState(scope, operation);
+    case "check.rerun":
+      return executeCheckRerun(scope, operation);
+    case "release.create":
+      return executeReleaseCreate(scope, operation);
+    case "release.update":
+      return executeReleaseUpdate(scope, operation);
+    case "release.publish":
+      return executeReleasePublish(scope, operation);
+    case "release.delete":
+      return executeReleaseDelete(scope, operation);
+  }
+}
+function assertContext(context, operation, operationHash) {
+  if (!context.token) throw new Error("A GitHub token is required to apply effects");
+  if (!REPOSITORY_FULL_NAME.test(context.repositoryFullName)) {
+    throw new Error("repositoryFullName must be an owner/name GitHub repository");
+  }
+  if (context.operationHash !== void 0 && context.operationHash !== operationHash) {
+    throw new Error(
+      `operationHash ${context.operationHash} does not match the canonical hash ${operationHash} for operation ${operation.id}`
+    );
+  }
+  if (!Number.isSafeInteger(context.attempt) || context.attempt < 1) {
+    throw new Error("attempt must be a positive integer");
+  }
+  const [owner, name2] = context.repositoryFullName.split("/");
+  if (operation.repository.owner !== owner || operation.repository.name !== name2) {
+    throw new Error(
+      `Operation targets ${operation.repository.owner}/${operation.repository.name}, not the bound repository ${context.repositoryFullName}`
+    );
+  }
+  const deadline = (context.now ?? (() => /* @__PURE__ */ new Date()))().getTime() + (context.budgetMs ?? DEFAULT_BUDGET_MS);
+  return {
+    api: new GitHubApi(context, deadline),
+    repoPath: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name2)}`,
+    owner,
+    name: name2,
+    actorLogin: context.actorLogin ?? DEFAULT_ACTOR_LOGIN,
+    actorAppSlug: context.actorAppSlug ?? DEFAULT_ACTOR_APP_SLUG,
+    operationHash,
+    ...context.readCapturedFile === void 0 ? {} : { readCapturedFile: context.readCapturedFile }
+  };
+}
+async function executeActionsOperation(operationInput, context) {
+  const operation = operationSchema.parse(operationInput);
+  const operationHash = canonicalOperationHash(operation);
+  const scope = assertContext(context, operation, operationHash);
+  const clock = context.now ?? (() => /* @__PURE__ */ new Date());
+  const attemptedAt = clock().toISOString();
+  const base = {
+    schemaVersion: "v2",
+    operationId: operation.id,
+    operationHash,
+    kind: operation.kind,
+    attempt: context.attempt,
+    attemptedAt
+  };
+  try {
+    const outputs = await dispatch(scope, operation);
+    const receipt = operationReceiptSchema.parse({
+      ...base,
+      // A mutating request during this attempt means the effect was applied now;
+      // a read-only path means reconciliation proved it already existed.
+      status: scope.api.mutated ? "succeeded" : "skipped",
+      completedAt: latest(attemptedAt, clock().toISOString()),
+      ...requestId(scope),
+      ...resourceUrl(outputs)
+    });
+    return { receipt, outputs };
+  } catch (error63) {
+    const effect = error63 instanceof GitHubEffectError ? error63 : failure2("effect_failed", error63 instanceof Error ? error63.message : "GitHub effect failed");
+    const receipt = operationReceiptSchema.parse({
+      ...base,
+      status: effect.classification,
+      completedAt: latest(attemptedAt, clock().toISOString()),
+      ...effect.providerRequestId ? { providerRequestId: effect.providerRequestId } : requestId(scope),
+      error: {
+        code: effect.code,
+        message: effect.message.slice(0, 2e3),
+        retryable: effect.retryable
+      }
+    });
+    return { receipt };
+  }
+}
+function requestId(scope) {
+  const value = scope.api.lastRequestId;
+  return value ? { providerRequestId: value } : {};
+}
+function resourceUrl(outputs) {
+  const candidate = "commentUrl" in outputs ? outputs.commentUrl : "pullUrl" in outputs ? outputs.pullUrl : "issueUrl" in outputs ? outputs.issueUrl : "commitUrl" in outputs ? outputs.commitUrl : "branchUrl" in outputs ? outputs.branchUrl : "releaseUrl" in outputs ? outputs.releaseUrl : "reviewUrl" in outputs ? outputs.reviewUrl : "discussionUrl" in outputs ? outputs.discussionUrl : void 0;
+  return candidate && candidate.startsWith("https://") ? { resourceUrl: candidate } : {};
+}
+function latest(attemptedAt, completedAt) {
+  return Date.parse(completedAt) < Date.parse(attemptedAt) ? attemptedAt : completedAt;
+}
+
 // src/effects-main.ts
-async function main() {
+var inputToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
+delete process.env["INPUT_GITHUB-TOKEN"];
+async function runEffectsMain() {
+  let connection;
   try {
     const artifactPath = getInput("artifact-path", { required: true });
     const expectedSha256 = getInput("expected-sha256", { required: true });
-    const token = getInput("github-token", { required: true });
+    const token = inputToken || getInput("github-token", { required: true });
+    delete process.env["INPUT_GITHUB-TOKEN"];
     const runtimeUrl = getInput("runtime-url", { required: true });
+    const deadlineAt = Date.parse(getInput("deadline-at", { required: true }));
+    if (!Number.isFinite(deadlineAt) || deadlineAt <= Date.now()) throw new Error("deadline-at must be a future ISO timestamp");
     setSecret(token);
     if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("expected-sha256 must be a SHA-256 digest");
-    const bytes = await (0, import_promises.readFile)(artifactPath);
-    if (bytes.byteLength > 128 * 1024) throw new Error("Effect artifact is too large");
-    const actualSha256 = (0, import_node_crypto.createHash)("sha256").update(bytes).digest("hex");
-    if (actualSha256 !== expectedSha256) throw new Error("Effect artifact digest mismatch");
+    const bytes = await (0, import_promises3.readFile)(artifactPath);
+    if (bytes.byteLength > EFFECT_TRANSPORT_MAX_BYTES2) throw new Error("Effect artifact is too large");
+    const actualSha256 = (0, import_node_crypto3.createHash)("sha256").update(bytes).digest("hex");
+    if (!equalDigest(actualSha256, expectedSha256)) throw new Error("Effect artifact digest mismatch");
     const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
-    const event = JSON.parse(await (0, import_promises.readFile)(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
-    if (requiredEnvironment("GITHUB_REPOSITORY") !== plan.repository.fullName) throw new Error("Effect repository binding mismatch");
-    if (String(event.repository?.id ?? "") !== plan.repository.id) throw new Error("Effect repository identity mismatch");
-    if (requiredEnvironment("GITHUB_SHA") !== plan.provenance.commitSha) throw new Error("Effect commit binding mismatch");
-    if (requiredEnvironment("GITHUB_RUN_ID") !== plan.provenance.workflowRunId || Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")) !== plan.provenance.workflowRunAttempt) {
-      throw new Error("Effect workflow run binding mismatch");
-    }
-    if (event.action !== "opened" || Number(event.issue?.number) !== plan.issueNumber) throw new Error("Effect issue binding mismatch");
-    const marker = `<!-- gardener-operation:${plan.operationId} -->`;
-    const body2 = renderGardenerComment(plan, marker);
-    const existing = await findExistingComment(plan.repository.fullName, plan.issueNumber, marker, token);
-    const receipt = existing ?? await createComment(plan.repository.fullName, plan.issueNumber, body2, token);
-    await recordReceipt(runtimeUrl, plan.bundleHash, {
-      schemaVersion: "gardener.runner.effect-receipt/v1",
-      planRunId: plan.runId,
-      bundleHash: plan.bundleHash,
+    await assertApplyBindings(plan);
+    connection = await connectEffectsSession(runtimeUrl, plan.bundleHash);
+    const prior = await connection.session.priorEffectReceipt(plan.runId, actualSha256);
+    const captureDirectory = getInput("capture-artifact-path").trim();
+    const capture = await prepareCapture(plan, captureDirectory);
+    const result = await applyOrderedPlan({
+      plan,
       artifactSha256: actualSha256,
-      operationId: plan.operationId,
-      kind: plan.kind,
-      commentId: String(receipt.id),
-      commentUrl: receipt.html_url
+      token,
+      deadlineAt,
+      prior,
+      ...capture ? { captureDirectory: capture.directory } : {},
+      record: (receipt) => connection.session.recordEffect(receipt)
     });
-    setOutput("comment-id", String(receipt.id));
-    setOutput("comment-url", receipt.html_url);
-    setOutput("operation-id", plan.operationId);
+    setOutput("status", result.receipt.status);
+    setOutput("completed-operations", String(result.receipt.operations.length));
+    const last = result.receipt.operations.at(-1);
+    if (last) setOutput("operation-id", last.receipt.operationId);
+    if (last?.receipt.resourceUrl) setOutput("resource-url", last.receipt.resourceUrl);
+    for (const outputs of result.outputs.values()) {
+      if (typeof outputs.commentId === "string") setOutput("comment-id", outputs.commentId);
+      if (typeof outputs.commentUrl === "string") setOutput("comment-url", outputs.commentUrl);
+    }
+    if (result.receipt.status === "stopped") {
+      const error63 = last?.receipt.error;
+      throw new Error(`Effect plan stopped at ${result.receipt.stoppedAtStep}: ${error63?.message ?? "provider operation failed"}`);
+    }
   } catch (error63) {
     setFailed(error63 instanceof Error ? error63.message : "Gardener effect failed");
+  } finally {
+    connection?.root[Symbol.dispose]();
   }
+}
+async function applyOrderedPlan(input2) {
+  const { plan } = input2;
+  const ownerAndName = plan.repository.fullName.split("/");
+  if (ownerAndName.length !== 2) throw new Error("Plan repository name is invalid");
+  const [owner, name2] = ownerAndName;
+  const outputs = /* @__PURE__ */ new Map();
+  const completed = [];
+  let resumeIndex = 0;
+  if (input2.prior) {
+    assertReceiptEnvelope(plan, input2.artifactSha256, input2.prior);
+    for (const [index, entry] of input2.prior.operations.entries()) {
+      const operation = materializeOperation(plan, index, outputs, owner, name2);
+      if (entry.stepName !== plan.operations[index]?.stepName || entry.receipt.operationId !== operation.id || entry.receipt.kind !== operation.kind || entry.receipt.operationHash !== canonicalOperationHash(operation)) {
+        throw new Error("Prior effect receipt does not match the exact plan prefix");
+      }
+      if (entry.receipt.status === "conflicted") {
+        return { receipt: input2.prior, outputs };
+      }
+      if (entry.receipt.status === "failed") break;
+      const scalar = validateRecordedOutputs(operation.kind, entry.outputs);
+      completed.push(entry);
+      outputs.set(entry.stepName, scalar);
+      resumeIndex = index + 1;
+    }
+    if (input2.prior.status === "applied") {
+      return { receipt: input2.prior, outputs };
+    }
+  }
+  for (let index = resumeIndex; index < plan.operations.length; index += 1) {
+    const remaining = input2.deadlineAt - Date.now();
+    const operation = materializeOperation(plan, index, outputs, owner, name2);
+    if (remaining <= 1e3) {
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      completed.push(runnerStepReceipt(plan.operations[index].stepName, {
+        schemaVersion: "v2",
+        operationId: operation.id,
+        operationHash: canonicalOperationHash(operation),
+        kind: operation.kind,
+        status: "failed",
+        attempt: Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")),
+        attemptedAt: now,
+        completedAt: now,
+        error: {
+          code: "effect_deadline_expired",
+          message: "Effect job deadline expired before the operation started",
+          retryable: true
+        }
+      }, {}));
+      const stopped = effectReceipt(plan, input2.artifactSha256, completed, "stopped", plan.operations[index].stepName);
+      await input2.record(stopped);
+      return { receipt: stopped, outputs };
+    }
+    const context = {
+      token: input2.token,
+      repositoryFullName: plan.repository.fullName,
+      attempt: Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")),
+      budgetMs: Math.max(1e3, remaining),
+      timeoutMs: Math.min(1e4, Math.max(1e3, remaining)),
+      ...input2.fetch ? { fetch: input2.fetch } : {},
+      ...input2.captureDirectory ? { readCapturedFile: captureReader(input2.captureDirectory) } : {}
+    };
+    const result = await (input2.execute ?? executeActionsOperation)(operation, context);
+    const scalar = result.outputs === void 0 ? {} : scalarOutputs(operation.kind, result.outputs);
+    const stepReceipt = runnerStepReceipt(plan.operations[index].stepName, result.receipt, scalar);
+    completed.push(stepReceipt);
+    if (result.receipt.status === "failed" || result.receipt.status === "conflicted") {
+      const stopped = effectReceipt(plan, input2.artifactSha256, completed, "stopped", plan.operations[index].stepName);
+      await input2.record(stopped);
+      return { receipt: stopped, outputs };
+    }
+    outputs.set(plan.operations[index].stepName, scalar);
+    const status = completed.length === plan.operations.length ? "applied" : "running";
+    const progress = effectReceipt(plan, input2.artifactSha256, completed, status, null);
+    await input2.record(progress);
+  }
+  const applied = effectReceipt(plan, input2.artifactSha256, completed, "applied", null);
+  return { receipt: applied, outputs };
+}
+function materializeOperation(plan, index, outputs, owner, name2) {
+  const step = plan.operations[index];
+  if (!step) throw new Error(`Plan operation ${index} is missing`);
+  const payload = safeClone(step.payload);
+  for (const [pointer, reference] of Object.entries(step.references)) {
+    const source = outputs.get(reference.step);
+    if (!source || !Object.hasOwn(source, reference.output)) {
+      throw new Error(`Step ${step.stepName} references unavailable output ${reference.step}.${reference.output}`);
+    }
+    const sourceStep = plan.operations.find((candidate) => candidate.stepName === reference.step);
+    if (!sourceStep || operationOutputType(sourceStep.kind, reference.output) === void 0) {
+      throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
+    }
+    setJsonPointer(payload, pointer, source[reference.output]);
+  }
+  if (step.kind === "commit.create") {
+    if (!plan.capture) throw new Error("commit.create has no verified capture manifest");
+    if (Object.hasOwn(payload, "files")) throw new Error("commit.create files must come only from capture");
+    payload.files = plan.capture.files.map((file2) => ({
+      path: file2.path,
+      captured: file2.status === "deleted" ? { status: "deleted" } : { status: file2.status, mode: file2.mode, sizeBytes: file2.sizeBytes, sha256: file2.sha256 }
+    }));
+  }
+  return operationSchema.parse({
+    schemaVersion: "v2",
+    id: step.operationId,
+    repository: { provider: "github", id: plan.repository.id, owner, name: name2, defaultBranch: plan.repository.defaultBranch },
+    kind: step.kind,
+    ...payload
+  });
+}
+function setJsonPointer(root, pointer, value) {
+  const segments = decodeJsonPointer(pointer);
+  if (segments.length === 0) throw new Error("References may not replace the payload root");
+  let cursor = root;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (["__proto__", "constructor", "prototype"].includes(segment)) throw new Error("Unsafe reference pointer");
+    const last = index === segments.length - 1;
+    if (Array.isArray(cursor)) {
+      if (!/^(?:0|[1-9][0-9]?)$/.test(segment)) throw new Error("Reference array index is invalid");
+      const position = Number(segment);
+      if (last) cursor[position] = value;
+      else {
+        cursor[position] ??= /^(?:0|[1-9][0-9]?)$/.test(segments[index + 1]) ? [] : /* @__PURE__ */ Object.create(null);
+        cursor = cursor[position];
+      }
+    } else if (cursor !== null && typeof cursor === "object") {
+      const record3 = cursor;
+      if (last) Object.defineProperty(record3, segment, { value, enumerable: true, writable: true, configurable: true });
+      else {
+        if (!Object.hasOwn(record3, segment)) {
+          Object.defineProperty(record3, segment, {
+            value: /^(?:0|[1-9][0-9]?)$/.test(segments[index + 1]) ? [] : /* @__PURE__ */ Object.create(null),
+            enumerable: true,
+            writable: true,
+            configurable: true
+          });
+        }
+        cursor = record3[segment];
+      }
+    } else throw new Error(`Reference pointer ${pointer} does not address a payload field`);
+  }
+}
+function scalarOutputs(kind, value) {
+  const source = value;
+  const selected = {};
+  for (const name2 of operationOutputNames(kind)) {
+    const output2 = source[name2];
+    if (typeof output2 !== "string" && typeof output2 !== "number" && typeof output2 !== "boolean" && output2 !== null) {
+      throw new Error(`${kind} did not return scalar output ${name2}`);
+    }
+    selected[name2] = output2;
+  }
+  return selected;
+}
+function validateRecordedOutputs(kind, value) {
+  const expected = new Set(operationOutputNames(kind));
+  if (Object.keys(value).some((name2) => !expected.has(name2))) throw new Error(`Receipt carries an output ${kind} does not publish`);
+  return scalarOutputs(kind, value);
+}
+function runnerStepReceipt(stepName2, receipt, outputs) {
+  return { stepName: stepName2, receipt, outputs };
+}
+function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep) {
+  return runnerEffectReceiptV1Schema.parse({
+    schemaVersion: "gardener.runner.effect-receipt/v1",
+    planRunId: plan.runId,
+    bundleHash: plan.bundleHash,
+    artifactSha256,
+    ...plan.changesSha256 ? { changesSha256: plan.changesSha256 } : {},
+    plannedOperations: plan.operations.length,
+    status,
+    stoppedAtStep,
+    operations
+  });
+}
+function assertReceiptEnvelope(plan, artifactSha256, receipt) {
+  if (receipt.planRunId !== plan.runId || receipt.bundleHash !== plan.bundleHash || receipt.artifactSha256 !== artifactSha256 || receipt.plannedOperations !== plan.operations.length || receipt.changesSha256 !== plan.changesSha256) {
+    throw new Error("Prior effect receipt is not bound to this exact plan");
+  }
+}
+async function assertApplyBindings(plan) {
+  if (requiredEnvironment("GITHUB_REPOSITORY") !== plan.repository.fullName) throw new Error("Effect repository binding mismatch");
+  if (requiredEnvironment("GITHUB_REPOSITORY_ID") !== plan.repository.id) throw new Error("Effect repository identity mismatch");
+  if (requiredEnvironment("GITHUB_SHA") !== plan.provenance.commitSha) throw new Error("Effect commit binding mismatch");
+  if (requiredEnvironment("GITHUB_RUN_ID") !== plan.provenance.workflowRunId) throw new Error("Effect workflow run binding mismatch");
+  const currentAttempt = Number(requiredEnvironment("GITHUB_RUN_ATTEMPT"));
+  if (!Number.isSafeInteger(currentAttempt) || currentAttempt < plan.provenance.workflowRunAttempt) {
+    throw new Error("Effect workflow attempt predates the plan");
+  }
+  const raw = JSON.parse(await (0, import_promises3.readFile)(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
+  const rawRepository = raw && typeof raw === "object" ? raw.repository : void 0;
+  if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
+  const normalized = normalizeGitHubEvent(requiredEnvironment("GITHUB_EVENT_NAME"), raw);
+  if (normalized.repository.defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
+  const binding = taskEventBindingFromNormalizedEvent(normalized);
+  if (canonicalJson2(binding) !== canonicalJson2(plan.event)) throw new Error("Effect event binding mismatch");
+}
+async function prepareCapture(plan, directory) {
+  if (!plan.capture) {
+    if (plan.changesSha256 || directory) throw new Error("Effect changes artifact has no capture-bound plan");
+    return void 0;
+  }
+  if (!plan.changesSha256) throw new Error("Capture plan omitted its changes digest");
+  if (!directory) throw new Error("capture-artifact-path is required for a capture-bound plan");
+  const manifestJson = taskCaptureManifestText(plan.capture);
+  const expected = taskCaptureRefV1Schema.parse({
+    schemaVersion: "gardener.task-capture-ref/v1",
+    captureId: plan.capture.captureId,
+    baseSha: plan.capture.baseSha,
+    manifestSha256: (0, import_node_crypto3.createHash)("sha256").update(manifestJson).digest("hex"),
+    changesSha256: plan.changesSha256,
+    fileCount: plan.capture.files.length,
+    sizeBytes: plan.capture.totalBytes
+  });
+  const verified = await verifyCaptureArtifact(directory, expected);
+  if (taskCaptureManifestText(verified.manifest) !== manifestJson) throw new Error("Downloaded capture manifest does not match the exact plan");
+  return { directory };
+}
+function captureReader(directory) {
+  const content = import_node_path2.default.join(directory, "content");
+  return async ({ sha256: sha2563, sizeBytes }) => {
+    if (!/^[a-f0-9]{64}$/.test(sha2563)) throw new Error("Captured content digest is invalid");
+    const bytes = await (0, import_promises3.readFile)(import_node_path2.default.join(content, sha2563));
+    if (bytes.byteLength !== sizeBytes) throw new Error("Captured content size changed after verification");
+    const digest = (0, import_node_crypto3.createHash)("sha256").update(bytes).digest("hex");
+    if (!equalDigest(digest, sha2563)) throw new Error("Captured content changed after verification");
+    return bytes;
+  };
+}
+async function connectEffectsSession(runtimeUrl, bundleHash) {
+  const audience = new URL(runtimeUrl).origin;
+  const oidcToken = await getIDToken(audience);
+  setSecret(oidcToken);
+  const hello = helloFromOidcToken(oidcToken, bundleHash, "effects");
+  const root = newWebSocketRpcSession(sessionSocketUrl(runtimeUrl, hello, "effects"));
+  const session = root.authenticate(hello, oidcToken, new EffectsRunnerApi());
+  return { root, session };
 }
 var EffectsRunnerApi = class extends RpcTarget {
   execute(_action) {
@@ -44560,78 +48244,30 @@ var EffectsRunnerApi = class extends RpcTarget {
     return Promise.resolve();
   }
 };
-async function recordReceipt(harnessUrl, bundleHash, receipt) {
-  const audience = new URL(harnessUrl).origin;
-  const oidcToken = await getIDToken(audience);
-  setSecret(oidcToken);
-  const hello = helloFromOidcToken(oidcToken, bundleHash, "effects");
-  const root = newWebSocketRpcSession(sessionSocketUrl(harnessUrl, hello, "effects"));
-  try {
-    const session = root.authenticate(hello, oidcToken, new EffectsRunnerApi());
-    await session.recordEffect(receipt);
-  } finally {
-    root[Symbol.dispose]();
-  }
+function safeClone(value) {
+  return JSON.parse(JSON.stringify(value));
 }
-function renderGardenerComment(plan, marker) {
-  const repositoryUrl = `https://github.com/${plan.repository.fullName}`;
-  const sourcePath = plan.provenance.sourcePath.split("/").map(encodeURIComponent).join("/");
-  const sourceUrl = `${repositoryUrl}/blob/${plan.provenance.commitSha}/${sourcePath}`;
-  const runUrl = `${repositoryUrl}/actions/runs/${plan.provenance.workflowRunId}/attempts/${plan.provenance.workflowRunAttempt}`;
-  const commitUrl = `${repositoryUrl}/commit/${plan.provenance.commitSha}`;
-  return [
-    `## \u{1F331} Gardener \xB7 ${escapeMarkdownInline(plan.taskName)}`,
-    "",
-    plan.body,
-    "",
-    "<details>",
-    "<summary>Gardener provenance</summary>",
-    "",
-    `[Task source](${sourceUrl}) \xB7 [Workflow run](${runUrl}) \xB7 [Commit](${commitUrl})`,
-    "",
-    `Bundle \`${plan.bundleHash}\`  `,
-    `Operation \`${plan.operationId}\``,
-    "",
-    "</details>",
-    "",
-    marker
-  ].join("\n");
+function canonicalJson2(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalJson2).join(",")}]`;
+  const record3 = value;
+  return `{${Object.keys(record3).sort().filter((key) => record3[key] !== void 0).map((key) => `${JSON.stringify(key)}:${canonicalJson2(record3[key])}`).join(",")}}`;
 }
-function escapeMarkdownInline(value) {
-  return value.replace(/[\\`*_{}\[\]()<>#+.!|~-]/g, "\\$&");
-}
-async function findExistingComment(repository, issue3, marker, token) {
-  const response = await githubFetch(`https://api.github.com/repos/${repository}/issues/${issue3}/comments?per_page=100`, token);
-  const comments = await response.json();
-  return comments.find((comment) => comment.body?.includes(marker));
-}
-async function createComment(repository, issue3, body2, token) {
-  const response = await githubFetch(`https://api.github.com/repos/${repository}/issues/${issue3}/comments`, token, {
-    method: "POST",
-    body: JSON.stringify({ body: body2 })
-  });
-  return await response.json();
-}
-async function githubFetch(url2, token, init = {}) {
-  const response = await fetch(url2, {
-    ...init,
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "user-agent": "gardener-effects-v1",
-      "x-github-api-version": "2022-11-28"
-    }
-  });
-  if (!response.ok) throw new Error(`GitHub comment effect failed with HTTP ${response.status}`);
-  return response;
+function equalDigest(left, right) {
+  if (!/^[a-f0-9]{64}$/.test(left) || !/^[a-f0-9]{64}$/.test(right)) return false;
+  return (0, import_node_crypto3.timingSafeEqual)(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 }
 function requiredEnvironment(name2) {
   const value = process.env[name2];
   if (!value) throw new Error(`${name2} is required`);
   return value;
 }
-void main();
+void runEffectsMain();
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  applyOrderedPlan,
+  runEffectsMain
+});
 /*! Bundled license information:
 
 undici/lib/web/fetch/body.js:

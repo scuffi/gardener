@@ -3,13 +3,26 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  taskEffectPlanV1Schema,
+  type Operation,
+  type TaskEffectPlanV1,
+} from "@gardener/contracts";
+import type { RunnerEffectReceiptV1 } from "@gardener/protocol";
+import {
+  canonicalOperationHash,
+  type GitHubEffectResult,
+  type GitHubEffectsContext,
+  type OperationOutputsV1,
+} from "../src/github-effects";
 
 const core = vi.hoisted(() => ({
   inputs: new Map<string, string>(),
   setOutput: vi.fn(),
   setFailed: vi.fn(),
   setSecret: vi.fn(),
-  recordEffect: vi.fn(async () => undefined),
+  recordEffect: vi.fn(async (receipt: RunnerEffectReceiptV1) => receipt),
+  priorEffectReceipt: vi.fn(async () => null as RunnerEffectReceiptV1 | null),
 }));
 
 vi.mock("@actions/core", () => ({
@@ -23,7 +36,10 @@ vi.mock("@actions/core", () => ({
 vi.mock("capnweb", () => ({
   RpcTarget: class {},
   newWebSocketRpcSession: vi.fn(() => ({
-    authenticate: () => ({ recordEffect: core.recordEffect }),
+    authenticate: () => ({
+      recordEffect: core.recordEffect,
+      priorEffectReceipt: core.priorEffectReceipt,
+    }),
     [Symbol.dispose]: vi.fn(),
   })),
 }));
@@ -33,208 +49,368 @@ vi.mock("../src/context", () => ({
   sessionSocketUrl: vi.fn(() => "wss://gardener.example/session/effects"),
 }));
 
-describe("exact issue-comment effects action", () => {
-  beforeEach(() => {
-    core.inputs.clear();
-    vi.clearAllMocks();
-    vi.resetModules();
-    vi.unstubAllGlobals();
-    process.env.GITHUB_SHA = "b".repeat(40);
-    process.env.GITHUB_RUN_ID = "2";
-    process.env.GITHUB_RUN_ATTEMPT = "1";
+const effects = await import("../src/effects-main");
+await vi.waitFor(() => expect(core.setFailed).toHaveBeenCalled());
+
+const SHA = "b".repeat(40);
+const BUNDLE_HASH = "a".repeat(64);
+const ARTIFACT_HASH = "c".repeat(64);
+const NOW = "2026-09-17T12:01:00.000Z";
+
+function step(
+  stepName: string,
+  operationId: string,
+  kind: TaskEffectPlanV1["operations"][number]["kind"],
+  payload: Record<string, unknown>,
+  references: Record<string, { step: string; output: string }> = {},
+): TaskEffectPlanV1["operations"][number] {
+  return {
+    stepName,
+    operationId,
+    kind,
+    payload,
+    references,
+    rationale: `Apply ${stepName}.`,
+  } as TaskEffectPlanV1["operations"][number];
+}
+
+function plan(operations: TaskEffectPlanV1["operations"], extra: Partial<TaskEffectPlanV1> = {}): TaskEffectPlanV1 {
+  return taskEffectPlanV1Schema.parse({
+    schemaVersion: "gardener.task-effect-plan/v1",
+    runId: "repo-123-run-2-attempt-1-plan",
+    taskId: "fixture.task",
+    taskName: "Fixture task",
+    bundleHash: BUNDLE_HASH,
+    repository: { id: "123", fullName: "owner/repo", defaultBranch: "main" },
+    provenance: {
+      sourcePath: ".gardener/tasks/fixture/TASK.md",
+      commitSha: SHA,
+      workflowRunId: "2",
+      workflowRunAttempt: 1,
+    },
+    event: {
+      kind: "github.workflow_dispatch",
+      eventName: "workflow_dispatch",
+      action: null,
+      resource: null,
+      commentId: null,
+    },
+    limits: {},
+    operations,
+    ...extra,
   });
+}
 
-  it("verifies the artifact binding and creates exactly one marked comment", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "gardener-effect-"));
-    const plan = {
-      schemaVersion: "gardener.task-effect-plan/v1",
-      runId: "repo-1-run-2-attempt-1-plan",
-      taskId: "fixture.issue-triage",
-      taskName: "Issue triage",
-      bundleHash: "a".repeat(64),
-      repository: { id: "123", fullName: "owner/repo" },
-      provenance: {
-        sourcePath: ".gardener/tasks/triage/TASK.md",
-        commitSha: "b".repeat(40),
-        workflowRunId: "2",
-        workflowRunAttempt: 1,
-      },
-      issueNumber: 7,
-      operationId: "op_123",
-      kind: "issue.comment.create",
-      body: "Thanks for the report. The next step is a regression test.",
-    };
-    const artifact = Buffer.from(JSON.stringify(plan));
-    const artifactPath = path.join(directory, "effect.json");
-    const eventPath = path.join(directory, "event.json");
-    await writeFile(artifactPath, artifact);
-    await writeFile(eventPath, JSON.stringify({ action: "opened", repository: { id: 123 }, issue: { number: 7 } }));
-    core.inputs.set("artifact-path", artifactPath);
-    core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
-    core.inputs.set("github-token", "token");
-    core.inputs.set("runtime-url", "https://gardener.example");
-    process.env.GITHUB_EVENT_PATH = eventPath;
-    process.env.GITHUB_REPOSITORY = "owner/repo";
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response("[]", { status: 200 }))
-      .mockResolvedValueOnce(Response.json({ id: 99, html_url: "https://github.test/comment/99" }, { status: 201 }));
-    vi.stubGlobal("fetch", fetchMock);
+function receipt(operation: Operation, status: "succeeded" | "skipped" | "failed" | "conflicted" = "succeeded") {
+  return {
+    schemaVersion: "v2" as const,
+    operationId: operation.id,
+    operationHash: canonicalOperationHash(operation),
+    kind: operation.kind,
+    status,
+    attempt: 1,
+    attemptedAt: NOW,
+    completedAt: "2026-09-17T12:01:01.000Z",
+    ...(status === "failed" || status === "conflicted"
+      ? { error: { code: "fixture_failure", message: "fixture failed", retryable: status === "failed" } }
+      : {}),
+  };
+}
 
-    await import("../src/effects-main");
-    await vi.waitFor(() => expect(core.setOutput).toHaveBeenCalledWith("comment-id", "99"));
+function success(operation: Operation, outputs: OperationOutputsV1): GitHubEffectResult {
+  return { receipt: receipt(operation), outputs };
+}
 
-    expect(core.setFailed).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]![1]).toMatchObject({
-      method: "POST",
-      body: expect.stringContaining("<!-- gardener-operation:op_123 -->"),
+function commentStep(name: string, id: string, body = "Thanks.") {
+  return step(name, id, "issue.comment.create", {
+    issueNumber: 7,
+    expectedIssueState: "open",
+    expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z",
+    body,
+  });
+}
+
+beforeEach(() => {
+  core.inputs.clear();
+  core.setOutput.mockClear();
+  core.setFailed.mockClear();
+  core.setSecret.mockClear();
+  core.recordEffect.mockClear();
+  core.priorEffectReceipt.mockClear();
+  process.env.GITHUB_RUN_ATTEMPT = "1";
+});
+
+describe("ordered effect application", () => {
+  it("resolves typed prior-step outputs and records progress in exact order", async () => {
+    const value = plan([
+      step("branch", "op_branch", "branch.create", {
+        branch: "gardener/fix-1",
+        fromSha: SHA,
+        expectedAbsent: true,
+      }),
+      step("release", "op_release", "release.create", {
+        tagName: "v0.0.1-draft",
+        expectedTagAbsent: true,
+        name: "Draft",
+        body: "Draft release.",
+        draft: true,
+        prerelease: true,
+      }, { "/targetCommitSha": { step: "branch", output: "commitSha" } }),
+    ]);
+    const seen: Operation[] = [];
+    const recorded: RunnerEffectReceiptV1[] = [];
+    const execute = vi.fn(async (operation: Operation, _context: GitHubEffectsContext) => {
+      seen.push(operation);
+      if (operation.kind === "branch.create") {
+        return success(operation, {
+          kind: operation.kind,
+          branch: operation.branch,
+          ref: `refs/heads/${operation.branch}`,
+          commitSha: SHA,
+          branchUrl: "https://github.com/owner/repo/tree/gardener/fix-1",
+        });
+      }
+      if (operation.kind !== "release.create") throw new Error("unexpected operation");
+      expect(operation.targetCommitSha).toBe(SHA);
+      return success(operation, {
+        kind: operation.kind,
+        releaseId: "99",
+        tagName: operation.tagName,
+        releaseUrl: "https://github.com/owner/repo/releases/tag/v0.0.1-draft",
+        draft: true,
+        prerelease: true,
+      });
     });
-    const posted = JSON.parse(String(fetchMock.mock.calls[1]![1]?.body)) as { body: string };
-    expect(posted.body).toContain("## 🌱 Gardener · Issue triage");
-    expect(posted.body).toContain("<summary>Gardener provenance</summary>");
-    expect(posted.body).toContain(
-      "https://github.com/owner/repo/blob/" + "b".repeat(40) + "/.gardener/tasks/triage/TASK.md",
-    );
-    expect(posted.body).toContain("https://github.com/owner/repo/actions/runs/2/attempts/1");
-    expect(core.setOutput).toHaveBeenCalledWith("operation-id", "op_123");
-    expect(core.recordEffect).toHaveBeenCalledWith(expect.objectContaining({
-      planRunId: plan.runId,
-      artifactSha256: core.inputs.get("expected-sha256"),
-      operationId: "op_123",
-      commentId: "99",
-    }));
+
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute,
+      record: async (value) => { recorded.push(value); },
+    });
+
+    expect(seen.map((operation) => operation.kind)).toEqual(["branch.create", "release.create"]);
+    expect(recorded.map((entry) => [entry.status, entry.operations.length]))
+      .toEqual([["running", 1], ["applied", 2]]);
+    expect(result.receipt.status).toBe("applied");
+    expect(result.outputs.get("release")?.releaseId).toBe("99");
   });
 
-  it("rejects a tampered artifact before GitHub or receipt recording", async () => {
+  it("stops on the first failed step and resumes from its successful prefix", async () => {
+    const value = plan([
+      commentStep("first", "op_first", "First."),
+      commentStep("second", "op_second", "Second."),
+      commentStep("third", "op_third", "Third."),
+    ]);
+    let calls = 0;
+    const firstPass = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation) => {
+        calls += 1;
+        if (calls === 2) return { receipt: receipt(operation, "failed") };
+        return success(operation, {
+          kind: "issue.comment.create",
+          issueNumber: 7,
+          commentId: "101",
+          commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-101",
+        });
+      },
+      record: async () => undefined,
+    });
+    expect(firstPass.receipt.status).toBe("stopped");
+    expect(firstPass.receipt.stoppedAtStep).toBe("second");
+    expect(firstPass.receipt.operations).toHaveLength(2);
+
+    const retried: string[] = [];
+    const secondPass = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: firstPass.receipt,
+      execute: async (operation) => {
+        retried.push(operation.id);
+        const suffix = operation.id === "op_second" ? "102" : "103";
+        return success(operation, {
+          kind: "issue.comment.create",
+          issueNumber: 7,
+          commentId: suffix,
+          commentUrl: `https://github.com/owner/repo/issues/7#issuecomment-${suffix}`,
+        });
+      },
+      record: async () => undefined,
+    });
+    expect(retried).toEqual(["op_second", "op_third"]);
+    expect(secondPass.receipt.status).toBe("applied");
+    expect(secondPass.receipt.operations.map((entry) => entry.receipt.operationId))
+      .toEqual(["op_first", "op_second", "op_third"]);
+  });
+
+  it("preserves a conflicted halt instead of retrying an immutable mismatch", async () => {
+    const value = plan([commentStep("comment", "op_comment")]);
+    const first = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation) => ({ receipt: receipt(operation, "conflicted") }),
+      record: async () => undefined,
+    });
+    expect(first.receipt.status).toBe("stopped");
+
+    const execute = vi.fn();
+    const resumed = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: first.receipt,
+      execute,
+      record: async () => undefined,
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(resumed.receipt).toEqual(first.receipt);
+  });
+
+  it("records a retryable stopped receipt when the apply deadline expires", async () => {
+    const value = plan([commentStep("comment", "op_comment")]);
+    const recorded: RunnerEffectReceiptV1[] = [];
+    const execute = vi.fn();
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now(),
+      prior: null,
+      execute,
+      record: async (entry) => { recorded.push(entry); },
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.receipt).toMatchObject({ status: "stopped", stoppedAtStep: "comment" });
+    expect(result.receipt.operations[0]?.receipt).toMatchObject({
+      status: "failed",
+      error: { code: "effect_deadline_expired", retryable: true },
+    });
+    expect(recorded).toEqual([result.receipt]);
+  });
+
+  it("refuses a prior receipt from another artifact before executing", async () => {
+    const value = plan([commentStep("comment", "op_comment")]);
+    const operation = operationForComment(value.operations[0]!);
+    const prior = {
+      schemaVersion: "gardener.runner.effect-receipt/v1" as const,
+      planRunId: value.runId,
+      bundleHash: value.bundleHash,
+      artifactSha256: "d".repeat(64),
+      plannedOperations: 1,
+      status: "applied" as const,
+      stoppedAtStep: null,
+      operations: [{
+        stepName: "comment",
+        outputs: { issueNumber: 7, commentId: "1", commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-1" },
+        receipt: receipt(operation),
+      }],
+    };
+    const execute = vi.fn();
+    await expect(effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior,
+      execute,
+      record: async () => undefined,
+    })).rejects.toThrow(/not bound to this exact plan/);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("materializes commit files only as capture-backed metadata", async () => {
+    const content = Buffer.from("changed\n");
+    const digest = createHash("sha256").update(content).digest("hex");
+    const capture = {
+      schemaVersion: "gardener.task-capture-manifest/v1" as const,
+      captureId: `cap_${"1".repeat(64)}`,
+      baseSha: SHA,
+      files: [{ path: "src/a.txt", status: "modified" as const, mode: "100644" as const, sizeBytes: content.length, sha256: digest }],
+      totalBytes: content.length,
+      truncated: false as const,
+    };
+    const value = plan([
+      step("commit", "op_commit", "commit.create", {
+        branch: "gardener/fix-1",
+        expectedHeadSha: SHA,
+        message: "Apply capture.",
+      }),
+    ], { capture, changesSha256: "e".repeat(64) });
+    let read = false;
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      captureDirectory: "/verified/capture",
+      execute: async (operation, context) => {
+        if (operation.kind !== "commit.create" || !("captured" in operation.files[0]!)) {
+          throw new Error("commit was not capture-backed");
+        }
+        expect(operation.files[0]!.captured).toMatchObject({ sha256: digest, sizeBytes: content.length });
+        expect(context.readCapturedFile).toBeTypeOf("function");
+        // The reader itself is separately exercised by capture integration;
+        // this pins that it is the only byte source given to the executor.
+        read = true;
+        return success(operation, {
+          kind: operation.kind,
+          branch: operation.branch,
+          commitSha: "f".repeat(40),
+          treeSha: "1".repeat(40),
+          parentSha: SHA,
+          commitUrl: `https://github.com/owner/repo/commit/${"f".repeat(40)}`,
+        });
+      },
+      record: async () => undefined,
+    });
+    expect(read).toBe(true);
+    expect(result.receipt.changesSha256).toBe("e".repeat(64));
+  });
+});
+
+describe("effects action artifact boundary", () => {
+  it("rejects a tampered artifact before opening a runtime session", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "gardener-effect-tampered-"));
     const artifactPath = path.join(directory, "effect.json");
-    const eventPath = path.join(directory, "event.json");
     await writeFile(artifactPath, "{}");
-    await writeFile(eventPath, JSON.stringify({ action: "opened", issue: { number: 7 } }));
     core.inputs.set("artifact-path", artifactPath);
     core.inputs.set("expected-sha256", "0".repeat(64));
     core.inputs.set("github-token", "token");
     core.inputs.set("runtime-url", "https://gardener.example");
-    process.env.GITHUB_EVENT_PATH = eventPath;
-    process.env.GITHUB_REPOSITORY = "owner/repo";
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    core.inputs.set("deadline-at", new Date(Date.now() + 60_000).toISOString());
 
-    await import("../src/effects-main");
-    await vi.waitFor(() => expect(core.setFailed).toHaveBeenCalledWith("Effect artifact digest mismatch"));
+    await effects.runEffectsMain();
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(core.setFailed).toHaveBeenCalledWith("Effect artifact digest mismatch");
     expect(core.recordEffect).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    {
-      name: "repository",
-      repository: "other/repo",
-      issueNumber: 7,
-      error: "Effect repository binding mismatch",
-    },
-    {
-      name: "issue",
-      repository: "owner/repo",
-      issueNumber: 8,
-      error: "Effect issue binding mismatch",
-    },
-  ])("rejects a wrong $name binding before GitHub", async ({ repository, issueNumber, error }) => {
-    const directory = await mkdtemp(path.join(tmpdir(), "gardener-effect-binding-"));
-    const plan = {
-      schemaVersion: "gardener.task-effect-plan/v1",
-      runId: "repo-1-run-2-attempt-1-plan",
-      taskId: "fixture.issue-triage",
-      taskName: "Issue triage",
-      bundleHash: "a".repeat(64),
-      repository: { id: "123", fullName: repository },
-      provenance: {
-        sourcePath: ".gardener/tasks/triage/TASK.md",
-        commitSha: "b".repeat(40),
-        workflowRunId: "2",
-        workflowRunAttempt: 1,
-      },
-      issueNumber: 7,
-      operationId: "op_binding",
-      kind: "issue.comment.create",
-      body: "This comment must not be posted.",
-    };
-    const artifact = Buffer.from(JSON.stringify(plan));
-    const artifactPath = path.join(directory, "effect.json");
-    const eventPath = path.join(directory, "event.json");
-    await writeFile(artifactPath, artifact);
-    await writeFile(eventPath, JSON.stringify({
-      action: "opened",
-      repository: { id: 123 },
-      issue: { number: issueNumber },
-    }));
-    core.inputs.set("artifact-path", artifactPath);
-    core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
-    core.inputs.set("github-token", "token");
-    core.inputs.set("runtime-url", "https://gardener.example");
-    process.env.GITHUB_EVENT_PATH = eventPath;
-    process.env.GITHUB_REPOSITORY = "owner/repo";
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    await import("../src/effects-main");
-    await vi.waitFor(() => expect(core.setFailed).toHaveBeenCalledWith(error));
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(core.recordEffect).not.toHaveBeenCalled();
-  });
-
-  it("reconciles an existing operation marker without posting a duplicate", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "gardener-effect-reconcile-"));
-    const plan = {
-      schemaVersion: "gardener.task-effect-plan/v1",
-      runId: "repo-1-run-2-attempt-1-plan",
-      taskId: "fixture.issue-triage",
-      taskName: "Issue triage",
-      bundleHash: "a".repeat(64),
-      repository: { id: "123", fullName: "owner/repo" },
-      provenance: {
-        sourcePath: ".gardener/tasks/triage/TASK.md",
-        commitSha: "b".repeat(40),
-        workflowRunId: "2",
-        workflowRunAttempt: 1,
-      },
-      issueNumber: 7,
-      operationId: "op_existing",
-      kind: "issue.comment.create",
-      body: "Already posted.",
-    };
-    const artifact = Buffer.from(JSON.stringify(plan));
-    const artifactPath = path.join(directory, "effect.json");
-    const eventPath = path.join(directory, "event.json");
-    await writeFile(artifactPath, artifact);
-    await writeFile(eventPath, JSON.stringify({
-      action: "opened",
-      repository: { id: 123 },
-      issue: { number: 7 },
-    }));
-    core.inputs.set("artifact-path", artifactPath);
-    core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
-    core.inputs.set("github-token", "token");
-    core.inputs.set("runtime-url", "https://gardener.example");
-    process.env.GITHUB_EVENT_PATH = eventPath;
-    process.env.GITHUB_REPOSITORY = "owner/repo";
-    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json([{
-      id: 99,
-      html_url: "https://github.test/comment/99",
-      body: "Already posted.\n<!-- gardener-operation:op_existing -->",
-    }]));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await import("../src/effects-main");
-    await vi.waitFor(() => expect(core.setOutput).toHaveBeenCalledWith("comment-id", "99"));
-
-    expect(core.setFailed).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(core.recordEffect).toHaveBeenCalledWith(expect.objectContaining({
-      operationId: "op_existing",
-      commentId: "99",
-    }));
+    expect(core.priorEffectReceipt).not.toHaveBeenCalled();
   });
 });
+
+function operationForComment(value: TaskEffectPlanV1["operations"][number]): Operation {
+  return {
+    schemaVersion: "v2",
+    id: value.operationId,
+    repository: { provider: "github", id: "123", owner: "owner", name: "repo", defaultBranch: "main" },
+    kind: "issue.comment.create",
+    issueNumber: 7,
+    expectedIssueState: "open",
+    expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z",
+    body: "Thanks.",
+  };
+}

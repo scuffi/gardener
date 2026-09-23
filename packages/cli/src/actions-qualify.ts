@@ -107,7 +107,17 @@ export async function qualifyActions(input: {
       throw new Error(`Task ${taskId} has no unique persisted effect receipt`);
     }
     const receipt = runnerEffectReceiptV1Schema.parse(JSON.parse(rows[0].effect_receipt_json));
-    if (receipt.commentId !== String(comment.id) || receipt.commentUrl !== comment.html_url) {
+    if (receipt.status !== "applied" || receipt.operations.length !== receipt.plannedOperations) {
+      throw new Error(`Task ${taskId} effect receipt did not apply the complete ordered plan`);
+    }
+    const commentSteps = receipt.operations.filter((step) => step.receipt.kind === "issue.comment.create");
+    if (commentSteps.length !== 1) {
+      throw new Error(`Task ${taskId} receipt records ${commentSteps.length} issue comments instead of one`);
+    }
+    const commentStep = commentSteps[0]!;
+    const receiptCommentId = commentStep.outputs.commentId;
+    const receiptCommentUrl = commentStep.outputs.commentUrl ?? commentStep.receipt.resourceUrl;
+    if (receiptCommentId !== String(comment.id) || receiptCommentUrl !== comment.html_url) {
       throw new Error(`Task ${taskId} D1 receipt does not match the GitHub comment`);
     }
     if (rows[0].bundle_hash !== task.bundleHash || receipt.bundleHash !== task.bundleHash) {
@@ -121,8 +131,8 @@ export async function qualifyActions(input: {
         issueUrl,
         runId: run.databaseId,
         runUrl: run.url,
-        commentId: receipt.commentId,
-        commentUrl: receipt.commentUrl,
+        commentId: receiptCommentId,
+        commentUrl: receiptCommentUrl,
         bundleHash: task.bundleHash,
       });
     }

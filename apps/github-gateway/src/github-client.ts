@@ -696,6 +696,11 @@ async function executePullMerge(operation: Extract<Operation, { kind: "pull_requ
 
 export async function executeGitHubOperation(env: Env, operation: Operation): Promise<OperationResult> {
   const { installationId, name } = operation.repository;
+  // An operation's installation identity is optional in the contract because an
+  // Actions-planned operation genuinely has none. This is the one place that
+  // mints an installation token, so it refuses rather than asking GitHub for a
+  // token on behalf of no installation.
+  if (installationId === undefined) throw new Error("Operation has no installation identity to mint a token for");
   const token = await installationToken(env, installationId, name, operationPermissions(operation));
   if (operation.kind === "issue.label.add" || operation.kind === "issue.label.remove" || operation.kind === "issue.comment.create" || operation.kind === "issue.comment.update" || operation.kind === "issue.close" || operation.kind === "issue.reopen") return executeIssueOperation(env, operation, token);
   switch (operation.kind) {

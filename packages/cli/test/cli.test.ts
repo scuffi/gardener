@@ -34,7 +34,65 @@ afterEach(() => {
   else process.env.NO_COLOR = originalNoColor;
 });
 
+const EXEC_TASK = `---
+schema: gardener.task/v1
+id: egress-task
+name: Egress task
+description: A task that declares repository.exec.
+trigger:
+  event: github.issue.opened
+tools:
+  - repository.exec
+effects:
+  - issue.comment.create
+network:
+  default: allow
+  allow: []
+  deny: []
+limits:
+  runtime-seconds: 300
+  max-turns: 8
+  max-tool-calls: 12
+  input-tokens: 24000
+  output-tokens: 4000
+---
+Investigate the issue.
+`;
+
 describe("Gardener CLI", () => {
+  it("prints every build warning on stderr, not stdout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-cli-warn-"));
+    const cliPath = join(process.cwd(), "dist/cli.js");
+
+    // A project with no exec task warns about nothing.
+    const init = spawnSync(process.execPath, [cliPath, "--", "init", "--demos"], {
+      cwd: root, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" },
+    });
+    expect(init.status, init.stderr).toBe(0);
+    const quiet = spawnSync(process.execPath, [cliPath, "--", "build"], {
+      cwd: root, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" },
+    });
+    expect(quiet.status, quiet.stderr).toBe(0);
+    expect(quiet.stderr).not.toMatch(/unrestricted network egress/);
+
+    // Adding a repository.exec task makes the exposure visible at build time.
+    await mkdir(join(root, ".gardener/tasks/egress"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/egress/TASK.md"), EXEC_TASK);
+    const loud = spawnSync(process.execPath, [cliPath, "--", "build"], {
+      cwd: root, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" },
+    });
+    expect(loud.status, loud.stderr).toBe(0);
+    expect(loud.stderr).toMatch(/^warning: /m);
+    expect(loud.stderr).toMatch(/egress-task/);
+    expect(loud.stderr).toMatch(/unrestricted network egress/);
+    expect(loud.stderr).toMatch(/exfiltrate private source/);
+    expect(loud.stderr).toMatch(/demo-only and is not production-ready/);
+
+    // stdout stays machine-readable: the warning must not be mixed into it.
+    expect(loud.stdout).not.toMatch(/unrestricted network egress/);
+    expect(loud.stdout).toMatch(/egress-task [0-9a-f]{64} /);
+  });
+
   it("exposes only the Actions-native local project commands", () => {
     const root = spawnSync(process.execPath, ["dist/cli.js", "--", "help"], {
       cwd: process.cwd(),

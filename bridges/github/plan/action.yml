@@ -12,6 +12,13 @@ inputs:
     description: Maximum Cap'n Web reconnection attempts after the initial connection.
     required: false
     default: "5"
+  github-token:
+    description: >-
+      Optional repository-scoped token enabling the read-only provider API tool.
+      It is captured by the bridge process, removed from the environment before
+      any task command runs, and never exposed to repository shell execution.
+    required: false
+    default: ""
 outputs:
   status:
     description: Terminal planning status.
@@ -25,6 +32,17 @@ outputs:
     description: Absolute path to the validated effect artifact produced by planning.
   effect-artifact-sha256:
     description: SHA-256 digest of the validated effect artifact.
+  effect-operation-count:
+    description: Number of ordered operations in the exact effect artifact.
+  capture-artifact-path:
+    description: >-
+      Absolute runner-local path of the verified working-tree capture this plan
+      commits. Present only when planning completed and the plan binds a
+      capture. The reusable workflow uploads this directory as the trusted changes artifact.
+  capture-id:
+    description: Identity of the verified working-tree capture bound to the plan.
+  capture-changes-sha256:
+    description: Digest of the captured change set, as bound into the effect plan.
 runs:
   using: node24
   main: dist/index.cjs

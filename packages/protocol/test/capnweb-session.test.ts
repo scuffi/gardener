@@ -112,6 +112,10 @@ class TestSession extends RpcTarget implements AuthenticatedSessionCapability {
     return Promise.resolve(receipt);
   }
 
+  priorEffectReceipt(_planRunId: string, _artifactSha256: string): Promise<RunnerEffectReceiptV1 | null> {
+    return Promise.resolve(null);
+  }
+
   [Symbol.dispose](): void {
     this.#runner[Symbol.dispose]();
   }

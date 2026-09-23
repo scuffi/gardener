@@ -23,7 +23,7 @@
     "versions:check": "node scripts/check-versions.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260922.1",
+    "@cloudflare/workers-types": "5.20260923.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.1",

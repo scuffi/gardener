@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PlanningShellExecutor } from "../src/executor";
-import type { RunnerActionV1 } from "@gardener/protocol";
+import type { RunnerShellActionV1 } from "@gardener/protocol";
 
 const directories: string[] = [];
 
@@ -64,7 +64,7 @@ describe("PlanningShellExecutor", () => {
   });
 });
 
-function action(command: string): RunnerActionV1 {
+function action(command: string): RunnerShellActionV1 {
   return {
     schemaVersion: "gardener.runner.action/v1",
     sequence: 1,

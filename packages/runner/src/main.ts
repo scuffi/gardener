@@ -2,7 +2,11 @@ import * as core from "@actions/core";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { runnerEventV1Schema, type RunnerEventV1 } from "@gardener/protocol";
+import { taskEffectPlanV1Schema } from "@gardener/contracts";
+import { type RunnerEventV1 } from "@gardener/protocol";
+import { normalizeGitHubEvent } from "./event";
+import { createPlanningExecutor } from "./executor";
+import { GitHubReadClient } from "./github-read";
 import { runPlanningSession } from "./session";
 
 const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
@@ -10,12 +14,39 @@ const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 
+/**
+ * The repository-scoped read token is captured and removed from the process
+ * environment before any task-controlled command can run, so it exists only in
+ * this module's closure. `safePlannerEnvironment` additionally allowlists the
+ * shell environment, so the token cannot reach `repository.exec` either way.
+ */
+const providerReadToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
+delete process.env["INPUT_GITHUB-TOKEN"];
+
 async function main(): Promise<void> {
   try {
     const runtimeUrl = requiredInput("runtime-url");
     const agentHash = requiredInput("task-bundle-hash");
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
+    if (providerReadToken) core.setSecret(providerReadToken);
+    // Built before the event is read and long before the session connects, so
+    // the capture baseline is taken while the checkout is still exactly what
+    // `actions/checkout` produced.
+    const executor = await createPlanningExecutor({
+      workspace: requiredEnvironment("GITHUB_WORKSPACE"),
+      runnerTemp: process.env.RUNNER_TEMP,
+      baseSha: process.env.GITHUB_SHA,
+      ...(providerReadToken
+        ? {
+          createReadClient: (signal: AbortSignal, maxResponseBytes: number) => new GitHubReadClient({
+            token: providerReadToken,
+            signal,
+            limits: { maxResponseBytes },
+          }),
+        }
+        : {}),
+    });
     const event = await githubEvent();
     const cancellation = new AbortController();
     const cancel = () => cancellation.abort();
@@ -27,6 +58,7 @@ async function main(): Promise<void> {
         harnessUrl: runtimeUrl,
         agentHash,
         maxReconnects,
+        executor,
         ...(event === undefined ? {} : { event }),
         signal: cancellation.signal,
         getOidcToken: (audience) => getIdTokenWithoutEnvironmentLeak(audience),
@@ -39,46 +71,46 @@ async function main(): Promise<void> {
       process.removeListener("SIGINT", cancel);
       process.removeListener("SIGTERM", cancel);
     }
-    core.setOutput("status", terminal.status);
-    core.setOutput("summary", terminal.summary);
-    core.setOutput("last-server-sequence", String(terminal.lastServerSequence));
-    core.setOutput("last-completed-sequence", String(terminal.lastCompletedSequence));
+    const outputs: Record<string, string> = {
+      status: terminal.status,
+      summary: terminal.summary,
+      "last-server-sequence": String(terminal.lastServerSequence),
+      "last-completed-sequence": String(terminal.lastCompletedSequence),
+    };
     if (terminal.effectArtifact) {
       const bytes = Buffer.from(terminal.effectArtifact.bytesBase64, "base64");
       const digest = createHash("sha256").update(bytes).digest("hex");
       if (digest !== terminal.effectArtifact.sha256) throw new Error("Gardener effect artifact digest mismatch");
-      const directory = path.join(requiredEnvironment("RUNNER_TEMP"), "gardener-effects");
+      const directory = path.join(requiredEnvironment("RUNNER_TEMP"), "gardener-effect-plans");
       await mkdir(directory, { recursive: true, mode: 0o700 });
+      const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
       const artifactPath = path.join(directory, `${digest}.json`);
       await writeFile(artifactPath, bytes, { mode: 0o600 });
-      core.setOutput("effect-artifact-path", artifactPath);
-      core.setOutput("effect-artifact-sha256", digest);
+      outputs["effect-artifact-path"] = artifactPath;
+      outputs["effect-artifact-sha256"] = digest;
+      outputs["effect-operation-count"] = String(plan.operations.length);
+      // Verify the model-writable local artifact against the digest that the
+      // trusted Worker independently derived before publishing any output.
+      if (terminal.status === "completed" && terminal.effectArtifact.changesSha256) {
+        const capture = await executor.verifiedCaptureArtifact(terminal.effectArtifact.changesSha256);
+        outputs["capture-artifact-path"] = capture.directory;
+        outputs["capture-id"] = capture.ref.captureId;
+        outputs["capture-changes-sha256"] = capture.ref.changesSha256;
+      }
     }
+    for (const [name, value] of Object.entries(outputs)) core.setOutput(name, value);
     if (terminal.status !== "completed") core.setFailed(terminal.summary);
   } catch (error) {
     core.setFailed(message(error));
   }
 }
 
+/** Reads the Actions event file and normalizes it through the pure module. */
 async function githubEvent(): Promise<RunnerEventV1 | undefined> {
-  if (process.env.GITHUB_EVENT_NAME !== "issues") return undefined;
-  const raw = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8")) as Record<string, unknown>;
-  if (raw.action !== "opened") throw new Error("Gardener v1 supports only issues: opened");
-  const issue = raw.issue as Record<string, unknown> | undefined;
-  const author = issue?.user as Record<string, unknown> | undefined;
-  if (!issue || !author) throw new Error("GitHub issue event payload is incomplete");
-  return runnerEventV1Schema.parse({
-    schemaVersion: "gardener.runner.event/v1",
-    kind: "github.issue.opened",
-    issue: {
-      id: String(issue.id ?? ""),
-      number: issue.number,
-      title: issue.title,
-      body: issue.body ?? null,
-      labels: Array.isArray(issue.labels) ? issue.labels.map((label) => String((label as Record<string, unknown>).name ?? "")) : [],
-      author: { id: String(author.id ?? ""), login: author.login },
-    },
-  });
+  const eventName = process.env.GITHUB_EVENT_NAME;
+  if (!eventName) return undefined;
+  const raw: unknown = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
+  return normalizeGitHubEvent(eventName, raw);
 }
 
 async function getIdTokenWithoutEnvironmentLeak(audience: string): Promise<string> {
