@@ -1,0 +1,79 @@
+apps/gardener/src/instance-state.ts
+  s_695d5569772103::t_f5ce176f53e8b4 4,175-183,191
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_695d5569772103::t_a7f00539ff0a88 2-3,39-48,60,163-168,171-201,203,206-210,217-222,224,230-250,252,258-270
+apps/gardener/src/task-runtime/runner-tool-facade.ts
+  s_695d5569772103::t_123f35e524ce0c 1-2,5-11,14-33,36,39-70
+apps/gardener/src/task-runtime/tool-authority.ts
+  s_695d5569772103::t_3abba03ddfad36 1-54
+apps/gardener/test/task-session-proposals.test.ts
+  s_695d5569772103::t_bfaa47c5c852f2 1-247
+apps/github-gateway/src/github-client.ts
+  s_695d5569772103::t_d7a5c6c4e7292b 699-703
+apps/github-gateway/src/operations.ts
+  s_695d5569772103::t_46ca06fa1cbfb3 12,49-60,83,128
+apps/github-gateway/test/operations.test.ts
+  s_695d5569772103::t_2563923e1dea03 95-119
+packages/cli/src/cli.ts
+  s_695d5569772103::t_31826079cb2b7d 220,390,394-403
+packages/cli/src/project.ts
+  s_695d5569772103::t_c77a7dc478fd84 8,10,37-38,41-50,259-261,263,273-362,374,380-383,385,400-404
+packages/cli/src/task-authoring.ts
+  s_695d5569772103::t_d06e0fe8815efe 2-3,5-7,9-11,22-74,80-83,95-96,98-111,120-142,161-166,173,175,183-184
+packages/cli/src/terminal.ts
+  s_695d5569772103::t_9a634412a417b0 24-32,34
+packages/cli/test/cli.test.ts
+  s_695d5569772103::t_d9100b456e6504 37-61,63-95
+packages/contracts/src/repository.ts
+  s_695d5569772103::t_2d32118a417565 6-16,19,24-33,36-47
+packages/contracts/test/repository-identity-v1.test.ts
+  s_695d5569772103::t_148d41c77f1f22 1-63
+packages/core/src/policy.ts
+  s_695d5569772103::t_bca19ba55dae33 91-96
+packages/core/test/agent-foundation.test.ts
+  s_695d5569772103::t_5247cba2855d60 325-341
+packages/protocol/test/runner-action.test.ts
+  s_695d5569772103::t_40d884437fed2f 1-147
+packages/provider-github/src/index.ts
+  s_695d5569772103::t_26c4a173438304 2
+packages/provider-github/src/permissions.ts
+  s_695d5569772103::t_5a9b30e80c96fc 1-157
+packages/provider-github/test/permissions.test.ts
+  s_695d5569772103::t_b5d1fb5a4f9ff9 1-80
+packages/runner/package.json
+  s_695d5569772103::t_b8e4e6d2414b75 18
+packages/runner/src/github-read.ts
+  s_695d5569772103::t_7cc33243d80f7f 1-587
+packages/runner/src/index.ts
+  s_695d5569772103::t_0d50c5fb205c85 3-4
+packages/runner/test/capture.test.ts
+  s_695d5569772103::t_9299794848464e 1-958
+packages/runner/test/context.test.ts
+  s_695d5569772103::t_0504a34eec310d 39-43
+packages/runner/test/executor.test.ts
+  s_695d5569772103::t_9aac6138a9f7a8 6,67
+packages/runner/test/github-effects.test.ts
+  s_695d5569772103::t_d3c3f495a61fad 1-1896
+packages/runner/test/github-read.test.ts
+  s_695d5569772103::t_234df3cb7ded45 1-501
+packages/runner/test/provider-read-action.test.ts
+  s_695d5569772103::t_f8293ea98ee614 1-259
+spikes/actions-v1/test/live-client.ts
+  s_695d5569772103::t_3d232e0c2ccf79 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0b866a6f38bd58392e7628926d674081c5e62762",
+  "prompts": {},
+  "sessions": {
+    "s_695d5569772103": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "c9531bf8-8d68-4ff0-989b-b7dd5ed6a7c5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
