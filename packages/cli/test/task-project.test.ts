@@ -278,8 +278,14 @@ describe("local Gardener project", () => {
     expect(workflowsFirst.join("\n")).toContain("gardener-bug");
     expect(workflowsFirst.join("\n")).toContain("gardener-docs");
     expect(workflowsFirst.join("\n")).not.toMatch(/\$\{\{\s*secrets\.|password|api[_-]?key/i);
-    const lock = JSON.parse(lockFirst) as { tasks: Record<string, { bundleHash: string }> };
+    const lock = JSON.parse(lockFirst) as {
+      tasks: Record<string, { bundleHash: string; bundle: { limits: { maxTurns: number; inputTokens: number } } }>;
+    };
     expect(lock.tasks["bug-intake"]?.bundleHash).toBe(first.tasks[0]?.bundleHash);
+    expect(Object.values(lock.tasks).map((task) => task.bundle.limits)).toEqual([
+      expect.objectContaining({ maxTurns: 16, inputTokens: 60_000 }),
+      expect.objectContaining({ maxTurns: 16, inputTokens: 60_000 }),
+    ]);
   });
 
   it("renders deterministic multi-trigger workflows with derived permissions", async () => {

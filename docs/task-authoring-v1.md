@@ -28,7 +28,7 @@ limits:
   runtime-seconds: 300
   max-turns: 16
   max-tool-calls: 12
-  input-tokens: 24000
+  input-tokens: 60000
   output-tokens: 4000
 ---
 Inspect the issue and repository evidence, then propose one concise issue comment.

@@ -70,7 +70,7 @@ limits:
   runtime-seconds: 300
   max-turns: 16
   max-tool-calls: 12
-  input-tokens: 24000
+  input-tokens: 60000
   output-tokens: 4000
 ---
 Inspect the issue and the repository's relevant conventions.
@@ -107,7 +107,7 @@ limits:
   runtime-seconds: 300
   max-turns: 16
   max-tool-calls: 12
-  input-tokens: 24000
+  input-tokens: 60000
   output-tokens: 4000
 ---
 Inspect the issue and the repository's documentation structure.
