@@ -88,7 +88,7 @@ function event(): NormalizedEventV1 {
       runnerEnvironment: "github-hosted",
     },
     actor: { id: "45369682", login: "scuffi" },
-    issue: { id: "999", number: 1, title: "Bug", body: "Broken", labels: ["gardener-test"], author: { id: "45369682", login: "scuffi" } },
+    issue: { id: "999", number: 1, title: "Bug", body: "Broken", state: "open", updatedAt: "2026-09-17T12:00:00.000Z", labels: ["gardener-test"], author: { id: "45369682", login: "scuffi" } },
   };
 }
 

@@ -36,6 +36,8 @@ function issueEvent(): NormalizedEventV1 {
       number: 1,
       title: "Fixture issue",
       body: "Please inspect this repository.",
+      state: "open",
+      updatedAt: "2026-09-17T12:00:00.000Z",
       labels: ["gardener-test"],
       author: { id: "45369682", login: "scuffi" },
     },

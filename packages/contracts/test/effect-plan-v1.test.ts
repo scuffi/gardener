@@ -6,6 +6,7 @@ import {
   operationOutputSentinel,
   operationOutputType,
   operationOutputTypeValues,
+  operationProposalPayloadJsonSchema,
   operationSchema,
 } from "../src/operations";
 import {
@@ -206,6 +207,26 @@ describe("JSON pointers", () => {
 });
 
 describe("effect proposals", () => {
+  it("renders compact exact payload guidance for every operation kind", () => {
+    for (const kind of operationKindValues) {
+      const schema = JSON.parse(operationProposalPayloadJsonSchema(kind)) as {
+        properties: Record<string, unknown>;
+        required: string[];
+      };
+      expect(schema.properties).not.toHaveProperty("schemaVersion");
+      expect(schema.properties).not.toHaveProperty("id");
+      expect(schema.properties).not.toHaveProperty("repository");
+      expect(schema.properties).not.toHaveProperty("kind");
+      expect(schema.required).not.toContain("schemaVersion");
+    }
+    const commit = JSON.parse(operationProposalPayloadJsonSchema("commit.create")) as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(commit.properties).not.toHaveProperty("files");
+    expect(commit.required).not.toContain("files");
+  });
+
   it("accepts a proposal for every operation kind", () => {
     for (const kind of operationKindValues) {
       expect(taskEffectProposalV1Schema.parse(proposalFor(kind)).kind).toBe(kind);

@@ -247,6 +247,49 @@ export const operationSchema = z.discriminatedUnion("kind", operationOptions).su
 });
 export type Operation = z.infer<typeof operationSchema>;
 
+/**
+ * Compact JSON Schema for the model-authored payload of one exact operation.
+ *
+ * The provider tool remains flat (`kind` plus a JSON string), avoiding the
+ * 29-arm `oneOf` that Workers AI models fail to call reliably. The trusted
+ * prompt can still state the exact field names and types for only the kinds a
+ * task declared. Plan-owned identity/repository fields are removed, as are
+ * capture-owned commit files.
+ */
+export function operationProposalPayloadJsonSchema(kind: OperationKind): string {
+  const full = z.toJSONSchema(operationSchema, { unrepresentable: "any" }) as Record<string, unknown>;
+  const options = full.oneOf;
+  if (!Array.isArray(options)) throw new Error("Operation schema did not produce exact variants");
+  const option = options.find((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+    const properties = (candidate as Record<string, unknown>).properties;
+    if (!properties || typeof properties !== "object" || Array.isArray(properties)) return false;
+    const discriminator = (properties as Record<string, unknown>).kind;
+    return discriminator !== null && typeof discriminator === "object"
+      && !Array.isArray(discriminator) && (discriminator as Record<string, unknown>).const === kind;
+  });
+  if (!option || typeof option !== "object" || Array.isArray(option)) {
+    throw new Error(`Operation schema has no variant for ${kind}`);
+  }
+  const source = structuredClone(option) as Record<string, unknown>;
+  const properties = source.properties as Record<string, unknown>;
+  for (const field of ["schemaVersion", "id", "repository", "kind", ...(kind === "commit.create" ? ["files"] : [])]) {
+    delete properties[field];
+  }
+  const omitted = new Set(["schemaVersion", "id", "repository", "kind", ...(kind === "commit.create" ? ["files"] : [])]);
+  source.required = Array.isArray(source.required)
+    ? source.required.filter((field): field is string => typeof field === "string" && !omitted.has(field))
+    : [];
+  const retain = new Set(["type", "const", "enum", "format", "properties", "required", "items", "oneOf", "anyOf", "additionalProperties"]);
+  const compact = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(compact);
+    if (value === null || typeof value !== "object") return value;
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(record).filter(([key]) => retain.has(key)).map(([key, entry]) => [key, compact(entry)]));
+  };
+  return JSON.stringify(compact(source));
+}
+
 export const operationReceiptSchema = z.object({
   schemaVersion: z.literal("v2"), operationId: operationIdSchema, operationHash: z.string().regex(/^[a-f0-9]{64}$/), kind: operationKindSchema,
   status: z.enum(["succeeded", "failed", "skipped", "conflicted"]), attempt: z.number().int().positive(), attemptedAt: z.iso.datetime(), completedAt: z.iso.datetime(),

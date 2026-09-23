@@ -36,7 +36,7 @@ const base = {
 };
 
 const actor = { id: "45369682", login: "scuffi" };
-const issue = { id: "999", number: 1, title: "t", body: null, labels: ["bug"], author: actor };
+const issue = { id: "999", number: 1, title: "t", body: null, state: "open" as const, updatedAt: "2026-09-22T12:00:00.000Z", labels: ["bug"], author: actor };
 const discussion = {
   id: "77",
   nodeId: "D_kwDOAbc123",
@@ -47,6 +47,8 @@ const discussion = {
   author: actor,
   category: "General",
   answered: false,
+  state: "open" as const,
+  updatedAt: "2026-09-22T12:00:00.000Z",
 };
 
 function pullRequest(headRepoId: string | null) {
@@ -60,6 +62,7 @@ function pullRequest(headRepoId: string | null) {
     draft: false,
     state: "open" as const,
     merged: false,
+    updatedAt: "2026-09-22T12:00:00.000Z",
     base: { ref: "main", sha: "a".repeat(40), repo: { id: "1374842705", fullName: "scuffi/gardener" } },
     head: {
       ref: "feature",
@@ -87,7 +90,7 @@ describe("normalized event v1", () => {
     const samples: Array<[string, Record<string, unknown>]> = [
       ["github.issue.opened", { issue }],
       ["github.issue.labeled", { issue, label: "bug" }],
-      ["github.issue_comment.created", { issue, comment: { id: "3", body: "hi", author: actor } }],
+      ["github.issue_comment.created", { issue, comment: { id: "3", body: "hi", updatedAt: "2026-09-22T12:00:00.000Z", author: actor } }],
       ["github.pull_request.opened", { pullRequest: pullRequest("1374842705") }],
       ["github.pull_request_review.submitted", {
         pullRequest: pullRequest("1374842705"),
@@ -95,7 +98,7 @@ describe("normalized event v1", () => {
       }],
       ["github.pull_request_review_comment.created", {
         pullRequest: pullRequest("1374842705"),
-        comment: { id: "4", body: "nit", author: actor },
+        comment: { id: "4", body: "nit", updatedAt: "2026-09-22T12:00:00.000Z", author: actor },
       }],
       ["github.push", {
         push: {
@@ -113,7 +116,7 @@ describe("normalized event v1", () => {
       ["github.discussion.created", { discussion }],
       ["github.discussion_comment.created", {
         discussion,
-        comment: { id: "8", nodeId: "DC_kwDOAbc", body: "hi", author: actor },
+        comment: { id: "8", nodeId: "DC_kwDOAbc", body: "hi", updatedAt: "2026-09-22T12:00:00.000Z", author: actor },
       }],
     ];
     for (const [kind, payload] of samples) {

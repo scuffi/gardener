@@ -55,6 +55,8 @@ function event(kind: "github.workflow_dispatch" | "github.issue.opened" = "githu
       number: 1,
       title: "Fixture issue",
       body: "Please inspect this repository.",
+      state: "open",
+      updatedAt: "2026-09-17T12:00:00.000Z",
       labels: ["gardener-test"],
       author: { id: "45369682", login: "scuffi" },
     },
@@ -218,6 +220,9 @@ describe("canonical task runtime framework", () => {
     const request = await createTaskHarnessRequest(await runRequest());
     expect(request.prompt).toContain("Effect kinds this task is allowed to propose");
     expect(request.prompt).toContain("issue.comment.create");
+    expect(request.prompt).toContain("Exact payloadJson contracts");
+    expect(request.prompt).toContain('"expectedIssueUpdatedAt"');
+    expect(request.prompt).toContain('"body"');
     expect(request.prompt).not.toContain("pull_request.merge");
   });
 

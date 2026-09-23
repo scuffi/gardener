@@ -31,6 +31,8 @@ function issuePayload(raw: Raw): Raw {
     number: issue.number,
     title: issue.title,
     body: issue.body ?? null,
+    state: issue.state === "closed" ? "closed" : "open",
+    updatedAt: issue.updated_at,
     labels: labelNames(issue.labels),
     author: actor(issue.user, "an issue author"),
   };
@@ -56,6 +58,7 @@ function pullRequestPayload(raw: Raw): Raw {
     draft: Boolean(pullRequest.draft),
     state: pullRequest.state === "closed" ? "closed" : "open",
     merged: Boolean(pullRequest.merged),
+    updatedAt: pullRequest.updated_at,
     base: { ref: base.ref, sha: base.sha, repo: repositoryRef(base.repo) },
     head: { ref: head.ref, sha: head.sha, repo: repositoryRef(head.repo) },
   };
@@ -66,6 +69,7 @@ function commentPayload(raw: Raw): Raw {
   return {
     id: String(comment.id ?? ""),
     body: comment.body ?? null,
+    updatedAt: comment.updated_at,
     author: actor(comment.user, "a comment author"),
   };
 }
@@ -82,6 +86,8 @@ function discussionPayload(raw: Raw): Raw {
     author: actor(discussion.user, "a discussion author"),
     category: object(discussion.category, "a discussion category").name,
     answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url),
+    state: discussion.state === "closed" ? "closed" : "open",
+    updatedAt: discussion.updated_at,
   };
 }
 
@@ -215,6 +221,7 @@ export function normalizeGitHubEvent(eventName: string, source: unknown): Runner
             id: String(comment.id ?? ""),
             nodeId: comment.node_id,
             body: comment.body ?? null,
+            updatedAt: comment.updated_at,
             author: actor(comment.user, "a discussion comment author"),
           },
         };

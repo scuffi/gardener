@@ -9,6 +9,8 @@ const issue = {
   number: 1,
   title: "Broken build",
   body: "details",
+  state: "open",
+  updated_at: "2026-09-22T12:00:00.000Z",
   labels: [{ name: "bug" }, { name: "triage" }],
   user: actor,
 };
@@ -23,6 +25,7 @@ const pullRequest = {
   draft: false,
   state: "open",
   merged: false,
+  updated_at: "2026-09-22T12:00:00.000Z",
   base: { ref: "main", sha: "a".repeat(40), repo: { id: 1374842705, full_name: "scuffi/gardener" } },
   head: { ref: "feature", sha: "d".repeat(40), repo: { id: 9999, full_name: "forker/gardener" } },
 };
@@ -37,6 +40,8 @@ const discussion = {
   user: actor,
   category: { name: "Q&A" },
   answer_chosen_at: null,
+  state: "open",
+  updated_at: "2026-09-22T12:00:00.000Z",
 };
 
 /**
@@ -55,7 +60,7 @@ describe("runner event normalization", () => {
     const cases: Array<[string, unknown, string]> = [
       ["issues", { action: "opened", issue }, "github.issue.opened"],
       ["issues", { action: "labeled", issue, label: { name: "bug" } }, "github.issue.labeled"],
-      ["issue_comment", { action: "created", issue, comment: { id: 3, body: "hi", user: actor } }, "github.issue_comment.created"],
+      ["issue_comment", { action: "created", issue, comment: { id: 3, body: "hi", updated_at: "2026-09-22T12:00:00.000Z", user: actor } }, "github.issue_comment.created"],
       ["pull_request", { action: "opened", pull_request: pullRequest }, "github.pull_request.opened"],
       ["pull_request", { action: "synchronize", pull_request: pullRequest }, "github.pull_request.synchronize"],
       ["pull_request_review", {
@@ -66,7 +71,7 @@ describe("runner event normalization", () => {
       ["pull_request_review_comment", {
         action: "created",
         pull_request: pullRequest,
-        comment: { id: 4, body: "nit", user: actor },
+        comment: { id: 4, body: "nit", updated_at: "2026-09-22T12:00:00.000Z", user: actor },
       }, "github.pull_request_review_comment.created"],
       ["push", {
         ref: "refs/heads/main",
@@ -80,7 +85,7 @@ describe("runner event normalization", () => {
       ["discussion_comment", {
         action: "created",
         discussion,
-        comment: { id: 8, node_id: "DC_kwDOAbc", body: "hi", user: actor },
+        comment: { id: 8, node_id: "DC_kwDOAbc", body: "hi", updated_at: "2026-09-22T12:00:00.000Z", user: actor },
       }, "github.discussion_comment.created"],
     ];
 
@@ -123,7 +128,7 @@ describe("runner event normalization", () => {
       .rejects.toThrow(/does not support pull_request_target/);
     await expect(normalize("release", { action: "published" })).rejects.toThrow(/does not support release/);
     await expect(normalize("issues", { action: "deleted", issue })).rejects.toThrow(/does not support issues: deleted/);
-    await expect(normalize("issue_comment", { action: "edited", issue, comment: { id: 3, body: "x", user: actor } }))
+    await expect(normalize("issue_comment", { action: "edited", issue, comment: { id: 3, body: "x", updated_at: "2026-09-22T12:00:00.000Z", user: actor } }))
       .rejects.toThrow(/does not support issue_comment: edited/);
   });
 

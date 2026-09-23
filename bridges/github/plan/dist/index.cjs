@@ -41557,6 +41557,8 @@ var normalizedIssueV1Schema = external_exports.strictObject({
   number: external_exports.number().int().positive(),
   title: external_exports.string().max(1024),
   body: boundedBody,
+  state: external_exports.enum(["open", "closed"]),
+  updatedAt: external_exports.iso.datetime(),
   labels: boundedLabels,
   author: normalizedActorV1Schema
 });
@@ -41574,6 +41576,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
+  updatedAt: external_exports.iso.datetime(),
   base: external_exports.strictObject({
     ref: external_exports.string().min(1).max(255),
     sha: sha1,
@@ -41593,6 +41596,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
 var normalizedCommentV1Schema = external_exports.strictObject({
   id: githubNumericId,
   body: boundedBody,
+  updatedAt: external_exports.iso.datetime(),
   author: normalizedActorV1Schema
 });
 var normalizedReviewV1Schema = external_exports.strictObject({
@@ -41610,12 +41614,15 @@ var normalizedDiscussionV1Schema = external_exports.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   category: external_exports.string().min(1).max(100),
-  answered: external_exports.boolean()
+  answered: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  updatedAt: external_exports.iso.datetime()
 });
 var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
   id: githubNumericId,
   nodeId: githubNodeId,
   body: boundedBody,
+  updatedAt: external_exports.iso.datetime(),
   author: normalizedActorV1Schema
 });
 var normalizedPushV1Schema = external_exports.strictObject({
@@ -42490,6 +42497,8 @@ var eventIssue = external_exports.strictObject({
   number: external_exports.number().int().positive(),
   title: external_exports.string().max(1024),
   body: eventBody,
+  state: external_exports.enum(["open", "closed"]),
+  updatedAt: external_exports.iso.datetime(),
   labels: eventLabels,
   author: eventActor
 });
@@ -42507,10 +42516,11 @@ var eventPullRequest = external_exports.strictObject({
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
+  updatedAt: external_exports.iso.datetime(),
   base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
   head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
 });
-var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, author: eventActor });
+var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, updatedAt: external_exports.iso.datetime(), author: eventActor });
 var eventReview = external_exports.strictObject({
   id: githubNumericId2,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
@@ -42526,12 +42536,15 @@ var eventDiscussion = external_exports.strictObject({
   labels: eventLabels,
   author: eventActor,
   category: external_exports.string().min(1).max(100),
-  answered: external_exports.boolean()
+  answered: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  updatedAt: external_exports.iso.datetime()
 });
 var eventDiscussionComment = external_exports.strictObject({
   id: githubNumericId2,
   nodeId: eventNodeId,
   body: eventBody,
+  updatedAt: external_exports.iso.datetime(),
   author: eventActor
 });
 var eventPush = external_exports.strictObject({
@@ -42783,6 +42796,8 @@ function issuePayload3(raw) {
     number: issue3.number,
     title: issue3.title,
     body: issue3.body ?? null,
+    state: issue3.state === "closed" ? "closed" : "open",
+    updatedAt: issue3.updated_at,
     labels: labelNames(issue3.labels),
     author: actor(issue3.user, "an issue author")
   };
@@ -42806,6 +42821,7 @@ function pullRequestPayload3(raw) {
     draft: Boolean(pullRequest.draft),
     state: pullRequest.state === "closed" ? "closed" : "open",
     merged: Boolean(pullRequest.merged),
+    updatedAt: pullRequest.updated_at,
     base: { ref: base.ref, sha: base.sha, repo: repositoryRef(base.repo) },
     head: { ref: head.ref, sha: head.sha, repo: repositoryRef(head.repo) }
   };
@@ -42815,6 +42831,7 @@ function commentPayload(raw) {
   return {
     id: String(comment.id ?? ""),
     body: comment.body ?? null,
+    updatedAt: comment.updated_at,
     author: actor(comment.user, "a comment author")
   };
 }
@@ -42829,7 +42846,9 @@ function discussionPayload3(raw) {
     labels: labelNames(discussion.labels),
     author: actor(discussion.user, "a discussion author"),
     category: object2(discussion.category, "a discussion category").name,
-    answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url)
+    answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url),
+    state: discussion.state === "closed" ? "closed" : "open",
+    updatedAt: discussion.updated_at
   };
 }
 var MAX_INCLUDED_COMMITS = 20;
@@ -42936,6 +42955,7 @@ function normalizeGitHubEvent(eventName, source) {
             id: String(comment.id ?? ""),
             nodeId: comment.node_id,
             body: comment.body ?? null,
+            updatedAt: comment.updated_at,
             author: actor(comment.user, "a discussion comment author")
           }
         };

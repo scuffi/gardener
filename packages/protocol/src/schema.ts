@@ -221,6 +221,8 @@ const eventIssue = z.strictObject({
   number: z.number().int().positive(),
   title: z.string().max(1_024),
   body: eventBody,
+  state: z.enum(["open", "closed"]),
+  updatedAt: z.iso.datetime(),
   labels: eventLabels,
   author: eventActor,
 });
@@ -240,11 +242,12 @@ const eventPullRequest = z.strictObject({
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
+  updatedAt: z.iso.datetime(),
   base: z.strictObject({ ref: z.string().min(1).max(255), sha: sha1, repo: eventPullRequestRepository }),
   head: z.strictObject({ ref: z.string().min(1).max(255), sha: sha1, repo: eventPullRequestRepository.nullable() }),
 });
 
-const eventComment = z.strictObject({ id: githubNumericId, body: eventBody, author: eventActor });
+const eventComment = z.strictObject({ id: githubNumericId, body: eventBody, updatedAt: z.iso.datetime(), author: eventActor });
 
 const eventReview = z.strictObject({
   id: githubNumericId,
@@ -263,12 +266,15 @@ const eventDiscussion = z.strictObject({
   author: eventActor,
   category: z.string().min(1).max(100),
   answered: z.boolean(),
+  state: z.enum(["open", "closed"]),
+  updatedAt: z.iso.datetime(),
 });
 
 const eventDiscussionComment = z.strictObject({
   id: githubNumericId,
   nodeId: eventNodeId,
   body: eventBody,
+  updatedAt: z.iso.datetime(),
   author: eventActor,
 });
 

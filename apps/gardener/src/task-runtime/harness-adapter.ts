@@ -1,6 +1,7 @@
 import {
   eventHeadIsSameRepository,
   normalizedPullRequest,
+  operationProposalPayloadJsonSchema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
   type NormalizedEventV1,
@@ -264,6 +265,13 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
     request.bundle.effects.length === 0
       ? "  (none - this task is inspect-only and must propose nothing)"
       : request.bundle.effects.map((kind) => `  ${kind}`).join("\n"),
+    ...(request.bundle.effects.length === 0 ? [] : [
+      "",
+      "Exact payloadJson contracts for the declared kinds follow. Use these field names and JSON types exactly.",
+      "Fields listed in required are mandatory unless referencesJson supplies that exact JSON pointer.",
+      "Never add schemaVersion, id, repository, kind, or commit.create files; trusted Gardener code owns them.",
+      ...request.bundle.effects.map((kind) => `  ${kind}: ${operationProposalPayloadJsonSchema(kind)}`),
+    ]),
     ...(limits.maxEffectOperations === undefined
       ? []
       : [`This task may propose at most ${limits.maxEffectOperations} steps.`]),

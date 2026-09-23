@@ -53,6 +53,7 @@ function pullRequestEvent(headRepoId: string | null): NormalizedEventV1 {
       draft: false,
       state: "open",
       merged: false,
+      updatedAt: "2026-09-22T12:00:00.000Z",
       base: { ref: "main", sha: "a".repeat(40), repo: { id: "1374842705", fullName: "scuffi/gardener" } },
       head: {
         ref: "feature",

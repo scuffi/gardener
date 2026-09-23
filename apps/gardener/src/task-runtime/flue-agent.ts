@@ -164,30 +164,45 @@ export function GardenerTaskFlueAgent(): string {
     durable: true,
     async run({ data, toolCallId }) {
       return sequentialTool(async () => {
-      const acknowledgement = await facade.proposeEffect({
-        runId: request.runId,
-        requestId: request.requestId,
-        toolCallId,
-        proposal: {
-          stepName: data.stepName,
-          kind: data.kind,
-          payload: parseJsonObject(data.payloadJson, "payloadJson"),
-          references: data.referencesJson === undefined || data.referencesJson.trim() === ""
-            ? {}
-            : parseJsonObject(data.referencesJson, "referencesJson"),
-          rationale: data.rationale,
-        },
-      });
-      console.log("gardener task effect proposed", { taskId, stepName: acknowledgement.stepName, kind: data.kind });
-      return {
-        output: {
-          accepted: true,
-          stepName: acknowledgement.stepName,
-          position: acknowledgement.index + 1,
-          totalProposed: acknowledgement.totalProposed,
-          alreadyProposed: acknowledgement.duplicate,
-        },
-      };
+        const acknowledgement = await (async () => {
+          try {
+            return await facade.proposeEffect({
+              runId: request.runId,
+              requestId: request.requestId,
+              toolCallId,
+              proposal: {
+                stepName: data.stepName,
+                kind: data.kind,
+                payload: parseJsonObject(data.payloadJson, "payloadJson"),
+                references: data.referencesJson === undefined || data.referencesJson.trim() === ""
+                  ? {}
+                  : parseJsonObject(data.referencesJson, "referencesJson"),
+                rationale: data.rationale,
+              },
+            });
+          } catch (error) {
+            // Do not log payloadJson (it is model-authored and may contain issue
+            // or repository content). The validator message and field paths are
+            // enough to diagnose a rejected proposal during live qualification.
+            console.warn("gardener task effect rejected", {
+              taskId,
+              stepName: data.stepName,
+              kind: data.kind,
+              error: (error instanceof Error ? error.message : String(error)).slice(0, 4_000),
+            });
+            throw error;
+          }
+        })();
+        console.log("gardener task effect proposed", { taskId, stepName: acknowledgement.stepName, kind: data.kind });
+        return {
+          output: {
+            accepted: true,
+            stepName: acknowledgement.stepName,
+            position: acknowledgement.index + 1,
+            totalProposed: acknowledgement.totalProposed,
+            alreadyProposed: acknowledgement.duplicate,
+          },
+        };
       });
     },
   });
