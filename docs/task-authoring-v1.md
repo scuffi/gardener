@@ -26,7 +26,7 @@ network:
   deny: []
 limits:
   runtime-seconds: 300
-  max-turns: 8
+  max-turns: 16
   max-tool-calls: 12
   input-tokens: 24000
   output-tokens: 4000

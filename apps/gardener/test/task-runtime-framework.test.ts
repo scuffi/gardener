@@ -221,8 +221,8 @@ describe("canonical task runtime framework", () => {
     expect(request.prompt).toContain("Effect kinds this task is allowed to propose");
     expect(request.prompt).toContain("issue.comment.create");
     expect(request.prompt).toContain("Exact payloadJson contracts");
-    expect(request.prompt).toContain('"expectedIssueUpdatedAt"');
-    expect(request.prompt).toContain('"body"');
+    expect(request.prompt).toContain('"expectedIssueUpdatedAt":{"type":"string","format":"date-time"}');
+    expect(request.prompt).toContain('"body":{"type":"string"}');
     expect(request.prompt).not.toContain("pull_request.merge");
   });
 

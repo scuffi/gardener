@@ -41557,8 +41557,10 @@ var normalizedIssueV1Schema = external_exports.strictObject({
   number: external_exports.number().int().positive(),
   title: external_exports.string().max(1024),
   body: boundedBody,
-  state: external_exports.enum(["open", "closed"]),
-  updatedAt: external_exports.iso.datetime(),
+  // Optional only for compatibility with explicitly pinned pre-field bridge
+  // revisions. Current bridges always emit both; apply never trusts them.
+  state: external_exports.enum(["open", "closed"]).optional(),
+  updatedAt: external_exports.iso.datetime().optional(),
   labels: boundedLabels,
   author: normalizedActorV1Schema
 });
@@ -41576,7 +41578,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
-  updatedAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime().optional(),
   base: external_exports.strictObject({
     ref: external_exports.string().min(1).max(255),
     sha: sha1,
@@ -41596,7 +41598,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
 var normalizedCommentV1Schema = external_exports.strictObject({
   id: githubNumericId,
   body: boundedBody,
-  updatedAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime().optional(),
   author: normalizedActorV1Schema
 });
 var normalizedReviewV1Schema = external_exports.strictObject({
@@ -41615,14 +41617,14 @@ var normalizedDiscussionV1Schema = external_exports.strictObject({
   author: normalizedActorV1Schema,
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
-  state: external_exports.enum(["open", "closed"]),
-  updatedAt: external_exports.iso.datetime()
+  state: external_exports.enum(["open", "closed"]).optional(),
+  updatedAt: external_exports.iso.datetime().optional()
 });
 var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
   id: githubNumericId,
   nodeId: githubNodeId,
   body: boundedBody,
-  updatedAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime().optional(),
   author: normalizedActorV1Schema
 });
 var normalizedPushV1Schema = external_exports.strictObject({
@@ -42497,8 +42499,10 @@ var eventIssue = external_exports.strictObject({
   number: external_exports.number().int().positive(),
   title: external_exports.string().max(1024),
   body: eventBody,
-  state: external_exports.enum(["open", "closed"]),
-  updatedAt: external_exports.iso.datetime(),
+  // Older immutable bridge pins omit these fields. Current bridge code emits
+  // them, but the runtime accepts the old shape so deploys do not strand runs.
+  state: external_exports.enum(["open", "closed"]).optional(),
+  updatedAt: external_exports.iso.datetime().optional(),
   labels: eventLabels,
   author: eventActor
 });
@@ -42516,11 +42520,11 @@ var eventPullRequest = external_exports.strictObject({
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
-  updatedAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime().optional(),
   base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
   head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
 });
-var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, updatedAt: external_exports.iso.datetime(), author: eventActor });
+var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, updatedAt: external_exports.iso.datetime().optional(), author: eventActor });
 var eventReview = external_exports.strictObject({
   id: githubNumericId2,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
@@ -42537,14 +42541,14 @@ var eventDiscussion = external_exports.strictObject({
   author: eventActor,
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
-  state: external_exports.enum(["open", "closed"]),
-  updatedAt: external_exports.iso.datetime()
+  state: external_exports.enum(["open", "closed"]).optional(),
+  updatedAt: external_exports.iso.datetime().optional()
 });
 var eventDiscussionComment = external_exports.strictObject({
   id: githubNumericId2,
   nodeId: eventNodeId,
   body: eventBody,
-  updatedAt: external_exports.iso.datetime(),
+  updatedAt: external_exports.iso.datetime().optional(),
   author: eventActor
 });
 var eventPush = external_exports.strictObject({

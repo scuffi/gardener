@@ -285,7 +285,17 @@ export function operationProposalPayloadJsonSchema(kind: OperationKind): string 
     if (Array.isArray(value)) return value.map(compact);
     if (value === null || typeof value !== "object") return value;
     const record = value as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(record).filter(([key]) => retain.has(key)).map(([key, entry]) => [key, compact(entry)]));
+    const output: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(record)) {
+      if (!retain.has(key)) continue;
+      // `properties` is a field-name map, not a schema object. Preserve its
+      // arbitrary keys and compact each field schema below them; filtering the
+      // map itself against `retain` would erase every payload field.
+      output[key] = key === "properties" && entry !== null && typeof entry === "object" && !Array.isArray(entry)
+        ? Object.fromEntries(Object.entries(entry as Record<string, unknown>).map(([field, schema]) => [field, compact(schema)]))
+        : compact(entry);
+    }
+    return output;
   };
   return JSON.stringify(compact(source));
 }

@@ -406,8 +406,10 @@ const normalizedIssueV1Schema = z.strictObject({
   number: z.number().int().positive(),
   title: z.string().max(1_024),
   body: boundedBody,
-  state: z.enum(["open", "closed"]),
-  updatedAt: z.iso.datetime(),
+  // Optional only for compatibility with explicitly pinned pre-field bridge
+  // revisions. Current bridges always emit both; apply never trusts them.
+  state: z.enum(["open", "closed"]).optional(),
+  updatedAt: z.iso.datetime().optional(),
   labels: boundedLabels,
   author: normalizedActorV1Schema,
 });
@@ -432,7 +434,7 @@ const normalizedPullRequestV1Schema = z.strictObject({
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
-  updatedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().optional(),
   base: z.strictObject({
     ref: z.string().min(1).max(255),
     sha: sha1,
@@ -453,7 +455,7 @@ const normalizedPullRequestV1Schema = z.strictObject({
 const normalizedCommentV1Schema = z.strictObject({
   id: githubNumericId,
   body: boundedBody,
-  updatedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().optional(),
   author: normalizedActorV1Schema,
 });
 
@@ -474,15 +476,15 @@ const normalizedDiscussionV1Schema = z.strictObject({
   author: normalizedActorV1Schema,
   category: z.string().min(1).max(100),
   answered: z.boolean(),
-  state: z.enum(["open", "closed"]),
-  updatedAt: z.iso.datetime(),
+  state: z.enum(["open", "closed"]).optional(),
+  updatedAt: z.iso.datetime().optional(),
 });
 
 const normalizedDiscussionCommentV1Schema = z.strictObject({
   id: githubNumericId,
   nodeId: githubNodeId,
   body: boundedBody,
-  updatedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().optional(),
   author: normalizedActorV1Schema,
 });
 

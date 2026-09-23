@@ -221,8 +221,10 @@ const eventIssue = z.strictObject({
   number: z.number().int().positive(),
   title: z.string().max(1_024),
   body: eventBody,
-  state: z.enum(["open", "closed"]),
-  updatedAt: z.iso.datetime(),
+  // Older immutable bridge pins omit these fields. Current bridge code emits
+  // them, but the runtime accepts the old shape so deploys do not strand runs.
+  state: z.enum(["open", "closed"]).optional(),
+  updatedAt: z.iso.datetime().optional(),
   labels: eventLabels,
   author: eventActor,
 });
@@ -242,12 +244,12 @@ const eventPullRequest = z.strictObject({
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
-  updatedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().optional(),
   base: z.strictObject({ ref: z.string().min(1).max(255), sha: sha1, repo: eventPullRequestRepository }),
   head: z.strictObject({ ref: z.string().min(1).max(255), sha: sha1, repo: eventPullRequestRepository.nullable() }),
 });
 
-const eventComment = z.strictObject({ id: githubNumericId, body: eventBody, updatedAt: z.iso.datetime(), author: eventActor });
+const eventComment = z.strictObject({ id: githubNumericId, body: eventBody, updatedAt: z.iso.datetime().optional(), author: eventActor });
 
 const eventReview = z.strictObject({
   id: githubNumericId,
@@ -266,15 +268,15 @@ const eventDiscussion = z.strictObject({
   author: eventActor,
   category: z.string().min(1).max(100),
   answered: z.boolean(),
-  state: z.enum(["open", "closed"]),
-  updatedAt: z.iso.datetime(),
+  state: z.enum(["open", "closed"]).optional(),
+  updatedAt: z.iso.datetime().optional(),
 });
 
 const eventDiscussionComment = z.strictObject({
   id: githubNumericId,
   nodeId: eventNodeId,
   body: eventBody,
-  updatedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().optional(),
   author: eventActor,
 });
 

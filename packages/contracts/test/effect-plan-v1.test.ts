@@ -213,12 +213,26 @@ describe("effect proposals", () => {
         properties: Record<string, unknown>;
         required: string[];
       };
+      expect(Object.keys(schema.properties).length).toBeGreaterThan(0);
       expect(schema.properties).not.toHaveProperty("schemaVersion");
       expect(schema.properties).not.toHaveProperty("id");
       expect(schema.properties).not.toHaveProperty("repository");
       expect(schema.properties).not.toHaveProperty("kind");
       expect(schema.required).not.toContain("schemaVersion");
     }
+    const issueComment = JSON.parse(operationProposalPayloadJsonSchema("issue.comment.create")) as {
+      properties: Record<string, { type?: string; enum?: string[]; format?: string }>;
+    };
+    expect(issueComment.properties.issueNumber?.type).toBe("integer");
+    expect(issueComment.properties.expectedIssueState?.enum).toEqual(["open", "closed"]);
+    expect(issueComment.properties.expectedIssueUpdatedAt?.format).toBe("date-time");
+
+    const pullUpdate = JSON.parse(operationProposalPayloadJsonSchema("pull_request.update")) as {
+      properties: Record<string, unknown>;
+    };
+    expect(pullUpdate.properties).toHaveProperty("title");
+    expect(pullUpdate.properties).toHaveProperty("draft");
+
     const commit = JSON.parse(operationProposalPayloadJsonSchema("commit.create")) as {
       properties: Record<string, unknown>;
       required: string[];

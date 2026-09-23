@@ -3,6 +3,7 @@ import {
   githubReadRequestV1Schema,
   runnerActionV1Schema,
   runnerCaptureResultV1Schema,
+  runnerEventV1Schema,
 } from "../src/schema";
 
 const base = {
@@ -28,6 +29,23 @@ const restRead = {
 };
 
 describe("runner action contract", () => {
+  it("accepts legacy pinned issue events while current bridges add exact precondition facts", () => {
+    const legacy = {
+      schemaVersion: "gardener.runner.event/v1",
+      kind: "github.issue.opened",
+      repository: { defaultBranch: "main" },
+      issue: {
+        id: "999",
+        number: 1,
+        title: "Bug",
+        body: "Broken",
+        labels: ["bug"],
+        author: { id: "45369682", login: "scuffi" },
+      },
+    };
+    expect(runnerEventV1Schema.parse(legacy)).toEqual(legacy);
+  });
+
   it("keeps the qualified shell action shape byte-compatible", () => {
     expect(runnerActionV1Schema.parse(shell)).toEqual(shell);
   });

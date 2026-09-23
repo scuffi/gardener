@@ -93,6 +93,11 @@ describe("runner event normalization", () => {
       const normalized = await normalize(eventName, payload);
       expect(runnerEventV1Schema.parse(normalized)).toMatchObject({ kind: expectedKind });
     }
+
+    const issueEvent = await normalize("issues", { action: "opened", issue });
+    expect(issueEvent).toMatchObject({
+      issue: { state: "open", updatedAt: "2026-09-22T12:00:00.000Z" },
+    });
   });
 
   it("lowercases review state and preserves fork head identity for the runtime to refuse", async () => {

@@ -124,6 +124,11 @@ describe("normalized event v1", () => {
     }
   });
 
+  it("accepts events from explicitly pinned bridges that predate precondition facts", () => {
+    const { state: _state, updatedAt: _updatedAt, ...legacyIssue } = issue;
+    expect(() => normalizedEventV1Schema.parse(event("github.issue.opened", { issue: legacyIssue }))).not.toThrow();
+  });
+
   it("rejects an event whose workflow eventName contradicts its kind", () => {
     expect(() => normalizedEventV1Schema.parse({
       ...(event("github.issue.opened", { issue }) as Record<string, unknown>),
