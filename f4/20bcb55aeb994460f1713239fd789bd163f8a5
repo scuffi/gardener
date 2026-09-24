@@ -1,0 +1,49 @@
+SECURITY.md
+  s_de0b486c128948::t_b7e0fe7b540db2 111-116
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_de0b486c128948::t_e881b3fc9fea06 9,220-241
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_a13d53f4d8b7db 37,41,223-230,254,295-302
+apps/gardener/src/task-runtime/transportable-error.ts
+  s_de0b486c128948::t_351cf459229106 1-21
+apps/gardener/test/task-session-proposals.test.ts
+  s_de0b486c128948::t_81cdd2d76a59a8 7,72,75-83,133-169
+apps/gardener/test/task-transportable-error.test.ts
+  s_de0b486c128948::t_9afa77a956899a 1-26
+docs/architecture.md
+  s_de0b486c128948::t_8c3b2149c58f62 110-114
+docs/task-authoring.md
+  s_de0b486c128948::t_90743d03e20774 228-230
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_a98aab585a0c4f 3,5,9,1197-1202,1210-1212,1214,1498-1575,1638-1641,1643
+packages/contracts/test/effect-plan-hardening.test.ts
+  s_de0b486c128948::t_8bb047100f9b46 2,388-391
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_a3ae1e8d5b5cea 484-489
+packages/protocol/src/schema.ts
+  s_de0b486c128948::t_f9fb803c9b72f9 420-428
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_bcacab8b24ccbb 36,126-130,152-157,200-202,205-208,343,345
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_19ba291764f8f4 153-170,177-178,248-253,526,567,571,609,616,669,720,779,806,858,881,916,954,1019,1405,1448,1525,1530,1602,1652,1686,1729,2093,2185,2233-2234,2254-2290
+packages/runner/test/effects-main.test.ts
+  s_de0b486c128948::t_3357778c095d5b 328-407
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_b2f76e0b2cb9d0 1437-1438,1559-1612,1619-1621
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f420bcb55aeb994460f1713239fd789bd163f8a5",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
