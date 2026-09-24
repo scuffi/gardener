@@ -11,7 +11,7 @@
     "db:migrate:local": "wrangler d1 migrations apply gardener-runtime --local"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.83.0",
+    "@earendil-works/pi-ai": "0.86.1",
     "@flue/runtime": "2.0.3",
     "@gardener/contracts": "workspace:*",
     "@gardener/core": "workspace:*",
