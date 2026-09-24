@@ -225,8 +225,9 @@ The figure is stated in decoded bytes on both sides of the boundary, so the base
 its exact encoded expansion rather than a number that quietly means 3 MiB of payload.
 
 Repository file contents are not part of this budget. A `commit.create` step that materializes a
-change carries only per-path metadata in the plan; the bytes travel in a separate changes artifact,
-which is why the capture manifest has no file-count or change-byte ceiling of its own.
+change carries only per-path metadata in the plan; the bytes travel in a separate changes artifact.
+A capture may change at most 1,000 files, the most one `commit.create` can write, and is refused
+when it is taken rather than during apply.
 
 ### Protected paths are never writable by a captured change
 

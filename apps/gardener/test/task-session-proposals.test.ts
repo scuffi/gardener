@@ -4,6 +4,7 @@ import {
   PROPOSAL_COUNT_KEY,
   RUNNER_TOOL_COUNT_KEY,
   admitProposal,
+  assertProposalFitsLedger,
   proposalDigest,
   readProposalLedger,
   recordedProposalIndex,
@@ -68,15 +69,18 @@ const branch = proposal({
   rationale: "Work needs a branch.",
 });
 
-/** Mirrors the session: digest the effect, then admit under one transaction. */
+/** Mirrors the session: digest the effect, then check and admit under one transaction. */
 async function record(storage: MemoryStorage, value: TaskEffectProposalV1, maxToolCalls = 24) {
   const digest = await proposalDigest(RUN_ID, value);
-  return storage.transaction((transaction) => admitProposal(transaction, {
-    proposal: value,
-    digest,
-    maxToolCalls,
-    recordedToolCalls: async () => (await transaction.list({ prefix: "action:" })).size,
-  }));
+  return storage.transaction(async (transaction) => {
+    await assertProposalFitsLedger(transaction, value);
+    return admitProposal(transaction, {
+      proposal: value,
+      digest,
+      maxToolCalls,
+      recordedToolCalls: async () => (await transaction.list({ prefix: "action:" })).size,
+    });
+  });
 }
 
 describe("durable ordered proposal ledger", () => {
@@ -123,6 +127,43 @@ describe("durable ordered proposal ledger", () => {
   it("starts empty, which is a valid plan", async () => {
     expect(await readProposalLedger(storage)).toEqual([]);
     expect(await recordedProposalIndex(storage, await proposalDigest(RUN_ID, comment))).toBeUndefined();
+  });
+});
+
+describe("references are checked when proposed", () => {
+  let storage: MemoryStorage;
+  beforeEach(() => { storage = new MemoryStorage(); });
+
+  const openDraft = proposal({
+    stepName: "open-pr",
+    kind: "pull_request.open_draft",
+    payload: { head: "gardener/fix-1", base: "main", expectedHeadSha: COMMIT, expectedBaseSha: COMMIT, title: "Fix", body: "Fix.", draft: true },
+    rationale: "Open the fix for review.",
+  });
+  const linkTo = (output: string, step = "open-pr") => proposal({
+    stepName: "link",
+    kind: "issue.comment.create",
+    payload: { ...ISSUE_PRECONDITIONS, body: "placeholder" },
+    references: { "/body": { step, output } },
+    rationale: "Link the pull request.",
+  });
+
+  it("admits a reference to a published output of an earlier step", async () => {
+    await record(storage, openDraft);
+    await expect(record(storage, linkTo("pullUrl"))).resolves.toMatchObject({ index: 1 });
+  });
+
+  it("refuses an unpublished output, names the real ones, and charges nothing", async () => {
+    await record(storage, openDraft);
+    const charged = storage.entries.get(RUNNER_TOOL_COUNT_KEY);
+    await expect(record(storage, linkTo("pullRequestUrl")))
+      .rejects.toThrow(/references \/body: pull_request\.open_draft does not publish a scalar output named "pullRequestUrl"; it publishes .*"pullUrl"/);
+    expect(storage.entries.get(RUNNER_TOOL_COUNT_KEY)).toBe(charged);
+    expect(await readProposalLedger(storage)).toHaveLength(1);
+  });
+
+  it("refuses a reference to a step that has not been proposed yet", async () => {
+    await expect(record(storage, linkTo("pullUrl"))).rejects.toThrow(/unknown step "open-pr"/);
   });
 });
 

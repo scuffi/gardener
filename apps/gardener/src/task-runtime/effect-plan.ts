@@ -6,6 +6,7 @@ import {
   taskCaptureManifestV1Schema,
   taskEffectPlanV1Schema,
   taskEffectProposalV1Schema,
+  taskStepIssues,
   taskEventBindingFromNormalizedEvent,
   taskOutcomeV1Schema,
   type TaskCaptureManifestV1,
@@ -214,6 +215,28 @@ export async function readProposalLedger(
 ): Promise<readonly TaskEffectProposalV1[]> {
   const stored = await storage.list<StoredProposalV1>({ prefix: PROPOSAL_PREFIX });
   return [...stored.values()].sort((left, right) => left.index - right.index).map((record) => record.proposal);
+}
+
+/**
+ * Refuses a proposal the finished plan would reject because of how it relates
+ * to the steps recorded before it: a reference to an unknown or later step, to
+ * an output its target does not publish, or of the wrong type for the field it
+ * fills.
+ *
+ * Run inside the admission transaction, so "before it" is exactly the ledger
+ * the proposal is appended to. Without this, such a step was admitted and the
+ * run failed only when the plan was assembled, after the model had finished
+ * and could no longer correct it.
+ */
+export async function assertProposalFitsLedger(
+  storage: ProposalLedgerStorage,
+  proposal: TaskEffectProposalV1,
+): Promise<void> {
+  const earlier = new Map((await readProposalLedger(storage)).map((step) => [step.stepName, step.kind] as const));
+  const issues = taskStepIssues(proposal, { earlier });
+  if (issues.length > 0) {
+    throw new Error(issues.map((issue) => `${issue.path.join(" ")}: ${issue.message}`).join("; "));
+  }
 }
 
 export interface ProposalAdmissionInput {

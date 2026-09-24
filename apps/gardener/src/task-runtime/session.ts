@@ -34,9 +34,11 @@ import {
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import type { HarnessSubmission, HarnessToolInvocation } from "../harness";
 import type { Env } from "../env";
+import { transportableError } from "./transportable-error";
 import {
   admitProposal,
   assertMonotonicReceipt,
+  assertProposalFitsLedger,
   assertReceiptMatchesPlan,
   buildTaskEffectPlan,
   captureAction,
@@ -218,6 +220,14 @@ export class TaskRunnerSession extends DurableObject<Env> {
    * undeclared, or conflicting proposal costs the task no tool calls.
    */
   async recordProposal(input: TaskEffectProposalInvocationV1): Promise<TaskEffectProposalAckV1> {
+    try {
+      return await this.recordProposalChecked(input);
+    } catch (error) {
+      throw transportableError(error);
+    }
+  }
+
+  private async recordProposalChecked(input: TaskEffectProposalInvocationV1): Promise<TaskEffectProposalAckV1> {
     const sessionId = await this.ctx.storage.get<string>("session-id");
     if (!sessionId || input.runId !== sessionId) throw new Error("Effect proposal is not bound to this runner session");
     const proposal = taskEffectProposalV1Schema.parse(input.proposal);
@@ -241,6 +251,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       if (await transaction.get(CAPTURE_PENDING_KEY) || await transaction.get(CAPTURE_KEY)) {
         throw new Error("The working tree capture has started; no further effect proposal may be admitted");
       }
+      await assertProposalFitsLedger(transaction, proposal);
       return admitProposal(transaction, {
         proposal,
         digest,
@@ -281,6 +292,14 @@ export class TaskRunnerSession extends DurableObject<Env> {
    * a settled run change what it commits.
    */
   async admitCapture(input: TaskCaptureAdmissionInvocationV1): Promise<TaskCaptureAdmissionAckV1> {
+    try {
+      return await this.admitCaptureChecked(input);
+    } catch (error) {
+      throw transportableError(error);
+    }
+  }
+
+  private async admitCaptureChecked(input: TaskCaptureAdmissionInvocationV1): Promise<TaskCaptureAdmissionAckV1> {
     const sessionId = await this.ctx.storage.get<string>("session-id");
     if (!sessionId || input.runId !== sessionId) {
       throw new Error("Repository capture is not bound to this runner session");

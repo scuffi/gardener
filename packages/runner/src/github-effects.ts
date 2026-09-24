@@ -150,12 +150,38 @@ export interface GitHubEffectsContext {
    * unverified content.
    */
   readCapturedFile?: (file: { path: string; sha256: string; sizeBytes: number }) => Promise<Uint8Array>;
+  /**
+   * `updated_at` of this operation's issue, pull request, or discussion as read
+   * back immediately after an earlier step of the same plan wrote to it.
+   *
+   * Every step carries the planning-time `updated_at`, so without this the
+   * plan's own first write would make every later step on the same resource
+   * conflict. The precondition accepts either the planned value or this one,
+   * and nothing else: a change by anyone other than this plan still conflicts.
+   * The only change attributed to the plan that it did not make is one landing
+   * between its write and the read-back that follows it.
+   */
+  chainedResourceVersion?: string;
+  /**
+   * Whether to read the resource back after a verified write. Set by the caller
+   * when a later step of the plan may target the same resource; otherwise the
+   * read-back would only spend requests and time budget.
+   */
+  readBackVersion?: boolean;
+}
+
+/** A resource's version as read back after a step of the plan wrote to it. */
+export interface ResourceVersion {
+  resource: string;
+  updatedAt: string;
 }
 
 export interface GitHubEffectResult {
   receipt: OperationReceipt;
   /** Present when the receipt status is `succeeded` or `skipped`. */
   outputs?: OperationOutputsV1;
+  /** Present after a successful step on an issue, pull request, or discussion. */
+  resourceVersion?: ResourceVersion;
 }
 
 export type GitHubEffectClassification = "conflicted" | "failed";
@@ -223,6 +249,14 @@ function sameInstant(left: unknown, right: string): boolean {
   const leftMs = Date.parse(left);
   const rightMs = Date.parse(right);
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+
+/** True when the resource is at its planned version or at the version this plan's own last write left. */
+function atExpectedVersion(scope: ExecutionScope, actual: unknown, planned: string): boolean {
+  const matches = sameInstant(actual, planned)
+    || (scope.chainedResourceVersion !== undefined && sameInstant(actual, scope.chainedResourceVersion));
+  if (matches) scope.versionVerified = true;
+  return matches;
 }
 
 function operationMarker(id: string): string {
@@ -497,6 +531,9 @@ interface ExecutionScope {
   actorAppSlug: string;
   operationHash: string;
   readCapturedFile?: GitHubEffectsContext["readCapturedFile"];
+  chainedResourceVersion?: string;
+  /** Set once this attempt has verified the resource's `updated_at` precondition. */
+  versionVerified: boolean;
 }
 
 /**
@@ -537,11 +574,11 @@ async function loadIssue(scope: ExecutionScope, issueNumber: number, expectPull:
   return data;
 }
 
-function assertIssueState(issue: JsonRecord, expectedState: string, expectedUpdatedAt: string): void {
+function assertIssueState(scope: ExecutionScope, issue: JsonRecord, expectedState: string, expectedUpdatedAt: string): void {
   if (issue.state !== expectedState) {
     throw conflict("issue_state_changed", `Precondition failed: issue state is ${String(issue.state)}`);
   }
-  if (!sameInstant(issue.updated_at, expectedUpdatedAt)) {
+  if (!atExpectedVersion(scope, issue.updated_at, expectedUpdatedAt)) {
     throw conflict("issue_changed", "Precondition failed: issue changed after the operation was planned");
   }
 }
@@ -579,14 +616,14 @@ interface PullStateExpectation {
   expectedPullUpdatedAt: string;
 }
 
-function assertPullState(pull: JsonRecord, expected: PullStateExpectation): void {
+function assertPullState(scope: ExecutionScope, pull: JsonRecord, expected: PullStateExpectation): void {
   if (pull.state !== expected.expectedState) {
     throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
   }
   if (pull.draft !== expected.expectedDraft) {
     throw conflict("pull_draft_changed", "Precondition failed: pull request draft state changed");
   }
-  if (!sameInstant(pull.updated_at, expected.expectedPullUpdatedAt)) {
+  if (!atExpectedVersion(scope, pull.updated_at, expected.expectedPullUpdatedAt)) {
     throw conflict("pull_changed", "Precondition failed: pull request changed after the operation was planned");
   }
 }
@@ -639,7 +676,7 @@ async function executeLabel(scope: ExecutionScope, operation: LabelOperation): P
   if (present === desired) {
     return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels };
   }
-  assertIssueState(issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   if (desired) {
     // `POST /issues/{n}/labels` silently creates an unknown label, inventing
     // repository taxonomy as a side effect. Require it to exist already.
@@ -690,7 +727,7 @@ async function executeIssueCommentCreate(
     };
   }
   const issue = await loadIssue(scope, operation.issueNumber, false);
-  assertIssueState(issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Issue comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body }),
@@ -749,7 +786,7 @@ async function executeIssueState(scope: ExecutionScope, operation: IssueStateOpe
   if (issue.state === desired) {
     return { kind: operation.kind, issueNumber: operation.issueNumber, state: desired, issueUrl: htmlUrl(issue) };
   }
-  assertIssueState(issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   const { data } = await scope.api.rest(`${scope.repoPath}/issues/${operation.issueNumber}`, "Issue state mutation", {
     method: "PATCH",
     body: JSON.stringify({ state: desired }),
@@ -776,7 +813,7 @@ async function executeAssignee(scope: ExecutionScope, operation: AssigneeOperati
       assigneeIds: current,
     };
   }
-  assertIssueState(issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}/assignees`;
   const { data } = await scope.api.rest(issuePath, desired ? "Issue assignee add" : "Issue assignee remove", {
     method: desired ? "POST" : "DELETE",
@@ -828,7 +865,7 @@ async function executePullCommentCreate(
   }
   const pull = await loadPull(scope, operation.pullNumber);
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body }),
@@ -851,7 +888,7 @@ async function executePullCommentUpdate(
   const result = await executeCommentUpdate(scope, operation, operation.pullNumber, async () => {
     const pull = await loadPull(scope, operation.pullNumber);
     assertPullRevision(pull, operation);
-    assertPullState(pull, operation);
+    assertPullState(scope, pull, operation);
   });
   return { kind: operation.kind, pullNumber: operation.pullNumber, ...result };
 }
@@ -886,7 +923,7 @@ async function executeReviewSubmit(scope: ExecutionScope, operation: ReviewSubmi
   }
   const pull = await loadPull(scope, operation.pullNumber);
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}/reviews`, "Pull request review", {
     method: "POST",
     body: JSON.stringify({
@@ -924,7 +961,7 @@ async function executeReviewer(scope: ExecutionScope, operation: ReviewerOperati
     return { kind: operation.kind, pullNumber: operation.pullNumber, reviewerIds: operation.reviewerIds, reviewerLogins: logins };
   }
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data } = await scope.api.rest(
     `${scope.repoPath}/pulls/${operation.pullNumber}/requested_reviewers`,
     desired ? "Reviewer request" : "Reviewer removal",
@@ -989,7 +1026,7 @@ async function executePullUpdate(scope: ExecutionScope, operation: PullUpdate): 
   const resumedAfterDraft = operation.draft !== undefined
     && operation.draft !== operation.expectedDraft
     && current.draft === operation.draft;
-  if (!resumedAfterDraft) assertPullState(current, operation);
+  if (!resumedAfterDraft) assertPullState(scope, current, operation);
 
   if (operation.draft !== undefined && current.draft !== operation.draft) {
     if (typeof current.node_id !== "string") throw failure("github_response_invalid", "Pull request node id was missing");
@@ -1375,7 +1412,7 @@ async function executePullMerge(scope: ExecutionScope, operation: PullMerge): Pr
     return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: sha, pullUrl: htmlUrl(pull) };
   }
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   if (!record(pull.base) || typeof pull.base.ref !== "string") {
     throw failure("github_response_invalid", "Pull request base branch was missing");
   }
@@ -1418,7 +1455,7 @@ async function executePullMerge(scope: ExecutionScope, operation: PullMerge): Pr
     return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: sha, pullUrl: htmlUrl(pull) };
   }
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data: merge } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}/merge`, "Pull request merge", {
     method: "PUT",
     body: JSON.stringify({ sha: operation.expectedHeadSha, merge_method: operation.method }),
@@ -1495,12 +1532,12 @@ async function loadDiscussion(scope: ExecutionScope, number: number): Promise<Di
   };
 }
 
-function assertDiscussionState(discussion: DiscussionNode, expectedState: string, expectedUpdatedAt: string): void {
+function assertDiscussionState(scope: ExecutionScope, discussion: DiscussionNode, expectedState: string, expectedUpdatedAt: string): void {
   const state = discussion.closed ? "closed" : "open";
   if (state !== expectedState) {
     throw conflict("discussion_state_changed", `Precondition failed: discussion state is ${state}`);
   }
-  if (!sameInstant(discussion.updatedAt, expectedUpdatedAt)) {
+  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt)) {
     throw conflict("discussion_changed", "Precondition failed: discussion changed after the operation was planned");
   }
 }
@@ -1572,7 +1609,7 @@ async function executeDiscussionCommentCreate(
     };
   }
   const discussion = await loadDiscussion(scope, operation.discussionNumber);
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   const data = await scope.api.graphql(
     `mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id databaseId url}}}`,
     { id: discussion.id, body: operation.body },
@@ -1622,7 +1659,7 @@ async function executeDiscussionCommentUpdate(
     throw conflict("comment_changed", "Precondition failed: discussion comment changed after the operation was planned");
   }
   const discussion = await loadDiscussion(scope, operation.discussionNumber);
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   const data = await scope.api.graphql(
     `mutation($id:ID!,$body:String!){updateDiscussionComment(input:{commentId:$id,body:$body}){comment{id databaseId url body}}}`,
     { id: target.nodeId, body: operation.body },
@@ -1656,7 +1693,7 @@ async function executeDiscussionAnswer(scope: ExecutionScope, operation: Discuss
       `Precondition failed: discussion answer is ${discussion.answerCommentId ?? "unset"}`,
     );
   }
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   if (mark) {
     const target = await findDiscussionComment(
       scope,
@@ -1699,7 +1736,7 @@ async function executeDiscussionState(scope: ExecutionScope, operation: Discussi
       discussionUrl: discussion.url,
     };
   }
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   const mutation = close
     ? "mutation($id:ID!){closeDiscussion(input:{discussionId:$id}){discussion{id closed url}}}"
     : "mutation($id:ID!){reopenDiscussion(input:{discussionId:$id}){discussion{id closed url}}}";
@@ -2063,7 +2100,7 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
     case "issue.comment.update": {
       const result = await executeCommentUpdate(scope, operation, operation.issueNumber, async () => {
         const issue = await loadIssue(scope, operation.issueNumber, false);
-        assertIssueState(issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+        assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
       });
       return { kind: operation.kind, issueNumber: operation.issueNumber, ...result };
     }
@@ -2155,6 +2192,8 @@ function assertContext(context: GitHubEffectsContext, operation: Operation, oper
     actorAppSlug: context.actorAppSlug ?? DEFAULT_ACTOR_APP_SLUG,
     operationHash,
     ...(context.readCapturedFile === undefined ? {} : { readCapturedFile: context.readCapturedFile }),
+    ...(context.chainedResourceVersion === undefined ? {} : { chainedResourceVersion: context.chainedResourceVersion }),
+    versionVerified: false,
   };
 }
 
@@ -2202,7 +2241,14 @@ export async function executeActionsOperation(
       ...requestId(scope),
       ...resourceUrl(outputs),
     });
-    return { receipt, outputs };
+    // Only a write this attempt made after verifying the resource's version may
+    // extend the chain. A reconciled (skipped) step, or a write on a path that
+    // never checked the version, would otherwise let the read-back adopt edits
+    // made by others since planning.
+    const version = context.readBackVersion === true && scope.api.mutated && scope.versionVerified
+      ? await readResourceVersion(scope, operation)
+      : null;
+    return { receipt, outputs, ...(version ? { resourceVersion: version } : {}) };
   } catch (error) {
     const effect = error instanceof GitHubEffectError
       ? error
@@ -2219,6 +2265,52 @@ export async function executeActionsOperation(
       },
     });
     return { receipt };
+  }
+}
+
+/**
+ * Issue, pull request, or discussion whose `updated_at` this operation's
+ * precondition checks, or null when it checks none.
+ */
+export function resourceVersionKey(operation: Operation): string | null {
+  if ("issueNumber" in operation) return `issue:${operation.issueNumber}`;
+  if ("pullNumber" in operation) return `pull:${operation.pullNumber}`;
+  if ("discussionNumber" in operation) return `discussion:${operation.discussionNumber}`;
+  return null;
+}
+
+/**
+ * Reads the version a successful step left its resource at.
+ *
+ * GitHub's write responses describe the comment, label, or review created,
+ * not the parent resource, so the parent is read back, retrying so a transient
+ * error does not become a terminal conflict. A read-back that still fails
+ * leaves the version unknown; a later step on the same resource then fails its
+ * precondition rather than trusting a guess.
+ */
+async function readResourceVersion(scope: ExecutionScope, operation: Operation): Promise<ResourceVersion | null> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const version = await readResourceVersionOnce(scope, operation);
+    if (version !== null) return version;
+  }
+  return null;
+}
+
+async function readResourceVersionOnce(scope: ExecutionScope, operation: Operation): Promise<ResourceVersion | null> {
+  const resource = resourceVersionKey(operation);
+  if (resource === null) return null;
+  try {
+    let updatedAt: unknown;
+    if ("issueNumber" in operation) {
+      ({ data: { updated_at: updatedAt } } = await scope.api.rest(`${scope.repoPath}/issues/${operation.issueNumber}`, "Issue version read-back") as { data: JsonRecord });
+    } else if ("pullNumber" in operation) {
+      ({ data: { updated_at: updatedAt } } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}`, "Pull request version read-back") as { data: JsonRecord });
+    } else if ("discussionNumber" in operation) {
+      updatedAt = (await loadDiscussion(scope, operation.discussionNumber)).updatedAt;
+    }
+    return typeof updatedAt === "string" && ISO_INSTANT.test(updatedAt) ? { resource, updatedAt } : null;
+  } catch {
+    return null;
   }
 }
 

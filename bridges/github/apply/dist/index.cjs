@@ -41074,12 +41074,11 @@ var taskCaptureManifestV1Schema = external_exports.strictObject({
   /** Commit the capture was taken against; apply refuses a drifted base. */
   baseSha: sha1,
   /**
-   * Bounded by the number of files one `commit.create` may write. A capture
-   * larger than that could never be materialized, so it is refused here — when
-   * the capture is admitted, before a plan exists — rather than partway
-   * through apply with earlier steps already written.
+   * Bounded by the number of files one `commit.create` may write. A larger
+   * capture could never be materialized, so it is refused when the capture is
+   * admitted, before a plan exists, rather than partway through apply.
    */
-  files: external_exports.array(taskCaptureFileV1Schema).min(1),
+  files: external_exports.array(taskCaptureFileV1Schema).min(1).max(COMMIT_FILE_LIMIT),
   totalBytes: captureByteCount,
   /**
    * A partial capture is never applicable, so the only representable value is
@@ -41240,6 +41239,53 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   rationale: external_exports.string().trim().min(1).max(5e3)
 });
 var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
+function taskStepIssues(step, context) {
+  const issues = [];
+  const resolvedTypes = /* @__PURE__ */ new Map();
+  for (const [pointer, reference] of Object.entries(step.references)) {
+    const path3 = ["references", pointer];
+    if (reference.step === step.stepName) {
+      issues.push({ path: path3, message: "a step cannot reference its own output" });
+      continue;
+    }
+    const targetKind = context.earlier.get(reference.step);
+    if (targetKind === void 0) {
+      issues.push({
+        path: path3,
+        message: context.later?.has(reference.step) ? `step "${reference.step}" does not run before this step` : `unknown step "${reference.step}"`
+      });
+      continue;
+    }
+    const outputType = operationOutputType(targetKind, reference.output);
+    if (outputType === void 0) {
+      issues.push({
+        path: path3,
+        message: `${targetKind} does not publish a scalar output named "${reference.output}"; it publishes ${operationOutputNames(targetKind).map((name2) => `"${name2}"`).join(", ")}`
+      });
+      continue;
+    }
+    resolvedTypes.set(pointer, outputType);
+  }
+  for (const message of captureOwnedPointerIssues(step.kind, step.payload, step.references)) {
+    issues.push({ path: ["payload"], message });
+  }
+  for (const message of probeOperationShape({
+    kind: step.kind,
+    payload: step.payload,
+    references: step.references,
+    deferredPointers: captureDeferredPointers(step.kind),
+    resolveOutputType: (reference) => {
+      for (const [pointer, type] of resolvedTypes) {
+        const candidate = step.references[pointer];
+        if (candidate?.step === reference.step && candidate.output === reference.output) return type;
+      }
+      return void 0;
+    }
+  })) {
+    issues.push({ path: ["payload"], message });
+  }
+  return issues;
+}
 var taskEffectPlanV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-effect-plan/v1"),
   runId: boundIdentifier,
@@ -41290,54 +41336,12 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   }
   let anyStepDefersToCapture = false;
   plan.operations.forEach((operation, index) => {
-    const path3 = ["operations", index];
-    const resolvedTypes = /* @__PURE__ */ new Map();
-    for (const [pointer, reference] of Object.entries(operation.references)) {
-      const targetIndex = indexByStepName.get(reference.step);
-      if (reference.step === operation.stepName) {
-        context.addIssue({ code: "custom", path: [...path3, "references", pointer], message: "a step cannot reference its own output" });
-        continue;
-      }
-      if (targetIndex === void 0) {
-        context.addIssue({ code: "custom", path: [...path3, "references", pointer], message: `unknown step "${reference.step}"` });
-        continue;
-      }
-      if (targetIndex >= index) {
-        context.addIssue({ code: "custom", path: [...path3, "references", pointer], message: `step "${reference.step}" does not run before this step` });
-        continue;
-      }
-      const targetKind = plan.operations[targetIndex].kind;
-      const outputType = operationOutputType(targetKind, reference.output);
-      if (outputType === void 0) {
-        context.addIssue({
-          code: "custom",
-          path: [...path3, "references", pointer],
-          message: `${targetKind} does not publish a scalar output named "${reference.output}"`
-        });
-        continue;
-      }
-      resolvedTypes.set(pointer, outputType);
+    const earlier = new Map(plan.operations.slice(0, index).map((candidate) => [candidate.stepName, candidate.kind]));
+    const later = new Set(plan.operations.slice(index + 1).map((candidate) => candidate.stepName));
+    for (const issue3 of taskStepIssues(operation, { earlier, later })) {
+      context.addIssue({ code: "custom", path: ["operations", index, ...issue3.path], message: issue3.message });
     }
-    for (const message of captureOwnedPointerIssues(operation.kind, operation.payload, operation.references)) {
-      context.addIssue({ code: "custom", path: [...path3, "payload"], message });
-    }
-    const deferredPointers = captureDeferredPointers(operation.kind);
-    if (deferredPointers.length > 0) anyStepDefersToCapture = true;
-    for (const message of probeOperationShape({
-      kind: operation.kind,
-      payload: operation.payload,
-      references: operation.references,
-      deferredPointers,
-      resolveOutputType: (reference) => {
-        for (const [pointer, type] of resolvedTypes) {
-          const candidate = operation.references[pointer];
-          if (candidate?.step === reference.step && candidate.output === reference.output) return type;
-        }
-        return void 0;
-      }
-    })) {
-      context.addIssue({ code: "custom", path: [...path3, "payload"], message });
-    }
+    if (captureDeferredPointers(operation.kind).length > 0) anyStepDefersToCapture = true;
   });
   const { maxEffectOperations, maxEffectBytes } = plan.limits;
   if (maxEffectOperations !== void 0 && plan.operations.length > maxEffectOperations) {
@@ -41723,7 +41727,16 @@ var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
   stepName,
   receipt: runnerOperationReceiptV1Schema,
   /** Scalar provider outputs needed to resolve references after a retry. */
-  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({})
+  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({}),
+  /**
+   * `updated_at` of the step's issue, pull request, or discussion read back
+   * after it succeeded. A later step on the same resource accepts it as the
+   * plan's own write, including after a resume.
+   */
+  resourceVersion: external_exports.strictObject({
+    resource: external_exports.string().regex(/^(?:issue|pull|discussion):[1-9][0-9]{0,15}$/),
+    updatedAt: external_exports.iso.datetime({ offset: true })
+  }).optional()
 });
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
@@ -45310,6 +45323,11 @@ function sameInstant(left, right) {
   const rightMs = Date.parse(right);
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
 }
+function atExpectedVersion(scope, actual, planned) {
+  const matches = sameInstant(actual, planned) || scope.chainedResourceVersion !== void 0 && sameInstant(actual, scope.chainedResourceVersion);
+  if (matches) scope.versionVerified = true;
+  return matches;
+}
 function operationMarker(id) {
   return `<!-- gardener-operation:${id} -->`;
 }
@@ -45522,11 +45540,11 @@ async function loadIssue(scope, issueNumber, expectPull) {
   }
   return data;
 }
-function assertIssueState(issue3, expectedState, expectedUpdatedAt) {
+function assertIssueState(scope, issue3, expectedState, expectedUpdatedAt) {
   if (issue3.state !== expectedState) {
     throw conflict("issue_state_changed", `Precondition failed: issue state is ${String(issue3.state)}`);
   }
-  if (!sameInstant(issue3.updated_at, expectedUpdatedAt)) {
+  if (!atExpectedVersion(scope, issue3.updated_at, expectedUpdatedAt)) {
     throw conflict("issue_changed", "Precondition failed: issue changed after the operation was planned");
   }
 }
@@ -45549,14 +45567,14 @@ function assertPullRevision(pull, expected) {
     throw conflict("pull_base_changed", `Precondition failed: pull request base is ${pull.base.ref} at ${pull.base.sha}`);
   }
 }
-function assertPullState(pull, expected) {
+function assertPullState(scope, pull, expected) {
   if (pull.state !== expected.expectedState) {
     throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
   }
   if (pull.draft !== expected.expectedDraft) {
     throw conflict("pull_draft_changed", "Precondition failed: pull request draft state changed");
   }
-  if (!sameInstant(pull.updated_at, expected.expectedPullUpdatedAt)) {
+  if (!atExpectedVersion(scope, pull.updated_at, expected.expectedPullUpdatedAt)) {
     throw conflict("pull_changed", "Precondition failed: pull request changed after the operation was planned");
   }
 }
@@ -45595,7 +45613,7 @@ async function executeLabel(scope, operation) {
   if (present === desired) {
     return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels };
   }
-  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   if (desired) {
     const defined = await scope.api.restOptional(
       `${scope.repoPath}/labels/${encodedLabel}`,
@@ -45634,7 +45652,7 @@ async function executeIssueCommentCreate(scope, operation) {
     };
   }
   const issue3 = await loadIssue(scope, operation.issueNumber, false);
-  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Issue comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body })
@@ -45680,7 +45698,7 @@ async function executeIssueState(scope, operation) {
   if (issue3.state === desired) {
     return { kind: operation.kind, issueNumber: operation.issueNumber, state: desired, issueUrl: htmlUrl(issue3) };
   }
-  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   const { data } = await scope.api.rest(`${scope.repoPath}/issues/${operation.issueNumber}`, "Issue state mutation", {
     method: "PATCH",
     body: JSON.stringify({ state: desired })
@@ -45704,7 +45722,7 @@ async function executeAssignee(scope, operation) {
       assigneeIds: current
     };
   }
-  assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
   const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}/assignees`;
   const { data } = await scope.api.rest(issuePath, desired ? "Issue assignee add" : "Issue assignee remove", {
     method: desired ? "POST" : "DELETE",
@@ -45743,7 +45761,7 @@ async function executePullCommentCreate(scope, operation) {
   }
   const pull = await loadPull(scope, operation.pullNumber);
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body })
@@ -45760,7 +45778,7 @@ async function executePullCommentUpdate(scope, operation) {
   const result = await executeCommentUpdate(scope, operation, operation.pullNumber, async () => {
     const pull = await loadPull(scope, operation.pullNumber);
     assertPullRevision(pull, operation);
-    assertPullState(pull, operation);
+    assertPullState(scope, pull, operation);
   });
   return { kind: operation.kind, pullNumber: operation.pullNumber, ...result };
 }
@@ -45785,7 +45803,7 @@ async function executeReviewSubmit(scope, operation) {
   }
   const pull = await loadPull(scope, operation.pullNumber);
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}/reviews`, "Pull request review", {
     method: "POST",
     body: JSON.stringify({
@@ -45820,7 +45838,7 @@ async function executeReviewer(scope, operation) {
     return { kind: operation.kind, pullNumber: operation.pullNumber, reviewerIds: operation.reviewerIds, reviewerLogins: logins };
   }
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data } = await scope.api.rest(
     `${scope.repoPath}/pulls/${operation.pullNumber}/requested_reviewers`,
     desired ? "Reviewer request" : "Reviewer removal",
@@ -45867,7 +45885,7 @@ async function executePullUpdate(scope, operation) {
   if (pullMatchesUpdate(current, operation)) return pullUpdateOutputs(operation, current);
   assertPullRevision(current, operation);
   const resumedAfterDraft = operation.draft !== void 0 && operation.draft !== operation.expectedDraft && current.draft === operation.draft;
-  if (!resumedAfterDraft) assertPullState(current, operation);
+  if (!resumedAfterDraft) assertPullState(scope, current, operation);
   if (operation.draft !== void 0 && current.draft !== operation.draft) {
     if (typeof current.node_id !== "string") throw failure2("github_response_invalid", "Pull request node id was missing");
     await setPullDraft(scope, current.node_id, operation.draft);
@@ -46167,7 +46185,7 @@ async function executePullMerge(scope, operation) {
     return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: sha, pullUrl: htmlUrl(pull) };
   }
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   if (!record2(pull.base) || typeof pull.base.ref !== "string") {
     throw failure2("github_response_invalid", "Pull request base branch was missing");
   }
@@ -46199,7 +46217,7 @@ async function executePullMerge(scope, operation) {
     return { kind: operation.kind, pullNumber: operation.pullNumber, mergeCommitSha: sha, pullUrl: htmlUrl(pull) };
   }
   assertPullRevision(pull, operation);
-  assertPullState(pull, operation);
+  assertPullState(scope, pull, operation);
   const { data: merge2 } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}/merge`, "Pull request merge", {
     method: "PUT",
     body: JSON.stringify({ sha: operation.expectedHeadSha, merge_method: operation.method })
@@ -46258,12 +46276,12 @@ async function loadDiscussion(scope, number4) {
     answerNodeId: answer && typeof answer.id === "string" ? answer.id : null
   };
 }
-function assertDiscussionState(discussion, expectedState, expectedUpdatedAt) {
+function assertDiscussionState(scope, discussion, expectedState, expectedUpdatedAt) {
   const state = discussion.closed ? "closed" : "open";
   if (state !== expectedState) {
     throw conflict("discussion_state_changed", `Precondition failed: discussion state is ${state}`);
   }
-  if (!sameInstant(discussion.updatedAt, expectedUpdatedAt)) {
+  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt)) {
     throw conflict("discussion_changed", "Precondition failed: discussion changed after the operation was planned");
   }
 }
@@ -46315,7 +46333,7 @@ async function executeDiscussionCommentCreate(scope, operation) {
     };
   }
   const discussion = await loadDiscussion(scope, operation.discussionNumber);
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   const data = await scope.api.graphql(
     `mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id databaseId url}}}`,
     { id: discussion.id, body: operation.body },
@@ -46359,7 +46377,7 @@ async function executeDiscussionCommentUpdate(scope, operation) {
     throw conflict("comment_changed", "Precondition failed: discussion comment changed after the operation was planned");
   }
   const discussion = await loadDiscussion(scope, operation.discussionNumber);
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   const data = await scope.api.graphql(
     `mutation($id:ID!,$body:String!){updateDiscussionComment(input:{commentId:$id,body:$body}){comment{id databaseId url body}}}`,
     { id: target.nodeId, body: operation.body },
@@ -46390,7 +46408,7 @@ async function executeDiscussionAnswer(scope, operation) {
       `Precondition failed: discussion answer is ${discussion.answerCommentId ?? "unset"}`
     );
   }
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   if (mark) {
     const target = await findDiscussionComment(
       scope,
@@ -46430,7 +46448,7 @@ async function executeDiscussionState(scope, operation) {
       discussionUrl: discussion.url
     };
   }
-  assertDiscussionState(discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
   const mutation = close ? "mutation($id:ID!){closeDiscussion(input:{discussionId:$id}){discussion{id closed url}}}" : "mutation($id:ID!){reopenDiscussion(input:{discussionId:$id}){discussion{id closed url}}}";
   const field = close ? "closeDiscussion" : "reopenDiscussion";
   const data = await scope.api.graphql(mutation, { id: discussion.id }, "Discussion state transition");
@@ -46689,7 +46707,7 @@ async function dispatch(scope, operation) {
     case "issue.comment.update": {
       const result = await executeCommentUpdate(scope, operation, operation.issueNumber, async () => {
         const issue3 = await loadIssue(scope, operation.issueNumber, false);
-        assertIssueState(issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+        assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
       });
       return { kind: operation.kind, issueNumber: operation.issueNumber, ...result };
     }
@@ -46768,7 +46786,9 @@ function assertContext(context, operation, operationHash) {
     actorLogin: context.actorLogin ?? DEFAULT_ACTOR_LOGIN,
     actorAppSlug: context.actorAppSlug ?? DEFAULT_ACTOR_APP_SLUG,
     operationHash,
-    ...context.readCapturedFile === void 0 ? {} : { readCapturedFile: context.readCapturedFile }
+    ...context.readCapturedFile === void 0 ? {} : { readCapturedFile: context.readCapturedFile },
+    ...context.chainedResourceVersion === void 0 ? {} : { chainedResourceVersion: context.chainedResourceVersion },
+    versionVerified: false
   };
 }
 async function executeActionsOperation(operationInput, context) {
@@ -46796,7 +46816,8 @@ async function executeActionsOperation(operationInput, context) {
       ...requestId(scope),
       ...resourceUrl(outputs)
     });
-    return { receipt, outputs };
+    const version2 = context.readBackVersion === true && scope.api.mutated && scope.versionVerified ? await readResourceVersion(scope, operation) : null;
+    return { receipt, outputs, ...version2 ? { resourceVersion: version2 } : {} };
   } catch (error63) {
     const effect = error63 instanceof GitHubEffectError ? error63 : failure2("effect_failed", error63 instanceof Error ? error63.message : "GitHub effect failed");
     const receipt = operationReceiptSchema.parse({
@@ -46811,6 +46832,36 @@ async function executeActionsOperation(operationInput, context) {
       }
     });
     return { receipt };
+  }
+}
+function resourceVersionKey(operation) {
+  if ("issueNumber" in operation) return `issue:${operation.issueNumber}`;
+  if ("pullNumber" in operation) return `pull:${operation.pullNumber}`;
+  if ("discussionNumber" in operation) return `discussion:${operation.discussionNumber}`;
+  return null;
+}
+async function readResourceVersion(scope, operation) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const version2 = await readResourceVersionOnce(scope, operation);
+    if (version2 !== null) return version2;
+  }
+  return null;
+}
+async function readResourceVersionOnce(scope, operation) {
+  const resource = resourceVersionKey(operation);
+  if (resource === null) return null;
+  try {
+    let updatedAt;
+    if ("issueNumber" in operation) {
+      ({ data: { updated_at: updatedAt } } = await scope.api.rest(`${scope.repoPath}/issues/${operation.issueNumber}`, "Issue version read-back"));
+    } else if ("pullNumber" in operation) {
+      ({ data: { updated_at: updatedAt } } = await scope.api.rest(`${scope.repoPath}/pulls/${operation.pullNumber}`, "Pull request version read-back"));
+    } else if ("discussionNumber" in operation) {
+      updatedAt = (await loadDiscussion(scope, operation.discussionNumber)).updatedAt;
+    }
+    return typeof updatedAt === "string" && ISO_INSTANT.test(updatedAt) ? { resource, updatedAt } : null;
+  } catch {
+    return null;
   }
 }
 function requestId(scope) {
@@ -46885,6 +46936,7 @@ async function applyOrderedPlan(input2) {
   const [owner, name2] = ownerAndName;
   const outputs = /* @__PURE__ */ new Map();
   const completed = [];
+  const versions = /* @__PURE__ */ new Map();
   let resumeIndex = 0;
   if (input2.prior) {
     assertReceiptEnvelope(plan, input2.artifactSha256, input2.prior);
@@ -46898,6 +46950,12 @@ async function applyOrderedPlan(input2) {
       }
       if (entry.receipt.status === "failed") break;
       const scalar = validateRecordedOutputs(operation.kind, entry.outputs);
+      if (entry.resourceVersion) {
+        if (entry.resourceVersion.resource !== resourceVersionKey(operation)) {
+          throw new Error("Prior effect receipt records a version for a different resource");
+        }
+        versions.set(entry.resourceVersion.resource, entry.resourceVersion.updatedAt);
+      }
       completed.push(entry);
       outputs.set(entry.stepName, scalar);
       resumeIndex = index + 1;
@@ -46939,9 +46997,15 @@ async function applyOrderedPlan(input2) {
       ...input2.fetch ? { fetch: input2.fetch } : {},
       ...input2.captureDirectory ? { readCapturedFile: captureReader(input2.captureDirectory) } : {}
     };
+    const resource = resourceVersionKey(operation);
+    const chained = resource === null ? void 0 : versions.get(resource);
+    if (chained !== void 0) context.chainedResourceVersion = chained;
+    if (resource !== null && laterStepMayTarget(plan, index, resource)) context.readBackVersion = true;
     const result = await (input2.execute ?? executeActionsOperation)(operation, context);
     const scalar = result.outputs === void 0 ? {} : scalarOutputs(operation.kind, result.outputs);
-    const stepReceipt = runnerStepReceipt(plan.operations[index].stepName, result.receipt, scalar);
+    const version2 = result.receipt.status === "succeeded" && result.resourceVersion?.resource === resource ? result.resourceVersion : void 0;
+    if (version2) versions.set(version2.resource, version2.updatedAt);
+    const stepReceipt = runnerStepReceipt(plan.operations[index].stepName, result.receipt, scalar, version2);
     completed.push(stepReceipt);
     if (result.receipt.status === "failed" || result.receipt.status === "conflicted") {
       const stopped = effectReceipt(plan, input2.artifactSha256, completed, "stopped", plan.operations[index].stepName);
@@ -46955,6 +47019,19 @@ async function applyOrderedPlan(input2) {
   }
   const applied = effectReceipt(plan, input2.artifactSha256, completed, "applied", null);
   return { receipt: applied, outputs };
+}
+var RESOURCE_NUMBER_FIELDS = [
+  ["issueNumber", "issue"],
+  ["pullNumber", "pull"],
+  ["discussionNumber", "discussion"]
+];
+function laterStepMayTarget(plan, index, resource) {
+  return plan.operations.slice(index + 1).some((step) => RESOURCE_NUMBER_FIELDS.some(([field, family]) => {
+    if (!resource.startsWith(`${family}:`)) return false;
+    if (Object.hasOwn(step.references, `/${field}`)) return true;
+    const value = step.payload[field];
+    return value !== void 0 && `${family}:${String(value)}` === resource;
+  }));
 }
 var MARKER_BODY_KINDS = /* @__PURE__ */ new Set([
   "issue.comment.create",
@@ -47051,8 +47128,8 @@ function validateRecordedOutputs(kind, value) {
   if (Object.keys(value).some((name2) => !expected.has(name2))) throw new Error(`Receipt carries an output ${kind} does not publish`);
   return scalarOutputs(kind, value);
 }
-function runnerStepReceipt(stepName2, receipt, outputs) {
-  return { stepName: stepName2, receipt, outputs };
+function runnerStepReceipt(stepName2, receipt, outputs, resourceVersion) {
+  return { stepName: stepName2, receipt, outputs, ...resourceVersion ? { resourceVersion } : {} };
 }
 function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep) {
   return runnerEffectReceiptV1Schema.parse({

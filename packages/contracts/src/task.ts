@@ -1,9 +1,12 @@
 import { z } from "zod";
 import {
+  COMMIT_FILE_LIMIT,
   operationKindValues,
+  operationOutputNames,
   operationOutputSentinel,
   operationOutputType,
   operationSchema,
+  type OperationKind,
   type OperationOutputType,
 } from "./operations";
 
@@ -1191,13 +1194,12 @@ export type TaskCaptureFileV1 = z.infer<typeof taskCaptureFileV1Schema>;
 /**
  * Per-path capture metadata, carried inside the plan.
  *
- * There is no file-*count* ceiling here: a number invented in this contract
- * would cap a legitimate refactor for no security reason. The byte ceilings
- * that do apply are the provider's own (`CAPTURE_FILE_MAX_BYTES`) and the
- * largest capture a commit could materialize (`CAPTURE_TOTAL_MAX_BYTES`), and
- * the manifest itself still has to fit inside the plan's canonical transport
- * ceiling alongside the task's optional `maxEffectOperations` and
- * `maxEffectBytes`.
+ * The file count shares `commit.create`'s `COMMIT_FILE_LIMIT`, so every
+ * admitted capture can be materialized. The byte ceilings are the provider's
+ * own (`CAPTURE_FILE_MAX_BYTES`) and the largest capture a commit could
+ * materialize (`CAPTURE_TOTAL_MAX_BYTES`), and the manifest itself still has to
+ * fit inside the plan's canonical transport ceiling alongside the task's
+ * optional `maxEffectOperations` and `maxEffectBytes`.
  */
 export const taskCaptureManifestV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-capture-manifest/v1"),
@@ -1205,12 +1207,11 @@ export const taskCaptureManifestV1Schema = z.strictObject({
   /** Commit the capture was taken against; apply refuses a drifted base. */
   baseSha: sha1,
   /**
-   * Bounded by the number of files one `commit.create` may write. A capture
-   * larger than that could never be materialized, so it is refused here — when
-   * the capture is admitted, before a plan exists — rather than partway
-   * through apply with earlier steps already written.
+   * Bounded by the number of files one `commit.create` may write. A larger
+   * capture could never be materialized, so it is refused when the capture is
+   * admitted, before a plan exists, rather than partway through apply.
    */
-  files: z.array(taskCaptureFileV1Schema).min(1),
+  files: z.array(taskCaptureFileV1Schema).min(1).max(COMMIT_FILE_LIMIT),
   totalBytes: captureByteCount,
   /**
    * A partial capture is never applicable, so the only representable value is
@@ -1494,6 +1495,84 @@ export type TaskEffectPlanOperationV1 = z.infer<typeof taskEffectPlanOperationV1
  */
 export const EFFECT_TRANSPORT_MAX_BYTES = 4 * 1_024 * 1_024;
 
+export interface TaskStepIssueV1 {
+  /** Path within the step, for example `["references", "/body"]` or `["payload"]`. */
+  readonly path: readonly string[];
+  readonly message: string;
+}
+
+export interface TaskStepContextV1 {
+  /** Kinds of the steps that run before this one, by step name. */
+  readonly earlier: ReadonlyMap<string, OperationKind>;
+  /** Names of steps that run after this one, used only to explain a forward reference. */
+  readonly later?: ReadonlySet<string>;
+}
+
+/**
+ * Every problem with one step given the steps before it: references that name
+ * an unknown, later, or self step or an unpublished output; capture-owned
+ * fields; and the payload's operation shape with each reference typed by the
+ * output it resolves to.
+ *
+ * Planning and proposal admission share this, so a proposal the Worker admits
+ * is one the finished plan will accept, and a model that references a missing
+ * output is told while it can still correct the step.
+ */
+export function taskStepIssues(
+  step: Pick<TaskEffectPlanOperationV1, "stepName" | "kind" | "payload" | "references">,
+  context: TaskStepContextV1,
+): TaskStepIssueV1[] {
+  const issues: TaskStepIssueV1[] = [];
+  const resolvedTypes = new Map<string, OperationOutputType>();
+  for (const [pointer, reference] of Object.entries(step.references)) {
+    const path = ["references", pointer];
+    if (reference.step === step.stepName) {
+      issues.push({ path, message: "a step cannot reference its own output" });
+      continue;
+    }
+    const targetKind = context.earlier.get(reference.step);
+    if (targetKind === undefined) {
+      issues.push({
+        path,
+        message: context.later?.has(reference.step)
+          ? `step "${reference.step}" does not run before this step`
+          : `unknown step "${reference.step}"`,
+      });
+      continue;
+    }
+    const outputType = operationOutputType(targetKind, reference.output);
+    if (outputType === undefined) {
+      issues.push({
+        path,
+        message: `${targetKind} does not publish a scalar output named "${reference.output}"; `
+          + `it publishes ${operationOutputNames(targetKind).map((name) => `"${name}"`).join(", ")}`,
+      });
+      continue;
+    }
+    resolvedTypes.set(pointer, outputType);
+  }
+
+  for (const message of captureOwnedPointerIssues(step.kind, step.payload, step.references)) {
+    issues.push({ path: ["payload"], message });
+  }
+  for (const message of probeOperationShape({
+    kind: step.kind,
+    payload: step.payload,
+    references: step.references,
+    deferredPointers: captureDeferredPointers(step.kind),
+    resolveOutputType: (reference) => {
+      for (const [pointer, type] of resolvedTypes) {
+        const candidate = step.references[pointer];
+        if (candidate?.step === reference.step && candidate.output === reference.output) return type;
+      }
+      return undefined;
+    },
+  })) {
+    issues.push({ path: ["payload"], message });
+  }
+  return issues;
+}
+
 /**
  * Exact, hashable, ordered handoff consumed by the checkout-free effects job.
  *
@@ -1556,57 +1635,12 @@ export const taskEffectPlanV1Schema = z.strictObject({
   let anyStepDefersToCapture = false;
 
   plan.operations.forEach((operation, index) => {
-    const path = ["operations", index] as const;
-    const resolvedTypes = new Map<string, OperationOutputType>();
-
-    for (const [pointer, reference] of Object.entries(operation.references)) {
-      const targetIndex = indexByStepName.get(reference.step);
-      if (reference.step === operation.stepName) {
-        context.addIssue({ code: "custom", path: [...path, "references", pointer], message: "a step cannot reference its own output" });
-        continue;
-      }
-      if (targetIndex === undefined) {
-        context.addIssue({ code: "custom", path: [...path, "references", pointer], message: `unknown step "${reference.step}"` });
-        continue;
-      }
-      if (targetIndex >= index) {
-        context.addIssue({ code: "custom", path: [...path, "references", pointer], message: `step "${reference.step}" does not run before this step` });
-        continue;
-      }
-      const targetKind = (plan.operations[targetIndex] as TaskEffectPlanOperationV1).kind;
-      const outputType = operationOutputType(targetKind, reference.output);
-      if (outputType === undefined) {
-        context.addIssue({
-          code: "custom",
-          path: [...path, "references", pointer],
-          message: `${targetKind} does not publish a scalar output named "${reference.output}"`,
-        });
-        continue;
-      }
-      resolvedTypes.set(pointer, outputType);
+    const earlier = new Map(plan.operations.slice(0, index).map((candidate) => [candidate.stepName, candidate.kind] as const));
+    const later = new Set(plan.operations.slice(index + 1).map((candidate) => candidate.stepName));
+    for (const issue of taskStepIssues(operation, { earlier, later })) {
+      context.addIssue({ code: "custom", path: ["operations", index, ...issue.path], message: issue.message });
     }
-
-    for (const message of captureOwnedPointerIssues(operation.kind, operation.payload, operation.references)) {
-      context.addIssue({ code: "custom", path: [...path, "payload"], message });
-    }
-    const deferredPointers = captureDeferredPointers(operation.kind);
-    if (deferredPointers.length > 0) anyStepDefersToCapture = true;
-
-    for (const message of probeOperationShape({
-      kind: operation.kind,
-      payload: operation.payload,
-      references: operation.references,
-      deferredPointers,
-      resolveOutputType: (reference) => {
-        for (const [pointer, type] of resolvedTypes) {
-          const candidate = operation.references[pointer];
-          if (candidate?.step === reference.step && candidate.output === reference.output) return type;
-        }
-        return undefined;
-      },
-    })) {
-      context.addIssue({ code: "custom", path: [...path, "payload"], message });
-    }
+    if (captureDeferredPointers(operation.kind).length > 0) anyStepDefersToCapture = true;
   });
 
   const { maxEffectOperations, maxEffectBytes } = plan.limits;

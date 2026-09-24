@@ -33,6 +33,7 @@ import { normalizeGitHubEvent } from "./event";
 import {
   canonicalOperationHash,
   executeActionsOperation,
+  resourceVersionKey,
   type GitHubEffectsContext,
   type OperationOutputsV1,
 } from "./github-effects";
@@ -122,6 +123,11 @@ export async function applyOrderedPlan(input: {
   const [owner, name] = ownerAndName as [string, string];
   const outputs = new Map<string, Readonly<Record<string, string | number | boolean | null>>>();
   const completed: RunnerPlanStepReceiptV1[] = [];
+  // Versions this plan's own writes left each resource at, so a later step on
+  // the same issue, pull request, or discussion is not refused because of an
+  // earlier step. Seeded from the prior receipt so a resumed run recognises
+  // the writes of the attempt it continues.
+  const versions = new Map<string, string>();
 
   let resumeIndex = 0;
   if (input.prior) {
@@ -143,6 +149,12 @@ export async function applyOrderedPlan(input: {
       }
       if (entry.receipt.status === "failed") break;
       const scalar = validateRecordedOutputs(operation.kind, entry.outputs);
+      if (entry.resourceVersion) {
+        if (entry.resourceVersion.resource !== resourceVersionKey(operation)) {
+          throw new Error("Prior effect receipt records a version for a different resource");
+        }
+        versions.set(entry.resourceVersion.resource, entry.resourceVersion.updatedAt);
+      }
       completed.push(entry);
       outputs.set(entry.stepName, scalar);
       resumeIndex = index + 1;
@@ -185,9 +197,17 @@ export async function applyOrderedPlan(input: {
       ...(input.fetch ? { fetch: input.fetch } : {}),
       ...(input.captureDirectory ? { readCapturedFile: captureReader(input.captureDirectory) } : {}),
     };
+    const resource = resourceVersionKey(operation);
+    const chained = resource === null ? undefined : versions.get(resource);
+    if (chained !== undefined) context.chainedResourceVersion = chained;
+    if (resource !== null && laterStepMayTarget(plan, index, resource)) context.readBackVersion = true;
     const result = await (input.execute ?? executeActionsOperation)(operation, context);
     const scalar = result.outputs === undefined ? {} : scalarOutputs(operation.kind, result.outputs);
-    const stepReceipt = runnerStepReceipt(plan.operations[index]!.stepName, result.receipt, scalar);
+    const version = result.receipt.status === "succeeded" && result.resourceVersion?.resource === resource
+      ? result.resourceVersion
+      : undefined;
+    if (version) versions.set(version.resource, version.updatedAt);
+    const stepReceipt = runnerStepReceipt(plan.operations[index]!.stepName, result.receipt, scalar, version);
     completed.push(stepReceipt);
 
     if (result.receipt.status === "failed" || result.receipt.status === "conflicted") {
@@ -203,6 +223,25 @@ export async function applyOrderedPlan(input: {
 
   const applied = effectReceipt(plan, input.artifactSha256, completed, "applied", null);
   return { receipt: applied, outputs };
+}
+
+const RESOURCE_NUMBER_FIELDS = [
+  ["issueNumber", "issue"],
+  ["pullNumber", "pull"],
+  ["discussionNumber", "discussion"],
+] as const;
+
+/**
+ * Whether any step after `index` may target `resource`. A number filled by a
+ * reference is unknown until that step runs, so it counts as a possible match.
+ */
+function laterStepMayTarget(plan: TaskEffectPlanV1, index: number, resource: string): boolean {
+  return plan.operations.slice(index + 1).some((step) => RESOURCE_NUMBER_FIELDS.some(([field, family]) => {
+    if (!resource.startsWith(`${family}:`)) return false;
+    if (Object.hasOwn(step.references, `/${field}`)) return true;
+    const value = (step.payload as Record<string, unknown>)[field];
+    return value !== undefined && `${family}:${String(value)}` === resource;
+  }));
 }
 
 const MARKER_BODY_KINDS = new Set<OperationKind>([
@@ -322,8 +361,9 @@ function runnerStepReceipt(
   stepName: string,
   receipt: RunnerPlanStepReceiptV1["receipt"],
   outputs: Readonly<Record<string, string | number | boolean | null>>,
+  resourceVersion?: RunnerPlanStepReceiptV1["resourceVersion"],
 ): RunnerPlanStepReceiptV1 {
-  return { stepName, receipt, outputs };
+  return { stepName, receipt, outputs, ...(resourceVersion ? { resourceVersion } : {}) };
 }
 
 function effectReceipt(

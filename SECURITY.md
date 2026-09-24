@@ -108,6 +108,13 @@ can include:
 
 Apply re-reads that state before writing. A mismatch is a terminal conflict, never a retry.
 
+A plan can write the same issue, pull request, or discussion more than once, for example a comment
+followed by a label. After a write that passed its `updated_at` check, apply reads back the new
+`updated_at` and records it in the step receipt. A later step on that resource accepts either its
+planned value or that recorded value. Changes by anyone else still conflict, except for one landing
+in the moment between Gardener's write and its read-back. A step that found its effect already in
+place never extends the chain. Two writes to the same release or comment in one plan still conflict.
+
 Apply stops at the first failure. Re-running the apply job resumes after the last operation that
 succeeded exactly. Operations can be matched after an interrupted run through markers that trusted
 code adds:

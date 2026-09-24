@@ -417,6 +417,15 @@ export const runnerPlanStepReceiptV1Schema = z.strictObject({
   receipt: runnerOperationReceiptV1Schema,
   /** Scalar provider outputs needed to resolve references after a retry. */
   outputs: z.record(z.string().min(1).max(100), runnerScalarOutputV1Schema).default({}),
+  /**
+   * `updated_at` of the step's issue, pull request, or discussion read back
+   * after it succeeded. A later step on the same resource accepts it as the
+   * plan's own write, including after a resume.
+   */
+  resourceVersion: z.strictObject({
+    resource: z.string().regex(/^(?:issue|pull|discussion):[1-9][0-9]{0,15}$/),
+    updatedAt: z.iso.datetime({ offset: true }),
+  }).optional(),
 });
 export type RunnerPlanStepReceiptV1 = z.infer<typeof runnerPlanStepReceiptV1Schema>;
 

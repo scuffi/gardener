@@ -107,6 +107,12 @@ steps:
 Commits go through the Git Data API. The executor builds the new tree from the capture artifact one
 blob at a time, re-verifying each file's size and digest before uploading it.
 
+Each step's preconditions carry the resource state seen at planning. So that a plan can write the
+same issue, pull request, or discussion twice, apply reads the resource back after a verified write
+whenever a later step may target it, and records the new `updated_at` in the step receipt. A later
+step on that resource accepts either value. Releases and comments are not chained, so a second write
+to one of them in the same plan conflicts.
+
 Receipts are stored per step. A re-run of the apply job skips steps whose receipts match exactly
 and continues from the first incomplete step. A conflict, meaning GitHub state that changed since
 planning, is terminal.

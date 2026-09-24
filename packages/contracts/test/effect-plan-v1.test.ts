@@ -481,6 +481,12 @@ describe("repository change capture", () => {
     expect(parsed.files.some((file) => "contentBase64" in file)).toBe(false);
   });
 
+  it("refuses a capture with more files than one commit can write", () => {
+    const deletions = (count: number) => Array.from({ length: count }, (_, index) => ({ path: `src/f${index}.ts`, status: "deleted" as const }));
+    expect(taskCaptureManifestV1Schema.parse({ ...manifest, files: deletions(1_000), totalBytes: 0 }).files).toHaveLength(1_000);
+    expect(() => taskCaptureManifestV1Schema.parse({ ...manifest, files: deletions(1_001), totalBytes: 0 })).toThrow();
+  });
+
   it("requires mode and digest for written paths and forbids them for deletions", () => {
     expect(() => taskCaptureManifestV1Schema.parse({
       ...manifest,

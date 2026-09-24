@@ -1555,6 +1555,93 @@ describe("path segment safety", () => {
   });
 });
 
+describe("plan-owned resource versions", () => {
+  const labelAdd = () => scenarioFor("issue.label.add");
+  const writtenAt = "2026-01-06T00:00:00Z";
+
+  it("accepts the version the plan's own earlier write left", async () => {
+    const { receipt } = await run(labelAdd().operation, [
+      get(`${REPO}/issues/5`, { ...OPEN_ISSUE, updated_at: writtenAt }),
+      get(`${REPO}/labels/bug`, { id: 1, name: "bug" }),
+      send("POST", `${REPO}/issues/5/labels`, [{ name: "bug" }]),
+    ], { chainedResourceVersion: writtenAt });
+    expect(receipt.status, JSON.stringify(receipt.error)).toBe("succeeded");
+  });
+
+  it("still conflicts on a version neither planned nor written by the plan", async () => {
+    const { receipt } = await run(labelAdd().operation, [
+      get(`${REPO}/issues/5`, { ...OPEN_ISSUE, updated_at: "2026-01-07T00:00:00Z" }),
+    ], { chainedResourceVersion: writtenAt });
+    expect(receipt.status).toBe("conflicted");
+    expect(receipt.error?.code).toBe("issue_changed");
+  });
+
+  /** Label add whose issue reports `writtenAt` once the label POST has happened. */
+  function labelAddWithReadBack(options: { failFirstReadBack?: boolean } = {}): Handler[] {
+    let written = false;
+    let failed = false;
+    return [
+      {
+        when: (call) => call.method === "GET" && matches(call.path, `${REPO}/issues/5`),
+        get status() {
+          if (written && options.failFirstReadBack && !failed) { failed = true; return 502; }
+          return 200;
+        },
+        get json() { return written ? { ...OPEN_ISSUE, labels: [{ name: "bug" }], updated_at: writtenAt } : OPEN_ISSUE; },
+      },
+      get(`${REPO}/labels/bug`, { id: 1, name: "bug" }),
+      {
+        when: (call) => {
+          const hit = call.method === "POST" && matches(call.path, `${REPO}/issues/5/labels`);
+          if (hit) written = true;
+          return hit;
+        },
+        json: [{ name: "bug" }],
+      },
+    ];
+  }
+
+  it("reports the version a verified write left its resource at", async () => {
+    const { receipt, resourceVersion, calls } = await run(labelAdd().operation, labelAddWithReadBack(), { readBackVersion: true });
+    expect(receipt.status).toBe("succeeded");
+    expect(resourceVersion).toEqual({ resource: "issue:5", updatedAt: writtenAt });
+    expect(calls.at(-1)?.path).toBe(`${REPO}/issues/5`);
+  });
+
+  it("retries a transient read-back failure", async () => {
+    const { receipt, resourceVersion } = await run(labelAdd().operation, labelAddWithReadBack({ failFirstReadBack: true }), { readBackVersion: true });
+    expect(receipt.status).toBe("succeeded");
+    expect(resourceVersion).toEqual({ resource: "issue:5", updatedAt: writtenAt });
+  });
+
+  it("does not read back unless a later step needs the version", async () => {
+    const { receipt, resourceVersion, calls } = await run(labelAdd().operation, labelAddWithReadBack());
+    expect(receipt.status).toBe("succeeded");
+    expect(resourceVersion).toBeUndefined();
+    expect(calls.filter((call) => call.method === "GET" && call.path === `${REPO}/issues/5`)).toHaveLength(1);
+  });
+
+  it("never chains from a reconciled step that skipped the version check", async () => {
+    // The label is already present, so the executor reconciles before checking
+    // updated_at. Its read-back would adopt this third-party edit as the plan's own.
+    const { receipt, resourceVersion } = await run(labelAdd().operation, [
+      get(`${REPO}/issues/5`, { ...OPEN_ISSUE, labels: [{ name: "bug" }], updated_at: "2026-01-07T00:00:00Z" }),
+    ], { readBackVersion: true });
+    expect(receipt.status).toBe("skipped");
+    expect(resourceVersion).toBeUndefined();
+  });
+
+  it("reports no version for a failed step or an operation without a versioned resource", async () => {
+    const conflicted = await run(labelAdd().operation, [
+      get(`${REPO}/issues/5`, { ...OPEN_ISSUE, updated_at: "2026-01-07T00:00:00Z" }),
+    ], { readBackVersion: true });
+    expect(conflicted.resourceVersion).toBeUndefined();
+    const branch = await run(scenarioFor("branch.create").operation, scenarioFor("branch.create").apply, { readBackVersion: true });
+    expect(branch.receipt.status).toBe("succeeded");
+    expect(branch.resourceVersion).toBeUndefined();
+  });
+});
+
 describe("mutation classification", () => {
   it("treats a GraphQL query as read-only despite it being an HTTP POST", async () => {
     const { receipt, calls } = await run(scenarioFor("discussion.close").operation, [

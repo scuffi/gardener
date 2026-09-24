@@ -325,6 +325,120 @@ describe("ordered effect application", () => {
       .toEqual(["op_first", "op_second", "op_third"]);
   });
 
+  it("chains the plan's own resource versions across steps and through a resume", async () => {
+    const value = plan([
+      commentStep("first", "op_first", "First."),
+      commentStep("second", "op_second", "Second."),
+      commentStep("third", "op_third", "Third."),
+    ]);
+    const commentOutputs = (id: string): OperationOutputsV1 => ({
+      kind: "issue.comment.create",
+      issueNumber: 7,
+      commentId: id,
+      commentUrl: `https://github.com/owner/repo/issues/7#issuecomment-${id}`,
+    });
+    const seen: Array<string | undefined> = [];
+    const readBack: Array<boolean | undefined> = [];
+    const firstPass = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation, context) => {
+        seen.push(context.chainedResourceVersion);
+        readBack.push(context.readBackVersion);
+        if (operation.id === "op_second") return { receipt: receipt(operation, "failed") };
+        return {
+          ...success(operation, commentOutputs("101")),
+          resourceVersion: { resource: "issue:7", updatedAt: "2026-09-17T12:01:05Z" },
+        };
+      },
+      record: async () => undefined,
+    });
+    expect(seen).toEqual([undefined, "2026-09-17T12:01:05Z"]);
+    expect(readBack).toEqual([true, true]);
+    expect(firstPass.receipt.operations[0]?.resourceVersion)
+      .toEqual({ resource: "issue:7", updatedAt: "2026-09-17T12:01:05Z" });
+    expect(firstPass.receipt.operations[1]?.resourceVersion).toBeUndefined();
+
+    const resumed: Array<string | undefined> = [];
+    const resumedReadBack: Array<boolean | undefined> = [];
+    const secondPass = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: firstPass.receipt,
+      execute: async (operation, context) => {
+        resumed.push(context.chainedResourceVersion);
+        resumedReadBack.push(context.readBackVersion);
+        const updatedAt = operation.id === "op_second" ? "2026-09-17T12:02:00Z" : "2026-09-17T12:02:30Z";
+        return { ...success(operation, commentOutputs("102")), resourceVersion: { resource: "issue:7", updatedAt } };
+      },
+      record: async () => undefined,
+    });
+    // The resumed attempt recognises the first attempt's write, then chains its own.
+    expect(resumed).toEqual(["2026-09-17T12:01:05Z", "2026-09-17T12:02:00Z"]);
+    // The last step has no later step on the resource, so it skips the read-back.
+    expect(resumedReadBack).toEqual([true, undefined]);
+    expect(secondPass.receipt.status).toBe("applied");
+  });
+
+  it("does not chain from a skipped step", async () => {
+    const value = plan([commentStep("first", "op_first"), commentStep("second", "op_second")]);
+    const seen: Array<string | undefined> = [];
+    await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation, context) => {
+        seen.push(context.chainedResourceVersion);
+        return {
+          receipt: receipt(operation, "skipped"),
+          outputs: {
+            kind: "issue.comment.create",
+            issueNumber: 7,
+            commentId: "101",
+            commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-101",
+          },
+          resourceVersion: { resource: "issue:7", updatedAt: "2026-09-17T12:01:05Z" },
+        };
+      },
+      record: async () => undefined,
+    });
+    expect(seen).toEqual([undefined, undefined]);
+  });
+
+  it("ignores a read-back version for a resource the step did not target", async () => {
+    const value = plan([commentStep("first", "op_first"), commentStep("second", "op_second")]);
+    const seen: Array<string | undefined> = [];
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation, context) => {
+        seen.push(context.chainedResourceVersion);
+        return {
+          ...success(operation, {
+            kind: "issue.comment.create",
+            issueNumber: 7,
+            commentId: "101",
+            commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-101",
+          }),
+          resourceVersion: { resource: "issue:8", updatedAt: "2026-09-17T12:01:05Z" },
+        };
+      },
+      record: async () => undefined,
+    });
+    expect(seen).toEqual([undefined, undefined]);
+    expect(result.receipt.operations.every((entry) => entry.resourceVersion === undefined)).toBe(true);
+  });
+
   it("preserves a conflicted halt instead of retrying an immutable mismatch", async () => {
     const value = plan([commentStep("comment", "op_comment")]);
     const first = await effects.applyOrderedPlan({

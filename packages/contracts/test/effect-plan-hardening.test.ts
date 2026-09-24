@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COMMIT_FILE_LIMIT } from "../src/operations";
 import {
   CAPTURE_FILE_MAX_BYTES,
   CAPTURE_TOTAL_MAX_BYTES,
@@ -384,9 +385,10 @@ describe("protected capture paths", () => {
     })).capture?.files).toHaveLength(1);
   });
 
-  it("imposes no file-count ceiling on an external artifact", () => {
-    const wide = Array.from({ length: 5_000 }, (_, index) => `src/file-${index}.ts`);
-    expect(taskCaptureManifestV1Schema.parse(manifest(wide)).files).toHaveLength(5_000);
+  it("bounds file count by what one commit.create can write, so every capture is materializable", () => {
+    const paths = (count: number) => Array.from({ length: count }, (_, index) => `src/file-${index}.ts`);
+    expect(taskCaptureManifestV1Schema.parse(manifest(paths(COMMIT_FILE_LIMIT))).files).toHaveLength(COMMIT_FILE_LIMIT);
+    expect(() => taskCaptureManifestV1Schema.parse(manifest(paths(COMMIT_FILE_LIMIT + 1)))).toThrow();
   });
 });
 

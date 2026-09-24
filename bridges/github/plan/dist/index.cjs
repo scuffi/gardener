@@ -40260,6 +40260,9 @@ function operationOutputType(kind, output2) {
   const outputs = operationOutputCatalog[kind];
   return Object.hasOwn(outputs, output2) ? outputs[output2] : void 0;
 }
+function operationOutputNames(kind) {
+  return Object.keys(operationOutputCatalog[kind]).sort();
+}
 var outputSentinels = {
   string: "gardener-step-output",
   resourceNumber: 1,
@@ -41065,12 +41068,11 @@ var taskCaptureManifestV1Schema = external_exports.strictObject({
   /** Commit the capture was taken against; apply refuses a drifted base. */
   baseSha: sha1,
   /**
-   * Bounded by the number of files one `commit.create` may write. A capture
-   * larger than that could never be materialized, so it is refused here — when
-   * the capture is admitted, before a plan exists — rather than partway
-   * through apply with earlier steps already written.
+   * Bounded by the number of files one `commit.create` may write. A larger
+   * capture could never be materialized, so it is refused when the capture is
+   * admitted, before a plan exists, rather than partway through apply.
    */
-  files: external_exports.array(taskCaptureFileV1Schema).min(1),
+  files: external_exports.array(taskCaptureFileV1Schema).min(1).max(COMMIT_FILE_LIMIT),
   totalBytes: captureByteCount,
   /**
    * A partial capture is never applicable, so the only representable value is
@@ -41197,6 +41199,53 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   rationale: external_exports.string().trim().min(1).max(5e3)
 });
 var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
+function taskStepIssues(step, context) {
+  const issues = [];
+  const resolvedTypes = /* @__PURE__ */ new Map();
+  for (const [pointer, reference] of Object.entries(step.references)) {
+    const path4 = ["references", pointer];
+    if (reference.step === step.stepName) {
+      issues.push({ path: path4, message: "a step cannot reference its own output" });
+      continue;
+    }
+    const targetKind = context.earlier.get(reference.step);
+    if (targetKind === void 0) {
+      issues.push({
+        path: path4,
+        message: context.later?.has(reference.step) ? `step "${reference.step}" does not run before this step` : `unknown step "${reference.step}"`
+      });
+      continue;
+    }
+    const outputType = operationOutputType(targetKind, reference.output);
+    if (outputType === void 0) {
+      issues.push({
+        path: path4,
+        message: `${targetKind} does not publish a scalar output named "${reference.output}"; it publishes ${operationOutputNames(targetKind).map((name2) => `"${name2}"`).join(", ")}`
+      });
+      continue;
+    }
+    resolvedTypes.set(pointer, outputType);
+  }
+  for (const message3 of captureOwnedPointerIssues(step.kind, step.payload, step.references)) {
+    issues.push({ path: ["payload"], message: message3 });
+  }
+  for (const message3 of probeOperationShape({
+    kind: step.kind,
+    payload: step.payload,
+    references: step.references,
+    deferredPointers: captureDeferredPointers(step.kind),
+    resolveOutputType: (reference) => {
+      for (const [pointer, type] of resolvedTypes) {
+        const candidate = step.references[pointer];
+        if (candidate?.step === reference.step && candidate.output === reference.output) return type;
+      }
+      return void 0;
+    }
+  })) {
+    issues.push({ path: ["payload"], message: message3 });
+  }
+  return issues;
+}
 var taskEffectPlanV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-effect-plan/v1"),
   runId: boundIdentifier,
@@ -41247,54 +41296,12 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   }
   let anyStepDefersToCapture = false;
   plan.operations.forEach((operation, index) => {
-    const path4 = ["operations", index];
-    const resolvedTypes = /* @__PURE__ */ new Map();
-    for (const [pointer, reference] of Object.entries(operation.references)) {
-      const targetIndex = indexByStepName.get(reference.step);
-      if (reference.step === operation.stepName) {
-        context.addIssue({ code: "custom", path: [...path4, "references", pointer], message: "a step cannot reference its own output" });
-        continue;
-      }
-      if (targetIndex === void 0) {
-        context.addIssue({ code: "custom", path: [...path4, "references", pointer], message: `unknown step "${reference.step}"` });
-        continue;
-      }
-      if (targetIndex >= index) {
-        context.addIssue({ code: "custom", path: [...path4, "references", pointer], message: `step "${reference.step}" does not run before this step` });
-        continue;
-      }
-      const targetKind = plan.operations[targetIndex].kind;
-      const outputType = operationOutputType(targetKind, reference.output);
-      if (outputType === void 0) {
-        context.addIssue({
-          code: "custom",
-          path: [...path4, "references", pointer],
-          message: `${targetKind} does not publish a scalar output named "${reference.output}"`
-        });
-        continue;
-      }
-      resolvedTypes.set(pointer, outputType);
+    const earlier = new Map(plan.operations.slice(0, index).map((candidate) => [candidate.stepName, candidate.kind]));
+    const later = new Set(plan.operations.slice(index + 1).map((candidate) => candidate.stepName));
+    for (const issue3 of taskStepIssues(operation, { earlier, later })) {
+      context.addIssue({ code: "custom", path: ["operations", index, ...issue3.path], message: issue3.message });
     }
-    for (const message3 of captureOwnedPointerIssues(operation.kind, operation.payload, operation.references)) {
-      context.addIssue({ code: "custom", path: [...path4, "payload"], message: message3 });
-    }
-    const deferredPointers = captureDeferredPointers(operation.kind);
-    if (deferredPointers.length > 0) anyStepDefersToCapture = true;
-    for (const message3 of probeOperationShape({
-      kind: operation.kind,
-      payload: operation.payload,
-      references: operation.references,
-      deferredPointers,
-      resolveOutputType: (reference) => {
-        for (const [pointer, type] of resolvedTypes) {
-          const candidate = operation.references[pointer];
-          if (candidate?.step === reference.step && candidate.output === reference.output) return type;
-        }
-        return void 0;
-      }
-    })) {
-      context.addIssue({ code: "custom", path: [...path4, "payload"], message: message3 });
-    }
+    if (captureDeferredPointers(operation.kind).length > 0) anyStepDefersToCapture = true;
   });
   const { maxEffectOperations, maxEffectBytes } = plan.limits;
   if (maxEffectOperations !== void 0 && plan.operations.length > maxEffectOperations) {
@@ -41680,7 +41687,16 @@ var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
   stepName,
   receipt: runnerOperationReceiptV1Schema,
   /** Scalar provider outputs needed to resolve references after a retry. */
-  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({})
+  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({}),
+  /**
+   * `updated_at` of the step's issue, pull request, or discussion read back
+   * after it succeeded. A later step on the same resource accepts it as the
+   * plan's own write, including after a resume.
+   */
+  resourceVersion: external_exports.strictObject({
+    resource: external_exports.string().regex(/^(?:issue|pull|discussion):[1-9][0-9]{0,15}$/),
+    updatedAt: external_exports.iso.datetime({ offset: true })
+  }).optional()
 });
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
