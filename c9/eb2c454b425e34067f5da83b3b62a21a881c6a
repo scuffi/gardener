@@ -1,0 +1,40 @@
+apps/gardener/test/task-session-proposals.test.ts
+  s_de0b486c128948::t_684bf0919681c1 165-178
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_de0b486c128948::t_0c065fcb600efd 150-152
+apps/gardener/test/task-runtime-framework.test.ts
+  s_de0b486c128948::t_c81bcd8509f9e8 226
+docs/task-authoring.md
+  s_de0b486c128948::t_9c4acc5b850bbb 203-224
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_34c531b0c9189e 392-416
+packages/runner/test/effects-main.test.ts
+  s_de0b486c128948::t_bc4989d462ebac 65,274-357,367-371,374,376-382
+  s_de0b486c128948::t_7e658b0d59a678 358-366,372-373,375,383
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_de1e8e98f93768 4,275-277
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_aaab3fad56f5e2 7,9,12-13,21,141-158,191-214,303-332,343,349-370,372
+packages/contracts/test/effect-plan-hardening.test.ts
+  s_de0b486c128948::t_7dc48f99c7ac63 20,457-540
+  s_de0b486c128948::t_69fa9a9fddd0fa 2,541-558
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_075c29ccda36a0 4,831-882,889,892-902,994-1015,1094,1128-1147,1553,1615-1646,1663,1665-1673,1675-1682
+  s_de0b486c128948::t_097b3d351a4701 1683-1685,1697
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c9eb2c454b425e34067f5da83b3b62a21a881c6a",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
