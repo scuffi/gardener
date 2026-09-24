@@ -1,0 +1,56 @@
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_a13d53f4d8b7db 37,41,223-230,254,295-302
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_19ba291764f8f4 153-176,183-184,254-261,534-536,577,581,619,626,679,730,789,816,868,891,926,964,1029,1415,1458,1535,1540,1612,1662,1696,1739,2103,2195-2196,2244-2251,2271-2287,2289,2294,2315
+  s_de0b486c128948::t_231df3eb4dc682 2288,2290-2293,2295-2314,2316
+docs/architecture.md
+  s_de0b486c128948::t_8c3b2149c58f62 110-114
+  s_de0b486c128948::t_f246d41836dd9f 115
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_bcacab8b24ccbb 36,126-130,152-157,200-203,206-207
+  s_de0b486c128948::t_d397d1d23cbc2e 208-210,228-246,364,366
+apps/gardener/test/task-session-proposals.test.ts
+  s_de0b486c128948::t_81cdd2d76a59a8 7,72,75-83,133-169
+SECURITY.md
+  s_de0b486c128948::t_b7e0fe7b540db2 111-116
+  s_de0b486c128948::t_24dd55a7462070 117
+docs/task-authoring.md
+  s_de0b486c128948::t_90743d03e20774 228-230
+packages/contracts/test/effect-plan-hardening.test.ts
+  s_de0b486c128948::t_8bb047100f9b46 2,388-391
+packages/protocol/src/schema.ts
+  s_de0b486c128948::t_f9fb803c9b72f9 420-428
+packages/runner/test/effects-main.test.ts
+  s_de0b486c128948::t_3357778c095d5b 328-441
+apps/gardener/src/task-runtime/transportable-error.ts
+  s_de0b486c128948::t_351cf459229106 1-21
+  s_de0b486c128948::t_120699968d26b0 22-23
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_a3ae1e8d5b5cea 484-489
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_de0b486c128948::t_e881b3fc9fea06 9,220-241
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_b2f76e0b2cb9d0 1558-1619,1622,1627,1629
+  s_de0b486c128948::t_70a2806cf8aa81 1620-1621,1623-1626,1628,1630-1644
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_a98aab585a0c4f 3,5,9,1197-1202,1210-1212,1214,1498-1575,1638-1641,1643
+apps/gardener/test/task-transportable-error.test.ts
+  s_de0b486c128948::t_9afa77a956899a 1-26
+  s_de0b486c128948::t_80d297fd44e24b 27-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "424fa935484fc2b43d733f549c5b6ef45b73d77a",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
