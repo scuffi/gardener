@@ -1,0 +1,77 @@
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_1f0139f337052c 2,181-182,209-226,249
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_65fe14467ec6fb 64,646,651
+apps/gardener/src/task-runtime/task-bundles.ts
+  s_de0b486c128948::t_6c52d1c0ae4dcf 1,8,29-43
+apps/gardener/test/fixture-bundle.ts
+  s_de0b486c128948::t_7f3189ef84db1d 17
+apps/gardener/test/task-bundles.test.ts
+  s_de0b486c128948::t_bdee6b64bf3592 6,29-30,41-56,61
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_2fc5abab00fa81 4,85-93,98-102,182-219
+apps/gardener/test/task-runtime-framework.test.ts
+  s_de0b486c128948::t_debcb41b19c660 232
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_18270e7106905f 40488-40494,40509-40511,40749-40754,40770-40772,41279-41280,41283,41287-41288,41291,41798-41806,45151-45179,45289-45308,45356,45358-45376,47092,47407,47419-47422
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_7f30a106bdec77 40482-40488,40503-40505,40743-40748,40764-40766,41501-41529,41785-41793,42092-42111,42159,42161-42179,47124-47126
+docs/architecture.md
+  s_de0b486c128948::t_58426b10c37335 55-58
+docs/operations.md
+  s_de0b486c128948::t_7400433f56a83c 87-90
+docs/task-authoring.md
+  s_de0b486c128948::t_74bdd973f48f8d 66-68,303-338,353-355
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_4ffea4c0c7b209 289-293
+packages/cli/src/actions-target.ts
+  s_de0b486c128948::t_0e19c7ab1909c2 2,115-122,177-180,183,193
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_4ef156aa440bc5 112
+packages/cli/src/project.ts
+  s_de0b486c128948::t_b9b460de3f74b1 4,311-313,317-318,320-325
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_429555f6fb2b5e 82,164-170,193
+packages/cli/test/actions-installation.test.ts
+  s_de0b486c128948::t_8858c8f3eb02d2 50,55-85
+packages/cli/test/actions-target.test.ts
+  s_de0b486c128948::t_79590178541b4a 2,5-14,33,70-73,95-99,230-247
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_a9a50ca481af65 251,356,363-370
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_4d500b867b5c21 190-206,269-274,291-293,571-576,592-594,1463-1465,1520-1522,1525,1529-1530,1533
+packages/contracts/test/normalized-event-v1.test.ts
+  s_de0b486c128948::t_e5ea1fb197f040 8,180-201,203,209
+packages/contracts/test/task-v1.test.ts
+  s_de0b486c128948::t_467bd8a19361d1 178-179,190-191,198-204
+packages/protocol/src/schema.ts
+  s_de0b486c128948::t_601725345bc9bd 344-352
+packages/runner/src/dispatch-target.ts
+  s_de0b486c128948::t_eb1b9d77923620 1-41
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_2a4085ab010b85 37-38,78,496,508-515
+packages/runner/src/event.ts
+  s_de0b486c128948::t_dab95c6f028432 143-185,238,240-259
+packages/runner/src/main.ts
+  s_de0b486c128948::t_44eb6bd4d9e30e 7-8,114-120
+packages/runner/test/dispatch-target.test.ts
+  s_de0b486c128948::t_d3aa6678fd4402 1-34
+packages/runner/test/event-normalization.test.ts
+  s_de0b486c128948::t_c3d93faac854a5 3,51,55,140,146-181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e047adb6bc8a27505f262a5b8e986363ba4989c7",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
