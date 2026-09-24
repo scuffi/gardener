@@ -4,7 +4,7 @@ import {
   type CloudflareAIBinding,
 } from "@flue/runtime/cloudflare/workers-ai";
 import type { HarnessBudget } from "../types";
-import { FLUE_NATIVE_INPUT_BYTES_PER_TOKEN } from "../../flue-native-protocol";
+import { INPUT_BYTES_PER_TOKEN } from "./input-budget";
 
 const NATIVE_BOUNDED_MODEL_PREFIX = "gardener-native-bounded-v3";
 const MINIMUM_PROVIDER_OUTPUT_TOKENS = 16;
@@ -139,7 +139,7 @@ function enforceInputByteLimit(value: unknown, maxInputBytes: number): void {
 }
 
 function inputByteLimit(maxInputTokens: number): number {
-  const limit = maxInputTokens * FLUE_NATIVE_INPUT_BYTES_PER_TOKEN;
+  const limit = maxInputTokens * INPUT_BYTES_PER_TOKEN;
   if (!Number.isSafeInteger(limit) || limit < 1) {
     throw new Error("Flue model input token budget cannot be encoded safely");
   }

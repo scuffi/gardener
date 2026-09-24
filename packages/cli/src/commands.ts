@@ -69,21 +69,3 @@ export function wrangler(
     ...(options?.allowFailure === undefined ? {} : { allowFailure: options.allowFailure }),
   });
 }
-
-export function uploadSecret(
-  repositoryRoot: string,
-  applicationDirectory: string,
-  name: string,
-  value: string,
-  config?: string,
-  quiet = false,
-): void {
-  if (!quiet) console.log(`Uploading ${name} directly to the GitHub Gateway.`);
-  wrangler(
-    repositoryRoot,
-    applicationDirectory,
-    ["secret", "put", name, ...(config ? ["--config", config] : [])],
-    `${value}\n`,
-    { quiet },
-  );
-}

@@ -65,7 +65,7 @@ function payloadFor(kind: typeof operationKindValues[number]): Record<string, un
       branch: "gardener/fix-2",
       expectedHeadSha: sha1,
       message: "Fix issue",
-      files: [{ path: "src/a.ts", contentBase64: "aGVsbG8=" }],
+      files: [{ path: "src/a.ts", captured: { status: "modified", mode: "100644", sizeBytes: 5, sha256: "c".repeat(64) } }],
     };
     case "pull_request.open_draft": return {
       head: "gardener/fix-2", base: "main", expectedHeadSha: sha1, expectedBaseSha: sha1,
@@ -427,7 +427,7 @@ describe("probeOperationShape", () => {
   it("reports the exact failing pointer", () => {
     const [message] = probeOperationShape({
       kind: "commit.create",
-      payload: { ...payloadFor("commit.create"), files: [{ path: "../escape", contentBase64: "aGVsbG8=" }] },
+      payload: { ...payloadFor("commit.create"), files: [{ path: "../escape", captured: { status: "deleted" } }] },
     });
     expect(message).toMatch(/^\/files\/0\/path:/);
   });

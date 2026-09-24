@@ -18,7 +18,7 @@ import {
   settledTaskOutcome,
   type CompletedTaskOutcomeV1,
 } from "../src/task-runtime/effect-plan";
-import { inspectRepositoryFixtureBundle } from "../src/task-runtime/fixture";
+import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 
 const COMMIT = "b".repeat(40);
 const OTHER_COMMIT = "a".repeat(40);

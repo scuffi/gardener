@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "gardener-actions-v1-runtime",
+  "name": "gardener-runtime",
   "main": "src/task-runtime/runtime-entrypoint.ts",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat", "experimental", "global_fetch_strictly_public"],
@@ -8,9 +8,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "gardener-actions-v1-runtime",
+      "database_name": "gardener-runtime",
       "database_id": "e5b4c408-55d6-42f7-802e-93542cf93877",
-      "migrations_dir": "migrations-actions"
+      "migrations_dir": "migrations"
     }
   ],
   "ai": { "binding": "AI" },
@@ -27,10 +27,7 @@
     }
   ],
   "vars": {
-    "AI_MODEL": "@cf/moonshotai/kimi-k2.6",
-    "GARDENER_WORKSPACE_ID": "workspace-local",
-    "GARDENER_DEPLOYMENT_MODE": "actions-v1",
-    "LOCAL_DEV_BYPASS": "false"
+    "AI_MODEL": "@cf/moonshotai/kimi-k2.6"
   },
   "observability": {
     "enabled": true,

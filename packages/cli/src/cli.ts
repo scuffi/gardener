@@ -26,18 +26,18 @@ const HELP = `gardener <command>
 Commands:
   init                         Create a local .gardener project
   build                        Compile TASK.md files and generate caller workflows
-  deploy                       Provision the headless Actions-native Cloudflare runtime
+  deploy                       Deploy the Gardener runtime to Cloudflare
   upgrade                      Upgrade runtime and one repository bridge pin
   rollback                     Redeploy an explicitly confirmed historical source digest
   connect                      Enroll a GitHub repository and its compiled task bundles
   up                           Init, build, deploy, connect, and verify
-  doctor                       Verify an existing Actions-native installation
+  doctor                       Verify an existing installation
   qualify                      Run both demo workflows and verify exact receipts
   task <enable|disable>        Immediately enable or disable one enrolled task
   repository <enable|disable>  Immediately enable or disable one repository
   repositories                 List enrolled repositories
   tasks                        List enrolled task bundles
-  runs                         List recent Actions-native runs
+  runs                         List recent runs
   run show                     Show one run and its audit records
   down                         Preview or execute manifest-guarded teardown
 
@@ -76,7 +76,7 @@ Options:
 
 const DEPLOY_HELP = `gardener deploy
 
-Provision or resume one headless Actions-native Gardener deployment.
+Deploy or resume the Gardener runtime on Cloudflare.
 
 Options:
   --workspace <name>           Stable installation name

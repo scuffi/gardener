@@ -9,16 +9,15 @@ updates:
     schedule:
       interval: weekly
     groups:
-      cloudflare-runtime:
+      cloudflare:
         patterns:
           - "@cloudflare/*"
           - "wrangler"
-          - "agents"
-      application-runtime:
+      flue:
         patterns:
-          - "hono"
-          - "jose"
-          - "zod"
+          - "@flue/*"
+          - "@earendil-works/*"
+          - "valibot"
       test-tooling:
         patterns:
           - "typescript"

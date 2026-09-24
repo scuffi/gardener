@@ -5,7 +5,6 @@ import {
   operationReceiptSchema,
   operationSchema,
   type Operation,
-  type OperationKind,
   type OperationReceipt,
 } from "@gardener/contracts";
 
@@ -17,14 +16,13 @@ import {
  * repository content from disk. Every mutation is an authenticated GitHub REST
  * or GraphQL call bound to the enrolled repository.
  *
- * Authority model differences from the historical GitHub App gateway:
+ * Authority model:
  *
- * - the caller supplies `GITHUB_TOKEN`, which acts as `github-actions[bot]`
- *   rather than a per-installation App token, so authorship checks match the
- *   Actions bot login (or the `github-actions` app slug) instead of an App id;
- * - commit idempotency markers are derived from the canonical operation hash
- *   instead of an HMAC over a shared secret, because the effects job has no
- *   Gardener-held signing key. The hash is deterministic, collision-resistant,
+ * - the caller supplies `GITHUB_TOKEN`, which acts as `github-actions[bot]`,
+ *   so authorship checks match the Actions bot login (or the `github-actions`
+ *   app slug);
+ * - commit idempotency markers are derived from the canonical operation hash,
+ *   because the effects job holds no Gardener signing key. The hash is deterministic, collision-resistant,
  *   and verifiable by any party holding the operation, which is exactly what
  *   idempotent reconciliation requires. It is not an authenticity claim; the
  *   `gardener/` branch namespace and repository binding provide that.
@@ -45,21 +43,8 @@ const DEFAULT_MAX_PAGES = 100;
 const USER_AGENT = "gardener-actions-effects/1";
 const COMMIT_MARKER_PREFIX = "Gardener-Operation:";
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
-const SHA256_HEX = /^[a-f0-9]{64}$/;
 const GIT_SHA = /^[a-fA-F0-9]{40}$/;
 const REPOSITORY_FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-/**
- * Budget for commit content carried *inside* the operation.
- *
- * Capture-backed content is not counted: it never enters the operation, is
- * read one file at a time, and is bounded per file by GitHub's own blob
- * maximum. Applying this aggregate cap to it would refuse change sets the
- * provider accepts. Protected paths are not listed here either — the executor
- * uses `isProtectedCapturePath`, so the capture manifest, the instance policy,
- * and this final pre-write check cannot drift apart.
- */
-const MAX_INLINE_COMMIT_CONTENT_BYTES = 5_000_000;
-
 type JsonRecord = Record<string, unknown>;
 
 /* -------------------------------------------------------------------------- */
@@ -294,11 +279,6 @@ function isSafeFilePath(value: string): boolean {
     && !value.includes("\\")
     && !value.includes("\0")
     && value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
-}
-
-function decodedBase64Length(value: string): number {
-  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor((value.length * 3) / 4) - padding);
 }
 
 function htmlUrl(value: JsonRecord, field = "html_url"): string {
@@ -1082,18 +1062,6 @@ async function executeBranchCreate(scope: ExecutionScope, operation: BranchCreat
 
 type CommitCreate = Extract<Operation, { kind: "commit.create" }>;
 type CommitFile = CommitCreate["files"][number];
-type CapturedCommitFile = Extract<CommitFile, { captured: unknown }>;
-
-function isCapturedFile(file: CommitFile): file is CapturedCommitFile {
-  return "captured" in file;
-}
-
-/** Mode the commit must write, from the capture for capture-backed files. */
-function requestedMode(file: CommitFile): "100644" | "100755" | "120000" | null {
-  if (!isCapturedFile(file)) return null;
-  return file.captured.status === "deleted" ? null : file.captured.mode;
-}
-
 /**
  * Reads one captured file and re-proves it before it can be uploaded.
  *
@@ -1107,7 +1075,7 @@ function requestedMode(file: CommitFile): "100644" | "100755" | "120000" | null 
  */
 async function readVerifiedCapturedContent(
   scope: ExecutionScope,
-  file: CapturedCommitFile,
+  file: CommitFile,
 ): Promise<string> {
   if (file.captured.status === "deleted") throw new Error("A deleted capture entry has no content to read");
   const reader = scope.readCapturedFile;
@@ -1143,23 +1111,11 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
   if (operation.files.some((file) => isProtectedCapturePath(file.path))) {
     throw failure("protected_commit_path", "Commit touches a protected repository path");
   }
-  const captured = operation.files.filter(isCapturedFile);
-  if (captured.length > 0 && scope.readCapturedFile === undefined) {
+  if (operation.files.some((file) => file.captured.status !== "deleted") && scope.readCapturedFile === undefined) {
     // A caller defect, not an operation outcome: the plan asked for content the
     // executor was given no way to read. Failing here keeps the alternative —
     // committing an empty or partial tree — unrepresentable.
     throw new Error("commit.create requires capture-backed content but no capture reader was provided");
-  }
-  // Only inline content is budgeted. Capture-backed bytes never enter the
-  // operation, are read one file at a time, and are already bounded per file by
-  // the provider's blob maximum, so an aggregate cap here would reject change
-  // sets the provider accepts.
-  const inlineBytes = operation.files.reduce(
-    (total, file) => total + (isCapturedFile(file) || file.contentBase64 === null ? 0 : decodedBase64Length(file.contentBase64)),
-    0,
-  );
-  if (inlineBytes > MAX_INLINE_COMMIT_CONTENT_BYTES) {
-    throw failure("commit_too_large", "Inline commit content exceeds the 5 MB operation limit");
   }
   const marker = commitMarker(operation.id, scope.operationHash);
   const head = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
@@ -1220,23 +1176,19 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
     if (existing && (existing.type !== "blob" || typeof existingMode !== "string" || !supportedModes.includes(existingMode))) {
       throw conflict("unsupported_git_object", `Commit cannot replace unsupported Git object: ${file.path}`);
     }
-    // A capture recorded the mode it observed on disk, so it is authoritative:
-    // a newly executable script has to land as `100755` even though the path it
-    // replaces was `100644`. Inline content carries no mode, so it inherits the
-    // existing one and defaults to a regular file.
-    const mode = requestedMode(file) ?? (existingMode === "100755" || existingMode === "120000" ? existingMode : "100644");
-    const deletes = isCapturedFile(file) ? file.captured.status === "deleted" : file.contentBase64 === null;
-    if (deletes) {
+    if (file.captured.status === "deleted") {
       if (!existing) throw conflict("delete_target_missing", `Commit cannot delete absent path: ${file.path}`);
-      tree.push({ path: file.path, mode, type: "blob", sha: null });
+      tree.push({ path: file.path, mode: existingMode as string, type: "blob", sha: null });
       continue;
     }
+    // A capture recorded the mode it observed on disk, so it is authoritative:
+    // a newly executable script has to land as `100755` even though the path it
+    // replaces was `100644`.
+    const mode = file.captured.mode;
     // One blob at a time. The bytes of a capture-backed file are read, encoded,
     // uploaded, and dropped before the next path is touched, so peak memory is
     // a function of the largest single file rather than of the change set.
-    const content = isCapturedFile(file)
-      ? await readVerifiedCapturedContent(scope, file)
-      : file.contentBase64;
+    const content = await readVerifiedCapturedContent(scope, file);
     const { data: blob } = await scope.api.rest(`${scope.repoPath}/git/blobs`, "Git blob creation", {
       method: "POST",
       body: JSON.stringify({ content, encoding: "base64" }),

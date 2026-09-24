@@ -16,7 +16,7 @@ import {
   type CompletedTaskOutcomeV1,
   type TaskEffectPlanCaptureV1,
 } from "../src/task-runtime/effect-plan";
-import { inspectRepositoryFixtureBundle } from "../src/task-runtime/fixture";
+import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 
 const COMMIT = "b".repeat(40);
 const ISSUE_PRECONDITIONS = {

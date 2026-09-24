@@ -45,35 +45,11 @@ const operationIdSchema = z.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
  */
 export const COMMIT_FILE_LIMIT = 1_000;
 
-/**
- * Encoded-byte budget for commit content carried *inside* the operation.
- *
- * Capture-backed content is exempt because it never enters the operation; see
- * the `commit.create` refinement.
- */
-export const INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES = 7_000_000;
-
-const canonicalBase64Schema = z.string().regex(
-  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
-  "expected canonical base64 content",
-);
-
 const commitFilePathSchema = z.string().min(1).max(1_024).refine(
   (path) => !path.startsWith("/") && !path.endsWith("/") && !path.includes("\\")
     && path.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "invalid repository path",
 );
-
-/**
- * A commit file whose bytes travel inside the operation.
- *
- * `null` content deletes the path. This is the shape an installation-backed
- * boundary uses, where the planner and the writer are the same process.
- */
-const inlineCommitFileSchema = z.object({
-  path: commitFilePathSchema,
-  contentBase64: canonicalBase64Schema.max(1_400_000).nullable(),
-}).strict();
 
 /**
  * A commit file whose bytes stay in the verified capture artifact.
@@ -91,7 +67,7 @@ const inlineCommitFileSchema = z.object({
  * (and the commit trailer derived from it) stays a function of what is written
  * without ever holding what is written.
  */
-const capturedCommitFileSchema = z.object({
+const commitFileSchema = z.object({
   path: commitFilePathSchema,
   captured: z.discriminatedUnion("status", [
     z.object({
@@ -104,8 +80,6 @@ const capturedCommitFileSchema = z.object({
     z.object({ status: z.literal("deleted") }).strict(),
   ]),
 }).strict();
-
-const commitFileSchema = z.union([inlineCommitFileSchema, capturedCommitFileSchema]);
 
 const operationBase = z.object({ schemaVersion: z.literal("v2"), id: operationIdSchema, repository: operationRepositoryRefSchema });
 const expectedTimestamp = z.iso.datetime();
@@ -150,25 +124,11 @@ const operationOptions = [
     kind: z.literal("commit.create"), branch: gardenerBranchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
     files: z.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
   }).strict().superRefine((value, context) => {
-    const paths = new Set<string>(); let encodedBytes = 0; let inlineFiles = 0;
+    const paths = new Set<string>();
     value.files.forEach((file, index) => {
       if (paths.has(file.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file.path);
-      if ("contentBase64" in file) { inlineFiles += 1; encodedBytes += file.contentBase64?.length ?? 0; }
     });
-    // The inline budget is unchanged and still applies to inline entries. It
-    // exists because those bytes travel inside the operation itself, through
-    // every boundary that stores or forwards the operation. Capture-backed
-    // entries carry no bytes at all, so the budget has nothing to bound; their
-    // limit is the provider's per-blob maximum, already enforced by
-    // `sizeBytes`.
-    if (encodedBytes > INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
-    // A commit is either the caller's own bytes or a verified capture, never a
-    // blend. Mixing them would let a plan smuggle model-authored content into
-    // a commit whose provenance reads as "materialized from the capture".
-    if (inlineFiles > 0 && inlineFiles !== value.files.length) {
-      context.addIssue({ code: "custom", path: ["files"], message: "a commit may not mix inline content with capture-backed content" });
-    }
   }),
   operationBase.extend({
     kind: z.literal("pull_request.open_draft"), head: gardenerBranchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,

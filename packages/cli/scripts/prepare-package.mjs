@@ -7,21 +7,21 @@ const repositoryRoot = resolve(packageRoot, "../..");
 const assets = join(packageRoot, "assets");
 
 if (process.argv.includes("--clean")) {
-  await rm(join(repositoryRoot, "apps/gardener/dist/gardener_actions_v1_runtime"), { recursive: true, force: true });
+  await rm(join(repositoryRoot, "apps/gardener/dist/gardener_runtime"), { recursive: true, force: true });
   await rm(assets, { recursive: true, force: true });
   process.exit(0);
 }
 
 await rm(assets, { recursive: true, force: true });
 await mkdir(join(assets, "apps/gardener/dist"), { recursive: true });
-await mkdir(join(assets, "apps/gardener/migrations-actions"), { recursive: true });
+await mkdir(join(assets, "apps/gardener/migrations"), { recursive: true });
 await copyRuntimeClosure(
-  join(repositoryRoot, "apps/gardener/dist/gardener_actions_v1_runtime"),
-  join(assets, "apps/gardener/dist/gardener_actions_v1_runtime"),
+  join(repositoryRoot, "apps/gardener/dist/gardener_runtime"),
+  join(assets, "apps/gardener/dist/gardener_runtime"),
 );
-const migrationRoot = join(repositoryRoot, "apps/gardener/migrations-actions");
+const migrationRoot = join(repositoryRoot, "apps/gardener/migrations");
 for (const name of (await readdir(migrationRoot)).filter((value) => value.endsWith(".sql")).sort()) {
-  await cp(join(migrationRoot, name), join(assets, "apps/gardener/migrations-actions", name));
+  await cp(join(migrationRoot, name), join(assets, "apps/gardener/migrations", name));
 }
 
 async function copyRuntimeClosure(source, destination) {

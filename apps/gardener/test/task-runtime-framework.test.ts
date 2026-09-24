@@ -12,7 +12,7 @@ import type {
   HarnessRequest,
   HarnessSubmission,
 } from "../src/harness";
-import { inspectRepositoryFixtureBundle } from "../src/task-runtime/fixture";
+import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 import {
   TaskHarnessRuntime,
   createTaskHarnessRequest,

@@ -31,7 +31,6 @@ export {
   assertHarnessSubmission,
   emptyUsage,
   expectedHarnessBinding,
-  parseHarnessOutcome,
 } from "./validation";
 export {
   NarrowedHarnessToolFacade,

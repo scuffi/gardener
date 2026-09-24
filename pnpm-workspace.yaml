@@ -1,43 +1,24 @@
 packages:
   - "apps/gardener"
   - "packages/*"
-  - "spikes/*"
 
 allowBuilds:
-  '@google/genai': false
-  '@mongodb-js/zstd': false
-  core-js-pure: false
   esbuild: true
-  node-liblzma: false
-  protobufjs: false
   workerd: true
 
-# These packages were explicitly version-checked against npm and are required
-# to keep runtime, product UI, and test tooling current despite the release-age gate.
+# Exact pins that were version-checked against npm and are required to keep the
+# runtime and test tooling current despite the release-age gate.
 minimumReleaseAgeExclude:
   - "@cloudflare/workers-types"
   - "@types/node"
   - miniflare
   - wrangler
-  - '@cloudflare/kumo@2.13.1 || 2.13.2 || 2.14.0'
-  # Optional Kumo peer, consumed tree-shaken by the dashboard's chart surfaces.
-  - echarts@6.1.0
   - '@cloudflare/vite-plugin@1.54.4 || 1.54.6 || 1.54.7'
-  - "@testing-library/user-event@14.6.7"
-  - '@types/react-dom@19.2.7 || 19.3.0'
   - vitest@5.0.0 || 5.0.1
   - '@vitest/mocker@5.0.0 || 5.0.1'
   - '@vitest/spy@5.0.0 || 5.0.1'
   - jose@6.2.11
-  - '@ai-sdk/gateway@4.0.76 || 4.0.78'
-  - '@ai-sdk/provider-utils@5.0.37 || 5.0.39'
-  - '@ai-sdk/provider@4.0.11 || 4.0.13'
-  - ai@7.0.94 || 7.0.95 || 7.0.97
-  - react-dom@19.3.0
-  - react@19.3.0
-  - scheduler@0.28.0
   - zod@4.6.1 || 4.6.2 || 4.6.5
-  - '@types/react@19.3.0'
   - vite@8.3.0
   - '@cloudflare/workerd-darwin-64@1.20260910.1'
   - '@cloudflare/workerd-darwin-arm64@1.20260910.1'
@@ -46,8 +27,3 @@ minimumReleaseAgeExclude:
   - '@cloudflare/workerd-windows-64@1.20260910.1'
   - workerd@1.20260910.1
   - hono@4.13.8
-  - react-router-dom@7.18.4
-  - react-router@7.18.4
-  - '@tanstack/query-core@5.103.0'
-  - '@tanstack/react-query@5.103.0'
-  - jsdom@30.1.0 || 30.1.1

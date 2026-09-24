@@ -35,7 +35,6 @@ const teardownIntentSchema = z.strictObject({
   resources: z.strictObject({
     database: z.strictObject({ name: z.string().min(1), id: z.string().uuid() }),
     runtimeWorker: z.string().min(1),
-    legacyIngressWorker: z.string().min(1).nullable(),
     runnerAccessBypassAppId: z.string().nullable(),
   }),
   createdAt: z.string().datetime(),
@@ -66,29 +65,6 @@ const manifestSchema = z.strictObject({
 });
 export type ActionsInstallationManifest = z.infer<typeof manifestSchema>;
 
-const legacyManifestSchema = z.strictObject({
-  schemaVersion: z.literal("gardener.actions-installation/v1"),
-  workspace: workspaceName,
-  cloudflare: z.strictObject({
-    accountId: z.string().min(1),
-    database: z.strictObject({ name: z.string().min(1), id: z.string().uuid() }),
-    runtimeWorker: z.string().min(1),
-    ingressWorker: z.string().min(1),
-    ingressOrigin: z.string().url(),
-    runnerAccessBypassAppId: z.string().nullable(),
-    runtimeConfig: z.string().min(1),
-    ingressConfig: z.string().min(1),
-  }),
-  deployment: deploymentRecordSchema.optional(),
-  deploymentHistory: z.array(deploymentRecordSchema).max(20).optional(),
-  deploymentHashVersion: z.literal("actions-v2").optional(),
-  runtimeGeneration: z.literal("actions-only").optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-type LegacyActionsInstallationManifest = z.infer<typeof legacyManifestSchema>;
-type AnyActionsInstallationManifest = ActionsInstallationManifest | LegacyActionsInstallationManifest;
-
 export interface ActionsResourceNames {
   database: string;
   runtimeWorker: string;
@@ -118,7 +94,7 @@ export function renderRuntimeConfig(input: {
 }): string {
   return `${JSON.stringify({
     name: input.names.runtimeWorker,
-    main: join(input.sourceRoot, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"),
+    main: join(input.sourceRoot, "apps/gardener/dist/gardener_runtime/index.js"),
     compatibility_date: "2026-09-02",
     compatibility_flags: ["nodejs_compat", "experimental", "global_fetch_strictly_public"],
     workers_dev: true,
@@ -126,7 +102,7 @@ export function renderRuntimeConfig(input: {
       binding: "DB",
       database_name: input.names.database,
       database_id: input.databaseId,
-      migrations_dir: join(input.sourceRoot, "apps/gardener/migrations-actions"),
+      migrations_dir: join(input.sourceRoot, "apps/gardener/migrations"),
     }],
     ai: { binding: "AI" },
     durable_objects: { bindings: [
@@ -141,9 +117,6 @@ export function renderRuntimeConfig(input: {
     }),
     vars: {
       AI_MODEL: "@cf/moonshotai/kimi-k2.6",
-      GARDENER_WORKSPACE_ID: input.workspace,
-      GARDENER_DEPLOYMENT_MODE: "actions-v1",
-      LOCAL_DEV_BYPASS: "false",
     },
     observability: {
       enabled: true,
@@ -460,16 +433,13 @@ export async function destroyActions(input: {
 }): Promise<{
   destroyed: boolean;
   intentDigest: string;
-  resources: { database: string; runtimeWorker: string; legacyIngressWorker?: string };
+  resources: { database: string; runtimeWorker: string };
 }> {
-  const manifest = await requiredAnyActionsManifest(input.workspace);
+  const manifest = await requiredActionsManifest(input.workspace);
   const sourceRoot = resolve(input.sourceRoot);
   const resources = {
     database: manifest.cloudflare.database.name,
     runtimeWorker: manifest.cloudflare.runtimeWorker,
-    ...(manifest.schemaVersion === "gardener.actions-installation/v1"
-      ? { legacyIngressWorker: manifest.cloudflare.ingressWorker }
-      : {}),
   };
   const directory = actionsInstallationDirectory(input.workspace);
   const intentPath = join(directory, "teardown-intent.json");
@@ -477,9 +447,6 @@ export async function destroyActions(input: {
   const teardownResources = {
     database: manifest.cloudflare.database,
     runtimeWorker: manifest.cloudflare.runtimeWorker,
-    legacyIngressWorker: manifest.schemaVersion === "gardener.actions-installation/v1"
-      ? manifest.cloudflare.ingressWorker
-      : null,
     runnerAccessBypassAppId: manifest.cloudflare.runnerAccessBypassAppId,
   };
   let intent = await readTeardownIntent(intentPath);
@@ -528,9 +495,6 @@ export async function destroyActions(input: {
       true,
     );
   }
-  if (teardownResources.legacyIngressWorker) {
-    deleteWorker(sourceRoot, teardownResources.legacyIngressWorker);
-  }
   deleteWorker(sourceRoot, manifest.cloudflare.runtimeWorker);
   if (database) {
     wrangler(sourceRoot, "apps/gardener", [
@@ -552,10 +516,10 @@ export async function destroyActions(input: {
 
 export async function actionsDeploymentHash(sourceRootInput: string): Promise<string> {
   const sourceRoot = resolve(sourceRootInput);
-  const migrationRoot = join(sourceRoot, "apps/gardener/migrations-actions");
+  const migrationRoot = join(sourceRoot, "apps/gardener/migrations");
   const migrationNames = (await readdir(migrationRoot)).filter((name) => name.endsWith(".sql")).sort();
   return canonicalSha256({
-    runtimeBundle: await readFile(join(sourceRoot, "apps/gardener/dist/gardener_actions_v1_runtime/index.js"), "utf8"),
+    runtimeBundle: await readFile(join(sourceRoot, "apps/gardener/dist/gardener_runtime/index.js"), "utf8"),
     migrations: await Promise.all(migrationNames.map(async (name) => ({
       name,
       sql: await readFile(join(migrationRoot, name), "utf8"),
@@ -564,23 +528,11 @@ export async function actionsDeploymentHash(sourceRootInput: string): Promise<st
 }
 
 export async function readActionsManifest(workspace: string): Promise<ActionsInstallationManifest | null> {
-  const manifest = await readAnyActionsManifest(workspace);
-  if (!manifest) return null;
-  if (manifest.schemaVersion === "gardener.actions-installation/v1") {
-    throw new Error("This workspace uses the retired two-Worker topology; run gardener down before creating a fresh single-Worker installation");
-  }
-  return manifest;
-}
-
-async function readAnyActionsManifest(workspace: string): Promise<AnyActionsInstallationManifest | null> {
   try {
-    const value = JSON.parse(await readFile(
+    return manifestSchema.parse(JSON.parse(await readFile(
       join(actionsInstallationDirectory(workspace), "installation.json"),
       "utf8",
-    )) as { schemaVersion?: unknown };
-    return value.schemaVersion === "gardener.actions-installation/v1"
-      ? legacyManifestSchema.parse(value)
-      : manifestSchema.parse(value);
+    )));
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
     throw error;
@@ -614,12 +566,6 @@ async function readTeardownIntent(path: string): Promise<z.infer<typeof teardown
 
 async function requiredActionsManifest(workspace: string): Promise<ActionsInstallationManifest> {
   const manifest = await readActionsManifest(workspace);
-  if (!manifest) throw new Error(`No Actions installation exists for workspace ${workspace}`);
-  return manifest;
-}
-
-async function requiredAnyActionsManifest(workspace: string): Promise<AnyActionsInstallationManifest> {
-  const manifest = await readAnyActionsManifest(workspace);
   if (!manifest) throw new Error(`No Actions installation exists for workspace ${workspace}`);
   return manifest;
 }

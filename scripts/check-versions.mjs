@@ -35,15 +35,11 @@ configured.set(manager, { range: managerVersion, manifests: ["package.json#packa
 // signal, not an automatic upgrade, because it can change preview/runtime behavior or
 // the repository's supported package-manager baseline.
 const qualificationPins = new Map([
-  ["@cloudflare/computer", "preview workspace adapter"],
   ["@cloudflare/vite-plugin", "qualified Workers build integration"],
-  ["@flue/cli", "qualified Flue adapter family"],
+  ["@cloudflare/workers-types", "published daily; updated together with wrangler"],
   ["@flue/runtime", "qualified Flue adapter family"],
   ["@flue/vite", "qualified Flue adapter family"],
   ["@earendil-works/pi-ai", "qualified Flue 2.0.3 provider peer"],
-  ["@cloudflare/workers-oauth-provider", "qualified OAuth boundary"],
-  ["@modelcontextprotocol/server", "qualified MCP boundary"],
-  ["agents", "qualified stateless MCP helpers"],
   ["wrangler", "qualified Cloudflare deployment tool"],
   ["pnpm", "supported repository package-manager baseline"],
   ["valibot", "qualified Flue runtime peer"],

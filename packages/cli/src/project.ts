@@ -1,6 +1,5 @@
 import { lstat, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import { canonicalJson } from "@gardener/core";
 import { z } from "zod";
 import {
   compileGitHubActionsTask,
@@ -433,8 +432,4 @@ async function exists(path: string): Promise<boolean> {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return false;
     throw error;
   }
-}
-
-export function canonicalProjectLock(value: unknown): string {
-  return canonicalJson(value);
 }

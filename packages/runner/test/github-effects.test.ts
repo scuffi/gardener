@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { operationKindValues, operationSchema, type Operation } from "@gardener/contracts";
 import {
@@ -12,13 +13,23 @@ import {
 const REPOSITORY = {
   provider: "github",
   id: "100",
-  installationId: "7",
   owner: "acme",
   name: "widgets",
   defaultBranch: "main",
 } as const;
 
 const REPO = "/repos/acme/widgets";
+const CAPTURED_CONTENT = new TextEncoder().encode("const a = 1;");
+const CAPTURED_FILE = {
+  status: "modified",
+  mode: "100644",
+  sizeBytes: CAPTURED_CONTENT.byteLength,
+  sha256: createHash("sha256").update(CAPTURED_CONTENT).digest("hex"),
+} as const;
+async function readCapturedFixture(file: { sha256: string }): Promise<Uint8Array> {
+  if (file.sha256 !== CAPTURED_FILE.sha256) throw new Error("unknown captured file");
+  return CAPTURED_CONTENT;
+}
 const ISSUE_UPDATED = "2026-01-01T00:00:00Z";
 const PULL_UPDATED = "2026-01-02T00:00:00Z";
 const COMMENT_UPDATED = "2026-01-03T00:00:00Z";
@@ -120,6 +131,7 @@ function context(
     attempt: 1,
     fetch: fetchImpl,
     now: () => new Date("2026-02-01T00:00:00Z"),
+    readCapturedFile: readCapturedFixture,
     ...overrides,
   };
 }
@@ -265,7 +277,7 @@ const COMMIT_OPERATION = operationSchema.parse({
   branch: "gardener/feature",
   expectedHeadSha: HEAD,
   message: "Apply Gardener changes",
-  files: [{ path: "src/a.ts", contentBase64: "Y29uc3QgYSA9IDE7" }],
+  files: [{ path: "src/a.ts", captured: CAPTURED_FILE }],
 });
 const COMMIT_MARKER = `Gardener-Operation: op-commit:${canonicalOperationHash(COMMIT_OPERATION)}`;
 
@@ -850,11 +862,29 @@ describe("precondition conflicts", () => {
     expect(receipt.error?.code).toBe("branch_head_changed");
   });
 
+  it("accepts only capture-backed commit content", () => {
+    for (const file of [
+      { path: "src/a.ts", contentBase64: "Y29uc3QgYSA9IDE7" },
+      { path: "src/a.ts", contentBase64: null },
+      { path: "src/a.ts", captured: CAPTURED_FILE, contentBase64: "Y29uc3QgYSA9IDE7" },
+    ]) {
+      expect(() => operationSchema.parse({ ...COMMIT_OPERATION, files: [file] })).toThrow();
+    }
+  });
+
+  it("requires a capture reader for commits that write content", async () => {
+    const { fetchImpl, calls } = harness([]);
+    const { readCapturedFile: _reader, ...withoutReader } = context(fetchImpl, COMMIT_OPERATION);
+    const { receipt } = await executeActionsOperation(COMMIT_OPERATION, withoutReader);
+    expect(receipt.status).toBe("failed");
+    expect(calls).toHaveLength(0);
+  });
+
   it("refuses to delete a path absent from the parent tree", async () => {
     const operation = operationSchema.parse({
       ...COMMIT_OPERATION,
       id: "op-commit-delete",
-      files: [{ path: "src/gone.ts", contentBase64: null }],
+      files: [{ path: "src/gone.ts", captured: { status: "deleted" } }],
     });
     const { receipt } = await run(operation, [
       get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: HEAD } }),
@@ -1167,7 +1197,7 @@ describe("executor guards", () => {
     const operation = operationSchema.parse({
       ...COMMIT_OPERATION,
       id: "op-commit-workflow",
-      files: [{ path: ".github/workflows/release.yml", contentBase64: "b24=" }],
+      files: [{ path: ".github/workflows/release.yml", captured: CAPTURED_FILE }],
     });
     const { receipt, calls } = await run(operation, []);
     expect(receipt.status).toBe("failed");
@@ -1353,7 +1383,7 @@ describe("git ref path encoding", () => {
       branch,
       expectedHeadSha: HEAD,
       message: "Apply Gardener changes",
-      files: [{ path: "src/a.ts", contentBase64: "Y29uc3QgYSA9IDE7" }],
+      files: [{ path: "src/a.ts", captured: CAPTURED_FILE }],
     });
     const { receipt, calls } = await run(operation, [
       get(`${REPO}/git/ref/heads/${branch}`, { object: { sha: HEAD } }),

@@ -48,19 +48,8 @@ describe("harness contract", () => {
     expect(() => assertHarnessRequest(value, expectedHarnessBinding("flue"))).toThrow(/pins flue@1.0.0, not flue@gardener-flue-native\/v1/);
   });
 
-  it("accepts a bounded completed-only result schema without granting authority", () => {
-    const value = request();
-    value.tools = [];
-    value.resultDataSchema = {
-      type: "object",
-      additionalProperties: false,
-      properties: { body: { type: "string", maxLength: 1_000 } },
-      required: ["body"],
-    };
-    expect(() => assertHarnessRequest(value)).not.toThrow();
-    expect(() => assertHarnessRequest({ ...value, tools: request().tools })).toThrow(/completed-only.*tools/i);
-    expect(() => assertHarnessRequest({ ...value, resultDataSchema: { type: "object", patternProperties: {} } as never })).toThrow(/unsupported JSON Schema keywords/i);
-    expect(() => assertHarnessRequest({ ...value, resultDataSchema: { nested: () => "not JSON" } as never })).toThrow(/unsupported JSON Schema keywords/i);
+  it("rejects the retired structured-result schema field", () => {
+    expect(() => assertHarnessRequest({ ...request(), resultDataSchema: { type: "object" } } as never)).toThrow(/unknown fields/i);
   });
 
   it("rejects unknown request data and bounds model input by UTF-8 bytes", () => {

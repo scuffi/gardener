@@ -888,18 +888,6 @@ export const taskEffectProposalV1Schema = z.strictObject({
 });
 export type TaskEffectProposalV1 = z.infer<typeof taskEffectProposalV1Schema>;
 
-/**
- * Retained alias for the pre-ordered-plan name. The legacy composite kinds
- * (`issue.labels.update`, `repository.draft_pr.create`) are gone: they mapped
- * to several provider calls behind one identifier, so a partial failure could
- * not be described by a single receipt. Both are now expressed as ordered
- * steps over exact operation kinds.
- *
- * @deprecated Use `taskEffectProposalV1Schema`.
- */
-export const proposedEffectV1Schema = taskEffectProposalV1Schema;
-/** @deprecated Use `TaskEffectProposalV1`. */
-export type ProposedEffectV1 = TaskEffectProposalV1;
 
 /* -------------------------------------------------------------------------- */
 /* Probe validation                                                           */
@@ -1300,8 +1288,7 @@ export function taskCaptureChangesDigestInput(manifest: TaskCaptureManifestV1): 
 
 /**
  * Compact pointer to a capture, used where the full manifest is unnecessary
- * (tool results, receipts, journals). Replaces `gitChangeArtifactRefV1Schema`,
- * which carried no capture identity and so could not be bound to a plan.
+ * (tool results and receipts).
  */
 export const taskCaptureRefV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-capture-ref/v1"),
@@ -1320,15 +1307,6 @@ export const taskCaptureRefV1Schema = z.strictObject({
 });
 export type TaskCaptureRefV1 = z.infer<typeof taskCaptureRefV1Schema>;
 
-/** @deprecated Use `taskCaptureRefV1Schema`, which binds a capture identity and base commit. */
-export const gitChangeArtifactRefV1Schema = z.strictObject({
-  schemaVersion: z.literal("gardener.git-change-artifact/v1"),
-  sha256,
-  manifestSha256: sha256,
-  sizeBytes: z.number().int().nonnegative().max(1_000_000_000),
-});
-/** @deprecated Use `TaskCaptureRefV1`. */
-export type GitChangeArtifactRefV1 = z.infer<typeof gitChangeArtifactRefV1Schema>;
 
 /* -------------------------------------------------------------------------- */
 /* Event binding                                                              */
@@ -1382,23 +1360,6 @@ export type TaskEventBindingV1 = z.infer<typeof taskEventBindingV1Schema>;
  * event, and a second copy of this mapping living in the runner is exactly the
  * drift that would let a plan be applied against the wrong resource.
  */
-export interface TaskEventBindingSourceV1 {
-  readonly kind: TaskTriggerKindV1;
-  readonly issue?: { readonly id: string; readonly number: number };
-  readonly pullRequest?: { readonly id: string; readonly number: number };
-  readonly discussion?: { readonly id: string; readonly number: number; readonly nodeId: string };
-  readonly comment?: { readonly id: string };
-}
-
-/**
- * Derives the binding from any event carrying the identifying subset, so
- * planning, apply, and tests all produce byte-identical bindings instead of
- * each reimplementing the mapping.
- */
-export function taskEventBindingFromEvent(event: TaskEventBindingSourceV1): TaskEventBindingV1 {
-  return taskEventBindingFromNormalizedEvent(event as unknown as NormalizedEventV1);
-}
-
 /**
  * Derives the binding from a normalized event so planning, apply, and tests all
  * produce byte-identical bindings instead of each reimplementing the mapping.
@@ -1541,10 +1502,6 @@ export const EFFECT_TRANSPORT_MAX_BYTES = 4 * 1_024 * 1_024;
  * `maxEffectBytes`, the unconditional `EFFECT_TRANSPORT_MAX_BYTES` transport
  * ceiling enforced below, and the provider's own rate limits. A plan with zero
  * operations is valid and normal: an inspect-only run produces one.
- *
- * Shape note: this replaced a single-`issue.comment.create` plan. Stored plans
- * and receipts written by the previous shape cannot be read by this schema, so
- * the cutover is a fresh redeploy rather than a migration.
  */
 export const taskEffectPlanV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-effect-plan/v1"),

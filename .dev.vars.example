@@ -1,4 +1,0 @@
-# Gardener itself holds no GitHub credentials.
-# Local credentials belong only in apps/github-gateway/.dev.vars.
-GARDENER_WORKSPACE_ID=workspace-local
-LOCAL_DEV_BYPASS=true

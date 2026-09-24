@@ -1,12 +1,14 @@
-# Gardener GitHub bridge
+# GitHub bridge
 
-This bridge is the GitHub-hosted execution adapter for Gardener. It is not a separate service.
+The two Node.js Actions that run inside Gardener's reusable workflow
+(`.github/workflows/gardener-task.yml`).
 
-- `plan/` runs in the unprivileged checkout job, authenticates to the customer-deployed Gardener runtime with GitHub OIDC, and executes bounded repository inspection actions.
-- `apply/` runs in the checkout-free effects job, verifies the exact plan artifact, applies the permitted effect with the job-scoped `GITHUB_TOKEN`, and records the receipt with the runtime.
+- `plan/` runs in the read-only checkout job. It authenticates to the Gardener Worker with GitHub
+  OIDC, runs the task's tool calls in the checkout, captures proposed file changes, and writes the
+  plan artifact.
+- `apply/` runs in the checkout-free job. It verifies the plan artifact, applies each operation
+  with the job's `GITHUB_TOKEN`, and reports receipts to the Worker.
 
-The reusable two-job workflow lives at `.github/workflows/gardener-task.yml` because GitHub requires reusable workflows directly under `.github/workflows`.
-
-Both bridge Actions are committed as prebuilt Node.js bundles and must be consumed at full commit SHAs.
-
-While `scuffi/gardener` is private, GitHub permits private repositories owned by `scuffi` to consume this bridge when the Gardener repository's Actions access level is set to repositories owned by that user. Public or external repositories must wait until Gardener is public.
+`dist/index.cjs` in each directory is built from `packages/runner` with
+`pnpm --filter @gardener/runner build` and committed. `pnpm check:bridge-dist` fails if the
+committed bundles differ from source. Consume both Actions only at full commit SHAs.

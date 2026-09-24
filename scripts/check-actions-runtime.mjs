@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const output = join(repositoryRoot, "apps/gardener/dist/gardener_actions_v1_runtime");
+const output = join(repositoryRoot, "apps/gardener/dist/gardener_runtime");
 const entry = await readFile(join(output, "index.js"), "utf8");
 const exportsBlock = [...entry.matchAll(/export\s*\{([^}]+)\}/g)].at(-1)?.[1] ?? "";
 for (const required of ["TaskRunnerSession", "FlueGardenerTaskHarnessAgent"]) {

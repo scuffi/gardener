@@ -2,9 +2,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { describe, expect, it } from "vitest";
-import { inspectRepositoryFixtureBundle } from "../src/task-runtime/fixture";
+import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 import { loadEnabledTaskBundle } from "../src/task-runtime/task-bundles";
-import { d1Database } from "./persistence-test-db";
+import { d1Database } from "./sqlite";
 
 function database() {
   const sqlite = new DatabaseSync(":memory:");

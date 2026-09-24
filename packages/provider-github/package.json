@@ -15,8 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@gardener/contracts": "workspace:*",
-    "zod": "4.6.5"
+    "@gardener/contracts": "workspace:*"
   },
   "devDependencies": {
     "typescript": "7.0.2",

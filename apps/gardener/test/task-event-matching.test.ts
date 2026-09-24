@@ -7,7 +7,7 @@ import {
 } from "@gardener/contracts";
 import { canonicalSha256 } from "@gardener/core";
 import { createTaskHarnessRequest } from "../src/task-runtime/harness-adapter";
-import { inspectRepositoryFixtureBundle } from "../src/task-runtime/fixture";
+import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 
 const actor = { id: "45369682", login: "scuffi" };
 

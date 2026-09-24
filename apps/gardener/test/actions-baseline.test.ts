@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 const baseline = readFileSync(
-  new URL("../migrations-actions/0001_actions_baseline.sql", import.meta.url),
+  new URL("../migrations/0001_actions_baseline.sql", import.meta.url),
   "utf8",
 );
 

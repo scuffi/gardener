@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NormalizedEventV1, TaskBundleV1, TaskRunRequestV1 } from "@gardener/contracts";
 import { canonicalSha256 } from "@gardener/core";
 import { createTaskHarnessRequest } from "../src/task-runtime/harness-adapter";
-import { inspectRepositoryFixtureBundle } from "../src/task-runtime/fixture";
+import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 import { actionToolAuthority, taskDeclaresActionAuthority } from "../src/task-runtime/tool-authority";
 
 function issueEvent(): NormalizedEventV1 {

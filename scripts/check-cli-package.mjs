@@ -10,8 +10,8 @@ const files = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim(
 const required = [
   "package/dist/cli.js",
   "package/assets/gardener-distribution.json",
-  "package/assets/apps/gardener/dist/gardener_actions_v1_runtime/index.js",
-  "package/assets/apps/gardener/migrations-actions/0001_actions_baseline.sql",
+  "package/assets/apps/gardener/dist/gardener_runtime/index.js",
+  "package/assets/apps/gardener/migrations/0001_actions_baseline.sql",
 ];
 for (const path of required) {
   if (!files.includes(path)) throw new Error(`CLI tarball is missing ${path}`);
@@ -28,7 +28,7 @@ if (Object.values(packageJson.dependencies ?? {}).some((value) => String(value).
   throw new Error("CLI tarball depends on unpublished workspace packages");
 }
 const runtime = execFileSync("tar", [
-  "-xOzf", archive, "package/assets/apps/gardener/dist/gardener_actions_v1_runtime/index.js",
+  "-xOzf", archive, "package/assets/apps/gardener/dist/gardener_runtime/index.js",
 ], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
 for (const fragment of ["ComputerWorkspace", "GardenerGitHubEntrypoint", "GardenerFlueAgent", "github-gateway/v1"]) {
   if (runtime.includes(fragment)) throw new Error(`CLI runtime leaked ${fragment}`);

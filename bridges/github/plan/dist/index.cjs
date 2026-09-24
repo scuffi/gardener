@@ -4025,7 +4025,7 @@ var require_util2 = __commonJS({
     try {
       crypto2 = require("node:crypto");
       const possibleRelevantHashes = ["sha256", "sha384", "sha512"];
-      supportedHashes = crypto2.getHashes().filter((hash8) => possibleRelevantHashes.includes(hash8));
+      supportedHashes = crypto2.getHashes().filter((hash2) => possibleRelevantHashes.includes(hash2));
     } catch {
     }
     function responseURL(response) {
@@ -4150,8 +4150,8 @@ var require_util2 = __commonJS({
         request.headersList.append("origin", serializedOrigin, true);
       }
     }
-    function coarsenTime(timestamp5, crossOriginIsolatedCapability) {
-      return timestamp5;
+    function coarsenTime(timestamp, crossOriginIsolatedCapability) {
+      return timestamp;
     }
     function clampAndCoarsenConnectionTimingInfo(connectionTimingInfo, defaultStartTime, crossOriginIsolatedCapability) {
       if (!connectionTimingInfo?.startTime || connectionTimingInfo.startTime < defaultStartTime) {
@@ -6954,8 +6954,8 @@ var require_client_h2 = __commonJS({
       this[kSocket][kError] = err;
       this[kClient][kOnError](err);
     }
-    function onHttp2FrameError(type, code, id8) {
-      if (id8 === 0) {
+    function onHttp2FrameError(type, code, id) {
+      if (id === 0) {
         const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
         this[kSocket][kError] = err;
         this[kClient][kOnError](err);
@@ -11683,10 +11683,10 @@ var require_dns = __commonJS({
         return ip;
       }
       setRecords(origin, addresses) {
-        const timestamp5 = Date.now();
+        const timestamp = Date.now();
         const records = { records: { 4: null, 6: null } };
         for (const record2 of addresses) {
-          record2.timestamp = timestamp5;
+          record2.timestamp = timestamp;
           if (typeof record2.ttl === "number") {
             record2.ttl = Math.min(record2.ttl, this.#maxTTL);
           } else {
@@ -20047,8 +20047,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addRaw(text2, addEOL = false) {
-    this._buffer += text2;
+  addRaw(text, addEOL = false) {
+    this._buffer += text;
     return addEOL ? this.addEOL() : this;
   }
   /**
@@ -20144,10 +20144,10 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addHeading(text2, level) {
+  addHeading(text, level) {
     const tag = `h${level}`;
     const allowedTag = ["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag) ? tag : "h1";
-    const element = this.wrap(allowedTag, text2);
+    const element = this.wrap(allowedTag, text);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -20176,9 +20176,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addQuote(text2, cite) {
+  addQuote(text, cite) {
     const attrs = Object.assign({}, cite && { cite });
-    const element = this.wrap("blockquote", text2, attrs);
+    const element = this.wrap("blockquote", text, attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -20189,8 +20189,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addLink(text2, href) {
-    const element = this.wrap("a", text2, { href });
+  addLink(text, href) {
+    const element = this.wrap("a", text, { href });
     return this.addRaw(element).addEOL();
   }
 };
@@ -21558,8 +21558,8 @@ function cleanEnum(obj) {
     return Number.isNaN(Number.parseInt(k, 10));
   }).map((el) => el[1]);
 }
-function base64ToUint8Array(base644) {
-  const binaryString = atob(base644);
+function base64ToUint8Array(base643) {
+  const binaryString = atob(base643);
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
@@ -21574,9 +21574,9 @@ function uint8ArrayToBase64(bytes) {
   return btoa(binaryString);
 }
 function base64urlToUint8Array(base64url3) {
-  const base644 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - base644.length % 4) % 4);
-  return base64ToUint8Array(base644 + padding);
+  const base643 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - base643.length % 4) % 4);
+  return base64ToUint8Array(base643 + padding);
 }
 function uint8ArrayToBase64url(bytes) {
   return uint8ArrayToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
@@ -23319,8 +23319,8 @@ var base64urlCharset = /^[A-Za-z0-9_-]*$/;
 function isValidBase64URL(data) {
   if (!base64urlCharset.test(data))
     return false;
-  const base644 = data.replace(/[-_]/g, (c) => c === "-" ? "+" : "/");
-  const padded = base644.padEnd(Math.ceil(base644.length / 4) * 4, "=");
+  const base643 = data.replace(/[-_]/g, (c) => c === "-" ? "+" : "/");
+  const padded = base643.padEnd(Math.ceil(base643.length / 4) * 4, "=");
   return isValidBase64(padded);
 }
 var $ZodBase64URL = /* @__PURE__ */ $constructor("$ZodBase64URL", (inst, def) => {
@@ -23869,15 +23869,15 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     const syms = normalized.symbolKeys;
     const doc = new Doc(["payload", "ctx"], { shape, inst, memo: memo2, syms });
     const parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
-    const prefixStr = (id8, k) => `
-          let ${id8}_ab = false;
-          for (let i = 0; i < ${id8}.issues.length; i++) {
-            const iss = ${id8}.issues[i];
+    const prefixStr = (id, k) => `
+          let ${id}_ab = false;
+          for (let i = 0; i < ${id}.issues.length; i++) {
+            const iss = ${id}.issues[i];
             iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
-            if (iss.continue !== true) ${id8}_ab = true;
+            if (iss.continue !== true) ${id}_ab = true;
           }
-          if (${id8}_ab && ctx && ctx.abortEarly) {
+          if (${id}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
             return payload;
           }`;
@@ -23891,34 +23891,34 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     for (const key of normalized.allKeys) {
       if (key === "__proto__")
         continue;
-      const id8 = ids[key];
+      const id = ids[key];
       const k = typeof key === "symbol" ? `syms[${syms.indexOf(key)}]` : esc(key);
       const isPresent = `${k} in input`;
       const schema = shape[key];
       const optin = schema?._zod?.optin;
       const isOptionalIn = optin !== void 0;
       const isOptionalOut = schema?._zod?.optout === "optional";
-      doc.write(`const ${id8} = ${parseStr(k)};`);
+      doc.write(`const ${id} = ${parseStr(k)};`);
       if (isOptionalIn && isOptionalOut) {
-        const assign = optin === "optional" ? `${id8}_present` : `${id8}.value !== undefined || ${id8}_present`;
+        const assign = optin === "optional" ? `${id}_present` : `${id}.value !== undefined || ${id}_present`;
         doc.write(`
-        const ${id8}_present = ${isPresent};
-        if (!${id8}.issues.length || ${id8}_present) {
-          if (${id8}.issues.length) {${prefixStr(id8, k)}
+        const ${id}_present = ${isPresent};
+        if (!${id}.issues.length || ${id}_present) {
+          if (${id}.issues.length) {${prefixStr(id, k)}
           }
 
           if (${assign}) {
-            newResult[${k}] = ${id8}.value;
+            newResult[${k}] = ${id}.value;
           }
         }
 
       `);
       } else if (!isOptionalIn) {
         doc.write(`
-        const ${id8}_present = ${isPresent};
-        if (${id8}.issues.length) {${prefixStr(id8, k)}
+        const ${id}_present = ${isPresent};
+        if (${id}.issues.length) {${prefixStr(id, k)}
         }
-        if (!${id8}_present && !${id8}.issues.length) {
+        if (!${id}_present && !${id}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
@@ -23931,22 +23931,22 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
           }
         }
 
-        if (${id8}_present) {
-          newResult[${k}] = ${id8}.value;
+        if (${id}_present) {
+          newResult[${k}] = ${id}.value;
         }
 
       `);
       } else {
         doc.write(`
-        if (${id8}.issues.length) {${prefixStr(id8, k)}
+        if (${id}.issues.length) {${prefixStr(id, k)}
         }
       `);
         if (optin === "defaulted") {
-          doc.write(`newResult[${k}] = ${id8}.value;`);
+          doc.write(`newResult[${k}] = ${id}.value;`);
         } else {
           doc.write(`
-        if (${id8}.value !== undefined || ${isPresent}) {
-          newResult[${k}] = ${id8}.value;
+        if (${id}.value !== undefined || ${isPresent}) {
+          newResult[${k}] = ${id}.value;
         }
       `);
         }
@@ -29599,8 +29599,8 @@ function ko_default() {
 }
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/lt.js
-var capitalizeFirstCharacter = (text2) => {
-  return text2.charAt(0).toUpperCase() + text2.slice(1);
+var capitalizeFirstCharacter = (text) => {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
@@ -35964,26 +35964,26 @@ function extractDefs(ctx, schema) {
     return;
   const idToSchema = /* @__PURE__ */ new Map();
   for (const entry of ctx.seen.entries()) {
-    const id8 = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id8) {
-      const existing = idToSchema.get(id8);
+    const id = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id) {
+      const existing = idToSchema.get(id);
       if (existing && existing !== entry[0]) {
-        throw new Error(`Duplicate schema id "${id8}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
+        throw new Error(`Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
       }
-      idToSchema.set(id8, entry[0]);
+      idToSchema.set(id, entry[0]);
     }
   }
   const makeURI = (entry) => {
     const defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
     if (ctx.external) {
       const externalId = ctx.external.registry.get(entry[0])?.id;
-      const uriGenerator = ctx.external.uri ?? ((id9) => id9);
+      const uriGenerator = ctx.external.uri ?? ((id2) => id2);
       if (externalId) {
         return { ref: uriGenerator(externalId) };
       }
-      const id8 = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
-      entry[1].defId = id8;
-      return { defId: id8, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id8)}` };
+      const id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+      entry[1].defId = id;
+      return { defId: id, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id)}` };
     }
     const uriPrefix = `#`;
     const defUriPrefix = `${uriPrefix}/${defsSegment}/`;
@@ -36031,8 +36031,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         continue;
       }
     }
-    const id8 = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id8) {
+    const id = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id) {
       extractToDef(entry);
       continue;
     }
@@ -36265,10 +36265,10 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id8 = ctx.external.registry.get(schema)?.id;
-    if (!id8)
+    const id = ctx.external.registry.get(schema)?.id;
+    if (!id)
       throw new Error("Schema is missing an `id` property");
-    result.$id = ctx.external.uri(id8);
+    result.$id = ctx.external.uri(id);
   }
   assignProps(result, root.defId ? root.schema : root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
@@ -36874,7 +36874,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id: id8, ...rest } = json2;
+  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json2;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -39960,162 +39960,16 @@ function date4(params) {
 
 // ../contracts/src/identity.ts
 var githubNumericIdSchema = external_exports.string().regex(/^[1-9][0-9]{0,31}$/, "expected a numeric GitHub id");
-var githubAccountTypeSchema = external_exports.enum(["User", "Organization", "Bot", "Mannequin"]);
-var githubIdentitySchema = external_exports.object({
-  id: githubNumericIdSchema,
-  login: external_exports.string().trim().min(1).max(255),
-  accountType: githubAccountTypeSchema
-}).strict();
-var gardenerPrincipalSchema = external_exports.object({
-  kind: external_exports.enum(["owner", "member", "publisher", "system", "channel"]),
-  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
-  displayName: external_exports.string().trim().min(1).max(255).optional()
-}).strict();
-var authoringPrincipalSchema = external_exports.discriminatedUnion("provider", [
-  external_exports.object({ provider: external_exports.literal("github"), identity: githubIdentitySchema }).strict(),
-  external_exports.object({ provider: external_exports.literal("gardener"), principal: gardenerPrincipalSchema }).strict(),
-  external_exports.object({ provider: external_exports.literal("oauth_client"), clientId: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/) }).strict()
-]);
 
 // ../contracts/src/repository.ts
 var name = external_exports.string().trim().min(1).max(255).regex(/^[A-Za-z0-9_.-]+$/);
 var operationRepositoryRefSchema = external_exports.object({
   provider: external_exports.literal("github"),
   id: githubNumericIdSchema,
-  installationId: githubNumericIdSchema.optional(),
   owner: name,
   name,
   defaultBranch: external_exports.string().trim().min(1).max(255)
 }).strict();
-var repositoryRefSchema = operationRepositoryRefSchema.extend({
-  installationId: githubNumericIdSchema
-}).strict();
-var issueRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
-var pullRequestRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
-var discussionRefSchema = external_exports.object({ id: githubNumericIdSchema, number: external_exports.number().int().positive() }).strict();
-
-// ../contracts/src/events.ts
-var id = external_exports.string().min(1).max(255);
-var text = external_exports.string().max(65536);
-var sha = external_exports.string().regex(/^[a-fA-F0-9]{40}$/);
-var labels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100).default([]);
-var repositoryEventKindValues = [
-  "github.issue",
-  "github.pull_request",
-  "github.issue_comment",
-  "github.pull_request_comment",
-  "github.pull_request_review",
-  "github.pull_request_review_comment",
-  "github.discussion",
-  "github.discussion_comment",
-  "github.check_run",
-  "github.check_suite",
-  "github.push",
-  "github.release",
-  "gardener.manual",
-  "gardener.scheduled"
-];
-var repositoryEventKindSchema = external_exports.enum(repositoryEventKindValues);
-var issueEventActions = ["opened", "edited", "reopened", "closed", "labeled", "unlabeled", "assigned", "unassigned", "milestoned", "demilestoned", "locked", "unlocked", "typed", "untyped", "transferred", "deleted", "pinned", "unpinned"];
-var pullRequestEventActions = ["opened", "edited", "reopened", "closed", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "assigned", "unassigned", "milestoned", "demilestoned", "locked", "unlocked", "enqueued", "dequeued", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled"];
-var commentEventActions = ["created", "edited", "deleted"];
-var reviewEventActions = ["submitted", "edited", "dismissed"];
-var discussionEventActions = ["created", "edited", "deleted", "transferred", "pinned", "unpinned", "locked", "unlocked", "category_changed", "labeled", "unlabeled", "answered", "unanswered"];
-var checkRunEventActions = ["created", "rerequested", "completed", "requested_action"];
-var checkSuiteEventActions = ["requested", "rerequested", "completed"];
-var releaseEventActions = ["created", "edited", "deleted", "published", "unpublished", "prereleased", "released"];
-var issueEventActionSchema = external_exports.enum(issueEventActions);
-var pullRequestEventActionSchema = external_exports.enum(pullRequestEventActions);
-var commentEventActionSchema = external_exports.enum(commentEventActions);
-var reviewEventActionSchema = external_exports.enum(reviewEventActions);
-var discussionEventActionSchema = external_exports.enum(discussionEventActions);
-var checkRunEventActionSchema = external_exports.enum(checkRunEventActions);
-var checkSuiteEventActionSchema = external_exports.enum(checkSuiteEventActions);
-var releaseEventActionSchema = external_exports.enum(releaseEventActions);
-var issueResourceV2Schema = external_exports.object({
-  id,
-  number: external_exports.number().int().positive(),
-  title: external_exports.string().max(1024),
-  body: text.nullable(),
-  state: external_exports.enum(["open", "closed"]),
-  labels,
-  locked: external_exports.boolean(),
-  updatedAt: external_exports.iso.datetime(),
-  htmlUrl: external_exports.url()
-}).strict();
-var pullRequestResourceV2Schema = external_exports.object({
-  id,
-  number: external_exports.number().int().positive(),
-  title: external_exports.string().max(1024),
-  body: text.nullable(),
-  state: external_exports.enum(["open", "closed"]),
-  draft: external_exports.boolean(),
-  merged: external_exports.boolean(),
-  labels,
-  head: external_exports.object({ ref: external_exports.string().min(1).max(255), sha }).strict(),
-  base: external_exports.object({ ref: external_exports.string().min(1).max(255), sha }).strict(),
-  updatedAt: external_exports.iso.datetime(),
-  htmlUrl: external_exports.url()
-}).strict();
-var commentResourceV2Schema = external_exports.object({ id, body: text, updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
-var reviewResourceV2Schema = external_exports.object({ id, state: external_exports.enum(["pending", "commented", "approved", "changes_requested", "dismissed"]), body: text, submittedAt: external_exports.iso.datetime().nullable(), commitSha: sha }).strict();
-var reviewCommentResourceV2Schema = commentResourceV2Schema.extend({ path: external_exports.string().min(1).max(1024), line: external_exports.number().int().positive().nullable(), commitSha: sha }).strict();
-var discussionResourceV2Schema = external_exports.object({ id, number: external_exports.number().int().positive(), title: external_exports.string().max(1024), body: text, state: external_exports.enum(["open", "closed"]), answered: external_exports.boolean(), labels, updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
-var checkRunResourceV2Schema = external_exports.object({ id, name: external_exports.string().min(1).max(255), headSha: sha, status: external_exports.enum(["queued", "in_progress", "completed", "waiting", "pending"]), conclusion: external_exports.enum(["action_required", "cancelled", "failure", "neutral", "skipped", "stale", "startup_failure", "success", "timed_out"]).nullable(), detailsUrl: external_exports.url().nullable() }).strict();
-var checkSuiteResourceV2Schema = external_exports.object({ id, headSha: sha, status: external_exports.enum(["queued", "in_progress", "completed", "waiting", "pending"]), conclusion: external_exports.string().min(1).max(100).nullable() }).strict();
-var pushResourceV2Schema = external_exports.object({ ref: external_exports.string().min(1).max(255), before: sha, after: sha, forced: external_exports.boolean(), created: external_exports.boolean(), deleted: external_exports.boolean(), commitCount: external_exports.number().int().nonnegative().max(1e4) }).strict();
-var releaseResourceV2Schema = external_exports.object({ id, tagName: external_exports.string().min(1).max(255), targetCommitish: external_exports.string().min(1).max(255), name: external_exports.string().max(255).nullable(), body: text.nullable(), draft: external_exports.boolean(), prerelease: external_exports.boolean(), publishedAt: external_exports.iso.datetime().nullable(), updatedAt: external_exports.iso.datetime(), htmlUrl: external_exports.url() }).strict();
-var githubEventBaseSchema = external_exports.object({
-  schemaVersion: external_exports.literal("v2"),
-  id,
-  deliveryId: id,
-  instanceId: id,
-  occurredAt: external_exports.iso.datetime(),
-  repository: repositoryRefSchema,
-  actor: githubIdentitySchema,
-  resourceAuthor: githubIdentitySchema.nullable()
-});
-var githubEventSchemas = [
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.issue"), action: issueEventActionSchema, issue: issueResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request"), action: pullRequestEventActionSchema, pullRequest: pullRequestResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.issue_comment"), action: commentEventActionSchema, issue: issueResourceV2Schema, comment: commentResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_comment"), action: commentEventActionSchema, pullRequest: pullRequestResourceV2Schema, comment: commentResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_review"), action: reviewEventActionSchema, pullRequest: pullRequestResourceV2Schema, review: reviewResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.pull_request_review_comment"), action: commentEventActionSchema, pullRequest: pullRequestResourceV2Schema, comment: reviewCommentResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.discussion"), action: discussionEventActionSchema, discussion: discussionResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.discussion_comment"), action: commentEventActionSchema, discussion: discussionResourceV2Schema, comment: commentResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.check_run"), action: checkRunEventActionSchema, checkRun: checkRunResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.check_suite"), action: checkSuiteEventActionSchema, checkSuite: checkSuiteResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.push"), action: external_exports.literal("pushed"), push: pushResourceV2Schema }).strict(),
-  githubEventBaseSchema.extend({ kind: external_exports.literal("github.release"), action: releaseEventActionSchema, release: releaseResourceV2Schema }).strict()
-];
-var gardenerEventBaseSchema = external_exports.object({
-  schemaVersion: external_exports.literal("v2"),
-  id,
-  instanceId: id,
-  occurredAt: external_exports.iso.datetime(),
-  repository: repositoryRefSchema,
-  actor: gardenerPrincipalSchema,
-  resourceAuthor: external_exports.null()
-});
-var manualEventSchema = gardenerEventBaseSchema.extend({ kind: external_exports.literal("gardener.manual"), action: external_exports.literal("requested"), requestId: id, prompt: external_exports.string().trim().min(1).max(2e4) }).strict();
-var scheduledEventSchema = gardenerEventBaseSchema.extend({ kind: external_exports.literal("gardener.scheduled"), action: external_exports.literal("triggered"), scheduleId: id, scheduledFor: external_exports.iso.datetime() }).strict();
-var repositoryEventV2Schema = external_exports.discriminatedUnion("kind", [...githubEventSchemas, manualEventSchema, scheduledEventSchema]);
-var triggerSelectors = [
-  ...issueEventActions.map((action) => `github.issue.${action}`),
-  ...pullRequestEventActions.map((action) => `github.pull_request.${action}`),
-  ...commentEventActions.flatMap((action) => [`github.issue_comment.${action}`, `github.pull_request_comment.${action}`, `github.pull_request_review_comment.${action}`, `github.discussion_comment.${action}`]),
-  ...reviewEventActions.map((action) => `github.pull_request_review.${action}`),
-  ...discussionEventActions.map((action) => `github.discussion.${action}`),
-  ...checkRunEventActions.map((action) => `github.check_run.${action}`),
-  ...checkSuiteEventActions.map((action) => `github.check_suite.${action}`),
-  "github.push.pushed",
-  ...releaseEventActions.map((action) => `github.release.${action}`),
-  "gardener.manual.requested",
-  "gardener.scheduled.triggered"
-];
-var repositoryEventTriggerValues = triggerSelectors;
-var repositoryEventTriggerSchema = external_exports.enum(repositoryEventTriggerValues);
 
 // ../contracts/src/operations.ts
 var operationKindValues = [
@@ -40167,20 +40021,11 @@ var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(i
 var gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
 var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
 var COMMIT_FILE_LIMIT = 1e3;
-var INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES = 7e6;
-var canonicalBase64Schema = external_exports.string().regex(
-  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
-  "expected canonical base64 content"
-);
 var commitFilePathSchema = external_exports.string().min(1).max(1024).refine(
   (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "invalid repository path"
 );
-var inlineCommitFileSchema = external_exports.object({
-  path: commitFilePathSchema,
-  contentBase64: canonicalBase64Schema.max(14e5).nullable()
-}).strict();
-var capturedCommitFileSchema = external_exports.object({
+var commitFileSchema = external_exports.object({
   path: commitFilePathSchema,
   captured: external_exports.discriminatedUnion("status", [
     external_exports.object({
@@ -40193,7 +40038,6 @@ var capturedCommitFileSchema = external_exports.object({
     external_exports.object({ status: external_exports.literal("deleted") }).strict()
   ])
 }).strict();
-var commitFileSchema = external_exports.union([inlineCommitFileSchema, capturedCommitFileSchema]);
 var operationBase = external_exports.object({ schemaVersion: external_exports.literal("v2"), id: operationIdSchema, repository: operationRepositoryRefSchema });
 var expectedTimestamp = external_exports.iso.datetime();
 var body = external_exports.string().min(1).max(65536);
@@ -40247,20 +40091,10 @@ var operationOptions = [
     files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT)
   }).strict().superRefine((value, context) => {
     const paths = /* @__PURE__ */ new Set();
-    let encodedBytes = 0;
-    let inlineFiles = 0;
     value.files.forEach((file2, index) => {
       if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file2.path);
-      if ("contentBase64" in file2) {
-        inlineFiles += 1;
-        encodedBytes += file2.contentBase64?.length ?? 0;
-      }
     });
-    if (encodedBytes > INLINE_COMMIT_CONTENT_MAX_ENCODED_BYTES) context.addIssue({ code: "custom", path: ["files"], message: "encoded commit content exceeds the 5 MiB budget" });
-    if (inlineFiles > 0 && inlineFiles !== value.files.length) {
-      context.addIssue({ code: "custom", path: ["files"], message: "a commit may not mix inline content with capture-backed content" });
-    }
   }),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open_draft"),
@@ -40443,809 +40277,14 @@ function operationOutputSentinel(type) {
   return outputSentinels[type];
 }
 
-// ../contracts/src/capabilities.ts
-var observationCapabilityValues = [
-  "github.repository.metadata.read",
-  "github.issue.read",
-  "github.pull_request.read",
-  "github.comment.read",
-  "github.review.read",
-  "github.discussion.read",
-  "github.check.read",
-  "github.contents.read",
-  "github.commit.read",
-  "github.release.read"
-];
-var observationCapabilitySchema = external_exports.enum(observationCapabilityValues);
-var workspaceCapabilityValues = [
-  "workspace.fs.read",
-  "workspace.fs.write",
-  "workspace.git.read",
-  "workspace.git.write-local",
-  "workspace.exec.shell",
-  "workspace.exec.javascript",
-  "workspace.exec.container",
-  "workspace.network.connect",
-  "workspace.dependencies.install",
-  "workspace.artifacts.publish"
-];
-var workspaceCapabilitySchema = external_exports.enum(workspaceCapabilityValues);
-var effectCapabilitySchema = operationKindSchema;
-function uniqueValues(values, context, path4) {
-  if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path: path4, message: "capabilities must be unique" });
-}
-var requestedCapabilitySetSchema = external_exports.object({
-  observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length).default([]),
-  workspace: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilityValues.length).default([]),
-  effects: external_exports.array(effectCapabilitySchema).max(operationKindSchema.options.length).default([])
-}).strict().superRefine((value, context) => {
-  uniqueValues(value.observation, context, ["observation"]);
-  uniqueValues(value.workspace, context, ["workspace"]);
-  uniqueValues(value.effects, context, ["effects"]);
-});
-var capabilityPolicyModeSchema = external_exports.enum(["disabled", "approval", "automatic"]);
-var effectiveCapabilitySetSchema = external_exports.object({
-  observation: external_exports.array(observationCapabilitySchema).max(observationCapabilityValues.length),
-  workspace: external_exports.array(external_exports.object({
-    capability: workspaceCapabilitySchema,
-    mode: capabilityPolicyModeSchema
-  }).strict()).max(workspaceCapabilityValues.length),
-  effects: external_exports.array(external_exports.object({
-    capability: effectCapabilitySchema,
-    mode: capabilityPolicyModeSchema
-  }).strict()).max(operationKindSchema.options.length)
-}).strict().superRefine((value, context) => {
-  uniqueValues(value.observation, context, ["observation"]);
-  uniqueValues(value.workspace.map((item) => item.capability), context, ["workspace"]);
-  uniqueValues(value.effects.map((item) => item.capability), context, ["effects"]);
-});
-var capabilityCatalogEntrySchema = external_exports.object({
-  id: external_exports.union([observationCapabilitySchema, workspaceCapabilitySchema, effectCapabilitySchema]),
-  category: external_exports.enum(["observation", "workspace", "effect"]),
-  description: external_exports.string().min(1).max(500),
-  runtimeGrant: external_exports.enum(["safe_one_run", "revision_required", "never"])
-}).strict();
-var capabilityCatalog = Object.freeze([
-  ...observationCapabilityValues.map((id8) => ({ id: id8, category: "observation", description: `Observe ${id8}.`, runtimeGrant: "safe_one_run" })),
-  ...workspaceCapabilityValues.map((id8) => ({
-    id: id8,
-    category: "workspace",
-    description: `Use ${id8} in the run-scoped Cloudflare Computer workspace.`,
-    runtimeGrant: "safe_one_run"
-  })),
-  ...operationKindSchema.options.map((id8) => ({
-    id: id8,
-    category: "effect",
-    description: `Propose the persistent effect ${id8}.`,
-    runtimeGrant: "revision_required"
-  }))
-]);
-var publicNetworkHostnameSchema = external_exports.hostname().transform((value) => value.toLowerCase()).refine((value) => {
-  if (value === "localhost" || value.endsWith(".localhost") || value.endsWith(".local") || value.endsWith(".internal") || value.endsWith(".home.arpa")) return false;
-  if (value === "metadata.google.internal" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value) || value.includes(":")) return false;
-  return true;
-}, "network host must be a public DNS hostname; resolved addresses must also be checked at execution time");
-var capabilityRequestBaseSchema = external_exports.object({
-  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
-  reason: external_exports.string().trim().min(1).max(2e3),
-  requestedAt: external_exports.iso.datetime()
-});
-var runtimeCapabilityRequestSchema = external_exports.discriminatedUnion("kind", [
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("observation"), capability: observationCapabilitySchema }).strict(),
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("workspace"), capability: workspaceCapabilitySchema.exclude(["workspace.exec.container", "workspace.network.connect"]) }).strict(),
-  capabilityRequestBaseSchema.extend({
-    kind: external_exports.literal("container"),
-    capability: external_exports.literal("workspace.exec.container"),
-    imageProfile: external_exports.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
-    maxRuntimeSeconds: external_exports.number().int().positive().max(3600)
-  }).strict(),
-  capabilityRequestBaseSchema.extend({
-    kind: external_exports.literal("network"),
-    capability: external_exports.literal("workspace.network.connect"),
-    hosts: external_exports.array(publicNetworkHostnameSchema).min(1).max(20)
-  }).strict().superRefine((request, context) => {
-    if (new Set(request.hosts).size !== request.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
-  }),
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("persistent_effect"), capabilities: external_exports.array(effectCapabilitySchema).min(1).max(operationKindSchema.options.length) }).strict(),
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("actor_broadening"), actorIds: external_exports.array(githubNumericIdSchema).min(1).max(100) }).strict(),
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("authority_increase"), requestedMode: external_exports.enum(["approval", "automatic"]) }).strict(),
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("credentials"), credentialKind: external_exports.string().trim().min(1).max(100) }).strict(),
-  capabilityRequestBaseSchema.extend({ kind: external_exports.literal("policy_edit"), policyId: external_exports.string().min(1).max(255) }).strict()
-]);
-var runtimeGrantClassificationSchema = external_exports.enum(["safe_one_run", "revision_required", "never"]);
-
-// ../contracts/src/eligibility.ts
-var agentEligibilitySchema = external_exports.object({
-  actorIds: external_exports.array(githubNumericIdSchema).max(100).default([]),
-  resourceAuthorIds: external_exports.array(githubNumericIdSchema).max(100).default([]),
-  labelsAny: external_exports.array(external_exports.string().trim().min(1).max(100)).max(50).default([]),
-  labelsAll: external_exports.array(external_exports.string().trim().min(1).max(100)).max(50).default([]),
-  baseBranches: external_exports.array(external_exports.string().trim().min(1).max(255)).max(50).default([]),
-  includeDraftPullRequests: external_exports.boolean().default(true)
-}).strict().superRefine((value, context) => {
-  for (const key of ["actorIds", "resourceAuthorIds", "labelsAny", "labelsAll", "baseBranches"]) {
-    if (new Set(value[key]).size !== value[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
-  }
-});
-var eventEligibilityDecisionSchema = external_exports.object({
-  eligible: external_exports.boolean(),
-  reasons: external_exports.array(external_exports.string().min(1).max(500)).max(100),
-  matchedTrigger: external_exports.string().min(1).max(255).nullable()
-}).strict();
-
-// ../contracts/src/policies.ts
-var policyModeSchema = external_exports.enum(["disabled", "approval", "automatic"]);
-var instancePolicyV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/),
-  version: external_exports.number().int().positive(),
-  policyHash: external_exports.string().regex(/^[a-f0-9]{64}$/),
-  operationModes: external_exports.record(operationKindSchema, policyModeSchema),
-  allowedObservations: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
-  workspaceModes: external_exports.partialRecord(workspaceCapabilitySchema, policyModeSchema),
-  allowedMergeMethods: external_exports.array(external_exports.enum(["merge", "squash", "rebase"])).min(1).max(3),
-  requiredChecks: external_exports.array(external_exports.string().trim().min(1).max(255)).max(100),
-  maxCommentLength: external_exports.number().int().positive().max(65536),
-  maxChangedFiles: external_exports.number().int().positive().max(100),
-  deniedPathPrefixes: external_exports.array(external_exports.string().min(1).max(1024)).max(100)
-}).strict().superRefine((policy, context) => {
-  if (new Set(policy.allowedObservations).size !== policy.allowedObservations.length) context.addIssue({ code: "custom", path: ["allowedObservations"], message: "observation capabilities must be unique" });
-  if (new Set(policy.requiredChecks).size !== policy.requiredChecks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
-});
-var policyDecisionSchema = external_exports.object({
-  outcome: external_exports.enum(["denied", "approval_required", "authorized"]),
-  operationId: external_exports.string().min(1).max(255),
-  mode: policyModeSchema,
-  reasons: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100)
-}).strict();
-
-// ../contracts/src/workspace.ts
-var id2 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var timestamp = external_exports.iso.datetime();
-var workspaceRoleValues = ["owner", "member"];
-var workspaceRoleSchema = external_exports.enum(workspaceRoleValues);
-var workspacePermissionValues = [
-  "workspace.view",
-  "agent.draft.save",
-  "agent.validate",
-  "agent.simulate",
-  "agent.revision.publish_paused",
-  "agent.revision.activate",
-  "inbox.dismiss",
-  "run.cancel",
-  "run.approve",
-  "assignment.add",
-  "assignment.expand",
-  "assignment.enable",
-  "assignment.pause",
-  "assignment.resume",
-  "assignment.disable",
-  "assignment.remove",
-  "policy.narrow",
-  "policy.widen",
-  "member.manage",
-  "repository.sync",
-  "installation.manage"
-];
-var workspacePermissionSchema = external_exports.enum(workspacePermissionValues);
-var memberPermissions = [
-  "workspace.view",
-  "agent.draft.save",
-  "agent.validate",
-  "agent.simulate",
-  "agent.revision.publish_paused",
-  "inbox.dismiss",
-  "run.cancel",
-  "assignment.pause",
-  "assignment.disable",
-  "assignment.remove",
-  "policy.narrow"
-];
-var workspaceRolePermissions = Object.freeze({
-  member: Object.freeze(memberPermissions),
-  owner: Object.freeze(workspacePermissionValues)
-});
-var principalKindSchema = external_exports.enum(["dashboard-session", "cloudflare-access", "mcp-token", "local-dev"]);
-var internalUserV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id2,
-  displayName: external_exports.string().trim().min(1).max(255),
-  createdAt: timestamp,
-  disabledAt: timestamp.nullable()
-}).strict();
-var externalIdentityV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id2,
-  userId: id2,
-  provider: external_exports.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
-  providerSubject: external_exports.string().trim().min(1).max(255),
-  login: external_exports.string().trim().min(1).max(255),
-  createdAt: timestamp
-}).strict();
-var workspaceMembershipV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id2,
-  userId: id2,
-  role: workspaceRoleSchema,
-  createdAt: timestamp,
-  revokedAt: timestamp.nullable()
-}).strict();
-var workspaceInvitationV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id2,
-  provider: external_exports.literal("github"),
-  providerSubject: githubNumericIdSchema,
-  login: external_exports.string().trim().min(1).max(255),
-  role: workspaceRoleSchema,
-  invitedByUserId: id2,
-  createdAt: timestamp,
-  expiresAt: timestamp,
-  acceptedAt: timestamp.nullable(),
-  revokedAt: timestamp.nullable()
-}).strict().superRefine((invitation, context) => {
-  if (Date.parse(invitation.expiresAt) <= Date.parse(invitation.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "invitation expiry must follow creation" });
-  if (invitation.acceptedAt !== null && invitation.revokedAt !== null) context.addIssue({ code: "custom", message: "invitation cannot be both accepted and revoked" });
-});
-
-// ../contracts/src/assignments.ts
-var id3 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var agentId = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
-var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var timestamp2 = external_exports.iso.datetime();
-var displayName = external_exports.string().trim().min(1).max(255);
-var agentRepositoryAssignmentV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id3,
-  version: external_exports.number().int().positive(),
-  configHash: hash2,
-  agentId,
-  agentDisplayName: displayName.optional(),
-  repositoryId: githubNumericIdSchema,
-  repositoryDisplayName: displayName.optional(),
-  enabled: external_exports.boolean(),
-  authorityCeiling: policyModeSchema,
-  createdAt: timestamp2,
-  updatedAt: timestamp2,
-  removedAt: timestamp2.nullable()
-}).strict().superRefine((assignment, context) => {
-  if (Date.parse(assignment.updatedAt) < Date.parse(assignment.createdAt)) context.addIssue({ code: "custom", path: ["updatedAt"], message: "assignment update cannot precede creation" });
-});
-var assignmentHistoryBase = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id3,
-  assignmentId: id3,
-  assignmentVersion: external_exports.number().int().positive(),
-  actorUserId: id3,
-  createdAt: timestamp2
-});
-var assignmentHistoryDetailsSchema = external_exports.discriminatedUnion("action", [
-  external_exports.object({ action: external_exports.literal("added"), repositoryId: githubNumericIdSchema, agentId }).strict(),
-  external_exports.object({ action: external_exports.literal("enabled") }).strict(),
-  external_exports.object({ action: external_exports.literal("paused") }).strict(),
-  external_exports.object({ action: external_exports.literal("resumed") }).strict(),
-  external_exports.object({ action: external_exports.literal("disabled") }).strict(),
-  external_exports.object({ action: external_exports.literal("removed") }).strict(),
-  external_exports.object({ action: external_exports.literal("authority_narrowed"), from: policyModeSchema, to: policyModeSchema }).strict(),
-  external_exports.object({ action: external_exports.literal("authority_widened"), from: policyModeSchema, to: policyModeSchema }).strict()
-]);
-var agentRepositoryAssignmentHistoryV1Schema = assignmentHistoryBase.extend({ details: assignmentHistoryDetailsSchema }).strict();
-var repositoryPolicyV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  repositoryId: githubNumericIdSchema,
-  repositoryDisplayName: displayName.optional(),
-  version: external_exports.number().int().positive(),
-  policyHash: hash2,
-  operationModes: external_exports.partialRecord(operationKindSchema, policyModeSchema),
-  allowedObservations: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
-  workspaceModes: external_exports.partialRecord(workspaceCapabilitySchema, policyModeSchema)
-}).strict().superRefine((policy, context) => {
-  if (new Set(policy.allowedObservations).size !== policy.allowedObservations.length) context.addIssue({ code: "custom", path: ["allowedObservations"], message: "observation capabilities must be unique" });
-});
-var modeRank = { disabled: 0, approval: 1, automatic: 2 };
-var effectiveAuthorityLayersV1Schema = external_exports.object({
-  workspace: policyModeSchema,
-  repository: policyModeSchema,
-  agent: policyModeSchema,
-  assignment: policyModeSchema,
-  effective: policyModeSchema
-}).strict().superRefine((layers, context) => {
-  const expected = [layers.workspace, layers.repository, layers.agent, layers.assignment].reduce((narrowest, mode) => modeRank[mode] < modeRank[narrowest] ? mode : narrowest, "automatic");
-  if (layers.effective !== expected) context.addIssue({ code: "custom", path: ["effective"], message: "effective authority must be the most restrictive layer" });
-});
-var effectiveEffectAuthorityV1Schema = external_exports.object({
-  capability: operationKindSchema,
-  layers: effectiveAuthorityLayersV1Schema
-}).strict();
-var effectiveAssignmentPolicyV1Schema = external_exports.object({
-  authority: external_exports.array(effectiveEffectAuthorityV1Schema).max(operationKindSchema.options.length),
-  capabilities: effectiveCapabilitySetSchema
-}).strict();
-var assignmentOverlapConflictV1Schema = external_exports.object({
-  assignmentId: id3,
-  assignmentVersion: external_exports.number().int().positive(),
-  agentId,
-  agentDisplayName: displayName.optional(),
-  activeRevisionId: id3,
-  /** Canonical 64-hex hash of compiled revision content, never the agent_<hash> compiled revision ID. */
-  activeRevisionCompiledHash: hash2,
-  sharedTriggers: external_exports.array(repositoryEventTriggerSchema).min(1).max(repositoryEventTriggerSchema.options.length),
-  sharedEffects: external_exports.array(operationKindSchema).min(1).max(operationKindSchema.options.length)
-}).strict();
-var assignmentOverlapWarningV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  assignmentEpoch: external_exports.number().int().nonnegative(),
-  repositoryId: githubNumericIdSchema,
-  candidate: external_exports.object({ agentId, revisionId: id3, revisionCompiledHash: hash2, assignmentId: id3, assignmentVersion: external_exports.number().int().positive() }).strict(),
-  conflicts: external_exports.array(assignmentOverlapConflictV1Schema).min(1),
-  fingerprint: hash2
-}).strict();
-
-// ../contracts/src/grants.ts
-var id4 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var hash3 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var unparameterizedWorkspaceCapabilitySchema = workspaceCapabilitySchema.exclude(["workspace.exec.container", "workspace.network.connect"]);
-var runGrantScopeSchema = external_exports.discriminatedUnion("kind", [
-  external_exports.object({ kind: external_exports.literal("observation"), capabilities: external_exports.array(observationCapabilitySchema).min(1).max(observationCapabilitySchema.options.length) }).strict(),
-  external_exports.object({ kind: external_exports.literal("workspace"), capabilities: external_exports.array(unparameterizedWorkspaceCapabilitySchema).min(1).max(unparameterizedWorkspaceCapabilitySchema.options.length) }).strict(),
-  external_exports.object({
-    kind: external_exports.literal("container"),
-    capability: external_exports.literal("workspace.exec.container"),
-    capabilityRequestId: id4,
-    interruptionId: id4,
-    imageProfile: external_exports.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
-    maxRuntimeSeconds: external_exports.number().int().positive().max(3600)
-  }).strict(),
-  external_exports.object({
-    kind: external_exports.literal("network"),
-    capability: external_exports.literal("workspace.network.connect"),
-    capabilityRequestId: id4,
-    interruptionId: id4,
-    hosts: external_exports.array(publicNetworkHostnameSchema).min(1).max(20)
-  }).strict().superRefine((scope, context) => {
-    if (new Set(scope.hosts).size !== scope.hosts.length) context.addIssue({ code: "custom", path: ["hosts"], message: "network hosts must be unique" });
-  }),
-  external_exports.object({ kind: external_exports.literal("operation.execute"), operationId: id4, operationKind: operationKindSchema, operationHash: hash3, interruptionId: id4.nullable() }).strict()
-]);
-var runGrantV2Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v2"),
-  id: id4,
-  instanceId: id4,
-  runId: id4,
-  eventId: id4,
-  repository: repositoryRefSchema,
-  scopes: external_exports.array(runGrantScopeSchema).min(1).max(50),
-  issuedAt: external_exports.iso.datetime(),
-  expiresAt: external_exports.iso.datetime(),
-  nonce: external_exports.string().min(32).max(512)
-}).strict().superRefine((grant, context) => {
-  if (Date.parse(grant.expiresAt) <= Date.parse(grant.issuedAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "grant must expire after it is issued" });
-});
-
-// ../contracts/src/agent.ts
-var hash4 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var identifier = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,253}[a-z0-9])?$/);
-var entityId = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var relativePath = external_exports.string().min(1).max(1024).refine((path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."), "package paths must be normalized POSIX-relative paths");
-var base643 = external_exports.string().max(28e5).regex(
-  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/][AQgw]==|[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=)?$/,
-  "expected canonical base64 bytes"
-);
-var agentPackageFileV1Schema = external_exports.object({
-  path: relativePath,
-  mediaType: external_exports.string().regex(/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/).max(100),
-  bytesBase64: base643
-}).strict();
-var agentSourceV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  agentMd: external_exports.object({ path: external_exports.literal("AGENT.md"), mediaType: external_exports.literal("text/markdown"), bytesBase64: base643 }).strict(),
-  files: external_exports.array(agentPackageFileV1Schema).max(100).default([])
-}).strict().superRefine((source, context) => {
-  const paths = /* @__PURE__ */ new Set(["AGENT.md"]);
-  let encodedSize = source.agentMd.bytesBase64.length;
-  source.files.forEach((file2, index) => {
-    if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "package paths must be unique" });
-    paths.add(file2.path);
-    encodedSize += file2.bytesBase64.length;
-  });
-  if (encodedSize > 14e6) context.addIssue({ code: "custom", message: "agent package exceeds the 10 MiB encoded-size budget" });
-});
-var agentLimitsV1Schema = external_exports.object({
-  runtimeSeconds: external_exports.number().int().positive().max(86400).default(900),
-  maxTurns: external_exports.number().int().positive().max(128).default(24),
-  maxToolCalls: external_exports.number().int().positive().max(1024).default(80),
-  maxTasks: external_exports.number().int().positive().max(256).default(32),
-  maxParallelTasks: external_exports.number().int().positive().max(64).default(8),
-  inputTokens: external_exports.number().int().positive().max(2e6).default(64e3),
-  outputTokens: external_exports.number().int().positive().max(1e6).default(16e3),
-  costUsd: external_exports.number().nonnegative().max(1e3).default(2),
-  operations: external_exports.number().int().positive().max(100).default(10),
-  artifactBytes: external_exports.number().int().positive().max(1e9).default(5e7),
-  retriesPerStep: external_exports.number().int().nonnegative().max(10).default(2)
-}).strict();
-var agentSpecShape = {
-  schemaVersion: external_exports.literal("gardener.agent/v1"),
-  name: external_exports.string().trim().min(1).max(100),
-  description: external_exports.string().trim().min(1).max(1e3),
-  triggers: external_exports.array(repositoryEventTriggerSchema).min(1).max(100),
-  requestedCapabilities: requestedCapabilitySetSchema.default({ observation: [], workspace: [], effects: [] }),
-  behavior: external_exports.string().trim().min(1).max(1e5),
-  authorityCeiling: policyModeSchema.default("approval"),
-  limits: agentLimitsV1Schema.default({ runtimeSeconds: 900, maxTurns: 24, maxToolCalls: 80, maxTasks: 32, maxParallelTasks: 8, inputTokens: 64e3, outputTokens: 16e3, costUsd: 2, operations: 10, artifactBytes: 5e7, retriesPerStep: 2 }),
-  skills: external_exports.array(relativePath).max(50).default([]),
-  evals: external_exports.array(relativePath).max(100).default([]),
-  eligibility: agentEligibilitySchema.default({ actorIds: [], resourceAuthorIds: [], labelsAny: [], labelsAll: [], baseBranches: [], includeDraftPullRequests: true })
-};
-function validatePortableAgentProse(value) {
-  const lines = value.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trim());
-  if (/\b(?:(?:https?:\/\/)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\b/i.test(value)) return "must not bind a GitHub repository URL";
-  if (lines.some((line) => {
-    const match = /^(?:[-*]\s*)?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(line);
-    return match !== null && !/\.[A-Za-z0-9]{1,10}$/.test(match[2]);
-  })) return "must not contain a bare owner/repository binding";
-  if (/\b(?:repository|repo)[-_ ]?(?:id|name|path)?\s*[:=]\s*\S+/i.test(value)) return "must not contain a labelled repository binding";
-  if (lines.some((line) => /^(?:[-*]\s*)?(?:(?:commit[-_ ]?)?sha\s*[:=]\s*)?[0-9a-f]{7,40}$/i.test(line))) return "must not bind a commit SHA";
-  if (/\b(?:token|password|secret|credential)\s*[:=]\s*\S+/i.test(value)) return "must not contain a credential assignment";
-  if (/\b(?:runtime|compiler|harness)[-_ ]version\s*[:=]\s*\S+/i.test(value)) return "must not contain a runtime-version binding";
-  return void 0;
-}
-function refineAgentSpec(spec, context) {
-  for (const key of ["triggers", "skills", "evals"]) {
-    if (new Set(spec[key]).size !== spec[key].length) context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
-  }
-  for (const key of ["name", "description", "behavior"]) {
-    const message3 = validatePortableAgentProse(spec[key]);
-    if (message3) context.addIssue({ code: "custom", path: [key], message: `Agent ${key} ${message3}` });
-  }
-}
-var agentSpecV1Schema = external_exports.object(agentSpecShape).strict().superRefine(refineAgentSpec);
-var compiledAgentSpecV1Schema = external_exports.object(agentSpecShape).strict().superRefine(refineAgentSpec);
-var agentProvenanceV1Schema = external_exports.object({
-  source: external_exports.enum(["dashboard", "git", "mcp", "api", "migration"]),
-  authoredBy: authoringPrincipalSchema,
-  publishedBy: authoringPrincipalSchema,
-  authoredAt: external_exports.iso.datetime(),
-  publishedAt: external_exports.iso.datetime(),
-  git: external_exports.object({ repositoryId: githubNumericIdSchema, commitSha: external_exports.string().regex(/^[a-fA-F0-9]{40}$/), path: relativePath }).strict().optional()
-}).strict().superRefine((provenance, context) => {
-  if (Date.parse(provenance.publishedAt) < Date.parse(provenance.authoredAt)) context.addIssue({ code: "custom", path: ["publishedAt"], message: "publication cannot precede authorship" });
-  if (provenance.source === "git" && !provenance.git) context.addIssue({ code: "custom", path: ["git"], message: "Git provenance requires a commit binding" });
-});
-var agentDraftV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  draftId: identifier,
-  agentId: identifier.nullable(),
-  status: external_exports.literal("paused"),
-  source: agentSourceV1Schema,
-  provenance: agentProvenanceV1Schema,
-  createdAt: external_exports.iso.datetime(),
-  updatedAt: external_exports.iso.datetime()
-}).strict().superRefine((draft, context) => {
-  if (Date.parse(draft.updatedAt) < Date.parse(draft.createdAt)) context.addIssue({ code: "custom", path: ["updatedAt"], message: "draft update cannot precede creation" });
-});
-var agentRevisionV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  agentId: identifier,
-  revision: external_exports.number().int().positive(),
-  revisionId: identifier,
-  source: agentSourceV1Schema,
-  spec: agentSpecV1Schema,
-  sourceHash: hash4,
-  semanticHash: hash4,
-  provenance: agentProvenanceV1Schema,
-  createdAt: external_exports.iso.datetime()
-}).strict();
-var compiledAgentRevisionV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  compiledRevisionId: external_exports.string().regex(/^agent_[a-f0-9]{64}$/),
-  agentId: identifier,
-  revision: external_exports.number().int().positive(),
-  revisionId: identifier,
-  sourceHash: hash4,
-  semanticHash: hash4,
-  spec: compiledAgentSpecV1Schema,
-  referencedFiles: external_exports.array(external_exports.object({ path: relativePath, hash: hash4, kind: external_exports.enum(["skill", "eval"]) }).strict()).max(150),
-  compiler: external_exports.object({ id: external_exports.literal("gardener-agent-compiler"), version: external_exports.string().min(1).max(100) }).strict(),
-  capabilityCatalogVersion: external_exports.string().min(1).max(100),
-  runtimeVersion: external_exports.string().min(1).max(100),
-  compiledAt: external_exports.iso.datetime()
-}).strict();
-var agentRunSnapshotV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  runId: identifier,
-  createdAt: external_exports.iso.datetime(),
-  revision: compiledAgentRevisionV1Schema,
-  assignment: external_exports.object({ id: entityId, version: external_exports.number().int().positive(), configHash: hash4 }).strict(),
-  repository: external_exports.object({ id: githubNumericIdSchema, policyHash: hash4, policyVersion: external_exports.number().int().positive() }).strict(),
-  workspace: external_exports.object({ policyHash: hash4, policyVersion: external_exports.number().int().positive() }).strict(),
-  effectiveConstraints: external_exports.object({
-    allowedMergeMethods: external_exports.array(external_exports.enum(["merge", "squash", "rebase"])).min(1).max(3),
-    requiredChecks: external_exports.array(external_exports.string().trim().min(1).max(255)).max(100),
-    maxCommentLength: external_exports.number().int().positive().max(65536),
-    maxChangedFiles: external_exports.number().int().positive().max(100),
-    deniedPathPrefixes: external_exports.array(external_exports.string().min(1).max(1024)).max(100)
-  }).strict(),
-  effectiveAuthority: external_exports.array(effectiveEffectAuthorityV1Schema).max(effectCapabilitySchema.options.length),
-  effectiveCapabilities: effectiveCapabilitySetSchema,
-  harness: external_exports.object({ id: external_exports.string().min(1).max(255), version: external_exports.string().min(1).max(100) }).strict(),
-  versions: external_exports.object({ runtime: external_exports.string().min(1).max(100), capabilityCatalog: external_exports.string().min(1).max(100), compiler: external_exports.string().min(1).max(100) }).strict(),
-  snapshotHash: hash4
-}).strict();
-var agentSemanticDiffV1Schema = external_exports.object({
-  fromRevisionId: identifier.nullable(),
-  toRevisionId: identifier,
-  triggers: external_exports.object({ added: external_exports.array(repositoryEventTriggerSchema).max(100), removed: external_exports.array(repositoryEventTriggerSchema).max(100) }).strict(),
-  capabilities: external_exports.object({
-    observationAdded: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
-    observationRemoved: external_exports.array(observationCapabilitySchema).max(observationCapabilitySchema.options.length),
-    workspaceAdded: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
-    workspaceRemoved: external_exports.array(workspaceCapabilitySchema).max(workspaceCapabilitySchema.options.length),
-    effectsAdded: external_exports.array(effectCapabilitySchema).max(effectCapabilitySchema.options.length),
-    effectsRemoved: external_exports.array(effectCapabilitySchema).max(effectCapabilitySchema.options.length)
-  }).strict(),
-  authority: external_exports.object({ from: policyModeSchema.nullable(), to: policyModeSchema, increased: external_exports.boolean() }).strict(),
-  metadata: external_exports.object({
-    name: external_exports.object({ from: external_exports.string().max(100).nullable(), to: external_exports.string().max(100), changed: external_exports.boolean() }).strict(),
-    description: external_exports.object({ from: external_exports.string().max(1e3).nullable(), to: external_exports.string().max(1e3), changed: external_exports.boolean() }).strict()
-  }).strict(),
-  limitsChanged: external_exports.boolean(),
-  behaviorChanged: external_exports.boolean(),
-  eligibilityChanged: external_exports.boolean(),
-  skillsChanged: external_exports.boolean(),
-  evalsChanged: external_exports.boolean()
-}).strict();
-
-// ../contracts/src/runs.ts
-var id5 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var hash5 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var timestamp3 = external_exports.iso.datetime();
-function precedesOrEquals(left, right) {
-  return Date.parse(left) <= Date.parse(right);
-}
-var runStateSchema = external_exports.enum(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
-var taskStateSchema = external_exports.enum(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
-var stepStateSchema = external_exports.enum(["pending", "running", "waiting", "succeeded", "failed", "cancelled", "skipped"]);
-var stepKindSchema = external_exports.enum(["resolve", "model", "tool", "child_agent", "interruption", "proposal", "effect", "checkpoint", "cleanup"]);
-var runBudgetUsageV1Schema = external_exports.object({
-  turns: external_exports.number().int().nonnegative(),
-  toolCalls: external_exports.number().int().nonnegative(),
-  tasksCreated: external_exports.number().int().nonnegative(),
-  activeParallelTasks: external_exports.number().int().nonnegative(),
-  inputTokens: external_exports.number().int().nonnegative(),
-  outputTokens: external_exports.number().int().nonnegative(),
-  costUsd: external_exports.number().nonnegative(),
-  operations: external_exports.number().int().nonnegative(),
-  artifactBytes: external_exports.number().int().nonnegative(),
-  runtimeSeconds: external_exports.number().nonnegative()
-}).strict();
-var agentRunV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id5,
-  instanceId: id5,
-  eventId: id5,
-  agentId: id5,
-  revisionId: id5,
-  snapshotHash: hash5,
-  orchestrationInstanceId: id5,
-  state: runStateSchema,
-  createdAt: timestamp3,
-  startedAt: timestamp3.nullable(),
-  completedAt: timestamp3.nullable(),
-  budgetUsage: runBudgetUsageV1Schema,
-  terminationReason: external_exports.string().max(1e3).nullable(),
-  traceId: id5
-}).strict().superRefine((run, context) => {
-  if (run.state === "queued" && (run.startedAt !== null || run.completedAt !== null)) context.addIssue({ code: "custom", message: "queued run cannot have lifecycle timestamps" });
-  if ((run.state === "running" || run.state === "waiting") && (run.startedAt === null || run.completedAt !== null)) context.addIssue({ code: "custom", message: "active run requires startedAt and no completedAt" });
-  if (["succeeded", "failed", "cancelled"].includes(run.state) && run.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal run requires completedAt" });
-  if ((run.state === "succeeded" || run.state === "failed") && run.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
-  if (["succeeded", "failed", "cancelled"].includes(run.state) && run.budgetUsage.activeParallelTasks !== 0) context.addIssue({ code: "custom", path: ["budgetUsage", "activeParallelTasks"], message: "terminal run cannot retain active parallel tasks" });
-  if (run.startedAt !== null && !precedesOrEquals(run.createdAt, run.startedAt)) context.addIssue({ code: "custom", path: ["startedAt"], message: "run cannot start before creation" });
-  if (run.completedAt !== null && (!precedesOrEquals(run.createdAt, run.completedAt) || run.startedAt !== null && !precedesOrEquals(run.startedAt, run.completedAt))) context.addIssue({ code: "custom", path: ["completedAt"], message: "run completion chronology is invalid" });
-});
-var agentTaskV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id5,
-  runId: id5,
-  parentTaskId: id5.nullable(),
-  kind: external_exports.enum(["main", "subagent", "evaluation", "workspace"]),
-  state: taskStateSchema,
-  ordinal: external_exports.number().int().nonnegative(),
-  assignedCapabilitiesHash: hash5,
-  workspaceId: id5.nullable(),
-  createdAt: timestamp3,
-  startedAt: timestamp3.nullable(),
-  completedAt: timestamp3.nullable(),
-  errorCode: external_exports.string().max(100).nullable()
-}).strict().superRefine((task, context) => {
-  if (task.state === "queued" && (task.startedAt !== null || task.completedAt !== null)) context.addIssue({ code: "custom", message: "queued task cannot have lifecycle timestamps" });
-  if ((task.state === "running" || task.state === "waiting") && (task.startedAt === null || task.completedAt !== null)) context.addIssue({ code: "custom", message: "active task requires startedAt and no completedAt" });
-  if (["succeeded", "failed", "cancelled"].includes(task.state) && task.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal task requires completedAt" });
-  if ((task.state === "succeeded" || task.state === "failed") && task.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
-  if (task.startedAt !== null && !precedesOrEquals(task.createdAt, task.startedAt)) context.addIssue({ code: "custom", path: ["startedAt"], message: "task cannot start before creation" });
-  if (task.completedAt !== null && (!precedesOrEquals(task.createdAt, task.completedAt) || task.startedAt !== null && !precedesOrEquals(task.startedAt, task.completedAt))) context.addIssue({ code: "custom", path: ["completedAt"], message: "task completion chronology is invalid" });
-});
-var agentStepV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id5,
-  runId: id5,
-  taskId: id5,
-  parentStepId: id5.nullable(),
-  kind: stepKindSchema,
-  state: stepStateSchema,
-  ordinal: external_exports.number().int().nonnegative(),
-  attempt: external_exports.number().int().positive(),
-  inputHash: hash5,
-  outputHash: hash5.nullable(),
-  artifactIds: external_exports.array(id5).max(100),
-  startedAt: timestamp3.nullable(),
-  completedAt: timestamp3.nullable(),
-  retryable: external_exports.boolean().nullable(),
-  errorCode: external_exports.string().max(100).nullable()
-}).strict().superRefine((step, context) => {
-  if (step.state === "pending" && (step.startedAt !== null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "pending step cannot have lifecycle timestamps" });
-  if ((step.state === "running" || step.state === "waiting") && (step.startedAt === null || step.completedAt !== null)) context.addIssue({ code: "custom", message: "active step requires startedAt and no completedAt" });
-  if (["succeeded", "failed", "cancelled", "skipped"].includes(step.state) && step.completedAt === null) context.addIssue({ code: "custom", path: ["completedAt"], message: "terminal step requires completedAt" });
-  if ((step.state === "succeeded" || step.state === "failed") && step.startedAt === null) context.addIssue({ code: "custom", path: ["startedAt"], message: "completed execution requires startedAt" });
-  if (step.startedAt !== null && step.completedAt !== null && !precedesOrEquals(step.startedAt, step.completedAt)) context.addIssue({ code: "custom", path: ["completedAt"], message: "step completion cannot precede start" });
-});
-var agentArtifactV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id5,
-  runId: id5,
-  taskId: id5.nullable(),
-  stepId: id5.nullable(),
-  kind: external_exports.enum(["repository_snapshot", "patch", "log", "report", "trace", "model_input", "model_output", "tool_output", "test_result", "eval_result"]),
-  name: external_exports.string().min(1).max(255),
-  mediaType: external_exports.string().min(1).max(100),
-  sizeBytes: external_exports.number().int().nonnegative().max(1e9),
-  hash: hash5,
-  storage: external_exports.object({ provider: external_exports.enum(["r2", "d1", "computer", "inline"]), key: external_exports.string().min(1).max(1024) }).strict(),
-  trust: external_exports.enum(["trusted_system", "untrusted_repository", "untrusted_model", "untrusted_tool", "human_authored"]),
-  createdAt: timestamp3,
-  expiresAt: timestamp3.nullable()
-}).strict().superRefine((artifact, context) => {
-  if (artifact.expiresAt !== null && Date.parse(artifact.expiresAt) <= Date.parse(artifact.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "artifact expiry must follow creation" });
-});
-var agentEffectProposalV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id5,
-  runId: id5,
-  stepId: id5,
-  operation: operationSchema,
-  operationHash: hash5,
-  rationale: external_exports.string().trim().min(1).max(5e3),
-  evidenceArtifactIds: external_exports.array(id5).max(100),
-  createdAt: timestamp3
-}).strict();
-var agentEffectResultV1Schema = external_exports.object({ proposalId: id5, receipt: operationReceiptSchema }).strict();
-
-// ../contracts/src/interruptions.ts
-var id6 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var hash6 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var timestamp4 = external_exports.iso.datetime();
-var interruptionBase = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id6,
-  runId: id6,
-  taskId: id6,
-  stepId: id6,
-  state: external_exports.enum(["pending", "approved", "rejected", "expired", "cancelled"]),
-  eligibleResponders: external_exports.array(gardenerPrincipalSchema).min(1).max(100),
-  nonceHash: hash6,
-  createdAt: timestamp4,
-  expiresAt: timestamp4,
-  resolvedAt: timestamp4.nullable()
-});
-var interruptionSchema = external_exports.discriminatedUnion("kind", [
-  interruptionBase.extend({ kind: external_exports.literal("clarification"), question: external_exports.string().trim().min(1).max(5e3), choices: external_exports.array(external_exports.object({ id: id6, label: external_exports.string().min(1).max(200) }).strict()).max(20), response: external_exports.object({ text: external_exports.string().max(1e4), choiceId: id6.nullable() }).strict().nullable() }).strict(),
-  interruptionBase.extend({ kind: external_exports.literal("capability_request"), request: runtimeCapabilityRequestSchema, decision: external_exports.enum(["allow_once", "reject", "revision_required", "never_allowed"]).nullable() }).strict(),
-  interruptionBase.extend({ kind: external_exports.literal("effect_approval"), operation: operationSchema, operationHash: hash6, decision: external_exports.enum(["approve_exact", "reject"]).nullable() }).strict(),
-  interruptionBase.extend({ kind: external_exports.literal("patch_review"), patchArtifactId: id6, patchHash: hash6, decision: external_exports.enum(["approve", "reject", "request_changes"]).nullable(), response: external_exports.string().max(1e4).nullable() }).strict(),
-  interruptionBase.extend({ kind: external_exports.literal("budget_request"), budget: external_exports.enum(["turns", "tool_calls", "runtime", "tokens", "cost", "artifact_bytes"]), requestedAdditional: external_exports.number().positive(), decision: external_exports.enum(["allow_once", "reject"]).nullable() }).strict()
-]).superRefine((interruption, context) => {
-  if (Date.parse(interruption.expiresAt) <= Date.parse(interruption.createdAt)) context.addIssue({ code: "custom", path: ["expiresAt"], message: "interruption must expire after creation" });
-  const resolution = interruption.kind === "clarification" ? interruption.response : interruption.decision;
-  if (interruption.state === "pending") {
-    if (resolution !== null) context.addIssue({ code: "custom", message: "pending interruption cannot have a resolution" });
-    if (interruption.resolvedAt !== null) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "pending interruption cannot have a resolution timestamp" });
-    return;
-  }
-  if (interruption.resolvedAt === null) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "resolved interruption requires a resolution timestamp" });
-  if (interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) < Date.parse(interruption.createdAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "interruption cannot resolve before creation" });
-  if ((interruption.state === "approved" || interruption.state === "rejected") && interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) > Date.parse(interruption.expiresAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "approval or rejection cannot occur after expiration" });
-  if (interruption.state === "expired" && interruption.resolvedAt !== null && Date.parse(interruption.resolvedAt) < Date.parse(interruption.expiresAt)) context.addIssue({ code: "custom", path: ["resolvedAt"], message: "expiration cannot resolve before its deadline" });
-  if (interruption.state === "expired" || interruption.state === "cancelled") {
-    if (resolution !== null) context.addIssue({ code: "custom", message: "expired or cancelled interruption cannot contain a decision" });
-    return;
-  }
-  if (interruption.kind !== "clarification" && resolution === null) context.addIssue({ code: "custom", path: ["decision"], message: "approved or rejected interruption requires a decision" });
-  if (interruption.kind === "clarification") {
-    if (interruption.state === "approved" && interruption.response === null) context.addIssue({ code: "custom", path: ["response"], message: "approved clarification requires a response" });
-    if (interruption.state === "rejected" && interruption.response !== null) context.addIssue({ code: "custom", path: ["response"], message: "rejected clarification cannot contain a response" });
-  } else if (interruption.kind === "capability_request") {
-    const approved = interruption.decision === "allow_once";
-    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "capability decision is incompatible with interruption state" });
-  } else if (interruption.kind === "effect_approval") {
-    const approved = interruption.decision === "approve_exact";
-    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "effect decision is incompatible with interruption state" });
-  } else if (interruption.kind === "patch_review") {
-    const approved = interruption.decision === "approve";
-    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "patch decision is incompatible with interruption state" });
-  } else {
-    const approved = interruption.decision === "allow_once";
-    if (interruption.state === "approved" !== approved) context.addIssue({ code: "custom", path: ["decision"], message: "budget decision is incompatible with interruption state" });
-  }
-});
-var interruptionResponseV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  interruptionId: id6,
-  nonce: external_exports.string().min(32).max(512),
-  responder: gardenerPrincipalSchema,
-  responseHash: hash6,
-  respondedAt: timestamp4,
-  payload: external_exports.union([
-    external_exports.object({ kind: external_exports.literal("clarification"), text: external_exports.string().max(1e4), choiceId: id6.nullable() }).strict(),
-    external_exports.object({ kind: external_exports.literal("capability_request"), decision: external_exports.enum(["allow_once", "reject", "revision_required", "never_allowed"]) }).strict(),
-    external_exports.object({ kind: external_exports.literal("effect_approval"), decision: external_exports.enum(["approve_exact", "reject"]), operationHash: hash6 }).strict(),
-    external_exports.object({ kind: external_exports.literal("patch_review"), decision: external_exports.enum(["approve", "reject", "request_changes"]), response: external_exports.string().max(1e4).nullable() }).strict(),
-    external_exports.object({ kind: external_exports.literal("budget_request"), decision: external_exports.enum(["allow_once", "reject"]) }).strict()
-  ])
-}).strict();
-var inboxBase = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  id: id6,
-  instanceId: id6,
-  runId: id6.nullable(),
-  createdAt: timestamp4,
-  updatedAt: timestamp4,
-  status: external_exports.enum(["unread", "open", "resolved", "dismissed"]),
-  severity: external_exports.enum(["info", "attention", "warning", "critical"]),
-  title: external_exports.string().trim().min(1).max(255),
-  summary: external_exports.string().trim().min(1).max(2e3)
-});
-var inboxItemSchema = external_exports.discriminatedUnion("kind", [
-  inboxBase.extend({ kind: external_exports.literal("interruption"), interruptionId: id6 }).strict(),
-  inboxBase.extend({ kind: external_exports.literal("run_failure"), errorCode: external_exports.string().min(1).max(100), retryable: external_exports.boolean() }).strict(),
-  inboxBase.extend({ kind: external_exports.literal("draft_activation"), draftId: id6 }).strict(),
-  inboxBase.extend({ kind: external_exports.literal("eval_regression"), revisionId: id6, evalArtifactId: id6 }).strict(),
-  inboxBase.extend({ kind: external_exports.literal("temporary_grant_expiring"), grantId: id6, expiresAt: timestamp4 }).strict()
-]);
-
-// ../contracts/src/simulations.ts
-var id7 = external_exports.string().regex(/^[A-Za-z0-9:._-]{1,255}$/);
-var hash7 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var agentSimulationRequestV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  simulationId: id7,
-  revisionId: id7,
-  event: repositoryEventV2Schema,
-  mode: external_exports.enum(["validate", "shadow"]),
-  fixtureId: id7.nullable()
-}).strict();
-var agentSimulationResultV1Schema = external_exports.object({
-  schemaVersion: external_exports.literal("v1"),
-  simulationId: id7,
-  revisionId: id7,
-  eventId: id7,
-  status: external_exports.enum(["eligible", "ineligible", "completed", "failed", "blocked"]),
-  traceHash: hash7,
-  effectiveCapabilities: effectiveCapabilitySetSchema,
-  proposals: external_exports.array(agentEffectProposalV1Schema).max(100),
-  deniedRequests: external_exports.array(external_exports.object({ capability: external_exports.union([observationCapabilitySchema, workspaceCapabilitySchema, effectCapabilitySchema]), reason: external_exports.string().min(1).max(1e3) }).strict()).max(100),
-  usage: runBudgetUsageV1Schema,
-  summary: external_exports.string().max(1e4),
-  createdAt: external_exports.iso.datetime(),
-  completedAt: external_exports.iso.datetime()
-}).strict();
-
 // ../contracts/src/task.ts
-var identifier2 = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
+var identifier = external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
 var boundIdentifier = external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
 var githubNumericId = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
 var sha1 = external_exports.string().regex(/^[a-f0-9]{40}$/);
 var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var repositoryFullName = external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201);
-var relativePath2 = external_exports.string().min(1).max(1024).refine(
+var relativePath = external_exports.string().min(1).max(1024).refine(
   (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "expected a normalized repository-relative POSIX path"
 );
@@ -41412,7 +40451,7 @@ var taskLimitsV1Schema = external_exports.strictObject({
 });
 var taskBundleV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-bundle/v1"),
-  taskId: identifier2,
+  taskId: identifier,
   name: external_exports.string().trim().min(1).max(100),
   description: external_exports.string().trim().min(1).max(1e3),
   instructions: external_exports.string().trim().min(1).max(1e5),
@@ -41697,7 +40736,7 @@ var taskRunRequestV1Schema = external_exports.strictObject({
   runId: boundIdentifier,
   bundle: taskBundleV1Schema,
   bundleHash: sha256,
-  sourcePath: relativePath2,
+  sourcePath: relativePath,
   policySnapshotHash: sha256,
   event: normalizedEventV1Schema,
   model: external_exports.strictObject({ id: external_exports.string().min(1).max(256) }),
@@ -42009,14 +41048,14 @@ function isProtectedCapturePath(path4) {
 }
 var taskCaptureFileV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
-    path: relativePath2,
+    path: relativePath,
     status: external_exports.enum(["added", "modified"]),
     mode: taskCaptureFileModeV1Schema,
     sizeBytes: fileByteCount,
     sha256
   }),
   external_exports.strictObject({
-    path: relativePath2,
+    path: relativePath,
     status: external_exports.literal("deleted")
   })
 ]);
@@ -42097,12 +41136,6 @@ var taskCaptureRefV1Schema = external_exports.strictObject({
   fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   sizeBytes: captureByteCount
 });
-var gitChangeArtifactRefV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.git-change-artifact/v1"),
-  sha256,
-  manifestSha256: sha256,
-  sizeBytes: external_exports.number().int().nonnegative().max(1e9)
-});
 var taskEventResourceV1Schema = external_exports.discriminatedUnion("kind", [
   external_exports.strictObject({ kind: external_exports.literal("issue"), id: githubNumericId, number: external_exports.number().int().positive() }),
   external_exports.strictObject({ kind: external_exports.literal("pull_request"), id: githubNumericId, number: external_exports.number().int().positive() }),
@@ -42167,7 +41200,7 @@ var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
 var taskEffectPlanV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-effect-plan/v1"),
   runId: boundIdentifier,
-  taskId: identifier2,
+  taskId: identifier,
   taskName: external_exports.string().trim().min(1).max(100),
   bundleHash: sha256,
   /**
@@ -42183,7 +41216,7 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
     defaultBranch: external_exports.string().trim().min(1).max(255)
   }),
   provenance: external_exports.strictObject({
-    sourcePath: relativePath2,
+    sourcePath: relativePath,
     commitSha: sha1,
     workflowRunId: githubNumericId,
     workflowRunAttempt: external_exports.number().int().positive()
@@ -42306,12 +41339,12 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
 var taskObservationV1Schema = external_exports.strictObject({
   kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
   summary: external_exports.string().trim().min(1).max(8e3),
-  paths: external_exports.array(relativePath2).max(100).default([])
+  paths: external_exports.array(relativePath).max(100).default([])
 });
 var taskOutcomeBase = {
   schemaVersion: external_exports.literal("gardener.task-outcome/v1"),
   runId: boundIdentifier,
-  taskId: identifier2,
+  taskId: identifier,
   bundleHash: sha256
 };
 var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
@@ -42331,7 +41364,7 @@ var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
     ...taskOutcomeBase,
     status: external_exports.literal("failed"),
-    error: external_exports.strictObject({ code: identifier2, message: external_exports.string().min(1).max(8e3), retryable: external_exports.boolean() })
+    error: external_exports.strictObject({ code: identifier, message: external_exports.string().min(1).max(8e3), retryable: external_exports.boolean() })
   }),
   external_exports.strictObject({
     ...taskOutcomeBase,
@@ -42341,7 +41374,7 @@ var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
 ]);
 
 // ../protocol/src/schema.ts
-var identifier3 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+var identifier2 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
 var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var sha12 = external_exports.string().regex(/^[a-f0-9]{40}$/);
 var githubNumericId2 = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
@@ -42373,7 +41406,7 @@ var runnerHelloV1Schema = external_exports.strictObject({
   phase: external_exports.enum(["plan", "effects"]),
   repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
   ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  runId: identifier3,
+  runId: identifier2,
   runAttempt: external_exports.number().int().positive().max(1e3),
   workflowRef: external_exports.string().min(1).max(1024),
   jobWorkflowRef: external_exports.string().min(1).max(1024),
@@ -42386,7 +41419,7 @@ var runnerHelloV1Schema = external_exports.strictObject({
 var runnerActionBaseFields = {
   schemaVersion: external_exports.literal("gardener.runner.action/v1"),
   sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier3,
+  operationId: identifier2,
   timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3)
 };
 var githubReadRequestV1Schema = external_exports.discriminatedUnion("transport", [
@@ -42447,7 +41480,7 @@ var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
 ]);
 var runnerCaptureRefV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
-  captureId: identifier3,
+  captureId: identifier2,
   baseSha: sha12,
   manifestSha256: sha2562,
   changesSha256: sha2562,
@@ -42470,7 +41503,7 @@ var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", 
 var runnerActionResultV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
   sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier3,
+  operationId: identifier2,
   status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
   exitCode: external_exports.number().int().min(0).max(255).nullable(),
   stdout: external_exports.string().max(4 * 1024 * 1024),
@@ -42612,7 +41645,7 @@ var githubUrl = external_exports.url().refine(
 );
 var runnerOperationReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("v2"),
-  operationId: identifier3,
+  operationId: identifier2,
   operationHash: sha2562,
   kind: external_exports.string().min(1).max(100).regex(/^[a-z][a-z_]*(?:\.[a-z][a-z_]*)+$/),
   status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
@@ -42651,7 +41684,7 @@ var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
 });
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
-  planRunId: identifier3,
+  planRunId: identifier2,
   bundleHash: sha2562,
   artifactSha256: sha2562,
   /** Digest of the changes artifact, when the plan materialized repository changes. */
@@ -43376,7 +42409,7 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
   async #materialize(directory, file2, budget, capturedBytes) {
     const temporary = import_node_path.default.join(directory, "content", `.tmp-${process.pid}-${uniqueSuffix()}`);
     const handle = await (0, import_promises.open)(temporary, import_node_fs.constants.O_WRONLY | import_node_fs.constants.O_CREAT | import_node_fs.constants.O_EXCL | import_node_fs.constants.O_NOFOLLOW, FILE_MODE);
-    const hash8 = (0, import_node_crypto.createHash)("sha256");
+    const hash2 = (0, import_node_crypto.createHash)("sha256");
     let sizeBytes = 0;
     const meter = new import_node_stream.Transform({
       transform(chunk, _encoding, callback) {
@@ -43393,7 +42426,7 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
           callback(budgetFailure(budget, budget.total, "Capture"));
           return;
         }
-        hash8.update(chunk);
+        hash2.update(chunk);
         callback(null, chunk);
       }
     });
@@ -43410,7 +42443,7 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
     } finally {
       await handle.close();
     }
-    const sha2563 = hash8.digest("hex");
+    const sha2563 = hash2.digest("hex");
     await (0, import_promises.rename)(temporary, import_node_path.default.join(directory, "content", sha2563));
     return { path: file2.path, status: file2.status, mode: file2.mode, sizeBytes, sha256: sha2563 };
   }
@@ -43648,9 +42681,9 @@ async function fileDigest(absolute) {
   const handle = await (0, import_promises.open)(absolute, import_node_fs.constants.O_RDONLY | import_node_fs.constants.O_NOFOLLOW).catch(() => void 0);
   if (handle === void 0) return "absent";
   try {
-    const hash8 = (0, import_node_crypto.createHash)("sha256");
-    await (0, import_promises2.pipeline)(handle.createReadStream({ autoClose: false }), hash8);
-    return hash8.digest("hex");
+    const hash2 = (0, import_node_crypto.createHash)("sha256");
+    await (0, import_promises2.pipeline)(handle.createReadStream({ autoClose: false }), hash2);
+    return hash2.digest("hex");
   } finally {
     await handle.close();
   }
@@ -43671,7 +42704,7 @@ async function measureContent(absolute, expectedSize) {
   try {
     const stats = await handle.stat();
     if (!stats.isFile() || stats.size !== expectedSize) return void 0;
-    const hash8 = (0, import_node_crypto.createHash)("sha256");
+    const hash2 = (0, import_node_crypto.createHash)("sha256");
     let seen = 0;
     await (0, import_promises2.pipeline)(
       handle.createReadStream({ autoClose: false }),
@@ -43682,7 +42715,7 @@ async function measureContent(absolute, expectedSize) {
             callback(new Error("Capture content grew while it was being verified"));
             return;
           }
-          hash8.update(chunk);
+          hash2.update(chunk);
           callback(null, chunk);
         }
       }),
@@ -43691,7 +42724,7 @@ async function measureContent(absolute, expectedSize) {
         }
       }
     );
-    return seen === expectedSize ? hash8.digest("hex") : void 0;
+    return seen === expectedSize ? hash2.digest("hex") : void 0;
   } finally {
     await handle.close();
   }
@@ -44150,9 +43183,9 @@ function boundedReadPayload(result, maxOutputBytes) {
   const bodyBudget = (overhead) => {
     let candidate = Math.max(0, maxOutputBytes - overhead);
     while (candidate > 0) {
-      const text2 = truncateUtf8(result.body, candidate);
-      const encoded = JSON.stringify(text2);
-      if (Buffer.byteLength(encoded, "utf8") + overhead <= maxOutputBytes) return text2;
+      const text = truncateUtf8(result.body, candidate);
+      const encoded = JSON.stringify(text);
+      if (Buffer.byteLength(encoded, "utf8") + overhead <= maxOutputBytes) return text;
       candidate = Math.floor(candidate / 2);
     }
     return "";
@@ -44177,8 +43210,8 @@ function overheadOf(shape) {
   return Buffer.byteLength(JSON.stringify({ ...shape, body: "" }), "utf8");
 }
 function redactedReadError(error63) {
-  const text2 = error63 instanceof Error ? error63.message : "Provider read failed";
-  return text2.slice(0, 1e3);
+  const text = error63 instanceof Error ? error63.message : "Provider read failed";
+  return text.slice(0, 1e3);
 }
 function localWorkspacePath(workspace, virtualPath) {
   const relative = import_node_path2.default.posix.relative("/workspace", import_node_path2.default.posix.normalize(virtualPath));
@@ -44611,12 +43644,12 @@ function isJsonContentType(value) {
   const type = value.split(";")[0].trim().toLowerCase();
   return type === "application/json" || type.endsWith("+json");
 }
-function stripTrailingPrefix(text2, needle) {
-  const longest = Math.min(needle.length - 1, text2.length);
+function stripTrailingPrefix(text, needle) {
+  const longest = Math.min(needle.length - 1, text.length);
   for (let length = longest; length > 0; length -= 1) {
-    if (text2.endsWith(needle.slice(0, length))) return text2.slice(0, text2.length - length);
+    if (text.endsWith(needle.slice(0, length))) return text.slice(0, text.length - length);
   }
-  return text2;
+  return text;
 }
 function trimToUtf8Boundary(buffer) {
   for (let back = 1; back <= 4 && back <= buffer.byteLength; back += 1) {
@@ -46680,7 +45713,7 @@ var RpcSessionImpl = class {
     return exportId;
   }
   unexport(ids) {
-    for (let id8 of ids) this.releaseExport(id8, 1);
+    for (let id of ids) this.releaseExport(id, 1);
   }
   releaseExport(exportId, refcount) {
     let entry = this.exports[exportId];
@@ -46827,14 +45860,14 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id8, path4, args) {
+  sendCall(id, path4, args) {
     if (this.abortReason) {
       args?.dispose();
       throw this.abortReason;
     }
     let value = [
       "pipeline",
-      id8,
+      id,
       path4
     ];
     if (args) {
@@ -46852,14 +45885,14 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id8, path4, args) {
+  sendStream(id, path4, args) {
     if (this.abortReason) {
       args.dispose();
       throw this.abortReason;
     }
     let value = [
       "pipeline",
-      id8,
+      id,
       path4
     ];
     let devalue;
@@ -46889,14 +45922,14 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id8, path4, captures, instructions) {
+  sendMap(id, path4, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
     }
     let value = [
       "remap",
-      id8,
+      id,
       path4,
       captures.map((hook) => {
         let importId = this.getImport(hook);
@@ -46910,18 +45943,18 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendPull(id8) {
+  sendPull(id) {
     if (this.abortReason) throw this.abortReason;
-    this.send(["pull", id8]);
+    this.send(["pull", id]);
   }
-  sendRelease(id8, remoteRefcount) {
+  sendRelease(id, remoteRefcount) {
     if (this.abortReason) return;
     this.send([
       "release",
-      id8,
+      id,
       remoteRefcount
     ]);
-    delete this.imports[id8];
+    delete this.imports[id];
   }
   abort(error63, trySendAbortMessage = true) {
     if (this.abortReason !== void 0) return;

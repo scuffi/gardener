@@ -71,8 +71,6 @@ export interface HarnessRequest {
   };
   tools: readonly HarnessToolDescriptor[];
   budget: HarnessBudget;
-  /** Optional host-owned, completed-only JSON Schema for legacy structured-text mode. Native tool mode omits it. */
-  resultDataSchema?: { [key: string]: JsonValue };
   context?: readonly {
     name: string;
     content: string;
