@@ -18,6 +18,12 @@ take these three flags:
 - The customer repository's Actions must be able to use `scuffi/gardener`'s reusable workflow.
   While Gardener is private, that means a repository owned by the same account, with this
   repository's **Settings → Actions → Access** set to allow it.
+- If any task opens pull requests or approves reviews, turn on **Allow GitHub Actions to create and
+  approve pull requests** in the customer repository's **Settings → Actions → General → Workflow
+  permissions**. It is off by default for new repositories. Without it, apply stops at the
+  pull-request step with `GitHub Actions is not permitted to create or approve pull requests`,
+  and rerunning the failed job after enabling it resumes from that step. Leave the default workflow
+  permissions at read-only: each generated workflow requests exactly the permissions its task needs.
 
 ## Install
 
@@ -62,6 +68,10 @@ pnpm gardener -- deploy --workspace my-gardener --source-root "$PWD"
 Gardener creates an Access bypass for the runtime hostname only. The bypass grants network
 reachability, nothing more: every session still requires a valid GitHub OIDC token. The token is
 used in memory and never stored.
+
+Alternatively, exclude the runtime hostname from the Access policy yourself, for example with a
+bypass application for that hostname only, and rerun `deploy`. It continues once `/health` is
+reachable without Access.
 
 ## Changing tasks
 

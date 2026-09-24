@@ -27,7 +27,13 @@ repository code.
 
 ## Quick start
 
-Requirements: Node.js 24+, pnpm 11.25, and authenticated `wrangler` and `gh` sessions.
+Requirements:
+
+- Node.js 24+, pnpm 11.25, and authenticated `wrangler` and `gh` sessions;
+- a repository whose Actions can use this repository's reusable workflow (see
+  [Prerequisites](docs/operations.md#prerequisites));
+- for tasks that open pull requests, **Allow GitHub Actions to create and approve pull requests**
+  turned on in that repository's **Settings → Actions → General**. New repositories have it off.
 
 ```bash
 git clone https://github.com/scuffi/gardener && cd gardener
