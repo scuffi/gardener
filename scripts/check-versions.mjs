@@ -36,6 +36,7 @@ configured.set(manager, { range: managerVersion, manifests: ["package.json#packa
 // the repository's supported package-manager baseline.
 const qualificationPins = new Map([
   ["@cloudflare/vite-plugin", "qualified Workers build integration"],
+  ["vite", "qualified Workers build integration; updated together with @cloudflare/vite-plugin"],
   ["@cloudflare/workers-types", "published daily; updated together with wrangler"],
   ["@flue/runtime", "qualified Flue adapter family"],
   ["@flue/vite", "qualified Flue adapter family"],
