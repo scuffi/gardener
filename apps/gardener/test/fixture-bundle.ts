@@ -5,6 +5,7 @@ import { deepFreeze } from "@gardener/core";
 export function inspectRepositoryFixtureBundle(): Readonly<TaskBundleV1> {
   return deepFreeze(taskBundleV1Schema.parse({
     schemaVersion: "gardener.task-bundle/v1",
+    model: "@cf/moonshotai/kimi-k2.6",
     taskId: "fixture.issue-triage",
     name: "Issue triage",
     description: "Inspect an opened issue and its repository, then propose one concise triage comment.",

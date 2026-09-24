@@ -252,6 +252,21 @@ export const taskLimitsV1Schema = z.strictObject({
 export type TaskLimitsV1 = z.infer<typeof taskLimitsV1Schema>;
 
 /**
+ * A model id as AI Gateway addresses it through the Workers AI binding, e.g.
+ * `@cf/moonshotai/kimi-k2.6` or `openai/gpt-5.1`. Any id is accepted; whether
+ * the model can call tools is only known when it runs.
+ */
+export const taskModelIdSchema = z.string().min(1).max(256)
+  .regex(/^[A-Za-z0-9@][A-Za-z0-9@._:/+-]*$/, "model must be an AI Gateway model id such as @cf/moonshotai/kimi-k2.6 or openai/gpt-5.1")
+  .refine(
+    (id) => !id.split("/").some((segment) => segment === "" || segment === "." || segment === ".."),
+    "model path segments must be non-empty and cannot be . or ..",
+  )
+  // The runtime adds the `cloudflare/` provider prefix itself and refuses a
+  // model that still carries one, so reject it here rather than mid-run.
+  .refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
+
+/**
  * Repository-independent executable semantics. Authoring formats compile to
  * this contract; the runtime never parses Markdown or YAML.
  */
@@ -266,6 +281,11 @@ export const taskBundleV1Schema = z.strictObject({
   effects: z.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
+  /**
+   * The model every run of this bundle uses. Authoring fills in Gardener's
+   * default when a task names none, so the bundle always states its model.
+   */
+  model: taskModelIdSchema,
   /**
    * A draft task runs only when dispatched by hand. Its other triggers are kept
    * so a manual run can still target the resource they describe, but no real

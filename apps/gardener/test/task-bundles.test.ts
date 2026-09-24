@@ -54,6 +54,19 @@ describe("repository task bundle authority", () => {
     expect((await loadEnabledTaskBundle(drafts.db, "100", draft.bundleHash)).manualOnly).toBe(true);
   });
 
+  it("explains a bundle enrolled by an older Gardener", async () => {
+    const { sqlite, db } = database();
+    try {
+      const { model: _model, ...legacy } = structuredClone(inspectRepositoryFixtureBundle());
+      const bundleHash = await canonicalSha256(legacy);
+      sqlite.prepare("INSERT INTO actions_task_bundles(bundle_hash,task_id,bundle_json)VALUES(?,?,?)")
+        .run(bundleHash, legacy.taskId, canonicalJson(legacy));
+      sqlite.prepare("INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled)VALUES(?,?,?,?,?)")
+        .run("100", bundleHash, legacy.taskId, ".gardener/tasks/x/TASK.md", 1);
+      await expect(loadEnabledTaskBundle(db, "100", bundleHash)).rejects.toThrow(/predates this Gardener runtime; rerun gardener upgrade/);
+    } finally { sqlite.close(); }
+  });
+
   it("loads only the canonical bundle enabled for the authenticated repository", async () => {
     const { sqlite, db } = database();
     try {

@@ -15,6 +15,7 @@ function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"
 function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
   return taskBundleV1Schema.parse({
     schemaVersion: "gardener.task-bundle/v1",
+    model: "@cf/moonshotai/kimi-k2.6",
     taskId: "demo.task",
     name: "Demo task",
     description: "A portable task used to validate the Actions target.",

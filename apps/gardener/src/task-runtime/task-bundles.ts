@@ -18,7 +18,14 @@ export async function loadEnabledTaskBundle(
   }>();
   if (!row) throw new Error("Task bundle is not enabled for the authenticated repository");
 
-  const bundle = taskBundleV1Schema.parse(JSON.parse(row.bundle_json));
+  const parsed = taskBundleV1Schema.safeParse(JSON.parse(row.bundle_json));
+  if (!parsed.success) {
+    // Enrolled by an older Gardener whose bundle format this runtime no longer reads.
+    throw new Error(
+      "Stored task bundle predates this Gardener runtime; rerun gardener upgrade for this repository and push the regenerated workflows",
+    );
+  }
+  const bundle = parsed.data;
   if (bundle.taskId !== row.task_id || bundle.taskId !== row.repository_task_id) {
     throw new Error("Stored task bundle identity is inconsistent");
   }

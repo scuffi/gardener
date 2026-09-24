@@ -156,7 +156,8 @@ source.
 
 ## Runtime dependencies
 
-The model runtime is Flue `2.0.3`, with `@earendil-works/pi-ai` `0.83.0`, on Workers AI. The
-default model is `@cf/moonshotai/kimi-k2.6`, set by the Worker's `AI_MODEL` variable. Dependencies
+The model runtime is Flue `2.0.3`, with `@earendil-works/pi-ai` `0.83.0`. Every model call goes
+through the Workers AI binding to the account's AI Gateway named `default`. Each bundle names its
+model; `gardener build` writes `@cf/moonshotai/kimi-k2.6` when a task names none. Dependencies
 are pinned exactly. `pnpm versions:check` reports drift from the latest npm releases, and any
 intentionally held version is listed in `scripts/check-versions.mjs`.

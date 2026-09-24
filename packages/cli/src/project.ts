@@ -9,7 +9,7 @@ import {
   type GitHubActionsTaskPlanV1,
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
-import { compileTaskSource, type CompiledTask } from "./task-authoring.js";
+import { compileTaskSource, modelWarning, type CompiledTask } from "./task-authoring.js";
 
 export const DEFAULT_WORKFLOW_REF =
   "scuffi/gardener/.github/workflows/gardener-task.yml@8d3197e3c2d87e5693f013bf368d7be66cfb03ff";
@@ -256,9 +256,15 @@ export async function buildProject(input: { repositoryRoot: string }): Promise<P
   };
   const lockPath = join(gardenerDirectory, "gardener.lock.json");
   await atomicWrite(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
-  const warnings = tasks
-    .filter((task) => task.bundle.tools.includes("repository.exec"))
-    .map((task) => `Task ${task.bundle.taskId} ${UNRESTRICTED_EGRESS_WARNING}`);
+  const warnings = [
+    ...tasks
+      .filter((task) => task.bundle.tools.includes("repository.exec"))
+      .map((task) => `Task ${task.bundle.taskId} ${UNRESTRICTED_EGRESS_WARNING}`),
+    ...tasks.flatMap((task) => {
+      const warning = modelWarning(task.bundle.model);
+      return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
+    }),
+  ];
   return {
     warnings,
     lockPath,

@@ -25,6 +25,10 @@ take these three flags:
   and rerunning the failed job after enabling it resumes from that step. `doctor`, which `up` and
   `upgrade` also run, warns when the setting is off. Leave the default workflow
   permissions at read-only: each generated workflow requests exactly the permissions its task needs.
+- If any task sets a non-Cloudflare `model:` (for example `openai/…` or `anthropic/…`), add that
+  provider's key, or turn on Unified Billing, on the Cloudflare account's AI Gateway named
+  `default` (**AI → AI Gateway**). Gardener stores no provider keys. Without them, runs of that
+  task fail at the first model call. `@cf/…` models need nothing extra.
 
 ## Install
 
@@ -147,6 +151,10 @@ pnpm gardener -- upgrade --workspace my-gardener --repository my-org/my-repo \
 
 Run it once per repository, then commit the regenerated workflows.
 
+Some releases change the bundle format, which changes every bundle hash. After such a release's
+Worker is deployed, runs for a repository fail with `Stored task bundle predates this Gardener
+runtime` until that repository has been upgraded and its regenerated workflows pushed.
+
 Each deploy records a digest of the Worker bundle and migrations. To roll back code, check out the
 earlier Gardener source and pass its recorded digest:
 
@@ -157,6 +165,10 @@ pnpm gardener -- rollback --workspace my-gardener \
 
 Rollback refuses a digest that is not in the deployment history. Migrations are forward-only:
 rollback restores code, not schema.
+
+Rollback deploys the earlier code with the Worker settings of the CLI you run it from. Rolling back
+to a Worker from before per-task model selection is therefore not supported: that Worker reads
+its model from an `AI_MODEL` setting the current CLI no longer writes, so every run would fail.
 
 ## Teardown
 

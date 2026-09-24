@@ -115,9 +115,6 @@ export function renderRuntimeConfig(input: {
         new_sqlite_classes: ["FlueGardenerTaskHarnessAgent", "TaskRunnerSession"],
       }],
     }),
-    vars: {
-      AI_MODEL: "@cf/moonshotai/kimi-k2.6",
-    },
     observability: {
       enabled: true,
       logs: { enabled: true, invocation_logs: false },

@@ -197,7 +197,8 @@ describe("Actions-native installation topology", () => {
       database_name: names.database,
       database_id: "11111111-1111-4111-8111-111111111111",
     })]);
-    expect(runtime.vars).toEqual({ AI_MODEL: "@cf/moonshotai/kimi-k2.6" });
+    // Each bundle names its model, so the runtime carries no model setting.
+    expect(runtime).not.toHaveProperty("vars");
     expect(runtime).not.toHaveProperty("assets");
     expect(runtime).not.toHaveProperty("triggers");
     expect(runtime.d1_databases[0].migrations_dir).toBe(join(sourceRoot, "apps/gardener/migrations"));

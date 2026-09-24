@@ -11,7 +11,7 @@ import {
   upgradeProjectRelease,
 } from "../src/project";
 import { operationKindValues } from "@gardener/contracts";
-import { compileTaskSource, effectFamilyGlobValues, expandEffectSelectors } from "../src/task-authoring";
+import { compileTaskSource, DEFAULT_TASK_MODEL, effectFamilyGlobValues, expandEffectSelectors, modelWarning } from "../src/task-authoring";
 
 const TASK = `---
 schema: gardener.task/v1
@@ -93,6 +93,21 @@ describe("TASK.md compiler", () => {
     });
     expect(first.bundleHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.parse(first.canonicalBundle)).toEqual(first.bundle);
+  });
+
+  it("writes Gardener's default model into the bundle unless the task names one", async () => {
+    expect((await compileTaskSource(TASK)).bundle.model).toBe(DEFAULT_TASK_MODEL);
+    const named = await compileTaskSource(TASK.replace("tools:", "model: openai/gpt-5.1\ntools:"));
+    expect(named.bundle.model).toBe("openai/gpt-5.1");
+    expect(named.bundleHash).not.toBe((await compileTaskSource(TASK)).bundleHash);
+    await expect(compileTaskSource(TASK.replace("tools:", "model: 'gpt 5'\ntools:"))).rejects.toThrow(/AI Gateway model id/);
+  });
+
+  it("warns only about models without a native request format", () => {
+    for (const model of ["@cf/moonshotai/kimi-k2.6", "openai/gpt-5.1", "anthropic/claude-haiku-4-5"]) {
+      expect(modelWarning(model)).toBeUndefined();
+    }
+    expect(modelWarning("google-ai-studio/gemini-2.5-flash")).toMatch(/may fail if it cannot call tools/);
   });
 
   it("rejects unknown keys and unsafe labels", async () => {

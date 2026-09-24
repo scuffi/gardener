@@ -42,6 +42,8 @@ Inspect the issue and repository evidence, then propose one concise issue commen
 - `network` declares the task's egress posture honestly. See [Network](#network); for
   `github-actions/v1` the host lists must be empty.
 - `limits` are immutable ceilings enforced by the runtime.
+- `model` names the model every run uses. `build` fills in the default when it is omitted. See
+  [Model](#model).
 - The instruction body cannot grant tools, effects, network access, or GitHub permissions.
 
 ## Triggers
@@ -224,6 +226,36 @@ Apply replaces every `{{pr}}` with the real URL when the step runs. Other text i
 left as written. A field may declare up to eight placeholders, and each must appear in its text.
 Planning checks the text with every placeholder at the longest its output can be, so a plan that
 passes cannot exceed a field's limit once the real values are in.
+
+## Model
+
+`model:` picks the model every run of the task uses. It accepts any model AI Gateway serves
+through the Workers AI binding:
+
+```yaml
+model: openai/gpt-5.1
+```
+
+If you omit it, `gardener build` writes Gardener's default, `@cf/moonshotai/kimi-k2.6`, into the
+bundle. The bundle, and so the repository, always states the model, and changing it changes the
+bundle hash, so it takes effect only after you rebuild and reconnect.
+
+The model ID's prefix decides how requests are sent:
+
+| Prefix | Request format |
+| --- | --- |
+| `@cf/…` | Workers AI (OpenAI-compatible chat completions) |
+| `openai/…` | OpenAI Responses |
+| `anthropic/…` | Anthropic Messages |
+| anything else | OpenAI-compatible chat completions |
+
+A non-Cloudflare model receives everything the task's model sees: its instructions, the event
+(such as issue or pull request text) and any repository content it reads. Choose one only where
+sending that to the provider is acceptable.
+
+`gardener build` warns about any other prefix. Every task depends on tool calls, so a model that
+cannot make them fails the run. Non-Cloudflare models also need provider keys or Unified Billing
+on the account's `default` AI Gateway. See [Operations](operations.md#prerequisites).
 
 ## Limits
 

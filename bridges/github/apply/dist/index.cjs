@@ -40476,6 +40476,10 @@ var taskLimitsV1Schema = external_exports.strictObject({
   maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
   maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
 });
+var taskModelIdSchema = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9@][A-Za-z0-9@._:/+-]*$/, "model must be an AI Gateway model id such as @cf/moonshotai/kimi-k2.6 or openai/gpt-5.1").refine(
+  (id) => !id.split("/").some((segment) => segment === "" || segment === "." || segment === ".."),
+  "model path segments must be non-empty and cannot be . or .."
+).refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
 var taskBundleV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-bundle/v1"),
   taskId: identifier,
@@ -40487,6 +40491,11 @@ var taskBundleV1Schema = external_exports.strictObject({
   effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
+  /**
+   * The model every run of this bundle uses. Authoring fills in Gardener's
+   * default when a task names none, so the bundle always states its model.
+   */
+  model: taskModelIdSchema,
   /**
    * A draft task runs only when dispatched by hand. Its other triggers are kept
    * so a manual run can still target the resource they describe, but no real

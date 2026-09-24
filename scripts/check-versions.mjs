@@ -40,7 +40,7 @@ const qualificationPins = new Map([
   ["@cloudflare/workers-types", "published daily; updated together with wrangler"],
   ["@flue/runtime", "qualified Flue adapter family"],
   ["@flue/vite", "qualified Flue adapter family"],
-  ["@earendil-works/pi-ai", "qualified Flue 2.0.3 provider peer"],
+  ["@earendil-works/pi-ai", "qualified Flue 2.0.3 provider peer; a new AI Gateway api family would change the model wire-format table in docs/task-authoring.md"],
   ["wrangler", "qualified Cloudflare deployment tool"],
   ["pnpm", "supported repository package-manager baseline"],
   ["valibot", "qualified Flue runtime peer"],

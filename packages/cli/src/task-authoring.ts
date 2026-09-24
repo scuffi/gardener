@@ -2,6 +2,7 @@ import {
   operationCatalog,
   operationKindValues,
   taskBundleV1Schema,
+  taskModelIdSchema,
   taskToolV1Schema,
   taskTriggerKindValues,
   triggerKindOrder,
@@ -72,6 +73,23 @@ const triggerAuthoringSchema = z.strictObject({
   reject("cron");
 });
 
+/** The model a task uses when its TASK.md names none. Written into the bundle. */
+export const DEFAULT_TASK_MODEL = "@cf/moonshotai/kimi-k2.6";
+
+/**
+ * Model id prefixes Flue's Cloudflare provider has a native request format
+ * for. Any other id is sent as OpenAI-compatible chat completions, which may
+ * not support the tool calls every task depends on.
+ */
+const NATIVE_MODEL_PREFIXES = ["@cf/", "anthropic/", "openai/"] as const;
+
+/** A build warning for a model Gardener cannot vouch for, or undefined. */
+export function modelWarning(model: string): string | undefined {
+  if (NATIVE_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix))) return undefined;
+  return `uses model ${model}, which is sent to AI Gateway as OpenAI-compatible chat completions. `
+    + "Gardener has only verified @cf/, anthropic/ and openai/ models; this one may fail if it cannot call tools.";
+}
+
 const authoringSchema = z.strictObject({
   schema: z.literal("gardener.task/v1"),
   id: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
@@ -80,6 +98,7 @@ const authoringSchema = z.strictObject({
   trigger: triggerAuthoringSchema.optional(),
   triggers: z.array(triggerAuthoringSchema).min(1).max(taskTriggerKindValues.length).optional(),
   draft: z.boolean().optional(),
+  model: taskModelIdSchema.optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: z.array(effectSelectorSchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
   network: z.strictObject({
@@ -190,6 +209,7 @@ export async function compileTaskSource(source: string, sourceName = "TASK.md"):
       maxEffectOperations: authoring.limits["max-effect-operations"],
       maxEffectBytes: authoring.limits["max-effect-bytes"],
     },
+    model: authoring.model ?? DEFAULT_TASK_MODEL,
     ...(authoring.draft === true ? { draft: true } : {}),
   });
   return {

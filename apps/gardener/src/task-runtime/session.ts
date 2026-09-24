@@ -683,7 +683,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
         },
         actor: { id: identity.actor.actorId, login: identity.actor.actorLogin },
       },
-      model: { id: this.env.AI_MODEL },
+      model: { id: bundle.model },
       admittedAt,
       deadlineAt: new Date(Date.parse(admittedAt) + bundle.limits.runtimeSeconds * 1_000).toISOString(),
     };

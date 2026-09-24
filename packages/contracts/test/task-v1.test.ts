@@ -20,6 +20,7 @@ const hash = "a".repeat(64);
 function fixtureBundle(): TaskBundleV1 {
   return {
     schemaVersion: "gardener.task-bundle/v1",
+    model: "@cf/moonshotai/kimi-k2.6",
     taskId: "fixture.inspect",
     name: "Fixture repository inspection",
     description: "Inspect repository state and return a structured report.",
@@ -193,6 +194,17 @@ describe("Actions-native task v1 contracts", () => {
       ...fixtureBundle(),
       triggers: [{ kind: "github.schedule", cron: "0 3 * *" }],
     })).toThrow(/cron/);
+  });
+
+  it("requires a model and accepts any AI Gateway model id", () => {
+    const { model: _omitted, ...withoutModel } = fixtureBundle();
+    expect(() => taskBundleV1Schema.parse(withoutModel)).toThrow();
+    for (const model of ["@cf/moonshotai/kimi-k2.6", "openai/gpt-5.1", "anthropic/claude-haiku-4-5", "google-ai-studio/gemini-2.5-flash", "workers-ai/@cf/zai-org/glm-5.2"]) {
+      expect(taskBundleV1Schema.parse({ ...fixtureBundle(), model }).model).toBe(model);
+    }
+    for (const model of ["", " openai/gpt-5.1", "openai/gpt 5", "/openai/gpt-5.1", "openai/gpt-5.1\n", "x".repeat(257), "openai/../foo", "anthropic//x", "@cf/x/", "./x", "cloudflare/openai/gpt-5.1"]) {
+      expect(() => taskBundleV1Schema.parse({ ...fixtureBundle(), model })).toThrow();
+    }
   });
 
   it("requires the manual trigger and accepts draft only as true", () => {

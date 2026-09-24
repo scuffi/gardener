@@ -211,6 +211,7 @@ function withManual(triggers: Array<{ kind: string; [key: string]: unknown }>): 
 describe("trigger validation hardening", () => {
   const bundle = (triggers: Array<{ kind: string; [key: string]: unknown }>) => ({
     schemaVersion: "gardener.task-bundle/v1",
+    model: "@cf/moonshotai/kimi-k2.6",
     taskId: "fixture",
     name: "Fixture",
     description: "d",
