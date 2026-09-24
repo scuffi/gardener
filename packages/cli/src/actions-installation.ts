@@ -397,13 +397,18 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
     `SELECT (SELECT COUNT(*) FROM actions_repository_enrollments) AS repositories,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1) AS enabled_repositories,(SELECT COUNT(*) FROM actions_repository_tasks WHERE enabled=1) AS enabled_tasks,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1 AND plan_job_workflow_ref<>${sql(DEFAULT_WORKFLOW_REF)}) AS stale_bridge_repositories;`)[0];
   if (!counts) throw new Error("Gardener D1 did not return operational counts");
   const pullRequestTasks = queryDoctorD1(resolve(sourceRoot), manifest,
-    `SELECT e.repository_id AS repository_id, e.owner_login || '/' || e.repository_name AS full_name, group_concat(DISTINCT effect.value) AS kinds FROM actions_repository_enrollments e JOIN actions_repository_tasks t ON t.repository_id=e.repository_id AND t.enabled=1 JOIN actions_task_bundles b ON b.bundle_hash=t.bundle_hash JOIN json_each(b.bundle_json, '$.effects') effect WHERE e.enabled=1 AND effect.value IN (${PULL_REQUEST_PERMISSION_KINDS.map(sql).join(",")}) GROUP BY e.repository_id ORDER BY full_name;`);
+    `SELECT e.repository_id AS repository_id, e.owner_login || '/' || e.repository_name AS full_name, group_concat(DISTINCT effect.value) AS kinds FROM actions_repository_enrollments e JOIN actions_repository_tasks t ON t.repository_id=e.repository_id AND t.enabled=1 JOIN actions_task_bundles b ON b.bundle_hash=t.bundle_hash JOIN json_each(CASE WHEN json_valid(b.bundle_json) THEN b.bundle_json ELSE '{}' END, '$.effects') effect WHERE e.enabled=1 AND effect.value IN (${PULL_REQUEST_PERMISSION_KINDS.map(sql).join(",")}) GROUP BY e.repository_id ORDER BY full_name;`);
   const pullRequestPermissionWarnings = pullRequestPermissionWarningsFor(pullRequestTasks.map((row) => ({
     repositoryId: String(row.repository_id),
     repository: String(row.full_name),
     kinds: String(row.kinds ?? "").split(",").filter((kind) => kind !== ""),
   })), (repositoryId) => {
-    const result = runCommand("gh", ["api", `repositories/${repositoryId}/actions/permissions/workflow`], { cwd: resolve(sourceRoot), quiet: true, timeoutMs: 30_000 });
+    // allowFailure keeps gh's own error output off the terminal; a failure
+    // becomes the tidy "could not confirm" warning instead.
+    const result = runCommand("gh", ["api", `repositories/${repositoryId}/actions/permissions/workflow`], {
+      cwd: resolve(sourceRoot), quiet: true, allowFailure: true, timeoutMs: 30_000,
+    });
+    if (result.status !== 0) throw new Error("gh api failed");
     return JSON.parse(result.stdout) as unknown;
   });
   if (manifest.cloudflare.runnerAccessBypassAppId) {
