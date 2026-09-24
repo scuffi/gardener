@@ -62,7 +62,7 @@ function step(
   operationId: string,
   kind: TaskEffectPlanV1["operations"][number]["kind"],
   payload: Record<string, unknown>,
-  references: Record<string, { step: string; output: string }> = {},
+  references: TaskEffectPlanV1["operations"][number]["references"] = {},
 ): TaskEffectPlanV1["operations"][number] {
   return {
     stepName,
@@ -269,6 +269,116 @@ describe("ordered effect application", () => {
       "Review note.\n<!-- gardener-operation:op_review -->",
       "<!-- gardener-operation:op_draft -->",
     ]);
+  });
+
+  it("fills placeholders in written text before deriving the marker", async () => {
+    const draft = step("open-pr", "op_draft", "pull_request.open_draft", {
+      head: "gardener/fix-1",
+      base: "main",
+      expectedHeadSha: SHA,
+      expectedBaseSha: SHA,
+      title: "Draft fix",
+      body: "Fixes #7.",
+      draft: true,
+    });
+    const link = step("link", "op_link", "issue.comment.create", {
+      issueNumber: 7,
+      expectedIssueState: "open",
+      expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z",
+      body: "Root cause: add() subtracted.\n\nDraft fix: {{pr}} (#{{number}}). See {{pr}}. Literal {{other}} stays.",
+    }, { "/body": { placeholders: { pr: { step: "open-pr", output: "pullUrl" }, number: { step: "open-pr", output: "pullNumber" } } } });
+    const seen: Operation[] = [];
+    const result = await effects.applyOrderedPlan({
+      plan: plan([draft, link]),
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation) => {
+        seen.push(operation);
+        if (operation.kind === "pull_request.open_draft") {
+          return success(operation, {
+            kind: operation.kind,
+            pullNumber: 9,
+            // A value that looks like a placeholder is inserted as written.
+            pullUrl: "https://github.com/owner/repo/pull/9?{{number}}",
+            pullNodeId: "PR_kwDOAbc",
+            headRef: operation.head,
+            headSha: operation.expectedHeadSha,
+            baseRef: operation.base,
+          });
+        }
+        if (operation.kind !== "issue.comment.create") throw new Error("unexpected operation");
+        return success(operation, {
+          kind: operation.kind,
+          issueNumber: 7,
+          commentId: "101",
+          commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-101",
+        });
+      },
+      record: async () => undefined,
+    });
+
+    expect(result.receipt.status).toBe("applied");
+    const comment = seen[1];
+    expect(comment?.kind === "issue.comment.create" ? comment.body : undefined).toBe(
+      "Root cause: add() subtracted.\n\nDraft fix: https://github.com/owner/repo/pull/9?{{number}} (#9). "
+        + "See https://github.com/owner/repo/pull/9?{{number}}. Literal {{other}} stays.\n<!-- gardener-operation:op_link -->",
+    );
+  });
+
+  it("refuses a placeholder value longer than its type allows", async () => {
+    const draft = step("open-pr", "op_draft", "pull_request.open_draft", {
+      head: "gardener/fix-1", base: "main", expectedHeadSha: SHA, expectedBaseSha: SHA, title: "Draft fix", body: "Fix.", draft: true,
+    });
+    const link = step("link", "op_link", "issue.comment.create", {
+      issueNumber: 7, expectedIssueState: "open", expectedIssueUpdatedAt: "2026-09-17T12:00:00.000Z", body: "PR: {{pr}}",
+    }, { "/body": { placeholders: { pr: { step: "open-pr", output: "pullUrl" } } } });
+    const execute = vi.fn(async (operation: Operation) => success(operation, {
+      kind: "pull_request.open_draft",
+      pullNumber: 9,
+      pullUrl: `https://github.com/${"x".repeat(1_100)}`,
+      pullNodeId: "PR_kwDOAbc",
+      headRef: "gardener/fix-1",
+      headSha: SHA,
+      baseRef: "main",
+    } as OperationOutputsV1));
+    const value = plan([draft, link]);
+    const recorded: RunnerEffectReceiptV1[] = [];
+    const first = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute,
+      record: async (receipt) => { recorded.push(receipt); },
+    });
+    // A step that cannot be materialized stops the plan terminally with a
+    // receipt, instead of throwing and leaving the run "running" forever.
+    expect(first.receipt.status).toBe("stopped");
+    const halted = first.receipt.operations[1];
+    expect(halted?.receipt).toMatchObject({
+      operationId: "op_link",
+      kind: "issue.comment.create",
+      status: "conflicted",
+      error: { code: "effect_materialization_failed", retryable: false },
+    });
+    expect(halted?.receipt.error?.message).toMatch(/placeholder pr is longer than url allows/);
+    expect(recorded.at(-1)).toEqual(first.receipt);
+
+    // A rerun recognises the terminal stop and neither retries nor re-executes.
+    const second = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: first.receipt,
+      execute,
+      record: async () => undefined,
+    });
+    expect(second.receipt).toEqual(first.receipt);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it("stops on the first failed step and resumes from its successful prefix", async () => {

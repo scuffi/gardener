@@ -1,6 +1,7 @@
 import {
   eventHeadIsSameRepository,
   normalizedPullRequest,
+  operationOutputCatalog,
   operationProposalPayloadJsonSchema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
@@ -271,6 +272,9 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
       "Fields listed in required are mandatory unless referencesJson supplies that exact JSON pointer.",
       "Never add schemaVersion, id, repository, kind, or commit.create files; trusted Gardener code owns them.",
       ...request.bundle.effects.map((kind) => `  ${kind}: ${operationProposalPayloadJsonSchema(kind)}`),
+      "",
+      "Outputs each kind publishes once it runs, which later steps may use through referencesJson, whole or as {{placeholders}} in text (nullable outputs cannot fill a placeholder):",
+      ...request.bundle.effects.map((kind) => `  ${kind}: ${Object.entries(operationOutputCatalog[kind]).map(([name, type]) => `${name} (${type})`).join(", ")}`),
     ]),
     ...(limits.maxEffectOperations === undefined
       ? []

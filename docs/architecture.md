@@ -113,6 +113,9 @@ whenever a later step may target it, and records the new `updated_at` in the ste
 step on that resource accepts either value. Releases and comments are not chained, so a second write
 to one of them in the same plan conflicts.
 
+If a step cannot become a valid operation with the values earlier steps produced, for example a
+placeholder value longer than its type allows, apply records it as a terminal conflict and stops.
+
 Receipts are stored per step. A re-run of the apply job skips steps whose receipts match exactly
 and continues from the first incomplete step. A conflict, meaning GitHub state that changed since
 planning, is terminal.

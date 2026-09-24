@@ -389,6 +389,31 @@ const outputSentinels = {
   openClosedState: "open",
 } as const satisfies Record<OperationOutputType, string | number | boolean>;
 
+const outputRenderedMaxLengths = {
+  // The longest string-typed source is a 256-character pull request title.
+  string: 256,
+  resourceNumber: 16,
+  boolean: 5,
+  commitSha: 40,
+  githubId: 20,
+  nullableGithubId: 20,
+  gardenerBranch: 255,
+  gitRef: 266,
+  url: 1_024,
+  nodeId: 256,
+  openClosedState: 6,
+} as const satisfies Record<OperationOutputType, number>;
+
+/**
+ * Longest text an output of this type may render as inside a placeholder.
+ * Planning validates a templated field with every placeholder at this length,
+ * and apply refuses a longer value, so a field that passed planning cannot
+ * exceed its own limit once the real values are in.
+ */
+export function operationOutputRenderedMaxLength(type: OperationOutputType): number {
+  return outputRenderedMaxLengths[type];
+}
+
 /**
  * Stand-in value used while probe-validating a payload whose real value is only
  * produced at apply time. A sentinel is a best-effort convenience: probe

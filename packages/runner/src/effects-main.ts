@@ -4,9 +4,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   decodeJsonPointer,
+  isTemplateReference,
   operationOutputNames,
+  operationOutputRenderedMaxLength,
   operationOutputType,
   operationSchema,
+  readPayloadPointer,
+  renderPlaceholders,
   taskCaptureManifestText,
   taskCaptureRefV1Schema,
   taskEffectPlanV1Schema,
@@ -14,6 +18,7 @@ import {
   type Operation,
   type OperationKind,
   type TaskEffectPlanV1,
+  type TaskStepOutputRefV1,
 } from "@gardener/contracts";
 import {
   EFFECT_TRANSPORT_MAX_BYTES,
@@ -133,7 +138,24 @@ export async function applyOrderedPlan(input: {
   if (input.prior) {
     assertReceiptEnvelope(plan, input.artifactSha256, input.prior);
     for (const [index, entry] of input.prior.operations.entries()) {
-      const operation = materializeOperation(plan, index, outputs, owner, name);
+      const materialized = tryMaterializeOperation(plan, index, outputs, owner, name);
+      if (!materialized.ok) {
+        // A step that could never be materialized stopped the plan terminally.
+        // It still has to be this plan's step, identified without the
+        // operation it never became.
+        const planned = plan.operations[index];
+        if (planned === undefined
+          || entry.stepName !== planned.stepName
+          || entry.receipt.operationId !== planned.operationId
+          || entry.receipt.kind !== planned.kind
+          || entry.receipt.operationHash !== unmaterializedStepHash(planned)
+          || entry.receipt.status !== "conflicted"
+          || entry.receipt.error?.code !== MATERIALIZATION_FAILED) {
+          throw new Error("Prior effect receipt does not match the exact plan prefix");
+        }
+        return { receipt: input.prior, outputs };
+      }
+      const operation = materialized.operation;
       if (entry.stepName !== plan.operations[index]?.stepName
         || entry.receipt.operationId !== operation.id
         || entry.receipt.kind !== operation.kind
@@ -166,7 +188,30 @@ export async function applyOrderedPlan(input: {
 
   for (let index = resumeIndex; index < plan.operations.length; index += 1) {
     const remaining = input.deadlineAt - Date.now();
-    const operation = materializeOperation(plan, index, outputs, owner, name);
+    const materialized = tryMaterializeOperation(plan, index, outputs, owner, name);
+    if (!materialized.ok) {
+      // The plan passed validation but this step cannot become a valid
+      // operation with the values earlier steps produced. Re-running the same
+      // bytes cannot change that, so stop terminally with a receipt rather
+      // than throwing and leaving the run "running" for every rerun to repeat.
+      const planned = plan.operations[index]!;
+      const now = new Date().toISOString();
+      completed.push(runnerStepReceipt(planned.stepName, {
+        schemaVersion: "v2",
+        operationId: planned.operationId,
+        operationHash: unmaterializedStepHash(planned),
+        kind: planned.kind,
+        status: "conflicted",
+        attempt: Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")),
+        attemptedAt: now,
+        completedAt: now,
+        error: { code: MATERIALIZATION_FAILED, message: materialized.message, retryable: false },
+      }, {}));
+      const stopped = effectReceipt(plan, input.artifactSha256, completed, "stopped", planned.stepName);
+      await input.record(stopped);
+      return { receipt: stopped, outputs };
+    }
+    const operation = materialized.operation;
     if (remaining <= 1_000) {
       const now = new Date().toISOString();
       completed.push(runnerStepReceipt(plan.operations[index]!.stepName, {
@@ -255,6 +300,36 @@ function bodyWithOperationMarker(body: string, operationId: string): string {
   return body.length === 0 ? marker : `${body}\n${marker}`;
 }
 
+const MATERIALIZATION_FAILED = "effect_materialization_failed";
+
+/**
+ * Identifies a step that never became an operation: its derived id, kind,
+ * payload, and references exactly as planned.
+ */
+function unmaterializedStepHash(step: TaskEffectPlanV1["operations"][number]): string {
+  return createHash("sha256").update(canonicalJson({
+    operationId: step.operationId,
+    kind: step.kind,
+    payload: step.payload,
+    references: step.references,
+  }), "utf8").digest("hex");
+}
+
+function tryMaterializeOperation(
+  plan: TaskEffectPlanV1,
+  index: number,
+  outputs: ReadonlyMap<string, Readonly<Record<string, string | number | boolean | null>>>,
+  owner: string,
+  name: string,
+): { ok: true; operation: Operation } | { ok: false; message: string } {
+  try {
+    return { ok: true, operation: materializeOperation(plan, index, outputs, owner, name) };
+  } catch (error) {
+    const message = error instanceof Error && error.message.trim() !== "" ? error.message : "operation could not be materialized";
+    return { ok: false, message: `Step could not be materialized: ${message}`.slice(0, 2_000) };
+  }
+}
+
 function materializeOperation(
   plan: TaskEffectPlanV1,
   index: number,
@@ -265,16 +340,36 @@ function materializeOperation(
   const step = plan.operations[index];
   if (!step) throw new Error(`Plan operation ${index} is missing`);
   const payload = safeClone(step.payload) as Record<string, unknown>;
-  for (const [pointer, reference] of Object.entries(step.references)) {
+  const resolve = (reference: TaskStepOutputRefV1) => {
     const source = outputs.get(reference.step);
     if (!source || !Object.hasOwn(source, reference.output)) {
       throw new Error(`Step ${step.stepName} references unavailable output ${reference.step}.${reference.output}`);
     }
     const sourceStep = plan.operations.find((candidate) => candidate.stepName === reference.step);
-    if (!sourceStep || operationOutputType(sourceStep.kind, reference.output) === undefined) {
-      throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
+    const type = sourceStep === undefined ? undefined : operationOutputType(sourceStep.kind, reference.output);
+    if (type === undefined) throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
+    return { value: source[reference.output], type };
+  };
+  for (const [pointer, reference] of Object.entries(step.references)) {
+    if (!isTemplateReference(reference)) {
+      setJsonPointer(payload, pointer, resolve(reference).value);
+      continue;
     }
-    setJsonPointer(payload, pointer, source[reference.output]);
+    const template = readPayloadPointer(payload, pointer);
+    if (typeof template !== "string") throw new Error(`Step ${step.stepName} has no text at ${pointer} to fill`);
+    const values = new Map<string, string>();
+    for (const [name, output] of Object.entries(reference.placeholders)) {
+      const { value, type } = resolve(output);
+      if (value === null) throw new Error(`Step ${step.stepName} placeholder ${name} resolved to no value`);
+      const rendered = String(value);
+      // Planning validated this field with the placeholder at its type's
+      // longest rendering; a longer value would break that guarantee.
+      if (rendered.length > operationOutputRenderedMaxLength(type)) {
+        throw new Error(`Step ${step.stepName} placeholder ${name} is longer than ${type} allows`);
+      }
+      values.set(name, rendered);
+    }
+    setJsonPointer(payload, pointer, renderPlaceholders(template, values));
   }
   // These three creates use a provider-visible marker for exact idempotency.
   // The model cannot author it: the proposal contract rejects reserved marker

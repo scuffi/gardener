@@ -200,6 +200,28 @@ Human-in-the-loop approval is intentionally deferred until after every trigger a
 qualified end to end. Tasks granting merge, release, check-rerun, or other destructive authority
 must therefore be treated as automatic production automation, not as approval-gated workflows.
 
+### Using one step's result in a later step
+
+The model plans every step before any of them runs, so it cannot know values such as a new pull
+request's number or URL. A step can instead refer to an output an earlier step will produce. The
+model's instructions list the outputs of each declared kind, for example `pullNumber` and `pullUrl`
+for `pull_request.open_draft`.
+
+A reference can fill a whole field, such as a pull request's `expectedHeadSha` taken from the commit
+it follows. It can also fill placeholders inside text the model writes, such as a comment body:
+
+```json
+{
+  "payload": { "body": "The fix changes `a - b` to `a + b` in src/math.js.\n\nDraft fix: {{pr}}" },
+  "references": { "/body": { "placeholders": { "pr": { "step": "open-pr", "output": "pullUrl" } } } }
+}
+```
+
+Apply replaces every `{{pr}}` with the real URL when the step runs. Other text in double braces is
+left as written. A field may declare up to eight placeholders, and each must appear in its text.
+Planning checks the text with every placeholder at the longest its output can be, so a plan that
+passes cannot exceed a field's limit once the real values are in.
+
 ## Limits
 
 `runtime-seconds`, `max-turns`, `max-tool-calls`, `input-tokens`, and `output-tokens` are required.

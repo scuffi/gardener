@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMMIT_FILE_LIMIT } from "../src/operations";
+import { COMMIT_FILE_LIMIT, operationOutputRenderedMaxLength } from "../src/operations";
 import {
   CAPTURE_FILE_MAX_BYTES,
   CAPTURE_TOTAL_MAX_BYTES,
@@ -17,6 +17,7 @@ import {
   taskEffectPlanV1Schema,
   taskEffectProposalV1Schema,
   taskPayloadPointerV1Schema,
+  renderPlaceholders,
   taskStepReferencesV1Schema,
 } from "../src/task";
 
@@ -451,5 +452,107 @@ describe("capture byte ceilings", () => {
     expect(taskCaptureRefV1Schema.parse(captureRef(CAPTURE_TOTAL_MAX_BYTES)).sizeBytes).toBe(CAPTURE_TOTAL_MAX_BYTES);
     expect(taskCaptureRefV1Schema.safeParse(captureRef(CAPTURE_TOTAL_MAX_BYTES + 1)).success).toBe(false);
     expect(taskCaptureRefV1Schema.safeParse(captureRef(Number.MAX_SAFE_INTEGER)).success).toBe(false);
+  });
+});
+
+describe("placeholders in written text", () => {
+  function draftOperation(): Record<string, unknown> {
+    return planOperation({
+      stepName: "open-pr",
+      operationId: "run:1:1:open-pr",
+      kind: "pull_request.open_draft",
+      payload: { head: "gardener/fix-1", base: "main", expectedHeadSha: sha1, expectedBaseSha: sha1, title: "Fix", body: "Fix.", draft: true },
+    });
+  }
+  function linkOperation(body: unknown, placeholders: Record<string, unknown>): Record<string, unknown> {
+    return planOperation({
+      stepName: "link",
+      operationId: "run:1:2:link",
+      payload: commentPayload({ body }),
+      references: { "/body": { placeholders } },
+    });
+  }
+  const pr = { step: "open-pr", output: "pullUrl" };
+
+  it("accepts text that uses each declared placeholder", () => {
+    expect(taskEffectPlanV1Schema.safeParse(plan({ operations: [draftOperation(), linkOperation("Fix: {{pr}}", { pr })] })).success).toBe(true);
+  });
+
+  it("refuses a declared placeholder the text does not use", () => {
+    const parsed = taskEffectPlanV1Schema.safeParse(plan({ operations: [draftOperation(), linkOperation("Fix: see the PR", { pr })] }));
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.some((issue) => issue.message.includes("does not contain {{pr}}"))).toBe(true);
+  });
+
+  it("refuses placeholders without written text to fill", () => {
+    const parsed = taskEffectPlanV1Schema.safeParse(plan({
+      operations: [draftOperation(), planOperation({
+        stepName: "link",
+        operationId: "run:1:2:link",
+        payload: { issueNumber: 2, expectedIssueState: "open", expectedIssueUpdatedAt: now },
+        references: { "/body": { placeholders: { pr } } },
+      })],
+    }));
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.some((issue) => issue.message.includes("must be text written in the payload"))).toBe(true);
+  });
+
+  it("checks the field's limits with each placeholder at its longest", () => {
+    // 65,536 is the comment body limit; a URL may render up to 1,024 characters.
+    const nearLimit = `${"a".repeat(65_536 - 1_024 - 10)}{{pr}}`;
+    const overLimit = `${"a".repeat(65_536 - 1_000)}{{pr}}`;
+    expect(taskEffectPlanV1Schema.safeParse(plan({ operations: [draftOperation(), linkOperation(nearLimit, { pr })] })).success).toBe(true);
+    expect(taskEffectPlanV1Schema.safeParse(plan({ operations: [draftOperation(), linkOperation(overLimit, { pr })] })).success).toBe(false);
+  });
+
+  it("refuses an unpublished output, a later step, and a nullable output in a placeholder", () => {
+    const unpublished = taskEffectPlanV1Schema.safeParse(plan({
+      operations: [draftOperation(), linkOperation("{{pr}}", { pr: { step: "open-pr", output: "pullRequestUrl" } })],
+    }));
+    expect(unpublished.error?.issues.some((issue) => issue.message.includes('it publishes') && issue.message.includes('"pullUrl"'))).toBe(true);
+    const later = taskEffectPlanV1Schema.safeParse(plan({ operations: [linkOperation("{{pr}}", { pr }), draftOperation()] }));
+    expect(later.error?.issues.some((issue) => issue.message.includes("does not run before this step"))).toBe(true);
+    const nullable = taskEffectPlanV1Schema.safeParse(plan({
+      operations: [
+        planOperation({
+          stepName: "unmark",
+          operationId: "run:1:1:unmark",
+          kind: "discussion.answer.unmark",
+          payload: { discussionNumber: 3, expectedDiscussionState: "open", expectedDiscussionUpdatedAt: now, commentNodeId: "DC_abc", expectedAnswerCommentId: "5" },
+        }),
+        linkOperation("{{answer}}", { answer: { step: "unmark", output: "answerCommentId" } }),
+      ],
+    }));
+    expect(nullable.error?.issues.some((issue) => issue.message.includes("may be null"))).toBe(true);
+  });
+
+  it("bounds placeholder names and counts", () => {
+    expect(taskStepReferencesV1Schema.safeParse({ "/body": { placeholders: {} } }).success).toBe(false);
+    expect(taskStepReferencesV1Schema.safeParse({ "/body": { placeholders: { "Bad-Name": pr } } }).success).toBe(false);
+    const nine = Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`p${index}`, pr]));
+    expect(taskStepReferencesV1Schema.safeParse({ "/body": { placeholders: nine } }).success).toBe(false);
+    expect(taskStepReferencesV1Schema.safeParse({ "/body": { placeholders: pr, step: "x" } }).success).toBe(false);
+  });
+
+  it("refuses a reference nested inside another reference", () => {
+    const parsed = taskStepReferencesV1Schema.safeParse({
+      "/comments/0": { step: "a", output: "commentUrl" },
+      "/comments/0/body": { placeholders: { u: { step: "a", output: "commentUrl" } } },
+    });
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toContain("is inside reference /comments/0");
+    expect(taskStepReferencesV1Schema.safeParse({
+      "/comments/0/body": { step: "a", output: "commentUrl" },
+      "/comments/01": { step: "a", output: "commentUrl" },
+    }).success).toBe(true);
+  });
+
+  it("renders a string output at least as long as the longest string it can carry", () => {
+    // pull_request.update publishes the pull request's title, which may be 256 characters.
+    expect(operationOutputRenderedMaxLength("string")).toBeGreaterThanOrEqual(256);
+  });
+
+  it("renders in one pass and leaves undeclared braces alone", () => {
+    expect(renderPlaceholders("{{a}} {{b}} {{a}} {{ c }}", new Map([["a", "{{b}}"], ["b", "2"]]))).toBe("{{b}} 2 {{b}} {{ c }}");
   });
 });

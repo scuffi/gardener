@@ -162,6 +162,20 @@ describe("references are checked when proposed", () => {
     expect(await readProposalLedger(storage)).toHaveLength(1);
   });
 
+  it("admits placeholders in written text and refuses one the text does not use", async () => {
+    await record(storage, openDraft);
+    const withText = (body: string) => proposal({
+      stepName: "link",
+      kind: "issue.comment.create",
+      payload: { ...ISSUE_PRECONDITIONS, body },
+      references: { "/body": { placeholders: { pr: { step: "open-pr", output: "pullUrl" } } } },
+      rationale: "Summarize and link the pull request.",
+    });
+    await expect(record(storage, withText("Root cause found. Draft fix: see below.")))
+      .rejects.toThrow(/does not contain \{\{pr\}\}/);
+    await expect(record(storage, withText("Root cause found. Draft fix: {{pr}}"))).resolves.toMatchObject({ index: 1 });
+  });
+
   it("refuses a reference to a step that has not been proposed yet", async () => {
     await expect(record(storage, linkTo("pullUrl"))).rejects.toThrow(/unknown step "open-pr"/);
   });

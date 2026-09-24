@@ -40282,6 +40282,23 @@ var outputSentinels = {
   nodeId: "GardenerStepOutput",
   openClosedState: "open"
 };
+var outputRenderedMaxLengths = {
+  // The longest string-typed source is a 256-character pull request title.
+  string: 256,
+  resourceNumber: 16,
+  boolean: 5,
+  commitSha: 40,
+  githubId: 20,
+  nullableGithubId: 20,
+  gardenerBranch: 255,
+  gitRef: 266,
+  url: 1024,
+  nodeId: 256,
+  openClosedState: 6
+};
+function operationOutputRenderedMaxLength(type) {
+  return outputRenderedMaxLengths[type];
+}
 function operationOutputSentinel(type) {
   return outputSentinels[type];
 }
@@ -40899,10 +40916,41 @@ var taskStepOutputRefV1Schema = external_exports.strictObject({
   output: taskOutputNameV1Schema
 });
 var MAX_STEP_REFERENCES = 32;
-var taskStepReferencesV1Schema = external_exports.record(taskPayloadPointerV1Schema, taskStepOutputRefV1Schema).superRefine((references, context) => {
+var MAX_FIELD_PLACEHOLDERS = 8;
+var placeholderNamePattern = "[a-z][a-z0-9_]{0,31}";
+var taskPlaceholderNameV1Schema = external_exports.string().regex(new RegExp(`^${placeholderNamePattern}$`));
+var taskStepTemplateRefV1Schema = external_exports.strictObject({
+  placeholders: external_exports.record(taskPlaceholderNameV1Schema, taskStepOutputRefV1Schema).superRefine((placeholders, context) => {
+    const count = Object.keys(placeholders).length;
+    if (count === 0 || count > MAX_FIELD_PLACEHOLDERS) {
+      context.addIssue({ code: "custom", message: `a field may declare between 1 and ${MAX_FIELD_PLACEHOLDERS} placeholders` });
+    }
+  })
+});
+var taskStepReferenceV1Schema = external_exports.union([taskStepOutputRefV1Schema, taskStepTemplateRefV1Schema]);
+function isTemplateReference(reference) {
+  return Object.hasOwn(reference, "placeholders");
+}
+function referenceOutputs(reference) {
+  return isTemplateReference(reference) ? Object.entries(reference.placeholders).map(([placeholder, output2]) => ({ placeholder, output: output2 })) : [{ output: reference }];
+}
+function placeholderToken(name2) {
+  return `{{${name2}}}`;
+}
+function renderPlaceholders(template, values) {
+  return template.replace(new RegExp(`\\{\\{(${placeholderNamePattern})\\}\\}`, "g"), (token, name2) => values.get(name2) ?? token);
+}
+var taskStepReferencesV1Schema = external_exports.record(taskPayloadPointerV1Schema, taskStepReferenceV1Schema).superRefine((references, context) => {
   const pointers = Object.keys(references);
-  if (pointers.length > MAX_STEP_REFERENCES) {
-    context.addIssue({ code: "custom", message: `a step may carry at most ${MAX_STEP_REFERENCES} references` });
+  const outputs = Object.values(references).reduce((total, reference) => total + referenceOutputs(reference).length, 0);
+  if (outputs > MAX_STEP_REFERENCES) {
+    context.addIssue({ code: "custom", message: `a step may reference at most ${MAX_STEP_REFERENCES} earlier-step outputs` });
+  }
+  for (const pointer of pointers) {
+    const enclosing = pointers.find((other) => other !== pointer && pointer.startsWith(`${other}/`));
+    if (enclosing !== void 0) {
+      context.addIssue({ code: "custom", path: [pointer], message: `reference ${pointer} is inside reference ${enclosing}` });
+    }
   }
   for (const pointer of pointers) {
     const [head] = decodeJsonPointer(pointer);
@@ -40939,6 +40987,23 @@ var PROBE_OPERATION_ID = "gardener-probe";
 var PROBE_UNTYPED_SENTINEL = "gardener-step-output";
 var MAX_POINTER_ARRAY_INDEX = 99;
 var MAX_PROBE_MESSAGES = 32;
+function readPayloadPointer(root, pointer) {
+  const segments = decodeJsonPointer(pointer);
+  if (segments.length === 0 || segments.some(isPrototypePollutingKey)) return void 0;
+  let cursor = root;
+  for (const segment of segments) {
+    if (Array.isArray(cursor)) {
+      const position = arrayIndex(segment);
+      if (position === null) return void 0;
+      cursor = cursor[position];
+    } else if (cursor !== null && typeof cursor === "object" && Object.hasOwn(cursor, segment)) {
+      cursor = cursor[segment];
+    } else {
+      return void 0;
+    }
+  }
+  return cursor;
+}
 function setPointer(root, segments, value) {
   if (segments.length === 0) return false;
   if (segments.some(isPrototypePollutingKey)) return false;
@@ -41000,6 +41065,22 @@ function probeOperationShape(step) {
   };
   const deferred = new Set(step.deferredPointers ?? []);
   for (const [pointer, reference] of Object.entries(step.references ?? {})) {
+    if (isTemplateReference(reference)) {
+      const template = readPayloadPointer(step.payload, pointer);
+      const lengths = /* @__PURE__ */ new Map();
+      for (const [name2, output2] of Object.entries(reference.placeholders)) {
+        const type2 = step.resolveOutputType?.(output2);
+        if (type2 !== void 0) lengths.set(name2, "x".repeat(operationOutputRenderedMaxLength(type2)));
+      }
+      if (typeof template === "string" && lengths.size === Object.keys(reference.placeholders).length) {
+        if (!setPointer(candidate, decodeJsonPointer(pointer), renderPlaceholders(template, lengths))) {
+          messages.push(`reference pointer ${pointer} does not address a payload location`);
+        }
+      } else {
+        deferred.add(pointer);
+      }
+      continue;
+    }
     deferred.add(pointer);
     const type = step.resolveOutputType?.(reference);
     const sentinel = type === void 0 ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
@@ -41239,32 +41320,55 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   rationale: external_exports.string().trim().min(1).max(5e3)
 });
 var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
+function referencedOutputType(reference, stepName2, context, path3, issues) {
+  if (reference.step === stepName2) {
+    issues.push({ path: path3, message: "a step cannot reference its own output" });
+    return void 0;
+  }
+  const targetKind = context.earlier.get(reference.step);
+  if (targetKind === void 0) {
+    issues.push({
+      path: path3,
+      message: context.later?.has(reference.step) ? `step "${reference.step}" does not run before this step` : `unknown step "${reference.step}"`
+    });
+    return void 0;
+  }
+  const outputType = operationOutputType(targetKind, reference.output);
+  if (outputType === void 0) {
+    issues.push({
+      path: path3,
+      message: `${targetKind} does not publish a scalar output named "${reference.output}"; it publishes ${operationOutputNames(targetKind).map((name2) => `"${name2}"`).join(", ")}`
+    });
+  }
+  return outputType;
+}
 function taskStepIssues(step, context) {
   const issues = [];
   const resolvedTypes = /* @__PURE__ */ new Map();
+  const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
-    const path3 = ["references", pointer];
-    if (reference.step === step.stepName) {
-      issues.push({ path: path3, message: "a step cannot reference its own output" });
-      continue;
+    for (const { placeholder, output: reference_ } of referenceOutputs(reference)) {
+      const path3 = placeholder === void 0 ? ["references", pointer] : ["references", pointer, "placeholders", placeholder];
+      const outputType = referencedOutputType(reference_, step.stepName, context, path3, issues);
+      if (outputType === void 0) continue;
+      if (placeholder !== void 0 && outputType === "nullableGithubId") {
+        issues.push({ path: path3, message: `"${reference_.output}" may be null and cannot fill a placeholder` });
+        continue;
+      }
+      resolvedTypes.set(outputKey(reference_), outputType);
     }
-    const targetKind = context.earlier.get(reference.step);
-    if (targetKind === void 0) {
-      issues.push({
-        path: path3,
-        message: context.later?.has(reference.step) ? `step "${reference.step}" does not run before this step` : `unknown step "${reference.step}"`
-      });
-      continue;
+    if (isTemplateReference(reference)) {
+      const template = readPayloadPointer(step.payload, pointer);
+      if (typeof template !== "string") {
+        issues.push({ path: ["payload", ...decodeJsonPointer(pointer)], message: "a field with placeholders must be text written in the payload" });
+        continue;
+      }
+      for (const name2 of Object.keys(reference.placeholders)) {
+        if (!template.includes(placeholderToken(name2))) {
+          issues.push({ path: ["references", pointer, "placeholders", name2], message: `the text at ${pointer} does not contain ${placeholderToken(name2)}` });
+        }
+      }
     }
-    const outputType = operationOutputType(targetKind, reference.output);
-    if (outputType === void 0) {
-      issues.push({
-        path: path3,
-        message: `${targetKind} does not publish a scalar output named "${reference.output}"; it publishes ${operationOutputNames(targetKind).map((name2) => `"${name2}"`).join(", ")}`
-      });
-      continue;
-    }
-    resolvedTypes.set(pointer, outputType);
   }
   for (const message of captureOwnedPointerIssues(step.kind, step.payload, step.references)) {
     issues.push({ path: ["payload"], message });
@@ -41274,13 +41378,7 @@ function taskStepIssues(step, context) {
     payload: step.payload,
     references: step.references,
     deferredPointers: captureDeferredPointers(step.kind),
-    resolveOutputType: (reference) => {
-      for (const [pointer, type] of resolvedTypes) {
-        const candidate = step.references[pointer];
-        if (candidate?.step === reference.step && candidate.output === reference.output) return type;
-      }
-      return void 0;
-    }
+    resolveOutputType: (reference) => resolvedTypes.get(outputKey(reference))
   })) {
     issues.push({ path: ["payload"], message });
   }
@@ -46941,7 +47039,15 @@ async function applyOrderedPlan(input2) {
   if (input2.prior) {
     assertReceiptEnvelope(plan, input2.artifactSha256, input2.prior);
     for (const [index, entry] of input2.prior.operations.entries()) {
-      const operation = materializeOperation(plan, index, outputs, owner, name2);
+      const materialized = tryMaterializeOperation(plan, index, outputs, owner, name2);
+      if (!materialized.ok) {
+        const planned = plan.operations[index];
+        if (planned === void 0 || entry.stepName !== planned.stepName || entry.receipt.operationId !== planned.operationId || entry.receipt.kind !== planned.kind || entry.receipt.operationHash !== unmaterializedStepHash(planned) || entry.receipt.status !== "conflicted" || entry.receipt.error?.code !== MATERIALIZATION_FAILED) {
+          throw new Error("Prior effect receipt does not match the exact plan prefix");
+        }
+        return { receipt: input2.prior, outputs };
+      }
+      const operation = materialized.operation;
       if (entry.stepName !== plan.operations[index]?.stepName || entry.receipt.operationId !== operation.id || entry.receipt.kind !== operation.kind || entry.receipt.operationHash !== canonicalOperationHash(operation)) {
         throw new Error("Prior effect receipt does not match the exact plan prefix");
       }
@@ -46966,7 +47072,26 @@ async function applyOrderedPlan(input2) {
   }
   for (let index = resumeIndex; index < plan.operations.length; index += 1) {
     const remaining = input2.deadlineAt - Date.now();
-    const operation = materializeOperation(plan, index, outputs, owner, name2);
+    const materialized = tryMaterializeOperation(plan, index, outputs, owner, name2);
+    if (!materialized.ok) {
+      const planned = plan.operations[index];
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      completed.push(runnerStepReceipt(planned.stepName, {
+        schemaVersion: "v2",
+        operationId: planned.operationId,
+        operationHash: unmaterializedStepHash(planned),
+        kind: planned.kind,
+        status: "conflicted",
+        attempt: Number(requiredEnvironment("GITHUB_RUN_ATTEMPT")),
+        attemptedAt: now,
+        completedAt: now,
+        error: { code: MATERIALIZATION_FAILED, message: materialized.message, retryable: false }
+      }, {}));
+      const stopped = effectReceipt(plan, input2.artifactSha256, completed, "stopped", planned.stepName);
+      await input2.record(stopped);
+      return { receipt: stopped, outputs };
+    }
+    const operation = materialized.operation;
     if (remaining <= 1e3) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       completed.push(runnerStepReceipt(plan.operations[index].stepName, {
@@ -47043,20 +47168,55 @@ function bodyWithOperationMarker(body2, operationId) {
   return body2.length === 0 ? marker : `${body2}
 ${marker}`;
 }
+var MATERIALIZATION_FAILED = "effect_materialization_failed";
+function unmaterializedStepHash(step) {
+  return (0, import_node_crypto3.createHash)("sha256").update(canonicalJson2({
+    operationId: step.operationId,
+    kind: step.kind,
+    payload: step.payload,
+    references: step.references
+  }), "utf8").digest("hex");
+}
+function tryMaterializeOperation(plan, index, outputs, owner, name2) {
+  try {
+    return { ok: true, operation: materializeOperation(plan, index, outputs, owner, name2) };
+  } catch (error63) {
+    const message = error63 instanceof Error && error63.message.trim() !== "" ? error63.message : "operation could not be materialized";
+    return { ok: false, message: `Step could not be materialized: ${message}`.slice(0, 2e3) };
+  }
+}
 function materializeOperation(plan, index, outputs, owner, name2) {
   const step = plan.operations[index];
   if (!step) throw new Error(`Plan operation ${index} is missing`);
   const payload = safeClone(step.payload);
-  for (const [pointer, reference] of Object.entries(step.references)) {
+  const resolve = (reference) => {
     const source = outputs.get(reference.step);
     if (!source || !Object.hasOwn(source, reference.output)) {
       throw new Error(`Step ${step.stepName} references unavailable output ${reference.step}.${reference.output}`);
     }
     const sourceStep = plan.operations.find((candidate) => candidate.stepName === reference.step);
-    if (!sourceStep || operationOutputType(sourceStep.kind, reference.output) === void 0) {
-      throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
+    const type = sourceStep === void 0 ? void 0 : operationOutputType(sourceStep.kind, reference.output);
+    if (type === void 0) throw new Error(`Step ${reference.step} does not publish ${reference.output}`);
+    return { value: source[reference.output], type };
+  };
+  for (const [pointer, reference] of Object.entries(step.references)) {
+    if (!isTemplateReference(reference)) {
+      setJsonPointer(payload, pointer, resolve(reference).value);
+      continue;
     }
-    setJsonPointer(payload, pointer, source[reference.output]);
+    const template = readPayloadPointer(payload, pointer);
+    if (typeof template !== "string") throw new Error(`Step ${step.stepName} has no text at ${pointer} to fill`);
+    const values = /* @__PURE__ */ new Map();
+    for (const [name3, output2] of Object.entries(reference.placeholders)) {
+      const { value, type } = resolve(output2);
+      if (value === null) throw new Error(`Step ${step.stepName} placeholder ${name3} resolved to no value`);
+      const rendered = String(value);
+      if (rendered.length > operationOutputRenderedMaxLength(type)) {
+        throw new Error(`Step ${step.stepName} placeholder ${name3} is longer than ${type} allows`);
+      }
+      values.set(name3, rendered);
+    }
+    setJsonPointer(payload, pointer, renderPlaceholders(template, values));
   }
   if (MARKER_BODY_KINDS.has(step.kind)) {
     if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);

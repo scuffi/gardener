@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   COMMIT_FILE_LIMIT,
+  operationOutputRenderedMaxLength,
   operationKindValues,
   operationOutputNames,
   operationOutputSentinel,
@@ -827,17 +828,78 @@ export const taskStepOutputRefV1Schema = z.strictObject({
 export type TaskStepOutputRefV1 = z.infer<typeof taskStepOutputRefV1Schema>;
 
 const MAX_STEP_REFERENCES = 32;
+const MAX_FIELD_PLACEHOLDERS = 8;
+const placeholderNamePattern = "[a-z][a-z0-9_]{0,31}";
+
+/** Name of a placeholder, written in text as `{{name}}`. */
+export const taskPlaceholderNameV1Schema = z.string().regex(new RegExp(`^${placeholderNamePattern}$`));
+
+/**
+ * Earlier-step outputs spliced into model-written text. The text at the
+ * reference's pointer contains `{{name}}` for each placeholder, and apply
+ * replaces every occurrence with the output's value.
+ */
+export const taskStepTemplateRefV1Schema = z.strictObject({
+  placeholders: z.record(taskPlaceholderNameV1Schema, taskStepOutputRefV1Schema).superRefine((placeholders, context) => {
+    const count = Object.keys(placeholders).length;
+    if (count === 0 || count > MAX_FIELD_PLACEHOLDERS) {
+      context.addIssue({ code: "custom", message: `a field may declare between 1 and ${MAX_FIELD_PLACEHOLDERS} placeholders` });
+    }
+  }),
+});
+export type TaskStepTemplateRefV1 = z.infer<typeof taskStepTemplateRefV1Schema>;
+
+/** A whole-field output, or outputs spliced into text at that field. */
+export const taskStepReferenceV1Schema = z.union([taskStepOutputRefV1Schema, taskStepTemplateRefV1Schema]);
+export type TaskStepReferenceV1 = z.infer<typeof taskStepReferenceV1Schema>;
+
+export function isTemplateReference(reference: TaskStepReferenceV1): reference is TaskStepTemplateRefV1 {
+  return Object.hasOwn(reference, "placeholders");
+}
+
+/** Every earlier-step output a reference consumes, with the placeholder it fills, if any. */
+export function referenceOutputs(
+  reference: TaskStepReferenceV1,
+): ReadonlyArray<{ readonly placeholder?: string; readonly output: TaskStepOutputRefV1 }> {
+  return isTemplateReference(reference)
+    ? Object.entries(reference.placeholders).map(([placeholder, output]) => ({ placeholder, output }))
+    : [{ output: reference }];
+}
+
+/** The text form of a placeholder. */
+export function placeholderToken(name: string): string {
+  return `{{${name}}}`;
+}
+
+/**
+ * Replaces each `{{name}}` that has a value, in one pass over the original
+ * text, so a substituted value is never itself scanned for placeholders.
+ * Anything else in braces is left as written.
+ */
+export function renderPlaceholders(template: string, values: ReadonlyMap<string, string>): string {
+  return template.replace(new RegExp(`\\{\\{(${placeholderNamePattern})\\}\\}`, "g"), (token, name: string) =>
+    values.get(name) ?? token);
+}
 
 /**
  * Substitutions applied to a payload immediately before the step runs, keyed by
  * the JSON pointer they fill. Kept out of the payload itself so an unresolved
  * reference can never be mistaken for a literal value.
  */
-export const taskStepReferencesV1Schema = z.record(taskPayloadPointerV1Schema, taskStepOutputRefV1Schema)
+export const taskStepReferencesV1Schema = z.record(taskPayloadPointerV1Schema, taskStepReferenceV1Schema)
   .superRefine((references, context) => {
     const pointers = Object.keys(references);
-    if (pointers.length > MAX_STEP_REFERENCES) {
-      context.addIssue({ code: "custom", message: `a step may carry at most ${MAX_STEP_REFERENCES} references` });
+    const outputs = Object.values(references).reduce((total, reference) => total + referenceOutputs(reference).length, 0);
+    if (outputs > MAX_STEP_REFERENCES) {
+      context.addIssue({ code: "custom", message: `a step may reference at most ${MAX_STEP_REFERENCES} earlier-step outputs` });
+    }
+    // One reference inside another would be read before substitution when
+    // planning but after it when applying, so the two could disagree.
+    for (const pointer of pointers) {
+      const enclosing = pointers.find((other) => other !== pointer && pointer.startsWith(`${other}/`));
+      if (enclosing !== undefined) {
+        context.addIssue({ code: "custom", path: [pointer], message: `reference ${pointer} is inside reference ${enclosing}` });
+      }
     }
     for (const pointer of pointers) {
       const [head] = decodeJsonPointer(pointer);
@@ -930,6 +992,28 @@ const MAX_POINTER_ARRAY_INDEX = 99;
 const MAX_PROBE_MESSAGES = 32;
 
 /**
+ * Reads the value at an RFC 6901 pointer using own properties only, or
+ * `undefined` when the pointer does not address a present value.
+ */
+export function readPayloadPointer(root: unknown, pointer: string): unknown {
+  const segments = decodeJsonPointer(pointer);
+  if (segments.length === 0 || segments.some(isPrototypePollutingKey)) return undefined;
+  let cursor: unknown = root;
+  for (const segment of segments) {
+    if (Array.isArray(cursor)) {
+      const position = arrayIndex(segment);
+      if (position === null) return undefined;
+      cursor = cursor[position];
+    } else if (cursor !== null && typeof cursor === "object" && Object.hasOwn(cursor, segment)) {
+      cursor = (cursor as Record<string, unknown>)[segment];
+    } else {
+      return undefined;
+    }
+  }
+  return cursor;
+}
+
+/**
  * Writes a value at a pointer inside a throwaway probe object.
  *
  * Every segment is refused if it can reach the prototype chain, traversal only
@@ -1007,7 +1091,7 @@ function safeJsonClone(value: unknown, depth = 0): unknown {
 export interface ProbeOperationShapeInput {
   readonly kind: TaskEffectKindV1;
   readonly payload: Readonly<Record<string, unknown>>;
-  readonly references?: Readonly<Record<string, TaskStepOutputRefV1>>;
+  readonly references?: Readonly<Record<string, TaskStepReferenceV1>>;
   /**
    * Pointers whose value is supplied at apply time rather than by the model,
    * such as the `commit.create` file set materialized from the capture
@@ -1041,6 +1125,26 @@ export function probeOperationShape(step: ProbeOperationShapeInput): readonly st
   };
   const deferred = new Set<string>(step.deferredPointers ?? []);
   for (const [pointer, reference] of Object.entries(step.references ?? {})) {
+    if (isTemplateReference(reference)) {
+      // With every placeholder typed, the text is validated at the longest it
+      // can render, so its field's own limits hold for any real value. Without
+      // types (a proposal checked before its ledger is known) it is deferred
+      // like a whole-field reference and validated once the types are known.
+      const template = readPayloadPointer(step.payload, pointer);
+      const lengths = new Map<string, string>();
+      for (const [name, output] of Object.entries(reference.placeholders)) {
+        const type = step.resolveOutputType?.(output);
+        if (type !== undefined) lengths.set(name, "x".repeat(operationOutputRenderedMaxLength(type)));
+      }
+      if (typeof template === "string" && lengths.size === Object.keys(reference.placeholders).length) {
+        if (!setPointer(candidate, decodeJsonPointer(pointer), renderPlaceholders(template, lengths))) {
+          messages.push(`reference pointer ${pointer} does not address a payload location`);
+        }
+      } else {
+        deferred.add(pointer);
+      }
+      continue;
+    }
     deferred.add(pointer);
     const type = step.resolveOutputType?.(reference);
     const sentinel = type === undefined ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
@@ -1446,7 +1550,7 @@ export function captureDeferredPointers(kind: TaskEffectKindV1): readonly string
 function captureOwnedPointerIssues(
   kind: TaskEffectKindV1,
   payload: unknown,
-  references: Readonly<Record<string, TaskStepOutputRefV1>> = {},
+  references: Readonly<Record<string, TaskStepReferenceV1>> = {},
 ): readonly string[] {
   const pointers = captureDeferredPointers(kind);
   if (pointers.length === 0) return [];
@@ -1508,6 +1612,38 @@ export interface TaskStepContextV1 {
   readonly later?: ReadonlySet<string>;
 }
 
+function referencedOutputType(
+  reference: TaskStepOutputRefV1,
+  stepName: string,
+  context: TaskStepContextV1,
+  path: readonly string[],
+  issues: TaskStepIssueV1[],
+): OperationOutputType | undefined {
+  if (reference.step === stepName) {
+    issues.push({ path, message: "a step cannot reference its own output" });
+    return undefined;
+  }
+  const targetKind = context.earlier.get(reference.step);
+  if (targetKind === undefined) {
+    issues.push({
+      path,
+      message: context.later?.has(reference.step)
+        ? `step "${reference.step}" does not run before this step`
+        : `unknown step "${reference.step}"`,
+    });
+    return undefined;
+  }
+  const outputType = operationOutputType(targetKind, reference.output);
+  if (outputType === undefined) {
+    issues.push({
+      path,
+      message: `${targetKind} does not publish a scalar output named "${reference.output}"; `
+        + `it publishes ${operationOutputNames(targetKind).map((name) => `"${name}"`).join(", ")}`,
+    });
+  }
+  return outputType;
+}
+
 /**
  * Every problem with one step given the steps before it: references that name
  * an unknown, later, or self step or an unpublished output; capture-owned
@@ -1524,32 +1660,30 @@ export function taskStepIssues(
 ): TaskStepIssueV1[] {
   const issues: TaskStepIssueV1[] = [];
   const resolvedTypes = new Map<string, OperationOutputType>();
+  const outputKey = (output: TaskStepOutputRefV1) => `${output.step}\u0000${output.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
-    const path = ["references", pointer];
-    if (reference.step === step.stepName) {
-      issues.push({ path, message: "a step cannot reference its own output" });
-      continue;
+    for (const { placeholder, output: reference_ } of referenceOutputs(reference)) {
+      const path = placeholder === undefined ? ["references", pointer] : ["references", pointer, "placeholders", placeholder];
+      const outputType = referencedOutputType(reference_, step.stepName, context, path, issues);
+      if (outputType === undefined) continue;
+      if (placeholder !== undefined && outputType === "nullableGithubId") {
+        issues.push({ path, message: `"${reference_.output}" may be null and cannot fill a placeholder` });
+        continue;
+      }
+      resolvedTypes.set(outputKey(reference_), outputType);
     }
-    const targetKind = context.earlier.get(reference.step);
-    if (targetKind === undefined) {
-      issues.push({
-        path,
-        message: context.later?.has(reference.step)
-          ? `step "${reference.step}" does not run before this step`
-          : `unknown step "${reference.step}"`,
-      });
-      continue;
+    if (isTemplateReference(reference)) {
+      const template = readPayloadPointer(step.payload, pointer);
+      if (typeof template !== "string") {
+        issues.push({ path: ["payload", ...decodeJsonPointer(pointer)], message: "a field with placeholders must be text written in the payload" });
+        continue;
+      }
+      for (const name of Object.keys(reference.placeholders)) {
+        if (!template.includes(placeholderToken(name))) {
+          issues.push({ path: ["references", pointer, "placeholders", name], message: `the text at ${pointer} does not contain ${placeholderToken(name)}` });
+        }
+      }
     }
-    const outputType = operationOutputType(targetKind, reference.output);
-    if (outputType === undefined) {
-      issues.push({
-        path,
-        message: `${targetKind} does not publish a scalar output named "${reference.output}"; `
-          + `it publishes ${operationOutputNames(targetKind).map((name) => `"${name}"`).join(", ")}`,
-      });
-      continue;
-    }
-    resolvedTypes.set(pointer, outputType);
   }
 
   for (const message of captureOwnedPointerIssues(step.kind, step.payload, step.references)) {
@@ -1560,13 +1694,7 @@ export function taskStepIssues(
     payload: step.payload,
     references: step.references,
     deferredPointers: captureDeferredPointers(step.kind),
-    resolveOutputType: (reference) => {
-      for (const [pointer, type] of resolvedTypes) {
-        const candidate = step.references[pointer];
-        if (candidate?.step === reference.step && candidate.output === reference.output) return type;
-      }
-      return undefined;
-    },
+    resolveOutputType: (reference) => resolvedTypes.get(outputKey(reference)),
   })) {
     issues.push({ path: ["payload"], message });
   }
