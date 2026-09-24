@@ -1,0 +1,25 @@
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_d00285d9967a9b 218-231
+docs/task-authoring.md
+  s_de0b486c128948::t_8775ea9847fabd 318-320
+packages/contracts/test/normalized-event-v1.test.ts
+  s_de0b486c128948::t_104c4af9d673e0 7,182-189
+packages/runner/test/dispatch-target.test.ts
+  s_de0b486c128948::t_7806b8f300f24b 17,34-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2e9e7d6f23ba35d616166b38863a81b6d13a6371",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
