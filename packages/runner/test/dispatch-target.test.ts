@@ -14,6 +14,7 @@ describe("manual run targets", () => {
     ]);
     const init = fetch.mock.calls[0]![1]!;
     expect(init.redirect).toBe("error");
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(init.headers).toMatchObject({ authorization: "Bearer t" });
   });
 
@@ -30,5 +31,9 @@ describe("manual run targets", () => {
       .rejects.toThrow(/owner\/name/);
     await expect(fetchDispatchTarget({ target: issue, repository: "o/r", token: "", fetch: respond(Response.json({})) }))
       .rejects.toThrow(/token is required/);
+    for (const repository of ["../..", "o/..", "./r"]) {
+      await expect(fetchDispatchTarget({ target: issue, repository, token: "t", fetch: respond(Response.json({})) }))
+        .rejects.toThrow(/owner\/name/);
+    }
   });
 });

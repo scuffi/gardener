@@ -4,6 +4,7 @@ import {
   eventHeadIsSameRepository,
   eventNameByTriggerKind,
   normalizedEventV1Schema,
+  dispatchTargetKinds,
   taskBundleV1Schema,
   taskEventBindingFromNormalizedEvent,
   taskTriggerKindValues,
@@ -178,6 +179,14 @@ describe("normalized event v1", () => {
 });
 
 describe("manual run events", () => {
+  it("offer the targets a task's other triggers act on", () => {
+    expect(dispatchTargetKinds([{ kind: "github.workflow_dispatch" }])).toEqual([]);
+    expect(dispatchTargetKinds([{ kind: "github.issue_comment.created" }])).toEqual(["issue"]);
+    expect(dispatchTargetKinds([{ kind: "github.pull_request_review.submitted" }, { kind: "github.issue.opened" }]))
+      .toEqual(["issue", "pull_request"]);
+    expect(dispatchTargetKinds([{ kind: "github.push" }, { kind: "github.discussion.created" }])).toEqual([]);
+  });
+
   it("allow an optional prompt and at most one target, which binds the run", () => {
     const parse = (payload: Record<string, unknown>) => normalizedEventV1Schema.parse(event("github.workflow_dispatch", payload));
     expect(taskEventBindingFromNormalizedEvent(parse({}))).toMatchObject({ resource: null });

@@ -315,7 +315,9 @@ With a target, the run sees that issue or pull request as if the event had come 
 most one target. An `issue` number that is really a pull request is refused; use `pull_request`.
 
 The planning job and the apply job each read the target from the GitHub API. Apply refuses the plan
-unless both reads name the same issue or pull request. The runtime also refuses a target of a
+unless both reads name the same issue or pull request. Edits to the target in between are fine, but a
+target that no longer fits Gardener's event limits (for example, more than 100 labels) makes apply
+fail rather than act. The runtime also refuses a target of a
 kind the task has no trigger for.
 
 A manual run checks out the branch it was started from, not the pull request's head. A pull

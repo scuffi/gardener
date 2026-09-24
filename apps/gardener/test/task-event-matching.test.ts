@@ -215,6 +215,20 @@ describe("trigger matching", () => {
       .rejects.toThrow(/no pull request trigger, so a manual run of it cannot target a pull request/);
     await expect(createTaskHarnessRequest(await request(event, { triggers: [] })))
       .rejects.toThrow(/cannot target a pull request/);
+    const issueEvent: NormalizedEventV1 = {
+      schemaVersion: "gardener.normalized-event/v1",
+      kind: "github.workflow_dispatch",
+      eventId,
+      occurredAt,
+      actor,
+      repository,
+      workflow: { ...workflow, eventName: "workflow_dispatch" },
+      issue: { id: "999", number: 1, title: "t", body: null, state: "open", updatedAt: "2026-09-22T12:00:00.000Z", labels: [], author: actor },
+    };
+    await expect(createTaskHarnessRequest(await request(issueEvent, { triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }] })))
+      .rejects.toThrow(/no issue trigger, so a manual run of it cannot target an issue/);
+    await expect(createTaskHarnessRequest(await request(issueEvent, { triggers: [{ kind: "github.issue_comment.created", labelsAll: [] }] })))
+      .resolves.toBeDefined();
   });
 
   it("rejects an event kind the bundle never declared", async () => {
