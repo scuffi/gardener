@@ -78,13 +78,13 @@ jobs:
     # planning job above always downgrades that grant to read-only.
     steps:
       - name: Download exact effect plan
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ needs.plan.outputs.effect-artifact-name }}
           path: ${{ runner.temp }}/gardener-effect
       - name: Download trusted repository capture
         if: ${{ needs.plan.outputs.capture-sha256 != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ needs.plan.outputs.capture-artifact-name }}
           path: ${{ runner.temp }}/gardener-capture
