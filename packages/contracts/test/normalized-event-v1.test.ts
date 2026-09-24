@@ -5,6 +5,7 @@ import {
   eventNameByTriggerKind,
   normalizedEventV1Schema,
   taskBundleV1Schema,
+  taskEventBindingFromNormalizedEvent,
   taskTriggerKindValues,
   triggerKindOrder,
   type NormalizedEventV1,
@@ -176,14 +177,36 @@ describe("normalized event v1", () => {
   });
 });
 
+describe("manual run events", () => {
+  it("allow an optional prompt and at most one target, which binds the run", () => {
+    const parse = (payload: Record<string, unknown>) => normalizedEventV1Schema.parse(event("github.workflow_dispatch", payload));
+    expect(taskEventBindingFromNormalizedEvent(parse({}))).toMatchObject({ resource: null });
+    expect(taskEventBindingFromNormalizedEvent(parse({ prompt: "x", issue })))
+      .toMatchObject({ resource: { kind: "issue", id: "999", number: 1 } });
+    expect(taskEventBindingFromNormalizedEvent(parse({ pullRequest: pullRequest("1374842705") })))
+      .toMatchObject({ resource: { kind: "pull_request", number: 12 } });
+    expect(() => parse({ issue, pullRequest: pullRequest("1374842705") })).toThrow(/not both/);
+    expect(() => parse({ prompt: "" })).toThrow();
+  });
+});
+
+/** Adds the manual trigger every bundle carries, in its canonical position. */
+function withManual(triggers: Array<{ kind: string; [key: string]: unknown }>): Array<{ kind: string; [key: string]: unknown }> {
+  const manual = triggerKindOrder.get("github.workflow_dispatch")!;
+  const at = triggers.findIndex((trigger) => triggerKindOrder.get(trigger.kind as never)! > manual);
+  const copy = [...triggers];
+  copy.splice(at < 0 ? copy.length : at, 0, { kind: "github.workflow_dispatch" });
+  return copy;
+}
+
 describe("trigger validation hardening", () => {
-  const bundle = (triggers: unknown[]) => ({
+  const bundle = (triggers: Array<{ kind: string; [key: string]: unknown }>) => ({
     schemaVersion: "gardener.task-bundle/v1",
     taskId: "fixture",
     name: "Fixture",
     description: "d",
     instructions: "i",
-    triggers,
+    triggers: withManual(triggers),
     tools: ["repository.list_files"],
     effects: [],
     network: { default: "deny", allow: [], deny: [] },

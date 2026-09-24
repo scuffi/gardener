@@ -63,6 +63,9 @@ declare each trigger kind at most once.
 | `github.schedule` | `cron` (five-field expression, required) |
 | `github.workflow_dispatch` | none |
 
+Every task can also be run by hand. If you do not declare `github.workflow_dispatch`, `gardener
+build` adds it, so the compiled bundle always contains it. See [Running a task by hand](#running-a-task-by-hand).
+
 `labels-all` is an AND filter over the labels of the issue, pull request, or discussion that carries
 the event. Supplying a key that an event does not support is a compilation error.
 
@@ -297,6 +300,42 @@ top of the file, and it is the correct thing to review when judging a task's max
 declaring `repository.exec`, `default: deny` with empty lists otherwise. Non-empty host lists are
 rejected because this target cannot enforce them.
 
+### Running a task by hand
+
+Start a manual run from the task's workflow in the repository's **Actions** tab (**Run
+workflow**), or with `gh workflow run gardener-<task>.yml`. The form has these optional inputs:
+
+| Input | Offered when | Meaning |
+| --- | --- | --- |
+| `prompt` | always | Extra instructions for this run, up to 20000 characters. |
+| `issue` | the task has a `github.issue*` trigger | Issue number to run against. |
+| `pull_request` | the task has a `github.pull_request*` trigger | Pull request number to run against. |
+
+With a target, the run sees that issue or pull request as if the event had come from it. Give at
+most one target. An `issue` number that is really a pull request is refused; use `pull_request`.
+
+The planning job and the apply job each read the target from the GitHub API. Apply refuses the plan
+unless both reads name the same issue or pull request. The runtime also refuses a target of a
+kind the task has no trigger for.
+
+A manual run checks out the branch it was started from, not the pull request's head. A pull
+request from a fork is refused, the same as for pull-request events. Trigger filters such as
+`labels-all` do not apply to manual runs.
+
+### Draft tasks
+
+Set `draft: true` to try a task without it reacting to real events:
+
+```yaml
+draft: true
+triggers:
+  - event: github.pull_request.opened
+```
+
+A draft task's workflow listens only for manual runs, and the runtime refuses any other event for
+it. It still offers the targets its declared triggers imply, so you can run it against a real pull
+request. Remove `draft: true`, then rebuild and reconnect, to make it live.
+
 ### Known limitation: one cron per task
 
 A task may declare at most one `github.schedule` trigger, because triggers are unique by kind. If
@@ -310,6 +349,9 @@ trigger and the runtime can verify the cron it was started with.
 validates target support, and writes deterministic lock/workflow files. `gardener connect` stores the
 canonical bundle and trusted source path in customer-owned D1 and enables that exact hash for the
 numeric repository identity.
+
+`gardener connect` treats the checkout as the repository's full set of tasks. It disables every
+bundle the checkout does not contain, so run it from the default branch.
 
 The runtime loads task bytes from D1 after GitHub OIDC authentication, recomputes the hash, executes
 only enrolled tools, and hands exact effect artifacts to the checkout-free effects job.

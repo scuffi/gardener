@@ -1,6 +1,7 @@
 import { lstat, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { z } from "zod";
+import { dispatchTargetKinds } from "@gardener/contracts";
 import {
   compileGitHubActionsTask,
   GITHUB_ACTIONS_TARGET,
@@ -307,16 +308,21 @@ function renderWorkflowTriggers(task: BuiltTask): string {
       continue;
     }
     if (event === "workflow_dispatch") {
-      // The runner requires a non-empty `prompt` input and rejects anything
-      // longer than 20,000 characters, so the generated form declares it
-      // required with no default. A default would let an empty dispatch start
-      // a run that the parser then fails, which reads as a Gardener bug.
+      // Every input is optional. With none, the run follows the task's
+      // instructions alone; a target input names the issue or pull request to
+      // act on, offered for the resources the task's other triggers act on.
       lines.push("  workflow_dispatch:");
       lines.push("    inputs:");
       lines.push("      prompt:");
-      lines.push("        description: What this run should do. Required, 1 to 20000 characters.");
-      lines.push("        required: true");
+      lines.push("        description: Extra instructions for this run. Optional, up to 20000 characters.");
+      lines.push("        required: false");
       lines.push("        type: string");
+      for (const target of dispatchTargetKinds(task.bundle.triggers)) {
+        lines.push(`      ${target}:`);
+        lines.push(`        description: ${target === "issue" ? "Issue" : "Pull request"} number to run against. Optional.`);
+        lines.push("        required: false");
+        lines.push("        type: string");
+      }
       continue;
     }
     const types = matching

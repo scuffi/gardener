@@ -710,3 +710,47 @@ function operationForComment(value: TaskEffectPlanV1["operations"][number]): Ope
     body: "Thanks.",
   };
 }
+
+describe("apply event binding for manual runs", () => {
+  const repository = { id: 1374842705, full_name: "scuffi/gardener", default_branch: "main" };
+  const actor = { id: 45369682, login: "scuffi" };
+  const issue = (number: number, id: number) => ({
+    id, number, title: "t", body: null, state: "open", updated_at: "2026-09-22T12:00:00.000Z", labels: [], user: actor,
+  });
+  const bind = (inputs: Record<string, string>, fetched: unknown) => {
+    const fetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => Response.json(fetched));
+    return {
+      fetch,
+      result: effects.applyEventBinding({
+        eventName: "workflow_dispatch",
+        raw: { repository, sender: actor, inputs },
+        repository: "scuffi/gardener",
+        token: "apply-token",
+        fetch,
+      }),
+    };
+  };
+
+  it("binds the target apply read itself, with the apply token", async () => {
+    const { fetch, result } = bind({ issue: "1" }, issue(1, 999));
+    await expect(result).resolves.toMatchObject({
+      defaultBranch: "main",
+      binding: { kind: "github.workflow_dispatch", resource: { kind: "issue", id: "999", number: 1 } },
+    });
+    expect(fetch.mock.calls[0]![0]).toBe("https://api.github.com/repos/scuffi/gardener/issues/1");
+    expect(fetch.mock.calls[0]![1]!.headers).toMatchObject({ authorization: "Bearer apply-token" });
+  });
+
+  it("produces a different binding when the resource differs, so the plan is refused", async () => {
+    const planned = await bind({ issue: "1" }, issue(1, 999)).result;
+    const other = await bind({ issue: "1" }, issue(1, 1000)).result;
+    expect(JSON.stringify(other.binding)).not.toBe(JSON.stringify(planned.binding));
+    await expect(bind({ issue: "1" }, issue(2, 999)).result).rejects.toThrow(/does not match #1/);
+  });
+
+  it("does not fetch anything for a manual run with no target", async () => {
+    const { fetch, result } = bind({ prompt: "x" }, {});
+    await expect(result).resolves.toMatchObject({ binding: { resource: null } });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});

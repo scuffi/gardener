@@ -52,6 +52,10 @@ The caller workflow passes the bundle hash to the reusable workflow. The Worker 
 by hash, recomputes the digest, and refuses anything not enabled for the authenticated repository.
 Editing a task therefore takes effect only after it is rebuilt and reconnected.
 
+Every bundle contains the manual trigger, so every task can be run by hand. A bundle that sets
+`draft: true` is manual-only: its workflow listens only for manual runs, and the runtime refuses any
+other event for it.
+
 ## Plan phase
 
 ```text

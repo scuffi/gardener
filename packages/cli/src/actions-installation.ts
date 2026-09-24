@@ -286,7 +286,11 @@ export function actionsRepositoryTaskEnrollmentSql(input: {
 }): string {
   const repositoryId = sql(input.repositoryId);
   const taskId = sql(input.taskId);
-  return `INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled) SELECT ${repositoryId},${sql(input.bundleHash)},${taskId},${sql(input.sourcePath)},CASE WHEN EXISTS (SELECT 1 FROM actions_repository_tasks WHERE repository_id=${repositoryId} AND task_id=${taskId}) THEN (SELECT MAX(enabled) FROM actions_repository_tasks WHERE repository_id=${repositoryId} AND task_id=${taskId}) ELSE 1 END WHERE true ON CONFLICT(repository_id,bundle_hash) DO UPDATE SET task_id=excluded.task_id,source_path=excluded.source_path,updated_at=CURRENT_TIMESTAMP;`;
+  // Connecting never disables the bundle being kept. A bundle disabled only for
+  // being stale, such as a reverted task, comes back when another bundle of the
+  // task is enabled; after `task disable` every row is 0, so it stays disabled.
+  const inherited = (except: string) => `(SELECT MAX(o.enabled) FROM actions_repository_tasks o WHERE o.repository_id=${repositoryId} AND o.task_id=${taskId}${except})`;
+  return `INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled) SELECT ${repositoryId},${sql(input.bundleHash)},${taskId},${sql(input.sourcePath)},COALESCE(${inherited("")},1) WHERE true ON CONFLICT(repository_id,bundle_hash) DO UPDATE SET task_id=excluded.task_id,source_path=excluded.source_path,enabled=MAX(actions_repository_tasks.enabled,COALESCE(${inherited(" AND o.bundle_hash<>excluded.bundle_hash")},0)),updated_at=CURRENT_TIMESTAMP;`;
 }
 
 export async function connectActions(input: {

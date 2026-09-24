@@ -109,6 +109,7 @@ Options:
 const CONNECT_HELP = `gardener connect
 
 Enroll a repository, upload its compiled bundles, and set its non-secret runtime URL variable.
+Bundles not in this checkout are disabled, so run it from the default branch.
 
 Options:
   --workspace <name>           Existing Gardener installation

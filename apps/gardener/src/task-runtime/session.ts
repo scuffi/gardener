@@ -61,7 +61,7 @@ import {
 import { createTaskHarnessRequest, translateHarnessOutcome } from "./harness-adapter";
 import { FlueTaskHarness } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
-import { loadEnabledTaskBundle } from "./task-bundles";
+import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 
@@ -643,11 +643,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
         `Reported event ${runnerEvent.kind} does not match the ${identity.hello.eventName} event in the verified OIDC claims`,
       );
     }
-    const { bundle, bundleHash, sourcePath } = await loadEnabledTaskBundle(
+    const { bundle, bundleHash, sourcePath, manualOnly } = await loadEnabledTaskBundle(
       this.env.DB,
       identity.enrollment.repository_id,
       identity.hello.agentHash,
     );
+    assertEnrollmentAdmitsEvent({ taskId: bundle.taskId, manualOnly }, runnerEvent.kind);
     const admittedAt = new Date().toISOString();
     const freshRequest = {
       schemaVersion: "gardener.task-run-request/v1" as const,

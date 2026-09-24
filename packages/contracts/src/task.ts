@@ -187,6 +187,23 @@ export const pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
   (kind) => kind.startsWith("github.pull_request"),
 );
 
+/** Resources a manual run may target, by number. */
+export const dispatchTargetKindValues = ["issue", "pull_request"] as const;
+export type DispatchTargetKindV1 = typeof dispatchTargetKindValues[number];
+
+/**
+ * Resources a manual run of this bundle may target: those its other triggers
+ * act on. An issue-triggered task can be run by hand against an issue, a pull
+ * request task against a pull request.
+ */
+export function dispatchTargetKinds(triggers: readonly { kind: TaskTriggerKindV1 }[]): DispatchTargetKindV1[] {
+  const kinds = new Set(triggers.map((trigger) => trigger.kind));
+  const targets: DispatchTargetKindV1[] = [];
+  if ([...kinds].some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
+  if ([...kinds].some((kind) => kind.startsWith("github.pull_request"))) targets.push("pull_request");
+  return targets;
+}
+
 export const taskToolV1Schema = z.enum([
   "repository.read_file",
   "repository.list_files",
@@ -249,6 +266,12 @@ export const taskBundleV1Schema = z.strictObject({
   effects: z.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
+  /**
+   * A draft task runs only when dispatched by hand. Its other triggers are kept
+   * so a manual run can still target the resource they describe, but no real
+   * event starts it.
+   */
+  draft: z.literal(true).optional(),
 }).superRefine((bundle, context) => {
   for (const key of ["tools", "effects"] as const) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
@@ -264,6 +287,9 @@ export const taskBundleV1Schema = z.strictObject({
   const positions = triggerKinds.map((kind) => triggerKindOrder.get(kind)!);
   if (positions.some((position, index) => index > 0 && position <= positions[index - 1]!)) {
     context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must use canonical declaration order" });
+  }
+  if (!triggerKinds.includes("github.workflow_dispatch")) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "every task must include the github.workflow_dispatch trigger" });
   }
   if (bundle.limits.outputTokens < bundle.limits.maxTurns * 16) {
     context.addIssue({ code: "custom", path: ["limits", "outputTokens"], message: "outputTokens must permit at least 16 tokens per model turn" });
@@ -542,7 +568,12 @@ export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
   eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
   eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
   eventMember("github.push", { push: normalizedPushV1Schema }),
-  eventMember("github.workflow_dispatch", { prompt: z.string().trim().min(1).max(20_000) }),
+  eventMember("github.workflow_dispatch", {
+    prompt: z.string().trim().min(1).max(20_000).optional(),
+    // A manual run may name one issue or pull request to act on.
+    issue: normalizedIssueV1Schema.optional(),
+    pullRequest: normalizedPullRequestV1Schema.optional(),
+  }),
   eventMember("github.schedule", { cron: cronExpressionV1Schema }),
   eventMember("github.discussion.created", discussionPayload),
   eventMember("github.discussion.edited", discussionPayload),
@@ -557,6 +588,9 @@ export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
   }
   if (event.workflow.eventName !== eventNameByTriggerKind[event.kind]) {
     context.addIssue({ code: "custom", path: ["workflow", "eventName"], message: "workflow eventName does not match normalized event kind" });
+  }
+  if (event.kind === "github.workflow_dispatch" && event.issue !== undefined && event.pullRequest !== undefined) {
+    context.addIssue({ code: "custom", path: ["pullRequest"], message: "a manual run may target an issue or a pull request, not both" });
   }
   if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
     context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
@@ -1426,9 +1460,9 @@ export type TaskCaptureRefV1 = z.infer<typeof taskCaptureRefV1Schema>;
 /* -------------------------------------------------------------------------- */
 
 /**
- * The primary resource an event carried, if any. `push`, `schedule`, and
- * `workflow_dispatch` carry none, which is why the binding is nullable rather
- * than invented.
+ * The primary resource an event carried, if any. `push` and `schedule` carry
+ * none, nor does a manual run without a target, which is why the binding is
+ * nullable rather than invented.
  */
 export const taskEventResourceV1Schema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("issue"), id: githubNumericId, number: z.number().int().positive() }),
@@ -1483,17 +1517,20 @@ export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): T
     eventName: eventNameByTriggerKind[event.kind],
     action: eventActionByTriggerKind[event.kind] ?? null,
   } as const;
-  if ("issue" in event) {
+  // A manual run's target is optional, so the key may be present but empty.
+  const issue = "issue" in event ? event.issue : undefined;
+  if (issue !== undefined) {
     return {
       ...base,
-      resource: { kind: "issue", id: event.issue.id, number: event.issue.number },
+      resource: { kind: "issue", id: issue.id, number: issue.number },
       commentId: "comment" in event ? event.comment.id : null,
     };
   }
-  if ("pullRequest" in event) {
+  const pullRequest = "pullRequest" in event ? event.pullRequest : undefined;
+  if (pullRequest !== undefined) {
     return {
       ...base,
-      resource: { kind: "pull_request", id: event.pullRequest.id, number: event.pullRequest.number },
+      resource: { kind: "pull_request", id: pullRequest.id, number: pullRequest.number },
       commentId: "comment" in event ? event.comment.id : null,
     };
   }

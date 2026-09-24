@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { describe, expect, it } from "vitest";
 import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
-import { loadEnabledTaskBundle } from "../src/task-runtime/task-bundles";
+import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "../src/task-runtime/task-bundles";
 import { d1Database } from "./sqlite";
 
 function database() {
@@ -26,8 +26,8 @@ function database() {
   return { sqlite, db: d1Database(sqlite) };
 }
 
-async function seed(sqlite: DatabaseSync, repositoryId = "100", enabled = 1) {
-  const bundle = structuredClone(inspectRepositoryFixtureBundle());
+async function seed(sqlite: DatabaseSync, repositoryId = "100", enabled = 1, draft = false) {
+  const bundle = { ...structuredClone(inspectRepositoryFixtureBundle()), ...(draft ? { draft: true as const } : {}) };
   const bundleHash = await canonicalSha256(bundle);
   sqlite.prepare("INSERT INTO actions_task_bundles(bundle_hash,task_id,bundle_json)VALUES(?,?,?)")
     .run(bundleHash, bundle.taskId, canonicalJson(bundle));
@@ -38,11 +38,27 @@ async function seed(sqlite: DatabaseSync, repositoryId = "100", enabled = 1) {
 }
 
 describe("repository task bundle authority", () => {
+  it("admits only manual runs for a draft", () => {
+    expect(() => assertEnrollmentAdmitsEvent({ taskId: "t", manualOnly: true }, "github.workflow_dispatch")).not.toThrow();
+    expect(() => assertEnrollmentAdmitsEvent({ taskId: "t", manualOnly: true }, "github.issue.opened"))
+      .toThrow(/is a draft, so it runs only by hand and cannot run on github.issue.opened/);
+    expect(() => assertEnrollmentAdmitsEvent({ taskId: "t", manualOnly: false }, "github.issue.opened")).not.toThrow();
+  });
+
+  it("marks draft tasks manual-only", async () => {
+    const regular = database();
+    const normal = await seed(regular.sqlite);
+    expect((await loadEnabledTaskBundle(regular.db, "100", normal.bundleHash)).manualOnly).toBe(false);
+    const drafts = database();
+    const draft = await seed(drafts.sqlite, "100", 1, true);
+    expect((await loadEnabledTaskBundle(drafts.db, "100", draft.bundleHash)).manualOnly).toBe(true);
+  });
+
   it("loads only the canonical bundle enabled for the authenticated repository", async () => {
     const { sqlite, db } = database();
     try {
       const expected = await seed(sqlite);
-      await expect(loadEnabledTaskBundle(db, "100", expected.bundleHash)).resolves.toEqual(expected);
+      await expect(loadEnabledTaskBundle(db, "100", expected.bundleHash)).resolves.toEqual({ ...expected, manualOnly: false });
       await expect(loadEnabledTaskBundle(db, "200", expected.bundleHash)).rejects.toThrow(/not enabled/);
       await expect(loadEnabledTaskBundle(db, "100", "f".repeat(64))).rejects.toThrow(/not enabled/);
     } finally { sqlite.close(); }

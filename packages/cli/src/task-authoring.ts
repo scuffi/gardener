@@ -79,6 +79,7 @@ const authoringSchema = z.strictObject({
   description: z.string().trim().min(1).max(1_000),
   trigger: triggerAuthoringSchema.optional(),
   triggers: z.array(triggerAuthoringSchema).min(1).max(taskTriggerKindValues.length).optional(),
+  draft: z.boolean().optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: z.array(effectSelectorSchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
   network: z.strictObject({
@@ -160,7 +161,13 @@ export async function compileTaskSource(source: string, sourceName = "TASK.md"):
 
   // Triggers are emitted in canonical order so the bundle hash and generated
   // workflow do not depend on the order the author happened to list them in.
-  const authoredTriggers = [...(authoring.triggers ?? [authoring.trigger!])].sort(
+  // Every task can be run by hand, so the manual trigger is always compiled in.
+  const declaredTriggers = authoring.triggers ?? [authoring.trigger!];
+  const manual: AuthoredTrigger = { event: DISPATCH_TRIGGER };
+  const withManual: AuthoredTrigger[] = declaredTriggers.some((trigger) => trigger.event === DISPATCH_TRIGGER)
+    ? declaredTriggers
+    : [...declaredTriggers, manual];
+  const authoredTriggers = [...withManual].sort(
     (left, right) => triggerKindOrder.get(left.event as TaskTriggerKindV1)!
       - triggerKindOrder.get(right.event as TaskTriggerKindV1)!,
   );
@@ -183,6 +190,7 @@ export async function compileTaskSource(source: string, sourceName = "TASK.md"):
       maxEffectOperations: authoring.limits["max-effect-operations"],
       maxEffectBytes: authoring.limits["max-effect-bytes"],
     },
+    ...(authoring.draft === true ? { draft: true } : {}),
   });
   return {
     bundle,

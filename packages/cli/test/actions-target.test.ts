@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { operationKindValues, taskBundleV1Schema, type TaskBundleV1 } from "@gardener/contracts";
+import { operationKindValues, taskBundleV1Schema, triggerKindOrder, type TaskBundleV1 } from "@gardener/contracts";
 import { compileGitHubActionsTask } from "../src/actions-target";
+
+/** Adds the manual trigger every bundle carries, in its canonical position, if missing. */
+function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"] {
+  if (triggers.some((trigger) => trigger.kind === "github.workflow_dispatch")) return triggers;
+  const manual = triggerKindOrder.get("github.workflow_dispatch")!;
+  const at = triggers.findIndex((trigger) => triggerKindOrder.get(trigger.kind)! > manual);
+  const copy = [...triggers];
+  copy.splice(at < 0 ? copy.length : at, 0, { kind: "github.workflow_dispatch" });
+  return copy;
+}
 
 function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
   return taskBundleV1Schema.parse({
@@ -9,7 +19,6 @@ function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
     name: "Demo task",
     description: "A portable task used to validate the Actions target.",
     instructions: "Inspect repository evidence and propose one issue comment.",
-    triggers: [{ kind: "github.issue.opened", labelsAll: ["gardener-demo"] }],
     tools: ["repository.list_files", "repository.read_file"],
     effects: ["issue.comment.create"],
     network: { default: "deny", allow: [], deny: [] },
@@ -21,6 +30,7 @@ function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
       outputTokens: 4_000,
     },
     ...overrides,
+    triggers: withManual(overrides.triggers ?? [{ kind: "github.issue.opened", labelsAll: ["gardener-demo"] }]),
   });
 }
 
@@ -57,6 +67,10 @@ describe("github-actions/v1 target adapter", () => {
       action: "opened",
       labelsExpression: "github.event.issue.labels.*.name",
       forkSensitive: false,
+    }, {
+      kind: "github.workflow_dispatch",
+      event: "workflow_dispatch",
+      forkSensitive: false,
     }]);
     expect(plan.effectLimits).toEqual({});
   });
@@ -78,8 +92,11 @@ describe("github-actions/v1 target adapter", () => {
   });
 
   it("maps each operation family to its exact apply scope", () => {
-    const scopeFor = (effect: string) =>
-      compileGitHubActionsTask(bundle({ effects: [effect] as TaskBundleV1["effects"] })).effectsPermissions;
+    // A manual-only task offers no target, so only the effect's own scope appears.
+    const scopeFor = (effect: string) => compileGitHubActionsTask(bundle({
+      effects: [effect] as TaskBundleV1["effects"],
+      triggers: [{ kind: "github.workflow_dispatch" }],
+    })).effectsPermissions;
     expect(scopeFor("issue.label.add")).toEqual({ "id-token": "write", issues: "write" });
     expect(scopeFor("pull_request.comment.create")).toEqual({ "id-token": "write", "pull-requests": "write" });
     expect(scopeFor("branch.create")).toEqual({ contents: "write", "id-token": "write" });
@@ -208,6 +225,24 @@ describe("github-actions/v1 target adapter", () => {
     const plan = compileGitHubActionsTask(bundle({ effects: [] }));
     expect(plan.effectsPermissions).toEqual({ "id-token": "write" });
     expect(plan.callerPermissions).toEqual(plan.planningPermissions);
+  });
+
+  it("lets apply read every kind of target a manual run can name", () => {
+    const plan = compileGitHubActionsTask(bundle({
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+      effects: ["issue.comment.create"],
+    }));
+    expect(plan.effectsPermissions).toMatchObject({ issues: "write", "pull-requests": "read", "id-token": "write" });
+    expect(compileGitHubActionsTask(bundle({ effects: [] })).effectsPermissions).toEqual({ "id-token": "write" });
+  });
+
+  it("listens only for manual runs when the task is a draft", () => {
+    const plan = compileGitHubActionsTask(bundle({
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+      draft: true,
+    }));
+    expect(plan.triggers.map((trigger) => trigger.kind)).toEqual(["github.workflow_dispatch"]);
+    expect(plan.requiresSameRepositoryGuard).toBe(true);
   });
 
   it("flags pull-request tasks for the same-repository guard with no opt-in", () => {

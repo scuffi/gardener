@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   eventNameByTriggerKind,
+  triggerKindOrder,
   type NormalizedEventV1,
   type TaskBundleV1,
   type TaskRunRequestV1,
@@ -81,11 +82,24 @@ function pushEvent(ref: string): NormalizedEventV1 {
   } as NormalizedEventV1;
 }
 
+/** Adds the manual trigger every bundle carries, in its canonical position. */
+function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"] {
+  const manual = triggerKindOrder.get("github.workflow_dispatch")!;
+  const at = triggers.findIndex((trigger) => triggerKindOrder.get(trigger.kind)! > manual);
+  const copy = [...triggers];
+  copy.splice(at < 0 ? copy.length : at, 0, { kind: "github.workflow_dispatch" });
+  return copy;
+}
+
 async function request(
   event: NormalizedEventV1,
   overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools">> = {},
 ): Promise<TaskRunRequestV1> {
-  const bundle = { ...structuredClone(inspectRepositoryFixtureBundle()), ...overrides } as TaskBundleV1;
+  const bundle = {
+    ...structuredClone(inspectRepositoryFixtureBundle()),
+    ...overrides,
+    ...(overrides.triggers ? { triggers: withManual(overrides.triggers) } : {}),
+  } as TaskBundleV1;
   return {
     schemaVersion: "gardener.task-run-request/v1",
     runId: "run:fixture:1",
@@ -163,6 +177,44 @@ describe("trigger matching", () => {
     await expect(createTaskHarnessRequest(await request(scheduled, {
       triggers: [{ kind: "github.schedule", cron: "0 4 * * 1" }],
     }))).rejects.toThrow(/does not declare trigger/);
+  });
+
+  it("refuses a manual run that targets a fork pull request", async () => {
+    const dispatch = (headRepoId: string | null): NormalizedEventV1 => {
+      const { pullRequest, repository, workflow, eventId, occurredAt, actor } = pullRequestEvent(headRepoId) as Extract<NormalizedEventV1, { kind: "github.pull_request.opened" }>;
+      return {
+        schemaVersion: "gardener.normalized-event/v1",
+        kind: "github.workflow_dispatch",
+        eventId,
+        occurredAt,
+        actor,
+        repository,
+        workflow: { ...workflow, eventName: "workflow_dispatch" },
+        pullRequest,
+      };
+    };
+    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [] }];
+    await expect(createTaskHarnessRequest(await request(dispatch("1374842705"), { triggers }))).resolves.toBeDefined();
+    await expect(createTaskHarnessRequest(await request(dispatch("9999"), { triggers })))
+      .rejects.toThrow(/same-repository pull requests/);
+  });
+
+  it("refuses a manual run against a kind of resource the task does not act on", async () => {
+    const { pullRequest, repository, workflow, eventId, occurredAt, actor } = pullRequestEvent("1374842705") as Extract<NormalizedEventV1, { kind: "github.pull_request.opened" }>;
+    const event: NormalizedEventV1 = {
+      schemaVersion: "gardener.normalized-event/v1",
+      kind: "github.workflow_dispatch",
+      eventId,
+      occurredAt,
+      actor,
+      repository,
+      workflow: { ...workflow, eventName: "workflow_dispatch" },
+      pullRequest,
+    };
+    await expect(createTaskHarnessRequest(await request(event, { triggers: [{ kind: "github.issue.opened", labelsAll: [] }] })))
+      .rejects.toThrow(/no pull request trigger, so a manual run of it cannot target a pull request/);
+    await expect(createTaskHarnessRequest(await request(event, { triggers: [] })))
+      .rejects.toThrow(/cannot target a pull request/);
   });
 
   it("rejects an event kind the bundle never declared", async () => {

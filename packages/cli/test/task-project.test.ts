@@ -248,6 +248,7 @@ describe("TASK.md compiler", () => {
     expect(reordered.bundle.triggers.map((trigger) => trigger.kind)).toEqual([
       "github.issue.opened",
       "github.pull_request.opened",
+      "github.workflow_dispatch",
     ]);
   });
 });
@@ -352,21 +353,21 @@ describe("local Gardener project", () => {
     expect(source).not.toContain("requires-approval");
   });
 
-  it("declares a required bounded workflow_dispatch prompt matching the parser", async () => {
+  it("offers optional manual-run inputs, with a target for each resource the task acts on", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-project-dispatch-"));
     await initializeProject({ repositoryRoot: root, demos: false });
     await mkdir(join(root, ".gardener/tasks/wide"), { recursive: true });
     await writeFile(join(root, ".gardener/tasks/wide/TASK.md"), WIDE_TASK);
     const built = await buildProject({ repositoryRoot: root });
     const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
-
-    // The runner rejects an empty prompt, so the form must require one and
-    // must not supply a default that would start an immediately-failing run.
-    expect(workflow).toContain("  workflow_dispatch:\n    inputs:\n      prompt:");
-    expect(workflow).toContain("        required: true");
-    expect(workflow).toContain("        type: string");
-    expect(workflow).toContain("1 to 20000 characters");
-    expect(workflow).not.toContain("        default:");
+    const inputs = (parseYaml(workflow) as { on: { workflow_dispatch: { inputs: Record<string, Record<string, unknown>> } } })
+      .on.workflow_dispatch.inputs;
+    expect(Object.keys(inputs)).toEqual(["prompt", "issue", "pull_request"]);
+    for (const input of Object.values(inputs)) {
+      expect(input).toMatchObject({ required: false, type: "string" });
+      expect(input).not.toHaveProperty("default");
+    }
+    expect(String(inputs.prompt!.description)).toContain("20000 characters");
   });
 
   it("warns that repository.exec tasks have unrestricted demo-only egress", async () => {

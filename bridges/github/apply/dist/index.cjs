@@ -18968,6 +18968,7 @@ var require_undici = __commonJS({
 // src/effects-main.ts
 var effects_main_exports = {};
 __export(effects_main_exports, {
+  applyEventBinding: () => applyEventBinding,
   applyOrderedPlan: () => applyOrderedPlan,
   runEffectsMain: () => runEffectsMain
 });
@@ -40485,7 +40486,13 @@ var taskBundleV1Schema = external_exports.strictObject({
   tools: external_exports.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
   effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   network: taskNetworkPolicyV1Schema,
-  limits: taskLimitsV1Schema
+  limits: taskLimitsV1Schema,
+  /**
+   * A draft task runs only when dispatched by hand. Its other triggers are kept
+   * so a manual run can still target the resource they describe, but no real
+   * event starts it.
+   */
+  draft: external_exports.literal(true).optional()
 }).superRefine((bundle, context) => {
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
@@ -40499,6 +40506,9 @@ var taskBundleV1Schema = external_exports.strictObject({
   const positions = triggerKinds.map((kind) => triggerKindOrder.get(kind));
   if (positions.some((position, index) => index > 0 && position <= positions[index - 1])) {
     context.addIssue({ code: "custom", path: ["triggers"], message: "triggers must use canonical declaration order" });
+  }
+  if (!triggerKinds.includes("github.workflow_dispatch")) {
+    context.addIssue({ code: "custom", path: ["triggers"], message: "every task must include the github.workflow_dispatch trigger" });
   }
   if (bundle.limits.outputTokens < bundle.limits.maxTurns * 16) {
     context.addIssue({ code: "custom", path: ["limits", "outputTokens"], message: "outputTokens must permit at least 16 tokens per model turn" });
@@ -40737,7 +40747,12 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
   eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
   eventMember("github.push", { push: normalizedPushV1Schema }),
-  eventMember("github.workflow_dispatch", { prompt: external_exports.string().trim().min(1).max(2e4) }),
+  eventMember("github.workflow_dispatch", {
+    prompt: external_exports.string().trim().min(1).max(2e4).optional(),
+    // A manual run may name one issue or pull request to act on.
+    issue: normalizedIssueV1Schema.optional(),
+    pullRequest: normalizedPullRequestV1Schema.optional()
+  }),
   eventMember("github.schedule", { cron: cronExpressionV1Schema }),
   eventMember("github.discussion.created", discussionPayload),
   eventMember("github.discussion.edited", discussionPayload),
@@ -40752,6 +40767,9 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   }
   if (event.workflow.eventName !== eventNameByTriggerKind[event.kind]) {
     context.addIssue({ code: "custom", path: ["workflow", "eventName"], message: "workflow eventName does not match normalized event kind" });
+  }
+  if (event.kind === "github.workflow_dispatch" && event.issue !== void 0 && event.pullRequest !== void 0) {
+    context.addIssue({ code: "custom", path: ["pullRequest"], message: "a manual run may target an issue or a pull request, not both" });
   }
   if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
     context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
@@ -41259,17 +41277,19 @@ function taskEventBindingFromNormalizedEvent(event) {
     eventName: eventNameByTriggerKind[event.kind],
     action: eventActionByTriggerKind[event.kind] ?? null
   };
-  if ("issue" in event) {
+  const issue3 = "issue" in event ? event.issue : void 0;
+  if (issue3 !== void 0) {
     return {
       ...base,
-      resource: { kind: "issue", id: event.issue.id, number: event.issue.number },
+      resource: { kind: "issue", id: issue3.id, number: issue3.number },
       commentId: "comment" in event ? event.comment.id : null
     };
   }
-  if ("pullRequest" in event) {
+  const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+  if (pullRequest !== void 0) {
     return {
       ...base,
-      resource: { kind: "pull_request", id: event.pullRequest.id, number: event.pullRequest.number },
+      resource: { kind: "pull_request", id: pullRequest.id, number: pullRequest.number },
       commentId: "comment" in event ? event.comment.id : null
     };
   }
@@ -41776,7 +41796,15 @@ var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload2, review: eventReview }),
   runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload2, comment: eventComment }),
   runnerEventMember("github.push", { push: eventPush }),
-  runnerEventMember("github.workflow_dispatch", { prompt: external_exports.string().trim().min(1).max(2e4) }),
+  runnerEventMember("github.workflow_dispatch", {
+    prompt: external_exports.string().trim().min(1).max(2e4).optional(),
+    // The issue or pull request a manual run targets, read by the runner from
+    // the repository when the run starts.
+    issue: eventIssue.optional(),
+    pullRequest: eventPullRequest.optional()
+  }).refine((event) => event.issue === void 0 || event.pullRequest === void 0, {
+    message: "a manual run may target an issue or a pull request, not both"
+  }),
   runnerEventMember("github.schedule", { cron: external_exports.string().trim().min(1).max(100) }),
   runnerEventMember("github.discussion.created", discussionPayload2),
   runnerEventMember("github.discussion.edited", discussionPayload2),
@@ -45121,6 +45149,92 @@ function claim2(claims, name2) {
   return String(value);
 }
 
+// src/github-read.ts
+var DEFAULT_GITHUB_READ_LIMITS = Object.freeze({
+  maxRequestTargetLength: 2048,
+  maxQueryBytes: 32 * 1024,
+  maxVariablesBytes: 32 * 1024,
+  maxResponseBytes: 1024 * 1024,
+  maxRequestHeaders: 8,
+  requestTimeoutMs: 3e4
+});
+function trimToUtf8Boundary(buffer) {
+  for (let back = 1; back <= 4 && back <= buffer.byteLength; back += 1) {
+    const byte = buffer[buffer.byteLength - back];
+    if ((byte & 192) === 128) continue;
+    const needed = byte >= 240 ? 4 : byte >= 224 ? 3 : byte >= 192 ? 2 : 1;
+    return back < needed ? buffer.subarray(0, buffer.byteLength - back) : buffer;
+  }
+  return buffer;
+}
+async function readBoundedBody(response, maxBytes) {
+  const body2 = response.body;
+  if (!body2 || typeof body2.getReader !== "function") {
+    const raw = Buffer.from(await response.text(), "utf8");
+    if (raw.byteLength > maxBytes) {
+      return { text: trimToUtf8Boundary(raw.subarray(0, maxBytes)).toString("utf8"), truncated: true };
+    }
+    return { text: raw.toString("utf8"), truncated: false };
+  }
+  const reader = body2.getReader();
+  const chunks = [];
+  let retained = 0;
+  let truncated = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    const chunk = Buffer.from(value);
+    const remaining = maxBytes - retained;
+    if (chunk.byteLength > remaining) {
+      if (remaining > 0) {
+        chunks.push(chunk.subarray(0, remaining));
+        retained = maxBytes;
+      }
+      truncated = true;
+      await reader.cancel().catch(() => void 0);
+      break;
+    }
+    chunks.push(chunk);
+    retained += chunk.byteLength;
+  }
+  const joined = Buffer.concat(chunks);
+  const bounded = truncated ? trimToUtf8Boundary(joined) : joined;
+  return { text: bounded.toString("utf8"), truncated };
+}
+
+// src/dispatch-target.ts
+var REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+var MAX_RESPONSE_BYTES = 1024 * 1024;
+var TIMEOUT_MS = 15e3;
+async function fetchDispatchTarget(input2) {
+  if (!REPOSITORY.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error("GITHUB_REPOSITORY is not an owner/name slug");
+  }
+  if (!input2.token) throw new Error("A GitHub token is required to read the manual run's target");
+  const collection = input2.target.kind === "issue" ? "issues" : "pulls";
+  const noun = input2.target.kind === "issue" ? "issue" : "pull request";
+  const response = await (input2.fetch ?? fetch)(
+    `https://api.github.com/repos/${input2.repository}/${collection}/${input2.target.number}`,
+    {
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${input2.token}`,
+        "user-agent": "gardener-runner",
+        "x-github-api-version": "2022-11-28"
+      },
+      redirect: "error",
+      signal: input2.signal ? AbortSignal.any([input2.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS)
+    }
+  );
+  if (response.status === 404) throw new Error(`${noun} #${input2.target.number} was not found in ${input2.repository}`);
+  if (!response.ok) throw new Error(`Reading ${noun} #${input2.target.number} failed (${response.status})`);
+  const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+  if (body2.truncated) throw new Error(`${noun} #${input2.target.number} response is too large`);
+  const value = JSON.parse(body2.text);
+  return input2.target.kind === "issue" ? { issue: value } : { pull_request: value };
+}
+
 // src/event.ts
 function object2(value, what) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -45230,7 +45344,26 @@ function repositoryPayload(raw) {
   if (!defaultBranch) throw new Error("GitHub event payload is missing the repository default branch");
   return { defaultBranch };
 }
-function normalizeGitHubEvent(eventName, source) {
+function dispatchNumber(value, name2) {
+  const text = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (value === void 0 || value === null || text === "") return void 0;
+  if (!/^[1-9][0-9]{0,9}$/.test(text)) throw new Error(`workflow_dispatch input ${name2} must be a positive issue or pull request number`);
+  return Number(text);
+}
+function dispatchTargetRequest(eventName, source) {
+  if (eventName !== "workflow_dispatch") return null;
+  const raw = object2(source, "an event payload");
+  const inputs = raw.inputs === void 0 || raw.inputs === null ? {} : object2(raw.inputs, "dispatch inputs");
+  const issue3 = dispatchNumber(inputs.issue, "issue");
+  const pullRequest = dispatchNumber(inputs.pull_request, "pull_request");
+  if (issue3 !== void 0 && pullRequest !== void 0) {
+    throw new Error("workflow_dispatch may target an issue or a pull request, not both");
+  }
+  if (issue3 !== void 0) return { kind: "issue", number: issue3 };
+  if (pullRequest !== void 0) return { kind: "pull_request", number: pullRequest };
+  return null;
+}
+function normalizeGitHubEvent(eventName, source, resolved) {
   const raw = object2(source, "an event payload");
   const action = typeof raw.action === "string" ? raw.action : void 0;
   const unsupported = () => {
@@ -45278,10 +45411,27 @@ function normalizeGitHubEvent(eventName, source) {
       case "push":
         return { kind: "github.push", push: pushPayload(raw) };
       case "workflow_dispatch": {
-        const inputs = raw.inputs === void 0 ? {} : object2(raw.inputs, "dispatch inputs");
+        const inputs = raw.inputs === void 0 || raw.inputs === null ? {} : object2(raw.inputs, "dispatch inputs");
         const prompt = typeof inputs.prompt === "string" ? inputs.prompt.trim() : "";
-        if (!prompt) throw new Error("workflow_dispatch requires a non-empty prompt input");
-        return { kind: "github.workflow_dispatch", prompt };
+        const dispatch2 = { kind: "github.workflow_dispatch", ...prompt ? { prompt } : {} };
+        const target = dispatchTargetRequest(eventName, raw);
+        if (target === null) {
+          if (resolved?.issue !== void 0 || resolved?.pull_request !== void 0) {
+            throw new Error("A resolved target was supplied for a manual run that names none");
+          }
+          return dispatch2;
+        }
+        if (target.kind === "issue") {
+          const issue3 = object2(resolved?.issue, `issue #${target.number}`);
+          if (issue3.pull_request !== void 0 && issue3.pull_request !== null) {
+            throw new Error(`#${target.number} is a pull request; use the pull_request input`);
+          }
+          if (issue3.number !== target.number) throw new Error(`Fetched issue does not match #${target.number}`);
+          return { ...dispatch2, issue: issuePayload3({ issue: issue3 }) };
+        }
+        const pullRequest = object2(resolved?.pull_request, `pull request #${target.number}`);
+        if (pullRequest.number !== target.number) throw new Error(`Fetched pull request does not match #${target.number}`);
+        return { ...dispatch2, pullRequest: pullRequestPayload3({ pull_request: pullRequest }) };
       }
       case "schedule": {
         const cron = typeof raw.schedule === "string" ? raw.schedule.trim() : "";
@@ -46997,7 +47147,7 @@ async function runEffectsMain() {
     const actualSha256 = (0, import_node_crypto3.createHash)("sha256").update(bytes).digest("hex");
     if (!equalDigest(actualSha256, expectedSha256)) throw new Error("Effect artifact digest mismatch");
     const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
-    await assertApplyBindings(plan);
+    await assertApplyBindings(plan, token);
     connection = await connectEffectsSession(runtimeUrl, plan.bundleHash);
     const prior = await connection.session.priorEffectReceipt(plan.runId, actualSha256);
     const captureDirectory = getInput("capture-artifact-path").trim();
@@ -47312,7 +47462,7 @@ function assertReceiptEnvelope(plan, artifactSha256, receipt) {
     throw new Error("Prior effect receipt is not bound to this exact plan");
   }
 }
-async function assertApplyBindings(plan) {
+async function assertApplyBindings(plan, token) {
   if (requiredEnvironment("GITHUB_REPOSITORY") !== plan.repository.fullName) throw new Error("Effect repository binding mismatch");
   if (requiredEnvironment("GITHUB_REPOSITORY_ID") !== plan.repository.id) throw new Error("Effect repository identity mismatch");
   if (requiredEnvironment("GITHUB_SHA") !== plan.provenance.commitSha) throw new Error("Effect commit binding mismatch");
@@ -47324,10 +47474,28 @@ async function assertApplyBindings(plan) {
   const raw = JSON.parse(await (0, import_promises3.readFile)(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
   const rawRepository = raw && typeof raw === "object" ? raw.repository : void 0;
   if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
-  const normalized = normalizeGitHubEvent(requiredEnvironment("GITHUB_EVENT_NAME"), raw);
-  if (normalized.repository.defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
-  const binding = taskEventBindingFromNormalizedEvent(normalized);
+  const { defaultBranch, binding } = await applyEventBinding({
+    eventName: requiredEnvironment("GITHUB_EVENT_NAME"),
+    raw,
+    repository: requiredEnvironment("GITHUB_REPOSITORY"),
+    token
+  });
+  if (defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
   if (canonicalJson2(binding) !== canonicalJson2(plan.event)) throw new Error("Effect event binding mismatch");
+}
+async function applyEventBinding(input2) {
+  const target = dispatchTargetRequest(input2.eventName, input2.raw);
+  const resolved = target === null ? void 0 : await fetchDispatchTarget({
+    target,
+    repository: input2.repository,
+    token: input2.token,
+    ...input2.fetch ? { fetch: input2.fetch } : {}
+  });
+  const normalized = normalizeGitHubEvent(input2.eventName, input2.raw, resolved);
+  return {
+    defaultBranch: normalized.repository.defaultBranch,
+    binding: taskEventBindingFromNormalizedEvent(normalized)
+  };
 }
 async function prepareCapture(plan, directory) {
   if (!plan.capture) {
@@ -47402,6 +47570,7 @@ function requiredEnvironment(name2) {
 void runEffectsMain();
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  applyEventBinding,
   applyOrderedPlan,
   runEffectsMain
 });

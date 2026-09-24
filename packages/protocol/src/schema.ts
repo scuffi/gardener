@@ -341,7 +341,15 @@ export const runnerEventV1Schema = z.discriminatedUnion("kind", [
   runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: eventReview }),
   runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: eventComment }),
   runnerEventMember("github.push", { push: eventPush }),
-  runnerEventMember("github.workflow_dispatch", { prompt: z.string().trim().min(1).max(20_000) }),
+  runnerEventMember("github.workflow_dispatch", {
+    prompt: z.string().trim().min(1).max(20_000).optional(),
+    // The issue or pull request a manual run targets, read by the runner from
+    // the repository when the run starts.
+    issue: eventIssue.optional(),
+    pullRequest: eventPullRequest.optional(),
+  }).refine((event) => event.issue === undefined || event.pullRequest === undefined, {
+    message: "a manual run may target an issue or a pull request, not both",
+  }),
   runnerEventMember("github.schedule", { cron: z.string().trim().min(1).max(100) }),
   runnerEventMember("github.discussion.created", discussionPayload),
   runnerEventMember("github.discussion.edited", discussionPayload),

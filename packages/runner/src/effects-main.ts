@@ -34,7 +34,8 @@ import {
 import { RpcTarget, newWebSocketRpcSession, type RpcStub } from "capnweb";
 import { verifyCaptureArtifact } from "./capture";
 import { helloFromOidcToken, sessionSocketUrl } from "./context";
-import { normalizeGitHubEvent } from "./event";
+import { fetchDispatchTarget } from "./dispatch-target";
+import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
 import {
   canonicalOperationHash,
   executeActionsOperation,
@@ -74,7 +75,7 @@ export async function runEffectsMain(): Promise<void> {
     const actualSha256 = createHash("sha256").update(bytes).digest("hex");
     if (!equalDigest(actualSha256, expectedSha256)) throw new Error("Effect artifact digest mismatch");
     const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
-    await assertApplyBindings(plan);
+    await assertApplyBindings(plan, token);
 
     connection = await connectEffectsSession(runtimeUrl, plan.bundleHash);
     const prior = await connection.session.priorEffectReceipt(plan.runId, actualSha256);
@@ -492,7 +493,7 @@ function assertReceiptEnvelope(plan: TaskEffectPlanV1, artifactSha256: string, r
   }
 }
 
-async function assertApplyBindings(plan: TaskEffectPlanV1): Promise<void> {
+async function assertApplyBindings(plan: TaskEffectPlanV1, token: string): Promise<void> {
   if (requiredEnvironment("GITHUB_REPOSITORY") !== plan.repository.fullName) throw new Error("Effect repository binding mismatch");
   if (requiredEnvironment("GITHUB_REPOSITORY_ID") !== plan.repository.id) throw new Error("Effect repository identity mismatch");
   if (requiredEnvironment("GITHUB_SHA") !== plan.provenance.commitSha) throw new Error("Effect commit binding mismatch");
@@ -504,10 +505,42 @@ async function assertApplyBindings(plan: TaskEffectPlanV1): Promise<void> {
   const raw = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8")) as unknown;
   const rawRepository = raw && typeof raw === "object" ? (raw as Record<string, any>).repository : undefined;
   if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
-  const normalized = normalizeGitHubEvent(requiredEnvironment("GITHUB_EVENT_NAME"), raw);
-  if (normalized.repository.defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
-  const binding = taskEventBindingFromNormalizedEvent(normalized as never);
+  const { defaultBranch, binding } = await applyEventBinding({
+    eventName: requiredEnvironment("GITHUB_EVENT_NAME"),
+    raw,
+    repository: requiredEnvironment("GITHUB_REPOSITORY"),
+    token,
+  });
+  if (defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
   if (canonicalJson(binding) !== canonicalJson(plan.event)) throw new Error("Effect event binding mismatch");
+}
+
+/**
+ * Derives the event binding apply compares against the plan. A manual run's
+ * target is read again here rather than trusted from the plan, so a plan bound
+ * to another issue or pull request is refused.
+ */
+export async function applyEventBinding(input: {
+  eventName: string;
+  raw: unknown;
+  repository: string;
+  token: string;
+  fetch?: typeof fetch;
+}): Promise<{ defaultBranch: string; binding: ReturnType<typeof taskEventBindingFromNormalizedEvent> }> {
+  const target = dispatchTargetRequest(input.eventName, input.raw);
+  const resolved = target === null
+    ? undefined
+    : await fetchDispatchTarget({
+      target,
+      repository: input.repository,
+      token: input.token,
+      ...(input.fetch ? { fetch: input.fetch } : {}),
+    });
+  const normalized = normalizeGitHubEvent(input.eventName, input.raw, resolved);
+  return {
+    defaultBranch: normalized.repository.defaultBranch,
+    binding: taskEventBindingFromNormalizedEvent(normalized as never),
+  };
 }
 
 async function prepareCapture(plan: TaskEffectPlanV1, directory: string): Promise<{ directory: string } | undefined> {

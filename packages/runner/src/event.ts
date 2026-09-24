@@ -140,7 +140,49 @@ function repositoryPayload(raw: Raw): Raw {
  * the sole repository field carried is the default branch, which is not an
  * OIDC claim and which every exact operation embeds.
  */
-export function normalizeGitHubEvent(eventName: string, source: unknown): RunnerEventV1 {
+/** The issue or pull request a manual run names in its inputs, by number. */
+export interface DispatchTargetRequest {
+  kind: "issue" | "pull_request";
+  number: number;
+}
+
+/** GitHub's REST representation of the targeted resource, fetched when the run starts. */
+export interface ResolvedDispatchTarget {
+  issue?: unknown;
+  pull_request?: unknown;
+}
+
+function dispatchNumber(value: unknown, name: string): number | undefined {
+  const text = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (value === undefined || value === null || text === "") return undefined;
+  if (!/^[1-9][0-9]{0,9}$/.test(text)) throw new Error(`workflow_dispatch input ${name} must be a positive issue or pull request number`);
+  return Number(text);
+}
+
+/**
+ * The target a manual run names, or `null` when it names none. At most one of
+ * the `issue` and `pull_request` inputs may be set.
+ */
+export function dispatchTargetRequest(eventName: string, source: unknown): DispatchTargetRequest | null {
+  if (eventName !== "workflow_dispatch") return null;
+  const raw = object(source, "an event payload");
+  const inputs = raw.inputs === undefined || raw.inputs === null ? {} : object(raw.inputs, "dispatch inputs");
+  const issue = dispatchNumber(inputs.issue, "issue");
+  const pullRequest = dispatchNumber(inputs.pull_request, "pull_request");
+  if (issue !== undefined && pullRequest !== undefined) {
+    throw new Error("workflow_dispatch may target an issue or a pull request, not both");
+  }
+  if (issue !== undefined) return { kind: "issue", number: issue };
+  if (pullRequest !== undefined) return { kind: "pull_request", number: pullRequest };
+  return null;
+}
+
+/**
+ * Normalizes an Actions event. A manual run that targets an issue or pull
+ * request needs that resource as GitHub reports it now, which the caller
+ * fetches and passes as `resolved`; everything else comes from the payload.
+ */
+export function normalizeGitHubEvent(eventName: string, source: unknown, resolved?: ResolvedDispatchTarget): RunnerEventV1 {
   const raw = object(source, "an event payload");
   const action = typeof raw.action === "string" ? raw.action : undefined;
   const unsupported = (): never => {
@@ -193,10 +235,28 @@ export function normalizeGitHubEvent(eventName: string, source: unknown): Runner
       case "push":
         return { kind: "github.push", push: pushPayload(raw) };
       case "workflow_dispatch": {
-        const inputs = raw.inputs === undefined ? {} : object(raw.inputs, "dispatch inputs");
+        const inputs = raw.inputs === undefined || raw.inputs === null ? {} : object(raw.inputs, "dispatch inputs");
         const prompt = typeof inputs.prompt === "string" ? inputs.prompt.trim() : "";
-        if (!prompt) throw new Error("workflow_dispatch requires a non-empty prompt input");
-        return { kind: "github.workflow_dispatch", prompt };
+        const dispatch: Raw = { kind: "github.workflow_dispatch", ...(prompt ? { prompt } : {}) };
+        const target = dispatchTargetRequest(eventName, raw);
+        if (target === null) {
+          if (resolved?.issue !== undefined || resolved?.pull_request !== undefined) {
+            throw new Error("A resolved target was supplied for a manual run that names none");
+          }
+          return dispatch;
+        }
+        if (target.kind === "issue") {
+          const issue = object(resolved?.issue, `issue #${target.number}`);
+          // GitHub's issues API also returns pull requests.
+          if (issue.pull_request !== undefined && issue.pull_request !== null) {
+            throw new Error(`#${target.number} is a pull request; use the pull_request input`);
+          }
+          if (issue.number !== target.number) throw new Error(`Fetched issue does not match #${target.number}`);
+          return { ...dispatch, issue: issuePayload({ issue }) };
+        }
+        const pullRequest = object(resolved?.pull_request, `pull request #${target.number}`);
+        if (pullRequest.number !== target.number) throw new Error(`Fetched pull request does not match #${target.number}`);
+        return { ...dispatch, pullRequest: pullRequestPayload({ pull_request: pullRequest }) };
       }
       case "schedule": {
         const cron = typeof raw.schedule === "string" ? raw.schedule.trim() : "";

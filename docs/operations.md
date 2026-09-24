@@ -84,8 +84,10 @@ pnpm gardener -- connect --workspace my-gardener --repository my-org/my-repo \
   --repository-root /path/to/my-repo --source-root "$PWD"
 ```
 
-Commit the updated lock file and workflows. `connect` enables the new bundle hashes and retires
-the old ones for that repository. A retired hash is never re-enabled automatically.
+Commit the updated lock file and workflows. `connect` enables the checkout's bundle hashes and
+retires every other hash for that repository, so run it from the default branch. If you revert a
+task, connecting brings its earlier hash back. A task you disabled with `task disable` stays
+disabled.
 
 ## Inspecting runs
 

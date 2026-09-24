@@ -547,7 +547,7 @@ function trimToUtf8Boundary(buffer: Buffer): Buffer {
   return buffer;
 }
 
-async function readBoundedBody(
+export async function readBoundedBody(
   response: Response,
   maxBytes: number,
 ): Promise<{ text: string; truncated: boolean }> {

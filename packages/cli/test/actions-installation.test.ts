@@ -47,9 +47,49 @@ describe("Actions-native installation topology", () => {
       bundleHash: "a".repeat(64),
       sourcePath: ".gardener/tasks/bug-intake/TASK.md",
     });
-    expect(sql).toContain("SELECT MAX(enabled)");
+    expect(sql).toContain("SELECT MAX(o.enabled)");
     expect(sql).toContain(`bundle_hash,task_id,source_path,enabled) SELECT '1379585475','${"a".repeat(64)}','bug-intake'`);
     expect(sql).not.toContain("enabled=1");
+  });
+
+  it("re-enables a reverted bundle only when its task is not disabled", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const db = new DatabaseSync(":memory:");
+    const migrations = new URL("../../../apps/gardener/migrations/", import.meta.url);
+    for (const file of readdirSync(migrations).sort()) db.exec(readFileSync(new URL(file, migrations), "utf8"));
+    db.prepare("INSERT INTO actions_repository_enrollments(repository_id,owner_id,owner_login,repository_name,visibility,plan_job_workflow_ref,oidc_audience) VALUES (?,?,?,?,?,?,?)")
+      .run("1", "2", "o", "r", "public", "ref", "aud");
+    for (const hash of ["a", "b"]) {
+      db.prepare("INSERT INTO actions_task_bundles(bundle_hash,task_id,bundle_json) VALUES (?,?,?)").run(hash.repeat(64), "t", "{}");
+    }
+    const base = { repositoryId: "1", taskId: "t", sourcePath: ".gardener/tasks/t/TASK.md" };
+    // One connect: enroll the checkout's bundle, then retire the rest, as connectActions does.
+    const connect = (hash: string) => {
+      db.exec(actionsRepositoryTaskEnrollmentSql({ ...base, bundleHash: hash.repeat(64) }));
+      db.exec(`UPDATE actions_repository_tasks SET enabled=0 WHERE bundle_hash<>'${hash.repeat(64)}'`);
+    };
+    const rows = () => db.prepare("SELECT substr(bundle_hash,1,1) AS h,enabled FROM actions_repository_tasks ORDER BY h").all()
+      .map((row) => `${String(row.h)}:${String(row.enabled)}`).join(" ");
+    try {
+      connect("a");
+      connect("b");
+      expect(rows()).toBe("a:0 b:1");
+      // Reconnecting an unchanged checkout keeps the task enabled.
+      connect("b");
+      expect(rows()).toBe("a:0 b:1");
+      connect("a");
+      expect(rows()).toBe("a:1 b:0");
+      // task disable sets every row to 0; connecting does not undo it.
+      db.exec("UPDATE actions_repository_tasks SET enabled=0");
+      connect("b");
+      connect("b");
+      expect(rows()).toBe("a:0 b:0");
+      // task enable enables only the lock's bundle, and connecting keeps it.
+      db.exec(`UPDATE actions_repository_tasks SET enabled=1 WHERE bundle_hash='${"b".repeat(64)}'`);
+      connect("b");
+      expect(rows()).toBe("a:0 b:1");
+    } finally { db.close(); }
   });
 
   it("creates an exact-host Access bypass only when the account intercepts the runtime", async () => {

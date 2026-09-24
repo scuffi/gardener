@@ -175,8 +175,8 @@ describe("Actions-native task v1 contracts", () => {
   it("validates push branch filters and schedule cron expressions", () => {
     expect(taskBundleV1Schema.parse({
       ...fixtureBundle(),
-      triggers: [{ kind: "github.push", branches: ["main", "release/*"] }],
-    }).triggers).toEqual([{ kind: "github.push", branches: ["main", "release/*"] }]);
+      triggers: [{ kind: "github.push", branches: ["main", "release/*"] }, { kind: "github.workflow_dispatch" }],
+    }).triggers).toEqual([{ kind: "github.push", branches: ["main", "release/*"] }, { kind: "github.workflow_dispatch" }]);
     expect(() => taskBundleV1Schema.parse({
       ...fixtureBundle(),
       triggers: [{ kind: "github.push", branches: [] }],
@@ -187,12 +187,19 @@ describe("Actions-native task v1 contracts", () => {
     })).toThrow();
     expect(taskBundleV1Schema.parse({
       ...fixtureBundle(),
-      triggers: [{ kind: "github.schedule", cron: "0 3 * * 1" }],
-    }).triggers).toEqual([{ kind: "github.schedule", cron: "0 3 * * 1" }]);
+      triggers: [{ kind: "github.workflow_dispatch" }, { kind: "github.schedule", cron: "0 3 * * 1" }],
+    }).triggers).toEqual([{ kind: "github.workflow_dispatch" }, { kind: "github.schedule", cron: "0 3 * * 1" }]);
     expect(() => taskBundleV1Schema.parse({
       ...fixtureBundle(),
       triggers: [{ kind: "github.schedule", cron: "0 3 * *" }],
     })).toThrow(/cron/);
+  });
+
+  it("requires the manual trigger and accepts draft only as true", () => {
+    const issueOnly = { ...fixtureBundle(), triggers: [{ kind: "github.issue.opened", labelsAll: [] }] };
+    expect(() => taskBundleV1Schema.parse(issueOnly)).toThrow(/github.workflow_dispatch/);
+    expect(taskBundleV1Schema.parse({ ...fixtureBundle(), draft: true }).draft).toBe(true);
+    expect(() => taskBundleV1Schema.parse({ ...fixtureBundle(), draft: false })).toThrow();
   });
 
   it("carries no fork-execution opt-in and fails closed on fork head revisions", () => {

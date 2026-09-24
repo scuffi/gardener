@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runnerEventV1Schema } from "@gardener/protocol";
-import { normalizeGitHubEvent } from "../src/event";
+import { dispatchTargetRequest, normalizeGitHubEvent, type ResolvedDispatchTarget } from "../src/event";
 
 const actor = { id: 45369682, login: "scuffi" };
 
@@ -48,11 +48,11 @@ const discussion = {
  * The normalizer is a pure function, so tests call it directly. `main.ts` owns
  * reading the event file and is never imported here.
  */
-async function normalize(eventName: string, payload: unknown): Promise<unknown> {
+async function normalize(eventName: string, payload: unknown, resolved?: ResolvedDispatchTarget): Promise<unknown> {
   const withRepository = payload !== null && typeof payload === "object" && !Array.isArray(payload)
     ? { repository: { id: 1374842705, full_name: "scuffi/gardener", default_branch: "main" }, ...payload }
     : payload;
-  return normalizeGitHubEvent(eventName, withRepository);
+  return normalizeGitHubEvent(eventName, withRepository, resolved);
 }
 
 describe("runner event normalization", () => {
@@ -137,10 +137,45 @@ describe("runner event normalization", () => {
       .rejects.toThrow(/does not support issue_comment: edited/);
   });
 
-  it("fails closed on incomplete payloads and empty dispatch prompts", async () => {
+  it("fails closed on incomplete payloads", async () => {
     await expect(normalize("issues", { action: "opened" })).rejects.toThrow(/missing an issue/);
     await expect(normalize("pull_request", { action: "opened" })).rejects.toThrow(/missing a pull request/);
-    await expect(normalize("workflow_dispatch", { inputs: { prompt: "   " } })).rejects.toThrow(/non-empty prompt/);
     await expect(normalize("schedule", {})).rejects.toThrow(/missing its cron expression/);
+  });
+});
+
+describe("manual runs", () => {
+  it("accepts a manual run with no prompt and no target", async () => {
+    expect(await normalize("workflow_dispatch", { inputs: { prompt: "   " } })).not.toHaveProperty("prompt");
+    expect(await normalize("workflow_dispatch", {})).toMatchObject({ kind: "github.workflow_dispatch" });
+    expect(await normalize("workflow_dispatch", { inputs: { prompt: " Check #1 " } })).toMatchObject({ prompt: "Check #1" });
+  });
+
+  it("reads the target number from the inputs", () => {
+    expect(dispatchTargetRequest("workflow_dispatch", { inputs: { issue: "7", pull_request: "" } })).toEqual({ kind: "issue", number: 7 });
+    expect(dispatchTargetRequest("workflow_dispatch", { inputs: { pull_request: " 12 " } })).toEqual({ kind: "pull_request", number: 12 });
+    expect(dispatchTargetRequest("workflow_dispatch", { inputs: { prompt: "x" } })).toBeNull();
+    expect(dispatchTargetRequest("issues", { inputs: { issue: "7" } })).toBeNull();
+    expect(() => dispatchTargetRequest("workflow_dispatch", { inputs: { issue: "7", pull_request: "8" } })).toThrow(/not both/);
+    for (const bad of ["0", "-1", "7a", "#7", "12345678901"]) {
+      expect(() => dispatchTargetRequest("workflow_dispatch", { inputs: { issue: bad } })).toThrow(/positive/);
+    }
+  });
+
+  it("carries the fetched issue or pull request as the run's target", async () => {
+    expect(await normalize("workflow_dispatch", { inputs: { issue: "1" } }, { issue })).toMatchObject({
+      kind: "github.workflow_dispatch",
+      issue: { id: "999", number: 1, labels: ["bug", "triage"] },
+    });
+    expect(await normalize("workflow_dispatch", { inputs: { pull_request: "12", prompt: "Review" } }, { pull_request: pullRequest }))
+      .toMatchObject({ prompt: "Review", pullRequest: { id: "555", number: 12, head: { repo: { id: "9999" } } } });
+  });
+
+  it("refuses a missing, mismatched, or wrong-kind target", async () => {
+    await expect(normalize("workflow_dispatch", { inputs: { issue: "1" } })).rejects.toThrow(/issue #1/);
+    await expect(normalize("workflow_dispatch", { inputs: { issue: "2" } }, { issue })).rejects.toThrow(/does not match #2/);
+    await expect(normalize("workflow_dispatch", { inputs: { issue: "1" } }, { issue: { ...issue, pull_request: { url: "x" } } }))
+      .rejects.toThrow(/is a pull request; use the pull_request input/);
+    await expect(normalize("workflow_dispatch", {}, { issue })).rejects.toThrow(/names none/);
   });
 });

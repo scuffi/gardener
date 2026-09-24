@@ -4,7 +4,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { taskEffectPlanV1Schema } from "@gardener/contracts";
 import { type RunnerEventV1 } from "@gardener/protocol";
-import { normalizeGitHubEvent } from "./event";
+import { fetchDispatchTarget } from "./dispatch-target";
+import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
 import { createPlanningExecutor } from "./executor";
 import { GitHubReadClient } from "./github-read";
 import { runPlanningSession } from "./session";
@@ -110,7 +111,13 @@ async function githubEvent(): Promise<RunnerEventV1 | undefined> {
   const eventName = process.env.GITHUB_EVENT_NAME;
   if (!eventName) return undefined;
   const raw: unknown = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
-  return normalizeGitHubEvent(eventName, raw);
+  // A manual run that names an issue or pull request is planned against that
+  // resource as GitHub reports it now, read with the repository-scoped token.
+  const target = dispatchTargetRequest(eventName, raw);
+  const resolved = target === null
+    ? undefined
+    : await fetchDispatchTarget({ target, repository: requiredEnvironment("GITHUB_REPOSITORY"), token: providerReadToken });
+  return normalizeGitHubEvent(eventName, raw, resolved);
 }
 
 async function getIdTokenWithoutEnvironmentLeak(audience: string): Promise<string> {

@@ -1,4 +1,5 @@
 import {
+  dispatchTargetKinds,
   pullRequestFamilyTriggerKindValues,
   triggerKindOrder,
   type TaskBundleV1,
@@ -111,10 +112,14 @@ const planningPermissions = orderPermissions({
 });
 
 export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTaskPlanV1 {
-  const triggers = bundle.triggers.map((trigger) => ({
-    kind: trigger.kind,
-    ...TRIGGER_BINDINGS[trigger.kind],
-  }));
+  // A draft keeps its declared triggers in the bundle, so a manual run can
+  // target what they describe, but its workflow listens only for manual runs.
+  const triggers = bundle.triggers
+    .filter((trigger) => bundle.draft !== true || trigger.kind === "github.workflow_dispatch")
+    .map((trigger) => ({
+      kind: trigger.kind,
+      ...TRIGGER_BINDINGS[trigger.kind],
+    }));
   if (triggers.length === 0) {
     throw new Error(`Task ${bundle.taskId} must declare at least one trigger`);
   }
@@ -169,9 +174,13 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
     throw new Error(`Task ${bundle.taskId} sets max-effect-operations without declaring any effect`);
   }
 
+  // Apply reads a manual run's target again to check the plan's binding, so it
+  // needs read access to every kind of target the workflow form offers.
+  const targetReadPermissions: GitHubPermissions[] = dispatchTargetKinds(bundle.triggers)
+    .map((target) => (target === "issue" ? { issues: "read" } : { "pull-requests": "read" }));
   const effectsPermissions = bundle.effects.length === 0
     ? orderPermissions({ "id-token": "write" })
-    : mergePermissions({ "id-token": "write" }, ...bundle.effects.map(effectPermissions));
+    : mergePermissions({ "id-token": "write" }, ...targetReadPermissions, ...bundle.effects.map(effectPermissions));
 
   return {
     schemaVersion: "gardener.github-actions-task-plan/v1",
@@ -181,6 +190,8 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
     effectsPermissions,
     callerPermissions: mergePermissions(planningPermissions, effectsPermissions),
     triggers,
+    // Describes the bundle, not the rendered triggers: a draft still acts on
+    // pull requests when run by hand.
     requiresSameRepositoryGuard: bundle.triggers.some(
       (trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind),
     ),

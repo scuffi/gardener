@@ -1,4 +1,5 @@
 import {
+  dispatchTargetKinds,
   eventHeadIsSameRepository,
   normalizedPullRequest,
   operationOutputCatalog,
@@ -177,8 +178,8 @@ function assertOutcomeBinding(request: TaskRunRequestV1, outcome: TaskOutcomeV1)
 
 /** Labels carried by the resource this event is about, for `labelsAll` gating. */
 function eventLabels(event: NormalizedEventV1): string[] {
-  if ("issue" in event) return event.issue.labels;
-  if ("pullRequest" in event) return event.pullRequest.labels;
+  if ("issue" in event && event.issue !== undefined) return event.issue.labels;
+  if ("pullRequest" in event && event.pullRequest !== undefined) return event.pullRequest.labels;
   if ("discussion" in event) return event.discussion.labels;
   return [];
 }
@@ -206,6 +207,24 @@ function branchMatches(patterns: readonly string[], ref: string): boolean {
 }
 
 /**
+ * A manual run may target only the kinds of resource the task's other triggers
+ * act on, which are the only target inputs the generated form offers.
+ */
+function assertDispatchTargetOffered(
+  event: NormalizedEventV1,
+  triggers: TaskRunRequestV1["bundle"]["triggers"],
+): void {
+  if (event.kind !== "github.workflow_dispatch") return;
+  const offered = dispatchTargetKinds(triggers);
+  if (event.issue !== undefined && !offered.includes("issue")) {
+    throw new Error("Task has no issue trigger, so a manual run of it cannot target an issue");
+  }
+  if (event.pullRequest !== undefined && !offered.includes("pull_request")) {
+    throw new Error("Task has no pull request trigger, so a manual run of it cannot target a pull request");
+  }
+}
+
+/**
  * Confirms the admitted event satisfies one declared trigger exactly. Every
  * filter the compiler rendered into the workflow is re-checked here, because
  * the workflow is repository-editable and the runtime must not rely on it.
@@ -227,6 +246,7 @@ function assertTriggerMatches(
     return trigger.labelsAll.every((label) => labels.has(label));
   });
   if (!matches) throw new Error(`Task does not declare trigger ${event.kind}`);
+  assertDispatchTargetOffered(event, triggers);
 }
 
 /**

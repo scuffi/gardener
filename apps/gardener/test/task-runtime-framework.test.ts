@@ -229,7 +229,7 @@ describe("canonical task runtime framework", () => {
 
   it("rejects events that do not match the bundle's declared trigger filters", async () => {
     const bundle = structuredClone(inspectRepositoryFixtureBundle()) as TaskBundleV1;
-    bundle.triggers = [{ kind: "github.issue.opened", labelsAll: ["required"] }];
+    bundle.triggers = [{ kind: "github.issue.opened", labelsAll: ["required"] }, { kind: "github.workflow_dispatch" }];
     const input = await runRequest(bundle);
     input.event = event("github.issue.opened");
     input.bundleHash = await canonicalSha256(bundle);
