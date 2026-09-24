@@ -153,6 +153,9 @@ export async function applyOrderedPlan(input: {
           || entry.receipt.error?.code !== MATERIALIZATION_FAILED) {
           throw new Error("Prior effect receipt does not match the exact plan prefix");
         }
+        // Returned as-is because it is already terminal: the receipt schema
+        // only accepts a conflicted step as the last entry of a "stopped"
+        // receipt, so this prior cannot be one that asks for more work.
         return { receipt: input.prior, outputs };
       }
       const operation = materialized.operation;

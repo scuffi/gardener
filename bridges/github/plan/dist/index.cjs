@@ -41058,6 +41058,7 @@ function probeOperationShape(step) {
     kind: step.kind
   };
   const deferred = new Set(step.deferredPointers ?? []);
+  const wholeField = /* @__PURE__ */ new Set();
   for (const [pointer, reference] of Object.entries(step.references ?? {})) {
     if (isTemplateReference(reference)) {
       const template = readPayloadPointer(step.payload, pointer);
@@ -41076,6 +41077,7 @@ function probeOperationShape(step) {
       continue;
     }
     deferred.add(pointer);
+    wholeField.add(pointer);
     const type = step.resolveOutputType?.(reference);
     const sentinel = type === void 0 ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
     if (!setPointer(candidate, decodeJsonPointer(pointer), sentinel)) {
@@ -41093,8 +41095,9 @@ function probeOperationShape(step) {
   let suppressed = 0;
   for (const issue3 of probed.error.issues) {
     const pointer = encodeJsonPointer(issue3.path);
+    const scalarIntoStructure = wholeField.has(pointer) && issue3.code === "invalid_type" && (issue3.expected === "object" || issue3.expected === "array" || issue3.expected === "record");
     const isDeferred = pointer !== "" && [...deferred].some((prefix) => pointer === prefix || pointer.startsWith(`${prefix}/`));
-    if (isDeferred) continue;
+    if (isDeferred && !scalarIntoStructure) continue;
     if (messages.length >= MAX_PROBE_MESSAGES) {
       suppressed += 1;
       continue;

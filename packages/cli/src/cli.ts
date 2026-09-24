@@ -220,7 +220,7 @@ async function main(argv: string[]): Promise<void> {
       printBuildWarnings(build);
       const connection = await connectActions({ workspace, repository, repositoryRoot, sourceRoot });
       const doctor = await doctorActions(workspace, sourceRoot);
-      warnStaleBridgeRepositories(doctor);
+      warnDoctorFindings(doctor);
       console.log(JSON.stringify({ runtime, project, build, connection, doctor }, null, 2));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown repository error";
@@ -250,7 +250,7 @@ async function main(argv: string[]): Promise<void> {
   }
   if (command === "doctor") {
     const doctor = await doctorActions(requiredStringFlag(flags, "workspace"), sourceRoot);
-    warnStaleBridgeRepositories(doctor);
+    warnDoctorFindings(doctor);
     console.log(JSON.stringify(doctor, null, 2));
     return;
   }
@@ -288,7 +288,7 @@ async function main(argv: string[]): Promise<void> {
       sourceRoot,
     }), null, 2));
     const doctor = await doctorActions(workspace, sourceRoot);
-    warnStaleBridgeRepositories(doctor);
+    warnDoctorFindings(doctor);
     console.log(JSON.stringify(doctor, null, 2));
     return;
   }
@@ -371,12 +371,13 @@ async function operate(command: string, args: string[]): Promise<void> {
   throw new Error(`Unknown Gardener operation: ${command}`);
 }
 
-function warnStaleBridgeRepositories(doctor: Awaited<ReturnType<typeof doctorActions>>): void {
+function warnDoctorFindings(doctor: Awaited<ReturnType<typeof doctorActions>>): void {
   if (doctor.staleBridgeRepositories > 0) {
     console.error(terminal.caution(
       `${doctor.staleBridgeRepositories} enabled repository enrollment(s) differ from this CLI's bridge release; run gardener upgrade for each repository.`,
     ));
   }
+  for (const warning of doctor.pullRequestPermissionWarnings) console.error(terminal.caution(warning.message));
 }
 
 function printInit(result: { created: string[]; preserved: string[] }): void {

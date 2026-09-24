@@ -10,6 +10,7 @@ import {
   actionsResourceNames,
   destroyActions,
   ensurePublicRuntime,
+  pullRequestPermissionWarningsFor,
   renderRuntimeConfig,
   upgradeActions,
 } from "../src/actions-installation";
@@ -167,5 +168,36 @@ describe("Actions-native installation topology", () => {
     expect(JSON.stringify(runtime)).not.toMatch(/Gateway|ComputerWorkspace|GardenerGitHubEntrypoint|FlueGardenerHarnessAgent/);
 
     expect(runtime).not.toHaveProperty("services");
+  });
+});
+
+describe("pull request permission check", () => {
+  const repositories = [
+    { repositoryId: "1", repository: "acme/opens", kinds: ["pull_request.open_draft", "issue.comment.create"] },
+    { repositoryId: "2", repository: "acme/reviews", kinds: ["pull_request.review.submit"] },
+    { repositoryId: "3", repository: "acme/allowed", kinds: ["pull_request.open_draft"] },
+    { repositoryId: "4", repository: "acme/unreadable", kinds: ["pull_request.open_draft"] },
+  ];
+  const settings: Record<string, unknown> = {
+    "1": { default_workflow_permissions: "read", can_approve_pull_request_reviews: false },
+    "2": { default_workflow_permissions: "read", can_approve_pull_request_reviews: false },
+    "3": { default_workflow_permissions: "read", can_approve_pull_request_reviews: true },
+  };
+
+  it("warns for each repository whose tasks need the setting while it is off or unreadable", () => {
+    const read = vi.fn((repositoryId: string) => {
+      if (!(repositoryId in settings)) throw new Error("HTTP 403");
+      return settings[repositoryId];
+    });
+    const warnings = pullRequestPermissionWarningsFor(repositories, read);
+    expect(read.mock.calls.map(([id]) => id)).toEqual(["1", "2", "3", "4"]);
+    expect(warnings.map((warning) => warning.repository)).toEqual(["acme/opens", "acme/reviews", "acme/unreadable"]);
+    expect(warnings[0]?.message).toMatch(/acme\/opens has tasks that open pull requests, but "Allow GitHub Actions to create and approve pull requests .*" is off/);
+    expect(warnings[1]?.message).toContain("approve pull requests");
+    expect(warnings[2]?.message).toMatch(/could not confirm/);
+  });
+
+  it("stays quiet when no repository needs it", () => {
+    expect(pullRequestPermissionWarningsFor([], () => { throw new Error("not called"); })).toEqual([]);
   });
 });

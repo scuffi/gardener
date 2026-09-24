@@ -22,7 +22,8 @@ take these three flags:
   approve pull requests** in the customer repository's **Settings → Actions → General → Workflow
   permissions**. It is off by default for new repositories. Without it, apply stops at the
   pull-request step with `GitHub Actions is not permitted to create or approve pull requests`,
-  and rerunning the failed job after enabling it resumes from that step. Leave the default workflow
+  and rerunning the failed job after enabling it resumes from that step. `doctor`, which `up` and
+  `upgrade` also run, warns when the setting is off. Leave the default workflow
   permissions at read-only: each generated workflow requests exactly the permissions its task needs.
 
 ## Install
@@ -45,7 +46,7 @@ its own:
 | `build` | Compiles tasks, writes the lock file and one workflow per task | None |
 | `deploy` | Creates the D1 database, applies the migration, deploys the Worker, checks `/health` | Cloudflare |
 | `connect` | Enrolls the repository and its bundle hashes, sets `GARDENER_RUNTIME_URL` | D1, GitHub variable |
-| `doctor` | Verifies the installation and reports enrollments whose workflow pin differs from this CLI | None |
+| `doctor` | Verifies the installation. Warns about enrollments whose workflow pin differs from this CLI, and repositories whose tasks open or approve pull requests without the setting below | None |
 
 `init` and `build` never overwrite existing task files or workflows that Gardener did not generate.
 Rebuilding unchanged tasks produces byte-identical output. No command commits or pushes, so review

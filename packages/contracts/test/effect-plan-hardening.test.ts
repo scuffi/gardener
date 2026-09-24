@@ -547,6 +547,27 @@ describe("placeholders in written text", () => {
     }).success).toBe(true);
   });
 
+  it("refuses a whole-field reference where an object or array is required", () => {
+    const review = (references: Record<string, unknown>) => taskEffectPlanV1Schema.safeParse(plan({
+      operations: [planOperation(), planOperation({
+        stepName: "review",
+        operationId: "run:1:2:review",
+        kind: "pull_request.review.submit",
+        payload: {
+          pullNumber: 8, expectedHeadSha: sha1, expectedBaseRef: "main", expectedBaseSha: sha1, expectedState: "open",
+          expectedDraft: false, expectedPullUpdatedAt: now, event: "comment", body: "Review.",
+          comments: [{ path: "src/a.ts", line: 1, side: "RIGHT", body: "Here." }],
+        },
+        references,
+      })],
+    }));
+    const structural = review({ "/comments/0": { step: "comment", output: "commentUrl" } });
+    expect(structural.success).toBe(false);
+    expect(structural.error?.issues.some((issue) => issue.message.includes("/comments/0: "))).toBe(true);
+    // A scalar field under the same array is still fine to fill.
+    expect(review({ "/comments/0/body": { step: "comment", output: "commentUrl" } }).success).toBe(true);
+  });
+
   it("renders a string output at least as long as the longest string it can carry", () => {
     // pull_request.update publishes the pull request's title, which may be 256 characters.
     expect(operationOutputRenderedMaxLength("string")).toBeGreaterThanOrEqual(256);

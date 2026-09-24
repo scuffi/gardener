@@ -1124,6 +1124,7 @@ export function probeOperationShape(step: ProbeOperationShapeInput): readonly st
     kind: step.kind,
   };
   const deferred = new Set<string>(step.deferredPointers ?? []);
+  const wholeField = new Set<string>();
   for (const [pointer, reference] of Object.entries(step.references ?? {})) {
     if (isTemplateReference(reference)) {
       // With every placeholder typed, the text is validated at the longest it
@@ -1146,6 +1147,7 @@ export function probeOperationShape(step: ProbeOperationShapeInput): readonly st
       continue;
     }
     deferred.add(pointer);
+    wholeField.add(pointer);
     const type = step.resolveOutputType?.(reference);
     const sentinel = type === undefined ? PROBE_UNTYPED_SENTINEL : operationOutputSentinel(type);
     if (!setPointer(candidate, decodeJsonPointer(pointer), sentinel)) {
@@ -1168,9 +1170,15 @@ export function probeOperationShape(step: ProbeOperationShapeInput): readonly st
   let suppressed = 0;
   for (const issue of probed.error.issues) {
     const pointer = encodeJsonPointer(issue.path);
+    // Every output is a scalar, so a whole-field reference to a position that
+    // must hold an object or an array can never materialize, whatever value
+    // the step produces. Unlike other issues at a reference, that one is real.
+    const scalarIntoStructure = wholeField.has(pointer)
+      && issue.code === "invalid_type"
+      && (issue.expected === "object" || issue.expected === "array" || issue.expected === "record");
     const isDeferred = pointer !== ""
       && [...deferred].some((prefix) => pointer === prefix || pointer.startsWith(`${prefix}/`));
-    if (isDeferred) continue;
+    if (isDeferred && !scalarIntoStructure) continue;
     if (messages.length >= MAX_PROBE_MESSAGES) {
       suppressed += 1;
       continue;

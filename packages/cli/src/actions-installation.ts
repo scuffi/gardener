@@ -364,6 +364,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   enabledRepositories: number;
   enabledTasks: number;
   staleBridgeRepositories: number;
+  pullRequestPermissionWarnings: PullRequestPermissionWarning[];
 }> {
   const manifest = await requiredActionsManifest(workspace);
   if (selectedAccountId(resolve(sourceRoot)) !== manifest.cloudflare.accountId) {
@@ -395,6 +396,16 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   const counts = queryDoctorD1(resolve(sourceRoot), manifest,
     `SELECT (SELECT COUNT(*) FROM actions_repository_enrollments) AS repositories,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1) AS enabled_repositories,(SELECT COUNT(*) FROM actions_repository_tasks WHERE enabled=1) AS enabled_tasks,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1 AND plan_job_workflow_ref<>${sql(DEFAULT_WORKFLOW_REF)}) AS stale_bridge_repositories;`)[0];
   if (!counts) throw new Error("Gardener D1 did not return operational counts");
+  const pullRequestTasks = queryDoctorD1(resolve(sourceRoot), manifest,
+    `SELECT e.repository_id AS repository_id, e.owner_login || '/' || e.repository_name AS full_name, group_concat(DISTINCT effect.value) AS kinds FROM actions_repository_enrollments e JOIN actions_repository_tasks t ON t.repository_id=e.repository_id AND t.enabled=1 JOIN actions_task_bundles b ON b.bundle_hash=t.bundle_hash JOIN json_each(b.bundle_json, '$.effects') effect WHERE e.enabled=1 AND effect.value IN (${PULL_REQUEST_PERMISSION_KINDS.map(sql).join(",")}) GROUP BY e.repository_id ORDER BY full_name;`);
+  const pullRequestPermissionWarnings = pullRequestPermissionWarningsFor(pullRequestTasks.map((row) => ({
+    repositoryId: String(row.repository_id),
+    repository: String(row.full_name),
+    kinds: String(row.kinds ?? "").split(",").filter((kind) => kind !== ""),
+  })), (repositoryId) => {
+    const result = runCommand("gh", ["api", `repositories/${repositoryId}/actions/permissions/workflow`], { cwd: resolve(sourceRoot), quiet: true, timeoutMs: 30_000 });
+    return JSON.parse(result.stdout) as unknown;
+  });
   if (manifest.cloudflare.runnerAccessBypassAppId) {
     const record = objectResult(await cloudflareApi(
       manifest.cloudflare.accountId,
@@ -422,7 +433,54 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
     enabledRepositories: Number(counts.enabled_repositories),
     enabledTasks: Number(counts.enabled_tasks),
     staleBridgeRepositories: Number(counts.stale_bridge_repositories),
+    pullRequestPermissionWarnings,
   };
+}
+
+/**
+ * Effects GitHub refuses to a workflow's token unless the repository allows
+ * Actions to create and approve pull requests. A review only needs it to
+ * approve, but the task may approve, so it is checked too.
+ */
+const PULL_REQUEST_PERMISSION_KINDS = ["pull_request.open_draft", "pull_request.review.submit"] as const;
+
+export interface PullRequestPermissionWarning {
+  repository: string;
+  kinds: string[];
+  message: string;
+}
+
+/**
+ * Warns about each repository whose enabled tasks need the "Allow GitHub
+ * Actions to create and approve pull requests" setting while it is off or
+ * cannot be read. New repositories have it off, and without it apply stops at
+ * the pull request step.
+ */
+export function pullRequestPermissionWarningsFor(
+  repositories: ReadonlyArray<{ repositoryId: string; repository: string; kinds: readonly string[] }>,
+  readWorkflowPermissions: (repositoryId: string) => unknown,
+): PullRequestPermissionWarning[] {
+  const warnings: PullRequestPermissionWarning[] = [];
+  for (const { repositoryId, repository, kinds } of repositories) {
+    const needs = kinds.includes("pull_request.open_draft") ? "open pull requests" : "approve pull requests";
+    let allowed: boolean | null;
+    try {
+      const value = readWorkflowPermissions(repositoryId) as { can_approve_pull_request_reviews?: unknown } | null;
+      allowed = typeof value?.can_approve_pull_request_reviews === "boolean" ? value.can_approve_pull_request_reviews : null;
+    } catch {
+      allowed = null;
+    }
+    if (allowed === true) continue;
+    const setting = "Allow GitHub Actions to create and approve pull requests (Settings → Actions → General)";
+    warnings.push({
+      repository,
+      kinds: [...kinds],
+      message: allowed === false
+        ? `${repository} has tasks that ${needs}, but "${setting}" is off. Turn it on, or apply will stop at that step.`
+        : `${repository} has tasks that ${needs}; could not confirm "${setting}" is on.`,
+    });
+  }
+  return warnings;
 }
 
 export async function destroyActions(input: {
