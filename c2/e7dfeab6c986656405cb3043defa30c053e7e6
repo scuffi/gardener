@@ -1,0 +1,99 @@
+.github/dependabot.yml
+  s_de0b486c128948::t_2c50551f09fbcb 12,16,18-20
+SECURITY.md
+  s_de0b486c128948::t_1b3f5cbcfaefc6 3,5-7,9,11-14,16-17,19,21-37,39-41,43-132,134-143
+apps/gardener/migrations/0001_actions_baseline.sql
+  s_de0b486c128948::t_7363331b6240e5 1
+apps/gardener/package.json
+  s_de0b486c128948::t_8c89d283ce6fee 9-11,21,25
+apps/gardener/src/harness/flue/bounded-cloudflare-provider.ts
+  s_de0b486c128948::t_0e3d1431abfd4c 7,142
+apps/gardener/src/harness/flue/input-budget.ts
+  s_de0b486c128948::t_a2d0940ee8065c 6
+apps/gardener/src/harness/validation.ts
+  s_de0b486c128948::t_3e5e2d5339e403 54
+apps/gardener/test/actions-baseline.test.ts
+  s_de0b486c128948::t_e9bc903c029f48 7
+apps/gardener/test/fixture-bundle.ts
+  s_de0b486c128948::t_5ab4d3db9c8d83 4
+apps/gardener/test/harness-contract.test.ts
+  s_de0b486c128948::t_5c0c999bb69d21 51-52
+apps/gardener/test/task-bundles.test.ts
+  s_de0b486c128948::t_7203febd475f9e 5,7
+apps/gardener/test/task-capture-admission.test.ts
+  s_de0b486c128948::t_10fcf7c9898481 21
+apps/gardener/test/task-effect-plan.test.ts
+  s_de0b486c128948::t_7c2d994b3f5151 19
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_24134b1aa68ebc 10
+apps/gardener/test/task-provider-read.test.ts
+  s_de0b486c128948::t_09c3d298390196 5
+apps/gardener/test/task-runtime-framework.test.ts
+  s_de0b486c128948::t_d45f4f2c7f7ea3 15
+apps/gardener/wrangler.jsonc
+  s_de0b486c128948::t_6e3454d91b4485 3,11,13,30
+bridges/github/README.md
+  s_de0b486c128948::t_d81fc12131df36 1,3-4,6-10,12-14
+docs/architecture.md
+  s_de0b486c128948::t_125f5593c23998 1,3-4,6-11,13,16-28,31-39,41,43-45,47-49,51-53,55,57-72,74-76,78,80-81,83-84,86-89,91,93-94,96-105,107-108,110-112,114,116,118-125,127,129,131,133-135,137-139,141-142,144,146-149
+docs/operations.md
+  s_de0b486c128948::t_200fde72ff6329 1,3-4,6-10,12,14,16-20,22,27-28,33-55,58-59,62-66,68,71-73,76-86,88,90,92-94,97-100,102-107,110-111,114-135,137-138,142,145-151,155-176
+docs/task-authoring.md
+  s_de0b486c128948::t_24aab44df2d5ea 1,239,241-250
+docs/version-policy.md
+  s_de0b486c128948::t_28b3098c53cd7f 1-17
+package.json
+  s_de0b486c128948::t_6e034c7391528c 9-12,14,16,18,21
+packages/cli/scripts/prepare-package.mjs
+  s_de0b486c128948::t_6e2618db869c11 10,17,19-20,22,24
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_421ee75cc22781 97,105,436,438,519,522,532,535
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_25d8ad103e6ba2 29,34,40,79
+packages/cli/test/actions-installation.test.ts
+  s_de0b486c128948::t_580d1f7017c392 89-92,95,153,159,162
+packages/cli/test/cli.test.ts
+  s_de0b486c128948::t_e01a50f4d3fc3e 11,170,173,198,200-206
+packages/contracts/src/identity.ts
+  s_de0b486c128948::t_11df7c6ad65ff8 3
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_51f62e4bf869b1 70,127
+packages/contracts/src/repository.ts
+  s_de0b486c128948::t_39c24c2ccba51e 7-8
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_7b2c5f69a8db2f 1291
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_371ec7f16380d4 68,430
+packages/core/test/stable.test.ts
+  s_de0b486c128948::t_fc839fd962deb3 2,4-20
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_72a972c20b0cd6 19,21-25,1078,1114,1179,1181,1184-1187,1191
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_134f60522f8e04 1,22-32,134,280,865-882,887,1200,1386
+pnpm-lock.yaml
+  s_de0b486c128948::t_f7d28d694dfbbe 12-13,22,53,55-56,59,68,71,74,80,530-531,1620-1622,1624-1629,1631,3248,3256,3611-3612,3617,3639,3644,3646,3668,3674-3675,3681,3689,3694,3699,3701-3702,3901-3902,3924,3928,3932,4086-4087,4092,4097,4102,4107,4140-4141,4184,4192-4193,4278,4285,4355,4357-4358,4384,4395-4396,4465,4472,4496-4497,4501,4508,4513,4524,4555-4556,4565-4566,4575,4607,4641-4642,4674-4675,4710,4720,4728-4729,4746-4747,4754,4783-4784,4933,4943,4962,5064,5092-5093,5104-5105,5114-5115,5119-5120,5124-5125,5161,5206,5401-5402,5534,5567-5568,5588,5598-5599,5601-5602,5665,5673-5674,5740-5741,5746,5752,5754,5763-5764,5827-5828,5838,5847,5866-5867,5952,5957,6067-6068,6072-6073,6075-6076,6110,6115,6145-6146,6151,6160,6165,6170,6184,6196,6229-6230,6242-6243,6263,6268,6274,6281,6304,6310,6312,6324,6342,6345,6356,6391,6395-6396,6398-6399,6408,6417,6436,6447,6466-6467,6469-6470,6472-6473,6511-6512
+pnpm-workspace.yaml
+  s_de0b486c128948::t_7b3a98cdc5c310 9-10
+scripts/check-actions-runtime.mjs
+  s_de0b486c128948::t_57cfa6b0210b95 6
+scripts/check-cli-package.mjs
+  s_de0b486c128948::t_284e513370b03f 13-14,31
+scripts/check-versions.mjs
+  s_de0b486c128948::t_ff3df02c5cbd02 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c2e7dfeab6c986656405cb3043defa30c053e7e6",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
