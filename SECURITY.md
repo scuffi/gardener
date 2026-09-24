@@ -80,12 +80,11 @@ A task that commits code does not put file bytes in its plan. When a commit is p
 bridge captures the working tree changes into a separate artifact. The manifest records each path's status, mode,
 size, and SHA-256, and the plan binds the manifest digest.
 
-A capture may not write any of these paths:
+A capture may not write these paths:
 
-- `.git/`;
-- `.github/workflows/`;
-- `.github/actions/`;
-- `.gardener/`.
+- anything under `.git/`, `.github/workflows/`, `.github/actions/`, or `.gardener/`;
+- `CODEOWNERS`, `.github/CODEOWNERS`, and `docs/CODEOWNERS`;
+- `.github/dependabot.yml` and `.github/dependabot.yaml`.
 
 Apply verifies the artifact against the plan, then re-verifies each file's size and digest as it
 uploads the file.
@@ -140,4 +139,5 @@ A `CLOUDFLARE_API_TOKEN`, when provided for Cloudflare Access, is used in memory
 written to disk, D1, the Worker, GitHub, or command arguments.
 
 If you suspect compromise, disable the repository with `gardener repository disable`. Preserve the
-D1 database, because its audit tables are append-only evidence.
+D1 database. The database blocks updates and deletes on the run audit table, `actions_task_audit`, so
+its rows serve as evidence.

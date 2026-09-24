@@ -230,7 +230,8 @@ which is why the capture manifest has no file-count or change-byte ceiling of it
 
 ### Protected paths are never writable by a captured change
 
-A captured change may not write `.git/`, `.github/workflows/`, `.github/actions/`, or `.gardener/`.
+A captured change may not write anything under `.git/`, `.github/workflows/`, `.github/actions/`, or
+`.gardener/`, nor any `CODEOWNERS` file or `.github/dependabot.yml`/`.yaml`.
 A materialized `commit.create` lists no paths in its own payload, so the instance policy's path
 rules have nothing to inspect at plan time; the manifest is the one place where the full path set is
 known before anything is applied, and it is rejected there. Without this, a run could rewrite the
