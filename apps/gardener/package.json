@@ -18,7 +18,7 @@
     "@gardener/protocol": "workspace:*",
     "capnweb": "0.12.0",
     "jose": "6.2.12",
-    "valibot": "1.4.2"
+    "valibot": "1.5.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.54.7",
