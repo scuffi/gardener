@@ -1,0 +1,27 @@
+docs/task-authoring.md
+  s_de0b486c128948::t_b0e877f9086fb3 32,267-278
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_de0b486c128948::t_a88c7c008c6b6d 325-329,345-354
+apps/gardener/test/task-flue-agent.test.ts
+  s_de0b486c128948::t_18b8833d2ca6dc 2,22,113,416-440
+README.md
+  s_de0b486c128948::t_e7802cb3699389 95
+packages/cli/src/project.ts
+  s_de0b486c128948::t_db64371024a3eb 74,111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "daa7324ecf56021364b38454f68342157883673d",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
