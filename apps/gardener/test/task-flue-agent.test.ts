@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { taskEffectProposalV1Schema } from "@gardener/contracts";
+import { taskEffectProposalV1Schema, taskLimitsV1Schema } from "@gardener/contracts";
 import type { HarnessRequest } from "../src/harness";
 
 const flue = vi.hoisted(() => ({
@@ -19,6 +19,7 @@ vi.mock("@flue/runtime/cloudflare", () => ({ extend: vi.fn(() => ({})) }));
 import {
   GardenerTaskFlueAgent,
   installGardenerTaskToolFacade,
+  MAX_TASK_RUNTIME_SECONDS,
 } from "../src/task-runtime/flue-agent";
 
 function request(): HarnessRequest {
@@ -109,7 +110,7 @@ describe("canonical task Flue agent", () => {
     expect(rendered).toContain(value.prompt);
     expect(rendered).toContain("Execution protocol");
     expect(GardenerTaskFlueAgent.agentName).toBe("gardener-task-harness");
-    expect(GardenerTaskFlueAgent.durability).toEqual({ maxAttempts: 3, timeoutMs: 300_000 });
+    expect(GardenerTaskFlueAgent.durability).toEqual({ maxAttempts: 3, timeoutMs: (MAX_TASK_RUNTIME_SECONDS + 60) * 1_000 });
     expect(flue.useTool).toHaveBeenCalledTimes(3);
 
     expect(tool("propose_effect")).toMatchObject({ durable: true });
@@ -410,6 +411,31 @@ describe("canonical task Flue agent", () => {
     expect(() => finish({
       response: { toolCalls: [{ tool: "finish_task", isError: false }, { tool: "finish_task", isError: false }], usage },
     })).toThrow(/task_has_multiple_terminal_outcomes/);
+  });
+
+  it("bounds input per request, not summed across turns, and output per run", () => {
+    const value = request();
+    flue.useInitialData.mockReturnValue({ request: value });
+    GardenerTaskFlueAgent();
+    const finish = flue.useAgentFinish.mock.calls.at(-1)![0];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const toolCalls = [{ tool: "finish_task", isError: false }];
+    const { maxInputTokens, maxOutputTokens } = value.budget;
+    // Every turn resends the conversation, so the run's summed input may exceed the per-request limit.
+    expect(() => finish({ response: { toolCalls, usage: { input: maxInputTokens * 3, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } }))
+      .not.toThrow();
+    expect(() => finish({ response: { toolCalls, usage: { input: 1, output: maxOutputTokens + 1, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } }))
+      .toThrow(/task_model_token_budget_exceeded/);
+    expect(warn).toHaveBeenCalledWith("gardener task finish refused", { taskId: expect.any(String), reason: "task_model_token_budget_exceeded" });
+    warn.mockRestore();
+  });
+
+  it("sets Flue's durability timeout past the longest runtime a bundle may declare", () => {
+    const limits = { runtimeSeconds: MAX_TASK_RUNTIME_SECONDS, maxTurns: 3, maxToolCalls: 3, inputTokens: 1_000, outputTokens: 100 };
+    expect(taskLimitsV1Schema.safeParse(limits).success).toBe(true);
+    expect(taskLimitsV1Schema.safeParse({ ...limits, runtimeSeconds: MAX_TASK_RUNTIME_SECONDS + 1 }).success).toBe(false);
+    expect((GardenerTaskFlueAgent as unknown as { durability: { timeoutMs: number } }).durability.timeoutMs)
+      .toBeGreaterThan(MAX_TASK_RUNTIME_SECONDS * 1_000);
   });
 
   it("fails closed when a tool-bearing task has no trusted runner facade", () => {

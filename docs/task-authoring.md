@@ -29,7 +29,7 @@ limits:
   max-turns: 16
   max-tool-calls: 12
   input-tokens: 60000
-  output-tokens: 4000
+  output-tokens: 16000
 ---
 Inspect the issue and repository evidence, then propose one concise issue comment.
 ```
@@ -263,6 +263,18 @@ on the account's `default` AI Gateway. See [Operations](operations.md#prerequisi
 ## Limits
 
 `runtime-seconds`, `max-turns`, `max-tool-calls`, `input-tokens`, and `output-tokens` are required.
+
+| Key | Meaning |
+| --- | --- |
+| `runtime-seconds` | Wall-clock limit for the whole run. |
+| `max-turns` | Maximum model responses in the run. |
+| `max-tool-calls` | Maximum tool calls in the run. |
+| `input-tokens` | Maximum context sent in any one model request, enforced before each request as a conservative byte ceiling (8 bytes per token). The conversation is resent every turn, so this bounds each request, not the run's total. |
+| `output-tokens` | Total the model may generate across the whole run, including any reasoning. |
+
+Reasoning models, including the default `@cf/zai-org/glm-5.3`, spend `output-tokens` while they
+think. Too small a budget cuts a response off before it calls a tool, and the run fails. The
+starter tasks use 16,000.
 
 Two optional effect-plan ceilings are also available:
 

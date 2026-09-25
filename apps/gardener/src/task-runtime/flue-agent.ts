@@ -322,9 +322,11 @@ export function GardenerTaskFlueAgent(): string {
     if (terminal.length === 0) refuse("task_completed_without_terminal_outcome");
     if (terminal.length !== 1) refuse("task_has_multiple_terminal_outcomes");
     if (response.toolCalls.length > request.budget.maxToolCalls) refuse("task_tool_budget_exceeded");
-    if (inputTokens > request.budget.maxInputTokens || response.usage.output > request.budget.maxOutputTokens) {
-      refuse("task_model_token_budget_exceeded");
-    }
+    // `input-tokens` bounds each request's context, which the bounded provider
+    // enforces before every call; summing it across turns would count the
+    // resent conversation again on every turn. `output-tokens` is a whole-run
+    // budget, also enforced by the provider; this is the backstop.
+    if (response.usage.output > request.budget.maxOutputTokens) refuse("task_model_token_budget_exceeded");
   });
 
   return [
@@ -340,7 +342,16 @@ export function GardenerTaskFlueAgent(): string {
 
 GardenerTaskFlueAgent.agentName = "gardener-task-harness";
 GardenerTaskFlueAgent.initialData = v.object({ request: v.unknown() });
-GardenerTaskFlueAgent.durability = { maxAttempts: 3, timeoutMs: 300_000 };
+/**
+ * The longest runtime a task bundle may declare (`limits.runtimeSeconds` in
+ * the contract). Flue's durability timeout is static per agent, so it is set
+ * past the longest possible run; each run's own deadline is enforced by
+ * Gardener (the bounded provider, the session's read signal and `runTask`).
+ * A shorter value here cut off valid runs: it was once 5 minutes while tasks
+ * could run for 8.
+ */
+export const MAX_TASK_RUNTIME_SECONDS = 3_600;
+GardenerTaskFlueAgent.durability = { maxAttempts: 3, timeoutMs: (MAX_TASK_RUNTIME_SECONDS + 60) * 1_000 };
 
 export const cloudflare = extend<CloudflareAgentLike, TaskFlueEnv>({
   base(Base) {

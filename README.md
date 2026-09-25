@@ -92,7 +92,7 @@ limits:
   max-turns: 16
   max-tool-calls: 12
   input-tokens: 60000
-  output-tokens: 4000
+  output-tokens: 16000
 ---
 Read the issue and the relevant code. If the report is missing reproduction steps, expected
 behaviour, or version information, post one comment asking for exactly what is missing.

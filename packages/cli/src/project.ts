@@ -71,7 +71,7 @@ limits:
   max-turns: 16
   max-tool-calls: 12
   input-tokens: 60000
-  output-tokens: 4000
+  output-tokens: 16000
 ---
 Inspect the issue and the repository's relevant conventions.
 
@@ -108,7 +108,7 @@ limits:
   max-turns: 16
   max-tool-calls: 12
   input-tokens: 60000
-  output-tokens: 4000
+  output-tokens: 16000
 ---
 Inspect the issue and the repository's documentation structure.
 
