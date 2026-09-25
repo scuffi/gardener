@@ -39,5 +39,13 @@ export function boundedTaskLimitFailure(cause: unknown): { code: "budget-exceede
 function errorChain(value: unknown, depth = 0): string {
   if (depth > 3) return "";
   if (value instanceof Error) return `${value.message}\n${errorChain(value.cause, depth + 1)}`;
-  return typeof value === "string" ? value : "";
+  if (typeof value === "string") return value;
+  // Flue delivers a failed submission's cause as a serialized error object
+  // ({ name, message, type, meta }), not an Error, once it crosses the agent's
+  // Durable Object boundary.
+  if (value !== null && typeof value === "object") {
+    const { message, meta } = value as { message?: unknown; meta?: { reason?: unknown } };
+    return [message, meta?.reason].filter((part): part is string => typeof part === "string").join("\n");
+  }
+  return "";
 }

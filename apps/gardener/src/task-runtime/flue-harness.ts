@@ -55,27 +55,12 @@ export class FlueTaskHarness implements AgentHarness {
   async read(submission: HarnessSubmission, options?: HarnessReadOptions): Promise<HarnessOutcome> {
     assertHarnessSubmission(submission, { id: "flue", adapterVersion: HARNESS_ADAPTER_VERSIONS.flue });
     const handle = init(GardenerTaskFlueAgent, { id: submission.runId });
+    let reply: AgentReply;
     try {
-      const reply = await handle.read(
+      reply = await handle.read(
         submission.submissionId,
         options?.signal ? { signal: options.signal } : undefined,
       );
-      const result = oneTaskOutcome(reply);
-      return {
-        schemaVersion: "gardener.harness.outcome/v1",
-        harness: submission.harness,
-        runId: submission.runId,
-        requestId: submission.requestId,
-        submissionId: submission.submissionId,
-        status: "completed",
-        result: {
-          kind: "result",
-          summary: taskResultSummary(result),
-          data: result,
-        },
-        usage: replyUsage(reply),
-        events: [],
-      };
     } catch (error) {
       if (isSignalAbort(error, options?.signal)) {
         await handle.abort().catch(() => undefined);
@@ -90,6 +75,15 @@ export class FlueTaskHarness implements AgentHarness {
           usage: emptyUsage(),
           events: [],
         };
+      }
+      if (!(error instanceof AgentRunError)) {
+        // The agent did not settle: waiting on it failed, for example a failed
+        // long-poll. That says nothing about the task, so it must not become a
+        // failed run. Propagate so the runner reconnects and resumes the wait
+        // from a fresh request, which is how the D1 "subrequest depth" failures
+        // seen mid-run recover.
+        console.error("Gardener task Flue read interrupted", describeReadFailure(error));
+        throw new Error("Waiting for the task agent was interrupted; reconnect to resume", { cause: error });
       }
       console.error("Gardener task Flue read failed", describeReadFailure(error));
       const cancelled = error instanceof AgentRunError && error.outcome === "aborted";
@@ -112,6 +106,24 @@ export class FlueTaskHarness implements AgentHarness {
         events: [],
       };
     }
+    // Parsed outside the try, so a settled reply can never be mistaken for an
+    // interrupted wait.
+    const result = oneTaskOutcome(reply);
+    return {
+      schemaVersion: "gardener.harness.outcome/v1",
+      harness: submission.harness,
+      runId: submission.runId,
+      requestId: submission.requestId,
+      submissionId: submission.submissionId,
+      status: "completed",
+      result: {
+        kind: "result",
+        summary: taskResultSummary(result),
+        data: result,
+      },
+      usage: replyUsage(reply),
+      events: [],
+    };
   }
 
   async cancel(request: HarnessCancelRequest): Promise<HarnessCancelResult> {

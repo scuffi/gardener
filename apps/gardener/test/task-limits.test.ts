@@ -19,6 +19,15 @@ describe("Actions task hard limits", () => {
       cause: new Error("Flue model input exceeds its immutable 8000-byte safety limit"),
     }))).toEqual({ code: "budget-exceeded", message: "Task model-input limit was exceeded" });
     expect(boundedTaskLimitFailure(new Error("Workers AI request failed: private detail"))).toBeNull();
+    // Flue's serialized settlement cause is a plain object.
+    expect(boundedTaskLimitFailure({ message: "dispatch(x) failed: Gardener native profile permits at most 12 model turns" }))
+      .toEqual({ code: "budget-exceeded", message: "Task model-turn limit was exceeded" });
+    expect(boundedTaskLimitFailure({ message: 42, meta: { reason: "Gardener model runtime budget expired" } }))
+      .toEqual({ code: "budget-exceeded", message: "Task model-runtime limit was exceeded" });
+    expect(boundedTaskLimitFailure(new Error("outer", { cause: { message: "Gardener model output-token budget is exhausted" } })))
+      .toEqual({ code: "budget-exceeded", message: "Task model-output limit was exceeded" });
+    expect(boundedTaskLimitFailure({ message: "Workers AI request failed" })).toBeNull();
+    expect(boundedTaskLimitFailure(null)).toBeNull();
   });
 
   it("computes the immutable remaining runtime and rejects malformed deadlines", () => {
