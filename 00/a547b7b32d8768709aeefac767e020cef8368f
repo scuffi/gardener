@@ -1,0 +1,25 @@
+docs/architecture.md
+  s_de0b486c128948::t_ba5e96142858d0 161
+docs/operations.md
+  s_de0b486c128948::t_2291360a14cf2e 18-20
+docs/task-authoring.md
+  s_de0b486c128948::t_53c52bb5a29855 236,239-242,259
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_992b9d349f2a8d 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "00a547b7b32d8768709aeefac767e020cef8368f",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
