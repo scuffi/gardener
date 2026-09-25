@@ -36,6 +36,59 @@ export function boundedTaskLimitFailure(cause: unknown): { code: "budget-exceede
   return null;
 }
 
+/**
+ * Explains a failed agent run in one fixed sentence for the Actions log and
+ * the audit row. Only these fixed strings are ever returned, plus an HTTP
+ * status number, so provider response bodies, prompts and repository content
+ * never leave the Worker. Unrecognised failures return null and keep the
+ * generic message.
+ */
+export function classifyTaskFailure(cause: unknown): { code: "budget-exceeded" | "invalid-outcome" | "provider-error"; message: string } | null {
+  const limit = boundedTaskLimitFailure(cause);
+  if (limit) return limit;
+  const detail = errorChain(cause);
+  if (detail.includes("task_completed_without_terminal_outcome")) {
+    return {
+      code: "invalid-outcome",
+      message: "The model stopped without calling finish_task. It may have run out of output tokens; consider raising output-tokens",
+    };
+  }
+  if (detail.includes("task_has_multiple_terminal_outcomes")) {
+    return { code: "invalid-outcome", message: "The model called finish_task more than once" };
+  }
+  if (detail.includes("task_tool_budget_exceeded")) {
+    return { code: "budget-exceeded", message: "Task tool-call limit was exceeded" };
+  }
+  if (detail.includes("task_model_token_budget_exceeded")) {
+    return { code: "budget-exceeded", message: "Task model-output limit was exceeded" };
+  }
+  const status = providerHttpStatus(detail);
+  if (status !== null) return { code: "provider-error", message: providerFailureMessage(status) };
+  return null;
+}
+
+/** The HTTP status of a failed model-provider request, if the failure reports one. */
+function providerHttpStatus(detail: string): number | null {
+  const match = /AI binding request failed with (\d{3})\b/.exec(detail) ?? /"httpCode":\s*(\d{3})\b/.exec(detail);
+  if (!match) return null;
+  const status = Number(match[1]);
+  return status >= 400 && status <= 599 ? status : null;
+}
+
+function providerFailureMessage(status: number): string {
+  if (status === 401 || status === 403) {
+    return `The model provider rejected the request (HTTP ${status}). Check the provider keys on the account's default AI Gateway`;
+  }
+  if (status === 402) {
+    return "AI Gateway refused the request for insufficient balance (HTTP 402). Add a provider key or credit to the account's default AI Gateway";
+  }
+  if (status === 404) return "The model provider did not find the model (HTTP 404). Check the task's model setting";
+  if (status === 408 || status === 504) return `The model provider timed out (HTTP ${status})`;
+  if (status === 429) return "The model provider rate-limited the request (HTTP 429)";
+  if (status >= 500) return `The model provider failed (HTTP ${status})`;
+  return `The model provider rejected the request (HTTP ${status})`;
+}
+
 function errorChain(value: unknown, depth = 0): string {
   if (depth > 3) return "";
   if (value instanceof Error) return `${value.message}\n${errorChain(value.cause, depth + 1)}`;

@@ -1,6 +1,6 @@
 import { AgentRunError, init, type AgentReply } from "@flue/runtime";
 import { GardenerTaskFlueAgent } from "./flue-agent";
-import { boundedTaskLimitFailure } from "./task-limits";
+import { classifyTaskFailure } from "./task-limits";
 import {
   HARNESS_ADAPTER_VERSIONS,
   assertHarnessRequest,
@@ -87,9 +87,7 @@ export class FlueTaskHarness implements AgentHarness {
       }
       console.error("Gardener task Flue read failed", describeReadFailure(error));
       const cancelled = error instanceof AgentRunError && error.outcome === "aborted";
-      const limitFailure = !cancelled && error instanceof AgentRunError
-        ? boundedTaskLimitFailure(error.cause)
-        : null;
+      const knownFailure = cancelled ? null : classifyTaskFailure(error.cause);
       return {
         schemaVersion: "gardener.harness.outcome/v1",
         harness: submission.harness,
@@ -98,8 +96,8 @@ export class FlueTaskHarness implements AgentHarness {
         submissionId: submission.submissionId,
         status: cancelled ? "cancelled" : "failed",
         error: harnessError(
-          cancelled ? "cancelled" : limitFailure?.code ?? "provider-error",
-          cancelled ? "Task execution was cancelled" : limitFailure?.message ?? "Flue task execution failed",
+          cancelled ? "cancelled" : knownFailure?.code ?? "provider-error",
+          cancelled ? "Task execution was cancelled" : knownFailure?.message ?? "Flue task execution failed",
           false,
         ),
         usage: emptyUsage(),

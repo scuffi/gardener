@@ -781,7 +781,21 @@ export class TaskRunnerSession extends DurableObject<Env> {
       this.#db().prepare(
         "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
         "SELECT ?,'task.settled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.settled')",
-      ).bind(identity.sessionId, JSON.stringify({ status: settled.outcome.status, bundleHash }), identity.sessionId),
+      ).bind(identity.sessionId, JSON.stringify({
+        status: settled.outcome.status,
+        bundleHash,
+        // A failed run records why, so the audit trail explains it without Worker logs.
+        // Every audit message is a fixed sentence: a rejected plan's detail can quote
+        // model-authored step names, so it stays in outcome_json only.
+        ...(settled.outcome.status === "failed"
+          ? {
+            code: settled.outcome.error.code,
+            message: settled.outcome.error.code === "effect.plan_rejected"
+              ? "The proposed effect plan was rejected"
+              : settled.outcome.error.message,
+          }
+          : {}),
+      }), identity.sessionId),
     ]);
     return settled.terminal;
   }
