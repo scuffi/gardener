@@ -1,7 +1,15 @@
 import { lstat, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { z } from "zod";
-import { dispatchTargetKinds } from "@gardener/contracts";
+import {
+  authoredTriggerSubject,
+  dispatchTargetKinds,
+  githubHandleV1Schema,
+  isAuthoredTriggerKind,
+  isEditedTriggerKind,
+  maintainerAssociations,
+  type AuthoredTriggerKindV1,
+} from "@gardener/contracts";
 import {
   compileGitHubActionsTask,
   GITHUB_ACTIONS_TARGET,
@@ -23,6 +31,11 @@ const projectSchema = z.strictObject({
       /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/\.github\/workflows\/[A-Za-z0-9_.\/-]+\.ya?ml@[0-9a-f]{40}$/,
     ),
   }),
+  /**
+   * The GitHub handle people @mention to reach this project's tasks, such as a
+   * bot account. `mentions: [self]` in a TASK.md resolves to it.
+   */
+  handle: z.string().transform((value) => value.replace(/^@/, "").toLowerCase()).pipe(githubHandleV1Schema).optional(),
 });
 
 interface BuiltTask extends CompiledTask {
@@ -205,7 +218,7 @@ export async function buildProject(input: { repositoryRoot: string }): Promise<P
       throw new Error(`${relative(root, taskPath)} is not a regular file`);
     }
     const source = relative(gardenerDirectory, taskPath).replaceAll("\\", "/");
-    const compiled = await compileTaskSource(await readFile(taskPath, "utf8"), source);
+    const compiled = await compileTaskSource(await readFile(taskPath, "utf8"), source, project.handle === undefined ? {} : { handle: project.handle });
     if (taskIds.has(compiled.bundle.taskId)) throw new Error(`Duplicate task id: ${compiled.bundle.taskId}`);
     taskIds.add(compiled.bundle.taskId);
     const workflow = `.github/workflows/gardener-${workflowSlug(compiled.bundle.taskId)}.yml`;
@@ -355,7 +368,45 @@ function renderTriggerCondition(binding: GitHubActionsTriggerBindingV1, task: Bu
       clauses.push(`contains(${binding.labelsExpression}, ${yamlSingleQuoted(label)})`);
     }
   }
+  if (trigger !== undefined && "authors" in trigger && isAuthoredTriggerKind(trigger.kind)) {
+    clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions, trigger.authors));
+  }
   return clauses.length === 1 ? clauses[0]! : `(${clauses.join(" && ")})`;
+}
+
+const SUBJECT_EXPRESSIONS: Record<(typeof authoredTriggerSubject)[AuthoredTriggerKindV1], string> = {
+  issue: "github.event.issue",
+  comment: "github.event.comment",
+  pullRequest: "github.event.pull_request",
+  review: "github.event.review",
+  discussion: "github.event.discussion",
+};
+
+/**
+ * Prefilters for `mentions` and `authors`. They skip the job for events that
+ * certainly don't match, so they must never exclude one that does: the Worker
+ * makes the exact decision (word boundaries, and whether an edit added the
+ * mention), and a run that passes here but not there completes as a skip.
+ */
+function authoredTriggerClauses(
+  kind: AuthoredTriggerKindV1,
+  mentions: readonly string[],
+  authors: "maintainers" | "any",
+): string[] {
+  const subject = SUBJECT_EXPRESSIONS[authoredTriggerSubject[kind]];
+  const clauses: string[] = [];
+  if (authors === "maintainers") {
+    clauses.push(`contains(fromJSON('${JSON.stringify(maintainerAssociations)}'), ${subject}.author_association)`);
+  }
+  if (mentions.length > 0) {
+    // contains() is case-insensitive, like GitHub mentions. Handles are
+    // letters, digits and hyphens, so they need no quoting.
+    const any = mentions.map((handle) => `contains(${subject}.body, '@${handle}')`);
+    clauses.push(any.length === 1 ? any[0]! : `(${any.join(" || ")})`);
+    // An edit can only add a mention if it changed the body.
+    if (isEditedTriggerKind(kind)) clauses.push("github.event.changes.body");
+  }
+  return clauses;
 }
 
 function renderJobCondition(task: BuiltTask): string {

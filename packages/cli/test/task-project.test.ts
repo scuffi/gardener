@@ -199,16 +199,16 @@ describe("TASK.md compiler", () => {
     );
     const compiled = await compileTaskSource(multi);
     expect(compiled.bundle.triggers).toEqual([
-      { kind: "github.issue.opened", labelsAll: ["gardener-example"] },
-      { kind: "github.issue_comment.created", labelsAll: [] },
+      { kind: "github.issue.opened", labelsAll: ["gardener-example"], mentions: [], authors: "any" },
+      { kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers" },
       { kind: "github.pull_request.synchronize", labelsAll: [] },
-      { kind: "github.pull_request_review.submitted", labelsAll: [] },
-      { kind: "github.pull_request_review_comment.created", labelsAll: [] },
+      { kind: "github.pull_request_review.submitted", labelsAll: [], mentions: [], authors: "maintainers" },
+      { kind: "github.pull_request_review_comment.created", labelsAll: [], mentions: [], authors: "maintainers" },
       { kind: "github.push", branches: ["main", "release/*"] },
       { kind: "github.workflow_dispatch" },
       { kind: "github.schedule", cron: "0 3 * * 1" },
       { kind: "github.discussion.answered", labelsAll: [] },
-      { kind: "github.discussion_comment.created", labelsAll: [] },
+      { kind: "github.discussion_comment.created", labelsAll: [], mentions: [], authors: "maintainers" },
     ]);
 
     const withTrigger = (body: string) =>
@@ -302,6 +302,70 @@ describe("local Gardener project", () => {
       expect.objectContaining({ maxTurns: 16, inputTokens: 60_000 }),
       expect.objectContaining({ maxTurns: 16, inputTokens: 60_000 }),
     ]);
+  });
+
+  it("resolves mentions and author defaults into the bundle", async () => {
+    const withTrigger = (body: string, handle?: string) =>
+      compileTaskSource(TASK.replace(
+        "trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example",
+        body,
+      ), "TASK.md", handle === undefined ? {} : { handle });
+    const triggers = async (body: string, handle?: string) => (await withTrigger(body, handle)).bundle.triggers;
+
+    // Comment and review triggers default to maintainers; so does any trigger with mentions.
+    expect(await triggers("trigger:\n  event: github.issue_comment.created"))
+      .toEqual([{ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers" }, { kind: "github.workflow_dispatch" }]);
+    expect((await triggers("trigger:\n  event: github.pull_request_review.submitted"))[0])
+      .toMatchObject({ authors: "maintainers" });
+    expect((await triggers("trigger:\n  event: github.issue.opened"))[0]).toMatchObject({ mentions: [], authors: "any" });
+    expect((await triggers("trigger:\n  event: github.issue.opened\n  mentions: [octocat]"))[0])
+      .toMatchObject({ mentions: ["octocat"], authors: "maintainers" });
+    expect((await triggers("trigger:\n  event: github.issue_comment.created\n  authors: any"))[0])
+      .toMatchObject({ authors: "any" });
+
+    // self resolves to the project handle; @, case and repeats are normalised.
+    expect((await triggers("trigger:\n  event: github.issue_comment.created\n  mentions: [self, '@OctoCat', octocat]", "garden-bot"))[0])
+      .toMatchObject({ mentions: ["garden-bot", "octocat"] });
+    await expect(withTrigger("trigger:\n  event: github.issue_comment.created\n  mentions: [self]"))
+      .rejects.toThrow(/mentions self, but .gardener\/gardener.json sets no handle/);
+    await expect(withTrigger("trigger:\n  event: github.issue_comment.created\n  mentions: ['not a handle']"))
+      .rejects.toThrow(/not a GitHub handle/);
+    await expect(withTrigger("trigger:\n  event: github.issue_comment.created\n  mentions: [-bad]"))
+      .rejects.toThrow(/not a GitHub handle/);
+
+    // Only triggers with authored text take the filters.
+    await expect(withTrigger("trigger:\n  event: github.issue.labeled\n  mentions: [octocat]"))
+      .rejects.toThrow(/mentions is not supported/);
+    await expect(withTrigger("trigger:\n  event: github.push\n  branches: [main]\n  authors: any"))
+      .rejects.toThrow(/authors is not supported/);
+    await expect(withTrigger("trigger:\n  event: github.workflow_dispatch\n  mentions: [octocat]"))
+      .rejects.toThrow(/mentions is not supported/);
+  });
+
+  it("prefilters mentions, authors and edits in the workflow condition", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-mentions-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8")) as Record<string, unknown>;
+    await writeFile(projectPath, JSON.stringify({ ...project, handle: "@Garden-Bot" }));
+    await mkdir(join(root, ".gardener/tasks/mention"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/mention/TASK.md"), TASK.replace(
+      "trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example",
+      "triggers:\n  - event: github.issue_comment.created\n    mentions: [self]\n  - event: github.issue_comment.edited\n    mentions: [self, octocat]\n  - event: github.issue.opened",
+    ));
+    const built = await buildProject({ repositoryRoot: root });
+    const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
+    const maintainers = `contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)`;
+    expect(workflow).toContain(
+      `(github.event_name == 'issue_comment' && github.event.action == 'created' && ${maintainers} && contains(github.event.comment.body, '@garden-bot'))`,
+    );
+    expect(workflow).toContain(
+      `(github.event_name == 'issue_comment' && github.event.action == 'edited' && ${maintainers} && `
+      + "(contains(github.event.comment.body, '@garden-bot') || contains(github.event.comment.body, '@octocat')) && github.event.changes.body)",
+    );
+    // issue.opened keeps authors: any and no mention, so it adds no clauses.
+    expect(workflow).toContain("(github.event_name == 'issues' && github.event.action == 'opened')");
+    expect(workflow).toContain("  issue_comment:\n    types: [created, edited]");
   });
 
   it("renders deterministic multi-trigger workflows with derived permissions", async () => {

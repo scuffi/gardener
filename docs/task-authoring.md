@@ -54,13 +54,16 @@ declare each trigger kind at most once.
 
 | Trigger kinds | Extra keys |
 | --- | --- |
-| `github.issue.opened`, `.edited`, `.labeled`, `.unlabeled`, `.reopened` | `labels-all` |
-| `github.issue_comment.created` | `labels-all` |
-| `github.pull_request.opened`, `.reopened`, `.synchronize`, `.ready_for_review`, `.converted_to_draft`, `.edited`, `.labeled`, `.unlabeled` | `labels-all` |
-| `github.pull_request_review.submitted` | `labels-all` |
-| `github.pull_request_review_comment.created` | `labels-all` |
-| `github.discussion.created`, `.edited`, `.answered`, `.unanswered`, `.labeled`, `.unlabeled` | `labels-all` |
-| `github.discussion_comment.created` | `labels-all` |
+| `github.issue.opened`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.issue.labeled`, `.unlabeled`, `.reopened` | `labels-all` |
+| `github.issue_comment.created`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.pull_request.opened`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.pull_request.reopened`, `.synchronize`, `.ready_for_review`, `.converted_to_draft`, `.labeled`, `.unlabeled` | `labels-all` |
+| `github.pull_request_review.submitted` | `labels-all`, `mentions`, `authors` |
+| `github.pull_request_review_comment.created`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.discussion.created`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.discussion.answered`, `.unanswered`, `.labeled`, `.unlabeled` | `labels-all` |
+| `github.discussion_comment.created`, `.edited` | `labels-all`, `mentions`, `authors` |
 | `github.push` | `branches` (at least one branch filter, required) |
 | `github.schedule` | `cron` (five-field expression, required) |
 | `github.workflow_dispatch` | none |
@@ -72,6 +75,54 @@ build` adds it, so the compiled bundle always contains it. See [Running a task b
 the event. Supplying a key that an event does not support is a compilation error.
 
 `pull_request_target` is deliberately not modeled and can never be generated.
+
+### Mentions and authors
+
+Triggers whose event carries text someone wrote (an issue, pull request, discussion, review or
+comment) take two more filters.
+
+`mentions` lists GitHub handles. The task runs only when the text @mentions at least one of them:
+the comment on comment triggers, the review on `pull_request_review.submitted`, otherwise the
+issue, pull request or discussion body. Matching is case-insensitive and whole-handle, so
+`@gardener` does not match `@gardener-bot` or `me@gardener.dev`. A mention inside a code block
+or backticks still counts, although GitHub does not notify on it. Write `self` for the project's own
+handle, set as `handle` in `.gardener/gardener.json`:
+
+```json
+{ "schemaVersion": "gardener.project/v1", "target": "github-actions/v1", "handle": "my-bot", "release": { "workflowRef": "…" } }
+```
+
+`gardener build` fails if a task mentions `self` and no handle is set. There is no default handle.
+
+`authors` is `maintainers` or `any`. `maintainers` admits text written by the repository owner, an
+organization member, or a collaborator, using GitHub's `author_association`. It is the default for
+comment triggers, `pull_request_review.submitted`, and any trigger with `mentions`, because on a
+public repository anyone can write that text. Other triggers default to `any`. Set it explicitly to
+change that. Setting `authors: any` together with `mentions` on a public repository lets anyone who
+can comment start a model run with the task's effects, so its instructions must hold up against
+whatever that text says, and every such run costs model usage:
+
+```yaml
+triggers:
+  - event: github.issue_comment.created
+    mentions: [self]
+  - event: github.issue.opened
+    authors: any
+```
+
+GitHub reports an organization member whose membership is private as `CONTRIBUTOR` or `NONE`, not
+`MEMBER`, so `maintainers` ignores them. Make the membership public, or add the person to the
+repository as a collaborator.
+
+On an `.edited` trigger with `mentions`, the task runs only when the edit added a mention; an edit
+that leaves the body alone, or keeps a mention that was already there, does not run it. Without
+`mentions`, every edit runs it. `authors` on an edit checks whoever wrote the text, not whoever
+edited it. That fails safe: only the author, or someone with write access, can edit a comment.
+
+The generated workflow can only approximate these filters, so the Worker makes the exact decision.
+An event the workflow lets through but the filters exclude completes as a skip: the run succeeds with
+the summary "Trigger filters did not match; nothing to do", without calling the model. Manual runs
+ignore `mentions` and `authors`, because starting one already requires write access.
 
 ```yaml
 triggers:

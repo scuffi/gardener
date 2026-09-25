@@ -79,7 +79,7 @@ async function runRequest(overrides: {
 } = {}): Promise<TaskRunRequestV1> {
   const bundle = structuredClone(inspectRepositoryFixtureBundle()) as TaskBundleV1;
   bundle.effects = [...(overrides.effects ?? operationKindValues)] as TaskBundleV1["effects"];
-  bundle.triggers = [{ kind: "github.issue.opened", labelsAll: [] }, { kind: "github.workflow_dispatch" }];
+  bundle.triggers = [{ kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" }, { kind: "github.workflow_dispatch" }];
   if (overrides.maxEffectOperations !== undefined) bundle.limits.maxEffectOperations = overrides.maxEffectOperations;
   if (overrides.maxEffectBytes !== undefined) bundle.limits.maxEffectBytes = overrides.maxEffectBytes;
   return {

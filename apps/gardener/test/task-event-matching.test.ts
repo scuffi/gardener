@@ -116,7 +116,7 @@ async function request(
 
 describe("trigger matching", () => {
   it("admits a same-repository pull request and rejects fork and deleted-fork heads", async () => {
-    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [] }];
+    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }];
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), { triggers })))
       .resolves.toBeDefined();
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("9999"), { triggers })))
@@ -127,17 +127,24 @@ describe("trigger matching", () => {
 
   it("names repository.exec explicitly when a fork head is refused", async () => {
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("9999"), {
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }],
       tools: ["repository.list_files", "repository.exec"],
     }))).rejects.toThrow(/repository\.exec/);
   });
 
   it("enforces labelsAll against the resource the event is about", async () => {
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: ["ready"] }],
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: ["ready"], mentions: [], authors: "any" }],
     }))).resolves.toBeDefined();
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: ["missing"] }],
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: ["missing"], mentions: [], authors: "any" }],
+    }))).rejects.toThrow(/does not declare trigger/);
+  });
+
+  it("refuses to start the model for an event the authors filter excludes", async () => {
+    // The session completes such runs as a skip first; this is the backstop.
+    await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "maintainers" }],
     }))).rejects.toThrow(/does not declare trigger/);
   });
 
@@ -193,7 +200,7 @@ describe("trigger matching", () => {
         pullRequest,
       };
     };
-    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [] }];
+    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }];
     await expect(createTaskHarnessRequest(await request(dispatch("1374842705"), { triggers }))).resolves.toBeDefined();
     await expect(createTaskHarnessRequest(await request(dispatch("9999"), { triggers })))
       .rejects.toThrow(/same-repository pull requests/);
@@ -211,7 +218,7 @@ describe("trigger matching", () => {
       workflow: { ...workflow, eventName: "workflow_dispatch" },
       pullRequest,
     };
-    await expect(createTaskHarnessRequest(await request(event, { triggers: [{ kind: "github.issue.opened", labelsAll: [] }] })))
+    await expect(createTaskHarnessRequest(await request(event, { triggers: [{ kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" }] })))
       .rejects.toThrow(/no pull request trigger, so a manual run of it cannot target a pull request/);
     await expect(createTaskHarnessRequest(await request(event, { triggers: [] })))
       .rejects.toThrow(/cannot target a pull request/);
@@ -225,15 +232,15 @@ describe("trigger matching", () => {
       workflow: { ...workflow, eventName: "workflow_dispatch" },
       issue: { id: "999", number: 1, title: "t", body: null, state: "open", updatedAt: "2026-09-22T12:00:00.000Z", labels: [], author: actor },
     };
-    await expect(createTaskHarnessRequest(await request(issueEvent, { triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }] })))
+    await expect(createTaskHarnessRequest(await request(issueEvent, { triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }] })))
       .rejects.toThrow(/no issue trigger, so a manual run of it cannot target an issue/);
-    await expect(createTaskHarnessRequest(await request(issueEvent, { triggers: [{ kind: "github.issue_comment.created", labelsAll: [] }] })))
+    await expect(createTaskHarnessRequest(await request(issueEvent, { triggers: [{ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "any" }] })))
       .resolves.toBeDefined();
   });
 
   it("rejects an event kind the bundle never declared", async () => {
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
-      triggers: [{ kind: "github.issue.opened", labelsAll: [] }],
+      triggers: [{ kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" }],
     }))).rejects.toThrow(/does not declare trigger github\.pull_request\.opened/);
   });
 });

@@ -79,13 +79,13 @@ function event(kind: string, payload: Record<string, unknown>): unknown {
 }
 
 describe("normalized event v1", () => {
-  it("covers exactly the 26 common trigger kinds and excludes pull_request_target", () => {
-    expect(taskTriggerKindValues).toHaveLength(26);
-    expect(new Set(taskTriggerKindValues).size).toBe(26);
+  it("covers exactly the 29 common trigger kinds and excludes pull_request_target", () => {
+    expect(taskTriggerKindValues).toHaveLength(29);
+    expect(new Set(taskTriggerKindValues).size).toBe(29);
     expect(Object.keys(eventNameByTriggerKind).sort()).toEqual([...taskTriggerKindValues].sort());
     expect(Object.keys(eventActionByTriggerKind).sort()).toEqual([...taskTriggerKindValues].sort());
     expect(Object.values(eventNameByTriggerKind)).not.toContain("pull_request_target");
-    expect(triggerKindOrder.size).toBe(26);
+    expect(triggerKindOrder.size).toBe(29);
   });
 
   it("parses one representative event per family", () => {
@@ -232,6 +232,19 @@ describe("trigger validation hardening", () => {
     }
   });
 
+  it("requires resolved authors on authored triggers and validates mentions", () => {
+    const comment = (extra: Record<string, unknown>) => bundle([{ kind: "github.issue_comment.created", ...extra }]);
+    expect(() => taskBundleV1Schema.parse(comment({}))).toThrow();
+    expect(taskBundleV1Schema.parse(comment({ authors: "maintainers" })).triggers[0])
+      .toEqual({ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers" });
+    expect(() => taskBundleV1Schema.parse(comment({ authors: "maintainers", mentions: ["octocat", "garden-bot"] }))).not.toThrow();
+    for (const mentions of [["OctoCat"], ["@octocat"], ["-bad"], ["bad-"], ["a--b"], ["x".repeat(40)], ["octocat", "octocat"]]) {
+      expect(() => taskBundleV1Schema.parse(comment({ authors: "any", mentions }))).toThrow();
+    }
+    // Triggers without authored text take no filters.
+    expect(() => taskBundleV1Schema.parse(bundle([{ kind: "github.issue.labeled", authors: "any" }]))).toThrow();
+  });
+
   it("rejects an all-negative push branch list", () => {
     expect(() => taskBundleV1Schema.parse(bundle([{ kind: "github.push", branches: ["!wip/*"] }]))).toThrow(
       /at least one positive pattern/,
@@ -241,12 +254,12 @@ describe("trigger validation hardening", () => {
 
   it("requires canonical trigger ordering", () => {
     expect(() => taskBundleV1Schema.parse(bundle([
-      { kind: "github.pull_request.opened" },
-      { kind: "github.issue.opened" },
+      { kind: "github.pull_request.opened", authors: "any" },
+      { kind: "github.issue.opened", authors: "any" },
     ]))).toThrow(/canonical/);
     expect(() => taskBundleV1Schema.parse(bundle([
-      { kind: "github.issue.opened" },
-      { kind: "github.pull_request.opened" },
+      { kind: "github.issue.opened", authors: "any" },
+      { kind: "github.pull_request.opened", authors: "any" },
     ]))).not.toThrow();
   });
 });

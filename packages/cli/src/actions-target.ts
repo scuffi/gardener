@@ -70,6 +70,7 @@ const TRIGGER_BINDINGS: Record<TaskTriggerKindV1, Omit<GitHubActionsTriggerBindi
   "github.issue.unlabeled": { event: "issues", action: "unlabeled", labelsExpression: ISSUE_LABELS, forkSensitive: false },
   "github.issue.reopened": { event: "issues", action: "reopened", labelsExpression: ISSUE_LABELS, forkSensitive: false },
   "github.issue_comment.created": { event: "issue_comment", action: "created", labelsExpression: ISSUE_LABELS, forkSensitive: false },
+  "github.issue_comment.edited": { event: "issue_comment", action: "edited", labelsExpression: ISSUE_LABELS, forkSensitive: false },
   "github.pull_request.opened": { event: "pull_request", action: "opened", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
   "github.pull_request.reopened": { event: "pull_request", action: "reopened", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
   "github.pull_request.synchronize": { event: "pull_request", action: "synchronize", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
@@ -80,6 +81,7 @@ const TRIGGER_BINDINGS: Record<TaskTriggerKindV1, Omit<GitHubActionsTriggerBindi
   "github.pull_request.unlabeled": { event: "pull_request", action: "unlabeled", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
   "github.pull_request_review.submitted": { event: "pull_request_review", action: "submitted", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
   "github.pull_request_review_comment.created": { event: "pull_request_review_comment", action: "created", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
+  "github.pull_request_review_comment.edited": { event: "pull_request_review_comment", action: "edited", labelsExpression: PULL_REQUEST_LABELS, forkSensitive: true },
   "github.push": { event: "push", forkSensitive: false },
   "github.workflow_dispatch": { event: "workflow_dispatch", forkSensitive: false },
   "github.schedule": { event: "schedule", forkSensitive: false },
@@ -90,6 +92,7 @@ const TRIGGER_BINDINGS: Record<TaskTriggerKindV1, Omit<GitHubActionsTriggerBindi
   "github.discussion.labeled": { event: "discussion", action: "labeled", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
   "github.discussion.unlabeled": { event: "discussion", action: "unlabeled", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
   "github.discussion_comment.created": { event: "discussion_comment", action: "created", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
+  "github.discussion_comment.edited": { event: "discussion_comment", action: "edited", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
 };
 
 /** Write scopes the checkout-free apply job needs for one exact operation kind. */

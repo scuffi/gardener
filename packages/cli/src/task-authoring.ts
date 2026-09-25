@@ -1,4 +1,7 @@
 import {
+  defaultTriggerAuthors,
+  githubHandleV1Schema,
+  isAuthoredTriggerKind,
   operationCatalog,
   operationKindValues,
   taskBundleV1Schema,
@@ -38,10 +41,12 @@ const DISPATCH_TRIGGER = "github.workflow_dispatch";
 const triggerAuthoringSchema = z.strictObject({
   event: z.enum(taskTriggerKindValues),
   "labels-all": z.array(safeLabel).max(20).optional(),
+  mentions: z.array(z.string().trim().min(1).max(40)).min(1).max(20).optional(),
+  authors: z.enum(["maintainers", "any"]).optional(),
   branches: z.array(z.string().trim().min(1).max(255)).min(1).max(20).optional(),
   cron: z.string().trim().min(1).max(100).optional(),
 }).superRefine((trigger, context) => {
-  const reject = (key: "labels-all" | "branches" | "cron") => {
+  const reject = (key: "labels-all" | "mentions" | "authors" | "branches" | "cron") => {
     if (trigger[key] !== undefined) {
       context.addIssue({ code: "custom", path: [key], message: `${key} is not supported by ${trigger.event}` });
     }
@@ -54,23 +59,33 @@ const triggerAuthoringSchema = z.strictObject({
   if (trigger.event === PUSH_TRIGGER) {
     require("branches");
     reject("labels-all");
+    reject("mentions");
+    reject("authors");
     reject("cron");
     return;
   }
   if (trigger.event === SCHEDULE_TRIGGER) {
     require("cron");
     reject("labels-all");
+    reject("mentions");
+    reject("authors");
     reject("branches");
     return;
   }
   if (trigger.event === DISPATCH_TRIGGER) {
     reject("labels-all");
+    reject("mentions");
+    reject("authors");
     reject("branches");
     reject("cron");
     return;
   }
   reject("branches");
   reject("cron");
+  if (!isAuthoredTriggerKind(trigger.event)) {
+    reject("mentions");
+    reject("authors");
+  }
 });
 
 /** The model a task uses when its TASK.md names none. Written into the bundle. */
@@ -152,15 +167,52 @@ export function expandEffectSelectors(selectors: readonly string[]): TaskEffectK
 
 type AuthoredTrigger = z.output<typeof triggerAuthoringSchema>;
 
-function toContractTrigger(authored: AuthoredTrigger): TaskTriggerV1 {
+/** Options that come from `.gardener/gardener.json` rather than the task. */
+export interface TaskCompileOptions {
+  /** The project's own GitHub handle, which `mentions: [self]` resolves to. */
+  handle?: string;
+}
+
+function toContractTrigger(authored: AuthoredTrigger, options: TaskCompileOptions, sourceName: string): TaskTriggerV1 {
   const kind = authored.event as TaskTriggerKindV1;
   if (kind === PUSH_TRIGGER) return { kind, branches: authored.branches! };
   if (kind === SCHEDULE_TRIGGER) return { kind, cron: authored.cron! };
   if (kind === DISPATCH_TRIGGER) return { kind };
-  return { kind, labelsAll: authored["labels-all"] ?? [] } as TaskTriggerV1;
+  const labelsAll = authored["labels-all"] ?? [];
+  if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll } as TaskTriggerV1;
+  const mentions = resolveMentions(authored.mentions ?? [], options, sourceName, kind);
+  return { kind, labelsAll, mentions, authors: authored.authors ?? defaultTriggerAuthors(kind, mentions) } as TaskTriggerV1;
 }
 
-export async function compileTaskSource(source: string, sourceName = "TASK.md"): Promise<CompiledTask> {
+/**
+ * Lowercased handles without `@`, in the order written, with `self` replaced by
+ * the project handle. A handle the contract would refuse fails the build here,
+ * where the author can see which task and trigger it came from.
+ */
+function resolveMentions(written: readonly string[], options: TaskCompileOptions, sourceName: string, kind: string): string[] {
+  const handles: string[] = [];
+  for (const entry of written) {
+    let handle = entry.startsWith("@") ? entry.slice(1) : entry;
+    if (handle === "self") {
+      if (options.handle === undefined) {
+        throw new Error(`${sourceName} ${kind} mentions self, but .gardener/gardener.json sets no handle`);
+      }
+      handle = options.handle;
+    }
+    handle = handle.toLowerCase();
+    if (!githubHandleV1Schema.safeParse(handle).success) {
+      throw new Error(`${sourceName} ${kind} mentions ${entry}, which is not a GitHub handle`);
+    }
+    if (!handles.includes(handle)) handles.push(handle);
+  }
+  return handles;
+}
+
+export async function compileTaskSource(
+  source: string,
+  sourceName = "TASK.md",
+  options: TaskCompileOptions = {},
+): Promise<CompiledTask> {
   const normalized = source.replaceAll("\r\n", "\n");
   if (!normalized.startsWith("---\n")) {
     throw new Error(`${sourceName} must begin with YAML frontmatter`);
@@ -196,7 +248,7 @@ export async function compileTaskSource(source: string, sourceName = "TASK.md"):
     name: authoring.name,
     description: authoring.description,
     instructions,
-    triggers: authoredTriggers.map(toContractTrigger),
+    triggers: authoredTriggers.map((trigger) => toContractTrigger(trigger, options, sourceName)),
     tools: authoring.tools,
     effects: expandEffectSelectors(authoring.effects),
     network: authoring.network,

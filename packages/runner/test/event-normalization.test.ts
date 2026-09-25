@@ -133,14 +133,70 @@ describe("runner event normalization", () => {
       .rejects.toThrow(/does not support pull_request_target/);
     await expect(normalize("release", { action: "published" })).rejects.toThrow(/does not support release/);
     await expect(normalize("issues", { action: "deleted", issue })).rejects.toThrow(/does not support issues: deleted/);
-    await expect(normalize("issue_comment", { action: "edited", issue, comment: { id: 3, body: "x", updated_at: "2026-09-22T12:00:00.000Z", user: actor } }))
-      .rejects.toThrow(/does not support issue_comment: edited/);
+    await expect(normalize("issue_comment", { action: "deleted", issue, comment: { id: 3, body: "x", updated_at: "2026-09-22T12:00:00.000Z", user: actor } }))
+      .rejects.toThrow(/does not support issue_comment: deleted/);
   });
 
   it("fails closed on incomplete payloads", async () => {
     await expect(normalize("issues", { action: "opened" })).rejects.toThrow(/missing an issue/);
     await expect(normalize("pull_request", { action: "opened" })).rejects.toThrow(/missing a pull request/);
     await expect(normalize("schedule", {})).rejects.toThrow(/missing its cron expression/);
+  });
+});
+
+describe("trigger filter facts", () => {
+  const comment = (extra: Record<string, unknown> = {}) => ({
+    id: 3, body: "@gardener please", updated_at: "2026-09-22T12:00:00.000Z", user: actor, ...extra,
+  });
+
+  it("carries the author's association and, on edits, the previous body", async () => {
+    const event = await normalize("issue_comment", {
+      action: "edited",
+      issue: { ...issue, author_association: "MEMBER" },
+      comment: comment({ author_association: "OWNER" }),
+      changes: { body: { from: "please" } },
+    }) as Record<string, any>;
+    expect(event.kind).toBe("github.issue_comment.edited");
+    expect(event.comment.authorAssociation).toBe("OWNER");
+    expect(event.issue.authorAssociation).toBe("MEMBER");
+    expect(event.previousBody).toBe("please");
+  });
+
+  it("omits the previous body when the edit left the body alone", async () => {
+    for (const changes of [undefined, {}, { title: { from: "old" } }, { body: {} }, { body: { from: 7 } }]) {
+      const event = await normalize("issue_comment", {
+        action: "edited", issue, comment: comment(), ...(changes === undefined ? {} : { changes }),
+      }) as Record<string, unknown>;
+      expect(event).not.toHaveProperty("previousBody");
+    }
+  });
+
+  it("omits an association it does not know, so maintainer filters fail closed", async () => {
+    const event = await normalize("issue_comment", {
+      action: "created", issue, comment: comment({ author_association: "SUPREME_LEADER" }),
+    }) as Record<string, any>;
+    expect(event.comment).not.toHaveProperty("authorAssociation");
+  });
+
+  it("normalizes edited review and discussion comments and edited subjects", async () => {
+    const review = await normalize("pull_request_review_comment", {
+      action: "edited", pull_request: pullRequest, comment: comment({ author_association: "COLLABORATOR" }),
+      changes: { body: { from: "x" } },
+    }) as Record<string, any>;
+    expect(review).toMatchObject({ kind: "github.pull_request_review_comment.edited", previousBody: "x" });
+    const discussionComment = await normalize("discussion_comment", {
+      action: "edited", discussion, comment: { ...comment(), node_id: "DC_kwDOAbc123" }, changes: { body: { from: "y" } },
+    }) as Record<string, any>;
+    expect(discussionComment).toMatchObject({ kind: "github.discussion_comment.edited", previousBody: "y" });
+    const issueEdited = await normalize("issues", {
+      action: "edited", issue: { ...issue, author_association: "NONE" }, changes: { body: { from: "old" } },
+    }) as Record<string, any>;
+    expect(issueEdited).toMatchObject({ kind: "github.issue.edited", previousBody: "old", issue: { authorAssociation: "NONE" } });
+    const labeled = await normalize("issues", {
+      action: "labeled", issue, label: { name: "bug" }, changes: { body: { from: "old" } },
+    }) as Record<string, unknown>;
+    expect(labeled).not.toHaveProperty("previousBody");
+    expect(runnerEventV1Schema.safeParse(review).success).toBe(true);
   });
 });
 

@@ -58,7 +58,12 @@ import {
   type TaskEffectProposalAckV1,
   type TaskEffectProposalInvocationV1,
 } from "./effect-plan";
-import { createTaskHarnessRequest, translateHarnessOutcome } from "./harness-adapter";
+import {
+  createTaskHarnessRequest,
+  translateHarnessOutcome,
+  triggerAssociationMissing,
+  triggerFiltersExclude,
+} from "./harness-adapter";
 import { FlueTaskHarness, SupersededReadError } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
@@ -743,6 +748,25 @@ export class TaskRunnerSession extends DurableObject<Env> {
     }
     const cancelReason = await this.ctx.storage.get<string>("cancel-intent");
     if (cancelReason) return this.settleCancellation(request, cancelReason);
+    // The workflow's `if:` only prefilters mentions and authors; this is the
+    // exact check. An event it filters out completes as a skip without the
+    // model, rather than failing the run.
+    if (triggerFiltersExclude(request.event, request.bundle.triggers)) {
+      const associationMissing = triggerAssociationMissing(request.event, request.bundle.triggers);
+      return this.#settleAndPersist(request, taskOutcomeV1Schema.parse({
+        schemaVersion: "gardener.task-outcome/v1",
+        runId: request.runId,
+        taskId: request.bundle.taskId,
+        bundleHash: request.bundleHash,
+        status: "completed",
+        summary: associationMissing
+          ? "Trigger filters did not match; nothing to do. The event carried no author association, "
+            + "so maintainer-only triggers cannot match; run gardener upgrade to update the pinned Gardener bridge"
+          : "Trigger filters did not match; nothing to do",
+        observations: [],
+        proposedEffects: [],
+      }), bundleHash, { skipped: "trigger_filters", ...(associationMissing ? { associationMissing: true } : {}) });
+    }
     const harnessRequest = await createTaskHarnessRequest(request);
     const harness = new FlueTaskHarness();
     let submission: HarnessSubmission;
@@ -810,20 +834,34 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ]);
       return terminalFromOutcome(outcome, await this.completedSequence(), request);
     }
-    // Settled *before* anything is persisted. Building the plan is the last
-    // validation a run gets, and a plan that cannot be built is a failed run,
-    // not a completed one whose terminal happens to throw.
+    return this.#settleAndPersist(request, outcome, bundleHash);
+  }
+
+  /**
+   * Settles an outcome and makes it durable with its audit row. Settled
+   * *before* anything is persisted: building the plan is the last validation a
+   * run gets, and a plan that cannot be built is a failed run, not a completed
+   * one whose terminal happens to throw.
+   */
+  async #settleAndPersist(
+    request: TaskRunRequestV1,
+    outcome: TaskOutcomeV1,
+    bundleHash: string,
+    auditDetail: Record<string, JsonValue> = {},
+  ): Promise<RunnerTerminalV1> {
+    const runId = request.runId;
     const settled = await this.settleTerminal(request, outcome);
     await this.#db().batch([
       this.#db().prepare(
         "UPDATE actions_task_runs SET status=?,outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
-      ).bind(settled.outcome.status, JSON.stringify(settled.outcome), identity.sessionId),
+      ).bind(settled.outcome.status, JSON.stringify(settled.outcome), runId),
       this.#db().prepare(
         "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
         "SELECT ?,'task.settled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.settled')",
-      ).bind(identity.sessionId, JSON.stringify({
+      ).bind(runId, JSON.stringify({
         status: settled.outcome.status,
         bundleHash,
+        ...auditDetail,
         // A failed run records why, so the audit trail explains it without Worker logs.
         // Every audit message is a fixed sentence: a rejected plan's detail can quote
         // model-authored step names, so it stays in outcome_json only.
@@ -835,7 +873,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
               : settled.outcome.error.message,
           }
           : {}),
-      }), identity.sessionId),
+      }), runId),
     ]);
     return settled.terminal;
   }

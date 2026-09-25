@@ -14,6 +14,37 @@ function actor(value: unknown, what: string): Raw {
   return { id: String(user.id ?? ""), login: user.login };
 }
 
+const AUTHOR_ASSOCIATIONS = new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE",
+]);
+
+/**
+ * GitHub's `author_association` for the text's author, when it is one Gardener
+ * knows. An unknown or missing value is omitted, and `authors: maintainers`
+ * then refuses the event.
+ */
+function association(value: Raw): Raw {
+  const raw = value.author_association;
+  return typeof raw === "string" && AUTHOR_ASSOCIATIONS.has(raw) ? { authorAssociation: raw } : {};
+}
+
+/** On an edited event, the body before the edit, when the edit changed it. */
+function previousBody(raw: Raw): Raw {
+  const changes = raw.changes;
+  if (changes === null || typeof changes !== "object" || Array.isArray(changes)) return {};
+  const body = (changes as Raw).body;
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return {};
+  const from = (body as Raw).from;
+  return typeof from === "string" ? { previousBody: from } : {};
+}
+
 function labelNames(value: unknown): string[] {
   return Array.isArray(value)
     ? value.map((label) => String(object(label, "a label").name ?? "")).filter((name) => name.length > 0)
@@ -35,6 +66,7 @@ function issuePayload(raw: Raw): Raw {
     updatedAt: issue.updated_at,
     labels: labelNames(issue.labels),
     author: actor(issue.user, "an issue author"),
+    ...association(issue),
   };
 }
 
@@ -55,6 +87,7 @@ function pullRequestPayload(raw: Raw): Raw {
     body: pullRequest.body ?? null,
     labels: labelNames(pullRequest.labels),
     author: actor(pullRequest.user, "a pull-request author"),
+    ...association(pullRequest),
     draft: Boolean(pullRequest.draft),
     state: pullRequest.state === "closed" ? "closed" : "open",
     merged: Boolean(pullRequest.merged),
@@ -71,6 +104,7 @@ function commentPayload(raw: Raw): Raw {
     body: comment.body ?? null,
     updatedAt: comment.updated_at,
     author: actor(comment.user, "a comment author"),
+    ...association(comment),
   };
 }
 
@@ -84,6 +118,7 @@ function discussionPayload(raw: Raw): Raw {
     body: discussion.body ?? null,
     labels: labelNames(discussion.labels),
     author: actor(discussion.user, "a discussion author"),
+    ...association(discussion),
     category: object(discussion.category, "a discussion category").name,
     answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url),
     state: discussion.state === "closed" ? "closed" : "open",
@@ -194,21 +229,28 @@ export function normalizeGitHubEvent(eventName: string, source: unknown, resolve
       case "issues": {
         if (!action || !["opened", "edited", "labeled", "unlabeled", "reopened"].includes(action)) unsupported();
         const issue = { issue: issuePayload(raw) };
-        return action === "labeled" || action === "unlabeled"
-          ? { kind: `github.issue.${action}`, ...issue, label: changedLabel(raw) }
-          : { kind: `github.issue.${action}`, ...issue };
+        if (action === "labeled" || action === "unlabeled") {
+          return { kind: `github.issue.${action}`, ...issue, label: changedLabel(raw) };
+        }
+        return { kind: `github.issue.${action}`, ...issue, ...(action === "edited" ? previousBody(raw) : {}) };
       }
       case "issue_comment": {
-        if (action !== "created") unsupported();
-        return { kind: "github.issue_comment.created", issue: issuePayload(raw), comment: commentPayload(raw) };
+        if (action !== "created" && action !== "edited") unsupported();
+        return {
+          kind: `github.issue_comment.${action}`,
+          issue: issuePayload(raw),
+          comment: commentPayload(raw),
+          ...(action === "edited" ? previousBody(raw) : {}),
+        };
       }
       case "pull_request": {
         const supported = ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "edited", "labeled", "unlabeled"];
         if (!action || !supported.includes(action)) unsupported();
         const pullRequest = { pullRequest: pullRequestPayload(raw) };
-        return action === "labeled" || action === "unlabeled"
-          ? { kind: `github.pull_request.${action}`, ...pullRequest, label: changedLabel(raw) }
-          : { kind: `github.pull_request.${action}`, ...pullRequest };
+        if (action === "labeled" || action === "unlabeled") {
+          return { kind: `github.pull_request.${action}`, ...pullRequest, label: changedLabel(raw) };
+        }
+        return { kind: `github.pull_request.${action}`, ...pullRequest, ...(action === "edited" ? previousBody(raw) : {}) };
       }
       case "pull_request_review": {
         if (action !== "submitted") unsupported();
@@ -221,15 +263,17 @@ export function normalizeGitHubEvent(eventName: string, source: unknown, resolve
             state: String(review.state ?? "").toLowerCase(),
             body: review.body ?? null,
             author: actor(review.user, "a review author"),
+            ...association(review),
           },
         };
       }
       case "pull_request_review_comment": {
-        if (action !== "created") unsupported();
+        if (action !== "created" && action !== "edited") unsupported();
         return {
-          kind: "github.pull_request_review_comment.created",
+          kind: `github.pull_request_review_comment.${action}`,
           pullRequest: pullRequestPayload(raw),
           comment: commentPayload(raw),
+          ...(action === "edited" ? previousBody(raw) : {}),
         };
       }
       case "push":
@@ -267,15 +311,17 @@ export function normalizeGitHubEvent(eventName: string, source: unknown, resolve
         const supported = ["created", "edited", "answered", "unanswered", "labeled", "unlabeled"];
         if (!action || !supported.includes(action)) unsupported();
         const discussion = { discussion: discussionPayload(raw) };
-        return action === "labeled" || action === "unlabeled"
-          ? { kind: `github.discussion.${action}`, ...discussion, label: changedLabel(raw) }
-          : { kind: `github.discussion.${action}`, ...discussion };
+        if (action === "labeled" || action === "unlabeled") {
+          return { kind: `github.discussion.${action}`, ...discussion, label: changedLabel(raw) };
+        }
+        return { kind: `github.discussion.${action}`, ...discussion, ...(action === "edited" ? previousBody(raw) : {}) };
       }
       case "discussion_comment": {
-        if (action !== "created") unsupported();
+        if (action !== "created" && action !== "edited") unsupported();
         const comment = object(raw.comment, "a discussion comment");
         return {
-          kind: "github.discussion_comment.created",
+          kind: `github.discussion_comment.${action}`,
+          ...(action === "edited" ? previousBody(raw) : {}),
           discussion: discussionPayload(raw),
           comment: {
             id: String(comment.id ?? ""),
@@ -283,6 +329,7 @@ export function normalizeGitHubEvent(eventName: string, source: unknown, resolve
             body: comment.body ?? null,
             updatedAt: comment.updated_at,
             author: actor(comment.user, "a discussion comment author"),
+            ...association(comment),
           },
         };
       }

@@ -215,6 +215,19 @@ const eventLabels = z.array(z.string().trim().min(1).max(100)).max(100);
 const eventBody = z.string().max(65_536).nullable();
 const eventNodeId = z.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
 const eventChangedLabel = z.string().trim().min(1).max(100);
+/** GitHub's `author_association`; restated from `@gardener/contracts`. Optional for older bridge pins. */
+const eventAuthorAssociation = z.enum([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE",
+]).optional();
+/** On an edited event, the body before the edit; present only when the edit changed it. */
+const eventEdited = { previousBody: z.string().max(65_536).optional() };
 
 const eventIssue = z.strictObject({
   id: githubNumericId,
@@ -227,6 +240,7 @@ const eventIssue = z.strictObject({
   updatedAt: z.iso.datetime().optional(),
   labels: eventLabels,
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
 });
 
 const eventPullRequestRepository = z.strictObject({
@@ -241,6 +255,7 @@ const eventPullRequest = z.strictObject({
   body: eventBody,
   labels: eventLabels,
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
@@ -249,13 +264,20 @@ const eventPullRequest = z.strictObject({
   head: z.strictObject({ ref: z.string().min(1).max(255), sha: sha1, repo: eventPullRequestRepository.nullable() }),
 });
 
-const eventComment = z.strictObject({ id: githubNumericId, body: eventBody, updatedAt: z.iso.datetime().optional(), author: eventActor });
+const eventComment = z.strictObject({
+  id: githubNumericId,
+  body: eventBody,
+  updatedAt: z.iso.datetime().optional(),
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+});
 
 const eventReview = z.strictObject({
   id: githubNumericId,
   state: z.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: eventBody,
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
 });
 
 const eventDiscussion = z.strictObject({
@@ -266,6 +288,7 @@ const eventDiscussion = z.strictObject({
   body: eventBody,
   labels: eventLabels,
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
   category: z.string().min(1).max(100),
   answered: z.boolean(),
   state: z.enum(["open", "closed"]).optional(),
@@ -278,6 +301,7 @@ const eventDiscussionComment = z.strictObject({
   body: eventBody,
   updatedAt: z.iso.datetime().optional(),
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
 });
 
 const eventPush = z.strictObject({
@@ -325,21 +349,23 @@ const discussionPayload = { discussion: eventDiscussion };
 
 export const runnerEventV1Schema = z.discriminatedUnion("kind", [
   runnerEventMember("github.issue.opened", issuePayload),
-  runnerEventMember("github.issue.edited", issuePayload),
+  runnerEventMember("github.issue.edited", { ...issuePayload, ...eventEdited }),
   runnerEventMember("github.issue.labeled", { ...issuePayload, label: eventChangedLabel }),
   runnerEventMember("github.issue.unlabeled", { ...issuePayload, label: eventChangedLabel }),
   runnerEventMember("github.issue.reopened", issuePayload),
   runnerEventMember("github.issue_comment.created", { ...issuePayload, comment: eventComment }),
+  runnerEventMember("github.issue_comment.edited", { ...issuePayload, comment: eventComment, ...eventEdited }),
   runnerEventMember("github.pull_request.opened", pullRequestPayload),
   runnerEventMember("github.pull_request.reopened", pullRequestPayload),
   runnerEventMember("github.pull_request.synchronize", pullRequestPayload),
   runnerEventMember("github.pull_request.ready_for_review", pullRequestPayload),
   runnerEventMember("github.pull_request.converted_to_draft", pullRequestPayload),
-  runnerEventMember("github.pull_request.edited", pullRequestPayload),
+  runnerEventMember("github.pull_request.edited", { ...pullRequestPayload, ...eventEdited }),
   runnerEventMember("github.pull_request.labeled", { ...pullRequestPayload, label: eventChangedLabel }),
   runnerEventMember("github.pull_request.unlabeled", { ...pullRequestPayload, label: eventChangedLabel }),
   runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: eventReview }),
   runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: eventComment }),
+  runnerEventMember("github.pull_request_review_comment.edited", { ...pullRequestPayload, comment: eventComment, ...eventEdited }),
   runnerEventMember("github.push", { push: eventPush }),
   runnerEventMember("github.workflow_dispatch", {
     prompt: z.string().trim().min(1).max(20_000).optional(),
@@ -352,12 +378,13 @@ export const runnerEventV1Schema = z.discriminatedUnion("kind", [
   }),
   runnerEventMember("github.schedule", { cron: z.string().trim().min(1).max(100) }),
   runnerEventMember("github.discussion.created", discussionPayload),
-  runnerEventMember("github.discussion.edited", discussionPayload),
+  runnerEventMember("github.discussion.edited", { ...discussionPayload, ...eventEdited }),
   runnerEventMember("github.discussion.answered", discussionPayload),
   runnerEventMember("github.discussion.unanswered", discussionPayload),
   runnerEventMember("github.discussion.labeled", { ...discussionPayload, label: eventChangedLabel }),
   runnerEventMember("github.discussion.unlabeled", { ...discussionPayload, label: eventChangedLabel }),
   runnerEventMember("github.discussion_comment.created", { ...discussionPayload, comment: eventDiscussionComment }),
+  runnerEventMember("github.discussion_comment.edited", { ...discussionPayload, comment: eventDiscussionComment, ...eventEdited }),
 ]);
 
 /**

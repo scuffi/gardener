@@ -114,8 +114,8 @@ describe("Actions-native task v1 contracts", () => {
     expect(() => taskBundleV1Schema.parse({
       ...fixtureBundle(),
       triggers: [
-        { kind: "github.issue.opened", labelsAll: ["a"] },
-        { kind: "github.issue.opened", labelsAll: ["b"] },
+        { kind: "github.issue.opened", labelsAll: ["a"], mentions: [], authors: "any" },
+        { kind: "github.issue.opened", labelsAll: ["b"], mentions: [], authors: "any" },
       ],
     })).toThrow(/unique/);
     expect(() => taskBundleV1Schema.parse({
@@ -157,7 +157,7 @@ describe("Actions-native task v1 contracts", () => {
   it("keeps the declared trigger kind list aligned with the discriminated union", () => {
     const unionKinds = taskTriggerV1Schema.options.map((option) => option.shape.kind.value);
     expect([...taskTriggerKindValues]).toEqual(unionKinds);
-    expect(taskTriggerKindValues).toHaveLength(26);
+    expect(taskTriggerKindValues).toHaveLength(29);
     expect(taskTriggerKindValues).not.toContain("github.pull_request_target");
     expect(pullRequestFamilyTriggerKindValues).toEqual([
       "github.pull_request.opened",
@@ -170,6 +170,7 @@ describe("Actions-native task v1 contracts", () => {
       "github.pull_request.unlabeled",
       "github.pull_request_review.submitted",
       "github.pull_request_review_comment.created",
+      "github.pull_request_review_comment.edited",
     ]);
   });
 
@@ -208,7 +209,7 @@ describe("Actions-native task v1 contracts", () => {
   });
 
   it("requires the manual trigger and accepts draft only as true", () => {
-    const issueOnly = { ...fixtureBundle(), triggers: [{ kind: "github.issue.opened", labelsAll: [] }] };
+    const issueOnly = { ...fixtureBundle(), triggers: [{ kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" }] };
     expect(() => taskBundleV1Schema.parse(issueOnly)).toThrow(/github.workflow_dispatch/);
     expect(taskBundleV1Schema.parse({ ...fixtureBundle(), draft: true }).draft).toBe(true);
     expect(() => taskBundleV1Schema.parse({ ...fixtureBundle(), draft: false })).toThrow();

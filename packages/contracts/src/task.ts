@@ -25,6 +25,37 @@ const relativePath = z.string().min(1).max(1_024).refine(
 
 const taskLabelFilterV1Schema = z.array(z.string().trim().min(1).max(100)).max(20).default([]);
 
+/**
+ * A GitHub login as it appears in an @mention: letters, digits and single
+ * hyphens, no leading or trailing hyphen, at most 39 characters. Bundles carry
+ * it lowercased, because GitHub matches mentions case-insensitively.
+ */
+export const githubHandleV1Schema = z.string().regex(
+  /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/,
+  "expected a lowercase GitHub login such as octocat",
+);
+
+/** GitHub's `author_association` values. */
+export const authorAssociationV1Schema = z.enum([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE",
+]);
+export type AuthorAssociationV1 = z.infer<typeof authorAssociationV1Schema>;
+
+/** Associations `authors: maintainers` admits. */
+export const maintainerAssociations = ["OWNER", "MEMBER", "COLLABORATOR"] as const satisfies readonly AuthorAssociationV1[];
+
+const taskMentionFilterV1Schema = z.array(githubHandleV1Schema).max(20).default([]).refine(
+  (handles) => new Set(handles).size === handles.length,
+  "mentions must not repeat a handle",
+);
+
 /** GitHub branch filter pattern accepted by `on.push.branches`. */
 const branchFilterV1Schema = z.string().trim().min(1).max(255).regex(
   /^!?[A-Za-z0-9_.\-/*?+[\]]+$/,
@@ -93,26 +124,43 @@ function labelGatedTrigger<Kind extends string>(kind: Kind) {
 }
 
 /**
+ * A trigger whose event carries text someone wrote: an issue, pull request,
+ * discussion, review or comment. It can also require an @mention and restrict
+ * who wrote the text. The compiler always writes `authors`, resolved from the
+ * task's defaults, so the runtime never infers it.
+ */
+function authoredTrigger<Kind extends string>(kind: Kind) {
+  return z.strictObject({
+    kind: z.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    mentions: taskMentionFilterV1Schema,
+    authors: z.enum(["maintainers", "any"]),
+  });
+}
+
+/**
  * Portable repository event requirements. One member per (event, action) pair so
  * that every declared trigger compiles to an exact provider filter.
  */
 export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
-  labelGatedTrigger("github.issue.opened"),
-  labelGatedTrigger("github.issue.edited"),
+  authoredTrigger("github.issue.opened"),
+  authoredTrigger("github.issue.edited"),
   labelGatedTrigger("github.issue.labeled"),
   labelGatedTrigger("github.issue.unlabeled"),
   labelGatedTrigger("github.issue.reopened"),
-  labelGatedTrigger("github.issue_comment.created"),
-  labelGatedTrigger("github.pull_request.opened"),
+  authoredTrigger("github.issue_comment.created"),
+  authoredTrigger("github.issue_comment.edited"),
+  authoredTrigger("github.pull_request.opened"),
   labelGatedTrigger("github.pull_request.reopened"),
   labelGatedTrigger("github.pull_request.synchronize"),
   labelGatedTrigger("github.pull_request.ready_for_review"),
   labelGatedTrigger("github.pull_request.converted_to_draft"),
-  labelGatedTrigger("github.pull_request.edited"),
+  authoredTrigger("github.pull_request.edited"),
   labelGatedTrigger("github.pull_request.labeled"),
   labelGatedTrigger("github.pull_request.unlabeled"),
-  labelGatedTrigger("github.pull_request_review.submitted"),
-  labelGatedTrigger("github.pull_request_review_comment.created"),
+  authoredTrigger("github.pull_request_review.submitted"),
+  authoredTrigger("github.pull_request_review_comment.created"),
+  authoredTrigger("github.pull_request_review_comment.edited"),
   z.strictObject({
     kind: z.literal("github.push"),
     /**
@@ -127,13 +175,14 @@ export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("github.workflow_dispatch") }),
   z.strictObject({ kind: z.literal("github.schedule"), cron: cronExpressionV1Schema }),
-  labelGatedTrigger("github.discussion.created"),
-  labelGatedTrigger("github.discussion.edited"),
+  authoredTrigger("github.discussion.created"),
+  authoredTrigger("github.discussion.edited"),
   labelGatedTrigger("github.discussion.answered"),
   labelGatedTrigger("github.discussion.unanswered"),
   labelGatedTrigger("github.discussion.labeled"),
   labelGatedTrigger("github.discussion.unlabeled"),
-  labelGatedTrigger("github.discussion_comment.created"),
+  authoredTrigger("github.discussion_comment.created"),
+  authoredTrigger("github.discussion_comment.edited"),
 ]);
 export type TaskTriggerV1 = z.infer<typeof taskTriggerV1Schema>;
 export type TaskTriggerKindV1 = TaskTriggerV1["kind"];
@@ -146,6 +195,7 @@ export const taskTriggerKindValues = [
   "github.issue.unlabeled",
   "github.issue.reopened",
   "github.issue_comment.created",
+  "github.issue_comment.edited",
   "github.pull_request.opened",
   "github.pull_request.reopened",
   "github.pull_request.synchronize",
@@ -156,6 +206,7 @@ export const taskTriggerKindValues = [
   "github.pull_request.unlabeled",
   "github.pull_request_review.submitted",
   "github.pull_request_review_comment.created",
+  "github.pull_request_review_comment.edited",
   "github.push",
   "github.workflow_dispatch",
   "github.schedule",
@@ -166,6 +217,7 @@ export const taskTriggerKindValues = [
   "github.discussion.labeled",
   "github.discussion.unlabeled",
   "github.discussion_comment.created",
+  "github.discussion_comment.edited",
 ] as const satisfies readonly TaskTriggerKindV1[];
 
 /**
@@ -367,6 +419,7 @@ export const eventNameByTriggerKind = {
   "github.issue.unlabeled": "issues",
   "github.issue.reopened": "issues",
   "github.issue_comment.created": "issue_comment",
+  "github.issue_comment.edited": "issue_comment",
   "github.pull_request.opened": "pull_request",
   "github.pull_request.reopened": "pull_request",
   "github.pull_request.synchronize": "pull_request",
@@ -377,6 +430,7 @@ export const eventNameByTriggerKind = {
   "github.pull_request.unlabeled": "pull_request",
   "github.pull_request_review.submitted": "pull_request_review",
   "github.pull_request_review_comment.created": "pull_request_review_comment",
+  "github.pull_request_review_comment.edited": "pull_request_review_comment",
   "github.push": "push",
   "github.workflow_dispatch": "workflow_dispatch",
   "github.schedule": "schedule",
@@ -387,6 +441,7 @@ export const eventNameByTriggerKind = {
   "github.discussion.labeled": "discussion",
   "github.discussion.unlabeled": "discussion",
   "github.discussion_comment.created": "discussion_comment",
+  "github.discussion_comment.edited": "discussion_comment",
 } as const satisfies Record<TaskTriggerKindV1, NormalizedEventNameV1>;
 
 /**
@@ -400,6 +455,7 @@ export const eventActionByTriggerKind = {
   "github.issue.unlabeled": "unlabeled",
   "github.issue.reopened": "reopened",
   "github.issue_comment.created": "created",
+  "github.issue_comment.edited": "edited",
   "github.pull_request.opened": "opened",
   "github.pull_request.reopened": "reopened",
   "github.pull_request.synchronize": "synchronize",
@@ -410,6 +466,7 @@ export const eventActionByTriggerKind = {
   "github.pull_request.unlabeled": "unlabeled",
   "github.pull_request_review.submitted": "submitted",
   "github.pull_request_review_comment.created": "created",
+  "github.pull_request_review_comment.edited": "edited",
   "github.push": null,
   "github.workflow_dispatch": null,
   "github.schedule": null,
@@ -420,7 +477,59 @@ export const eventActionByTriggerKind = {
   "github.discussion.labeled": "labeled",
   "github.discussion.unlabeled": "unlabeled",
   "github.discussion_comment.created": "created",
+  "github.discussion_comment.edited": "edited",
 } as const satisfies Record<TaskTriggerKindV1, string | null>;
+
+/** Trigger kinds that accept `mentions` and `authors`. */
+export type AuthoredTriggerKindV1 = Extract<TaskTriggerV1, { authors: unknown }>["kind"];
+
+/**
+ * Where an authored trigger's text lives in the normalized event, and so which
+ * body a mention must appear in and whose `author_association` counts.
+ */
+export const authoredTriggerSubject = {
+  "github.issue.opened": "issue",
+  "github.issue.edited": "issue",
+  "github.issue_comment.created": "comment",
+  "github.issue_comment.edited": "comment",
+  "github.pull_request.opened": "pullRequest",
+  "github.pull_request.edited": "pullRequest",
+  "github.pull_request_review.submitted": "review",
+  "github.pull_request_review_comment.created": "comment",
+  "github.pull_request_review_comment.edited": "comment",
+  "github.discussion.created": "discussion",
+  "github.discussion.edited": "discussion",
+  "github.discussion_comment.created": "comment",
+  "github.discussion_comment.edited": "comment",
+} as const satisfies Record<AuthoredTriggerKindV1, "issue" | "comment" | "pullRequest" | "review" | "discussion">;
+
+export function isAuthoredTriggerKind(kind: TaskTriggerKindV1): kind is AuthoredTriggerKindV1 {
+  return Object.hasOwn(authoredTriggerSubject, kind);
+}
+
+/**
+ * Authored triggers whose text anyone who can comment may write, so they only
+ * run for maintainers unless the task says otherwise. A trigger with
+ * `mentions` defaults the same way.
+ */
+const maintainerDefaultKinds: ReadonlySet<TaskTriggerKindV1> = new Set([
+  "github.issue_comment.created",
+  "github.issue_comment.edited",
+  "github.pull_request_review.submitted",
+  "github.pull_request_review_comment.created",
+  "github.pull_request_review_comment.edited",
+  "github.discussion_comment.created",
+  "github.discussion_comment.edited",
+]);
+
+export function defaultTriggerAuthors(kind: AuthoredTriggerKindV1, mentions: readonly string[]): "maintainers" | "any" {
+  return maintainerDefaultKinds.has(kind) || mentions.length > 0 ? "maintainers" : "any";
+}
+
+/** Edited triggers: with `mentions`, they run only when the edit added the mention. */
+export function isEditedTriggerKind(kind: TaskTriggerKindV1): boolean {
+  return eventActionByTriggerKind[kind] === "edited";
+}
 
 const normalizedWorkflowV1Schema = z.strictObject({
   runId: githubNumericId,
@@ -462,6 +571,7 @@ const normalizedIssueV1Schema = z.strictObject({
   updatedAt: z.iso.datetime().optional(),
   labels: boundedLabels,
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
 });
 
 /**
@@ -481,6 +591,7 @@ const normalizedPullRequestV1Schema = z.strictObject({
   body: boundedBody,
   labels: boundedLabels,
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
@@ -507,6 +618,7 @@ const normalizedCommentV1Schema = z.strictObject({
   body: boundedBody,
   updatedAt: z.iso.datetime().optional(),
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
 });
 
 const normalizedReviewV1Schema = z.strictObject({
@@ -514,6 +626,7 @@ const normalizedReviewV1Schema = z.strictObject({
   state: z.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: boundedBody,
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
 });
 
 const normalizedDiscussionV1Schema = z.strictObject({
@@ -524,6 +637,7 @@ const normalizedDiscussionV1Schema = z.strictObject({
   body: boundedBody,
   labels: boundedLabels,
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
   category: z.string().min(1).max(100),
   answered: z.boolean(),
   state: z.enum(["open", "closed"]).optional(),
@@ -536,6 +650,7 @@ const normalizedDiscussionCommentV1Schema = z.strictObject({
   body: boundedBody,
   updatedAt: z.iso.datetime().optional(),
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
 });
 
 const normalizedPushV1Schema = z.strictObject({
@@ -567,26 +682,34 @@ function eventMember<Kind extends TaskTriggerKindV1, Shape extends z.ZodRawShape
 }
 
 const issuePayload = { issue: normalizedIssueV1Schema };
+/**
+ * On an edited event, the text body before the edit. Present only when the
+ * edit changed the body (GitHub's `changes.body.from`), so its absence means a
+ * title-only or other edit.
+ */
+const editedPayload = { previousBody: z.string().max(65_536).optional() };
 const pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
 const discussionPayload = { discussion: normalizedDiscussionV1Schema };
 
 export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
   eventMember("github.issue.opened", issuePayload),
-  eventMember("github.issue.edited", issuePayload),
+  eventMember("github.issue.edited", { ...issuePayload, ...editedPayload }),
   eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.reopened", issuePayload),
   eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload }),
   eventMember("github.pull_request.opened", pullRequestPayload),
   eventMember("github.pull_request.reopened", pullRequestPayload),
   eventMember("github.pull_request.synchronize", pullRequestPayload),
   eventMember("github.pull_request.ready_for_review", pullRequestPayload),
   eventMember("github.pull_request.converted_to_draft", pullRequestPayload),
-  eventMember("github.pull_request.edited", pullRequestPayload),
+  eventMember("github.pull_request.edited", { ...pullRequestPayload, ...editedPayload }),
   eventMember("github.pull_request.labeled", { ...pullRequestPayload, label: changedLabel }),
   eventMember("github.pull_request.unlabeled", { ...pullRequestPayload, label: changedLabel }),
   eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
   eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.pull_request_review_comment.edited", { ...pullRequestPayload, comment: normalizedCommentV1Schema, ...editedPayload }),
   eventMember("github.push", { push: normalizedPushV1Schema }),
   eventMember("github.workflow_dispatch", {
     prompt: z.string().trim().min(1).max(20_000).optional(),
@@ -596,12 +719,13 @@ export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
   }),
   eventMember("github.schedule", { cron: cronExpressionV1Schema }),
   eventMember("github.discussion.created", discussionPayload),
-  eventMember("github.discussion.edited", discussionPayload),
+  eventMember("github.discussion.edited", { ...discussionPayload, ...editedPayload }),
   eventMember("github.discussion.answered", discussionPayload),
   eventMember("github.discussion.unanswered", discussionPayload),
   eventMember("github.discussion.labeled", { ...discussionPayload, label: changedLabel }),
   eventMember("github.discussion.unlabeled", { ...discussionPayload, label: changedLabel }),
   eventMember("github.discussion_comment.created", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema }),
+  eventMember("github.discussion_comment.edited", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema, ...editedPayload }),
 ]).superRefine((event, context) => {
   if (event.repository.fullName !== `${event.repository.owner}/${event.repository.name}`) {
     context.addIssue({ code: "custom", path: ["repository", "fullName"], message: "fullName must match repository owner and name" });

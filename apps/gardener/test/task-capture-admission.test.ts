@@ -95,7 +95,7 @@ function event(): NormalizedEventV1 {
 async function runRequest(overrides: { maxEffectOperations?: number } = {}): Promise<TaskRunRequestV1> {
   const bundle = structuredClone(inspectRepositoryFixtureBundle()) as TaskBundleV1;
   bundle.effects = ["issue.comment.create", "commit.create"] as TaskBundleV1["effects"];
-  bundle.triggers = [{ kind: "github.issue.opened", labelsAll: [] }];
+  bundle.triggers = [{ kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" }];
   if (overrides.maxEffectOperations !== undefined) bundle.limits.maxEffectOperations = overrides.maxEffectOperations;
   return {
     schemaVersion: "gardener.task-run-request/v1",

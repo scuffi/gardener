@@ -15,7 +15,7 @@ export function inspectRepositoryFixtureBundle(): Readonly<TaskBundleV1> {
       "Produce one concise, helpful issue comment: summarize what you found, identify likely next steps, and clearly state uncertainty.",
       "Do not modify the repository and do not claim the comment has already been posted.",
     ].join("\n"),
-    triggers: [{ kind: "github.issue.opened", labelsAll: ["gardener-test"] }, { kind: "github.workflow_dispatch" }],
+    triggers: [{ kind: "github.issue.opened", labelsAll: ["gardener-test"], mentions: [], authors: "any" }, { kind: "github.workflow_dispatch" }],
     tools: ["repository.list_files", "repository.read_file", "repository.exec"],
     effects: ["issue.comment.create"],
     network: { default: "deny", allow: [], deny: [] },

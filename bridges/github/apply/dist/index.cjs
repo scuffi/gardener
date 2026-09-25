@@ -40316,6 +40316,24 @@ var relativePath = external_exports.string().min(1).max(1024).refine(
   "expected a normalized repository-relative POSIX path"
 );
 var taskLabelFilterV1Schema = external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([]);
+var githubHandleV1Schema = external_exports.string().regex(
+  /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/,
+  "expected a lowercase GitHub login such as octocat"
+);
+var authorAssociationV1Schema = external_exports.enum([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE"
+]);
+var taskMentionFilterV1Schema = external_exports.array(githubHandleV1Schema).max(20).default([]).refine(
+  (handles) => new Set(handles).size === handles.length,
+  "mentions must not repeat a handle"
+);
 var branchFilterV1Schema = external_exports.string().trim().min(1).max(255).regex(
   /^!?[A-Za-z0-9_.\-/*?+[\]]+$/,
   "expected a GitHub branch filter pattern"
@@ -40366,23 +40384,33 @@ var cronExpressionV1Schema = external_exports.string().trim().min(1).max(100).su
 function labelGatedTrigger(kind) {
   return external_exports.strictObject({ kind: external_exports.literal(kind), labelsAll: taskLabelFilterV1Schema });
 }
+function authoredTrigger(kind) {
+  return external_exports.strictObject({
+    kind: external_exports.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    mentions: taskMentionFilterV1Schema,
+    authors: external_exports.enum(["maintainers", "any"])
+  });
+}
 var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
-  labelGatedTrigger("github.issue.opened"),
-  labelGatedTrigger("github.issue.edited"),
+  authoredTrigger("github.issue.opened"),
+  authoredTrigger("github.issue.edited"),
   labelGatedTrigger("github.issue.labeled"),
   labelGatedTrigger("github.issue.unlabeled"),
   labelGatedTrigger("github.issue.reopened"),
-  labelGatedTrigger("github.issue_comment.created"),
-  labelGatedTrigger("github.pull_request.opened"),
+  authoredTrigger("github.issue_comment.created"),
+  authoredTrigger("github.issue_comment.edited"),
+  authoredTrigger("github.pull_request.opened"),
   labelGatedTrigger("github.pull_request.reopened"),
   labelGatedTrigger("github.pull_request.synchronize"),
   labelGatedTrigger("github.pull_request.ready_for_review"),
   labelGatedTrigger("github.pull_request.converted_to_draft"),
-  labelGatedTrigger("github.pull_request.edited"),
+  authoredTrigger("github.pull_request.edited"),
   labelGatedTrigger("github.pull_request.labeled"),
   labelGatedTrigger("github.pull_request.unlabeled"),
-  labelGatedTrigger("github.pull_request_review.submitted"),
-  labelGatedTrigger("github.pull_request_review_comment.created"),
+  authoredTrigger("github.pull_request_review.submitted"),
+  authoredTrigger("github.pull_request_review_comment.created"),
+  authoredTrigger("github.pull_request_review_comment.edited"),
   external_exports.strictObject({
     kind: external_exports.literal("github.push"),
     /**
@@ -40397,13 +40425,14 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   }),
   external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") }),
   external_exports.strictObject({ kind: external_exports.literal("github.schedule"), cron: cronExpressionV1Schema }),
-  labelGatedTrigger("github.discussion.created"),
-  labelGatedTrigger("github.discussion.edited"),
+  authoredTrigger("github.discussion.created"),
+  authoredTrigger("github.discussion.edited"),
   labelGatedTrigger("github.discussion.answered"),
   labelGatedTrigger("github.discussion.unanswered"),
   labelGatedTrigger("github.discussion.labeled"),
   labelGatedTrigger("github.discussion.unlabeled"),
-  labelGatedTrigger("github.discussion_comment.created")
+  authoredTrigger("github.discussion_comment.created"),
+  authoredTrigger("github.discussion_comment.edited")
 ]);
 var taskTriggerKindValues = [
   "github.issue.opened",
@@ -40412,6 +40441,7 @@ var taskTriggerKindValues = [
   "github.issue.unlabeled",
   "github.issue.reopened",
   "github.issue_comment.created",
+  "github.issue_comment.edited",
   "github.pull_request.opened",
   "github.pull_request.reopened",
   "github.pull_request.synchronize",
@@ -40422,6 +40452,7 @@ var taskTriggerKindValues = [
   "github.pull_request.unlabeled",
   "github.pull_request_review.submitted",
   "github.pull_request_review_comment.created",
+  "github.pull_request_review_comment.edited",
   "github.push",
   "github.workflow_dispatch",
   "github.schedule",
@@ -40431,7 +40462,8 @@ var taskTriggerKindValues = [
   "github.discussion.unanswered",
   "github.discussion.labeled",
   "github.discussion.unlabeled",
-  "github.discussion_comment.created"
+  "github.discussion_comment.created",
+  "github.discussion_comment.edited"
 ];
 var triggerKindOrder = new Map(
   taskTriggerKindValues.map((kind, index) => [kind, index])
@@ -40564,6 +40596,7 @@ var eventNameByTriggerKind = {
   "github.issue.unlabeled": "issues",
   "github.issue.reopened": "issues",
   "github.issue_comment.created": "issue_comment",
+  "github.issue_comment.edited": "issue_comment",
   "github.pull_request.opened": "pull_request",
   "github.pull_request.reopened": "pull_request",
   "github.pull_request.synchronize": "pull_request",
@@ -40574,6 +40607,7 @@ var eventNameByTriggerKind = {
   "github.pull_request.unlabeled": "pull_request",
   "github.pull_request_review.submitted": "pull_request_review",
   "github.pull_request_review_comment.created": "pull_request_review_comment",
+  "github.pull_request_review_comment.edited": "pull_request_review_comment",
   "github.push": "push",
   "github.workflow_dispatch": "workflow_dispatch",
   "github.schedule": "schedule",
@@ -40583,7 +40617,8 @@ var eventNameByTriggerKind = {
   "github.discussion.unanswered": "discussion",
   "github.discussion.labeled": "discussion",
   "github.discussion.unlabeled": "discussion",
-  "github.discussion_comment.created": "discussion_comment"
+  "github.discussion_comment.created": "discussion_comment",
+  "github.discussion_comment.edited": "discussion_comment"
 };
 var eventActionByTriggerKind = {
   "github.issue.opened": "opened",
@@ -40592,6 +40627,7 @@ var eventActionByTriggerKind = {
   "github.issue.unlabeled": "unlabeled",
   "github.issue.reopened": "reopened",
   "github.issue_comment.created": "created",
+  "github.issue_comment.edited": "edited",
   "github.pull_request.opened": "opened",
   "github.pull_request.reopened": "reopened",
   "github.pull_request.synchronize": "synchronize",
@@ -40602,6 +40638,7 @@ var eventActionByTriggerKind = {
   "github.pull_request.unlabeled": "unlabeled",
   "github.pull_request_review.submitted": "submitted",
   "github.pull_request_review_comment.created": "created",
+  "github.pull_request_review_comment.edited": "edited",
   "github.push": null,
   "github.workflow_dispatch": null,
   "github.schedule": null,
@@ -40611,7 +40648,8 @@ var eventActionByTriggerKind = {
   "github.discussion.unanswered": "unanswered",
   "github.discussion.labeled": "labeled",
   "github.discussion.unlabeled": "unlabeled",
-  "github.discussion_comment.created": "created"
+  "github.discussion_comment.created": "created",
+  "github.discussion_comment.edited": "edited"
 };
 var normalizedWorkflowV1Schema = external_exports.strictObject({
   runId: githubNumericId,
@@ -40646,7 +40684,8 @@ var normalizedIssueV1Schema = external_exports.strictObject({
   state: external_exports.enum(["open", "closed"]).optional(),
   updatedAt: external_exports.iso.datetime().optional(),
   labels: boundedLabels,
-  author: normalizedActorV1Schema
+  author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional()
 });
 var normalizedPullRequestRepositoryV1Schema = external_exports.strictObject({
   id: githubNumericId,
@@ -40659,6 +40698,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
   body: boundedBody,
   labels: boundedLabels,
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
@@ -40683,13 +40723,15 @@ var normalizedCommentV1Schema = external_exports.strictObject({
   id: githubNumericId,
   body: boundedBody,
   updatedAt: external_exports.iso.datetime().optional(),
-  author: normalizedActorV1Schema
+  author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional()
 });
 var normalizedReviewV1Schema = external_exports.strictObject({
   id: githubNumericId,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: boundedBody,
-  author: normalizedActorV1Schema
+  author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional()
 });
 var normalizedDiscussionV1Schema = external_exports.strictObject({
   id: githubNumericId,
@@ -40699,6 +40741,7 @@ var normalizedDiscussionV1Schema = external_exports.strictObject({
   body: boundedBody,
   labels: boundedLabels,
   author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional(),
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]).optional(),
@@ -40709,7 +40752,8 @@ var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
   nodeId: githubNodeId,
   body: boundedBody,
   updatedAt: external_exports.iso.datetime().optional(),
-  author: normalizedActorV1Schema
+  author: normalizedActorV1Schema,
+  authorAssociation: authorAssociationV1Schema.optional()
 });
 var normalizedPushV1Schema = external_exports.strictObject({
   ref: external_exports.string().min(1).max(1024),
@@ -40736,25 +40780,28 @@ function eventMember(kind, shape) {
   return external_exports.strictObject({ ...normalizedEventBase, kind: external_exports.literal(kind), ...shape });
 }
 var issuePayload = { issue: normalizedIssueV1Schema };
+var editedPayload = { previousBody: external_exports.string().max(65536).optional() };
 var pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
 var discussionPayload = { discussion: normalizedDiscussionV1Schema };
 var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.opened", issuePayload),
-  eventMember("github.issue.edited", issuePayload),
+  eventMember("github.issue.edited", { ...issuePayload, ...editedPayload }),
   eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.reopened", issuePayload),
   eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload }),
   eventMember("github.pull_request.opened", pullRequestPayload),
   eventMember("github.pull_request.reopened", pullRequestPayload),
   eventMember("github.pull_request.synchronize", pullRequestPayload),
   eventMember("github.pull_request.ready_for_review", pullRequestPayload),
   eventMember("github.pull_request.converted_to_draft", pullRequestPayload),
-  eventMember("github.pull_request.edited", pullRequestPayload),
+  eventMember("github.pull_request.edited", { ...pullRequestPayload, ...editedPayload }),
   eventMember("github.pull_request.labeled", { ...pullRequestPayload, label: changedLabel }),
   eventMember("github.pull_request.unlabeled", { ...pullRequestPayload, label: changedLabel }),
   eventMember("github.pull_request_review.submitted", { ...pullRequestPayload, review: normalizedReviewV1Schema }),
   eventMember("github.pull_request_review_comment.created", { ...pullRequestPayload, comment: normalizedCommentV1Schema }),
+  eventMember("github.pull_request_review_comment.edited", { ...pullRequestPayload, comment: normalizedCommentV1Schema, ...editedPayload }),
   eventMember("github.push", { push: normalizedPushV1Schema }),
   eventMember("github.workflow_dispatch", {
     prompt: external_exports.string().trim().min(1).max(2e4).optional(),
@@ -40764,12 +40811,13 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   }),
   eventMember("github.schedule", { cron: cronExpressionV1Schema }),
   eventMember("github.discussion.created", discussionPayload),
-  eventMember("github.discussion.edited", discussionPayload),
+  eventMember("github.discussion.edited", { ...discussionPayload, ...editedPayload }),
   eventMember("github.discussion.answered", discussionPayload),
   eventMember("github.discussion.unanswered", discussionPayload),
   eventMember("github.discussion.labeled", { ...discussionPayload, label: changedLabel }),
   eventMember("github.discussion.unlabeled", { ...discussionPayload, label: changedLabel }),
-  eventMember("github.discussion_comment.created", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema })
+  eventMember("github.discussion_comment.created", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema }),
+  eventMember("github.discussion_comment.edited", { ...discussionPayload, comment: normalizedDiscussionCommentV1Schema, ...editedPayload })
 ]).superRefine((event, context) => {
   if (event.repository.fullName !== `${event.repository.owner}/${event.repository.name}`) {
     context.addIssue({ code: "custom", path: ["repository", "fullName"], message: "fullName must match repository owner and name" });
@@ -41704,6 +41752,17 @@ var eventLabels = external_exports.array(external_exports.string().trim().min(1)
 var eventBody = external_exports.string().max(65536).nullable();
 var eventNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
 var eventChangedLabel = external_exports.string().trim().min(1).max(100);
+var eventAuthorAssociation = external_exports.enum([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE"
+]).optional();
+var eventEdited = { previousBody: external_exports.string().max(65536).optional() };
 var eventIssue = external_exports.strictObject({
   id: githubNumericId2,
   number: external_exports.number().int().positive(),
@@ -41714,7 +41773,8 @@ var eventIssue = external_exports.strictObject({
   state: external_exports.enum(["open", "closed"]).optional(),
   updatedAt: external_exports.iso.datetime().optional(),
   labels: eventLabels,
-  author: eventActor
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation
 });
 var eventPullRequestRepository = external_exports.strictObject({
   id: githubNumericId2,
@@ -41727,6 +41787,7 @@ var eventPullRequest = external_exports.strictObject({
   body: eventBody,
   labels: eventLabels,
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
@@ -41734,12 +41795,19 @@ var eventPullRequest = external_exports.strictObject({
   base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
   head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
 });
-var eventComment = external_exports.strictObject({ id: githubNumericId2, body: eventBody, updatedAt: external_exports.iso.datetime().optional(), author: eventActor });
+var eventComment = external_exports.strictObject({
+  id: githubNumericId2,
+  body: eventBody,
+  updatedAt: external_exports.iso.datetime().optional(),
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation
+});
 var eventReview = external_exports.strictObject({
   id: githubNumericId2,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: eventBody,
-  author: eventActor
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation
 });
 var eventDiscussion = external_exports.strictObject({
   id: githubNumericId2,
@@ -41749,6 +41817,7 @@ var eventDiscussion = external_exports.strictObject({
   body: eventBody,
   labels: eventLabels,
   author: eventActor,
+  authorAssociation: eventAuthorAssociation,
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]).optional(),
@@ -41759,7 +41828,8 @@ var eventDiscussionComment = external_exports.strictObject({
   nodeId: eventNodeId,
   body: eventBody,
   updatedAt: external_exports.iso.datetime().optional(),
-  author: eventActor
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation
 });
 var eventPush = external_exports.strictObject({
   ref: external_exports.string().min(1).max(1024),
@@ -41789,21 +41859,23 @@ var pullRequestPayload2 = { pullRequest: eventPullRequest };
 var discussionPayload2 = { discussion: eventDiscussion };
 var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.issue.opened", issuePayload2),
-  runnerEventMember("github.issue.edited", issuePayload2),
+  runnerEventMember("github.issue.edited", { ...issuePayload2, ...eventEdited }),
   runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
   runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
   runnerEventMember("github.issue.reopened", issuePayload2),
   runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
+  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited }),
   runnerEventMember("github.pull_request.opened", pullRequestPayload2),
   runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
   runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
   runnerEventMember("github.pull_request.ready_for_review", pullRequestPayload2),
   runnerEventMember("github.pull_request.converted_to_draft", pullRequestPayload2),
-  runnerEventMember("github.pull_request.edited", pullRequestPayload2),
+  runnerEventMember("github.pull_request.edited", { ...pullRequestPayload2, ...eventEdited }),
   runnerEventMember("github.pull_request.labeled", { ...pullRequestPayload2, label: eventChangedLabel }),
   runnerEventMember("github.pull_request.unlabeled", { ...pullRequestPayload2, label: eventChangedLabel }),
   runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload2, review: eventReview }),
   runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload2, comment: eventComment }),
+  runnerEventMember("github.pull_request_review_comment.edited", { ...pullRequestPayload2, comment: eventComment, ...eventEdited }),
   runnerEventMember("github.push", { push: eventPush }),
   runnerEventMember("github.workflow_dispatch", {
     prompt: external_exports.string().trim().min(1).max(2e4).optional(),
@@ -41816,12 +41888,13 @@ var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   }),
   runnerEventMember("github.schedule", { cron: external_exports.string().trim().min(1).max(100) }),
   runnerEventMember("github.discussion.created", discussionPayload2),
-  runnerEventMember("github.discussion.edited", discussionPayload2),
+  runnerEventMember("github.discussion.edited", { ...discussionPayload2, ...eventEdited }),
   runnerEventMember("github.discussion.answered", discussionPayload2),
   runnerEventMember("github.discussion.unanswered", discussionPayload2),
   runnerEventMember("github.discussion.labeled", { ...discussionPayload2, label: eventChangedLabel }),
   runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
-  runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment })
+  runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment }),
+  runnerEventMember("github.discussion_comment.edited", { ...discussionPayload2, comment: eventDiscussionComment, ...eventEdited })
 ]);
 var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
 var githubUrl = external_exports.url().refine(
@@ -45255,6 +45328,28 @@ function actor(value, what) {
   const user = object2(value, what);
   return { id: String(user.id ?? ""), login: user.login };
 }
+var AUTHOR_ASSOCIATIONS = /* @__PURE__ */ new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE"
+]);
+function association(value) {
+  const raw = value.author_association;
+  return typeof raw === "string" && AUTHOR_ASSOCIATIONS.has(raw) ? { authorAssociation: raw } : {};
+}
+function previousBody(raw) {
+  const changes = raw.changes;
+  if (changes === null || typeof changes !== "object" || Array.isArray(changes)) return {};
+  const body2 = changes.body;
+  if (body2 === null || typeof body2 !== "object" || Array.isArray(body2)) return {};
+  const from = body2.from;
+  return typeof from === "string" ? { previousBody: from } : {};
+}
 function labelNames(value) {
   return Array.isArray(value) ? value.map((label) => String(object2(label, "a label").name ?? "")).filter((name2) => name2.length > 0) : [];
 }
@@ -45271,7 +45366,8 @@ function issuePayload3(raw) {
     state: issue3.state === "closed" ? "closed" : "open",
     updatedAt: issue3.updated_at,
     labels: labelNames(issue3.labels),
-    author: actor(issue3.user, "an issue author")
+    author: actor(issue3.user, "an issue author"),
+    ...association(issue3)
   };
 }
 function repositoryRef(value) {
@@ -45290,6 +45386,7 @@ function pullRequestPayload3(raw) {
     body: pullRequest.body ?? null,
     labels: labelNames(pullRequest.labels),
     author: actor(pullRequest.user, "a pull-request author"),
+    ...association(pullRequest),
     draft: Boolean(pullRequest.draft),
     state: pullRequest.state === "closed" ? "closed" : "open",
     merged: Boolean(pullRequest.merged),
@@ -45304,7 +45401,8 @@ function commentPayload(raw) {
     id: String(comment.id ?? ""),
     body: comment.body ?? null,
     updatedAt: comment.updated_at,
-    author: actor(comment.user, "a comment author")
+    author: actor(comment.user, "a comment author"),
+    ...association(comment)
   };
 }
 function discussionPayload3(raw) {
@@ -45317,6 +45415,7 @@ function discussionPayload3(raw) {
     body: discussion.body ?? null,
     labels: labelNames(discussion.labels),
     author: actor(discussion.user, "a discussion author"),
+    ...association(discussion),
     category: object2(discussion.category, "a discussion category").name,
     answered: Boolean(discussion.answer_chosen_at ?? discussion.answer_html_url),
     state: discussion.state === "closed" ? "closed" : "open",
@@ -45383,17 +45482,28 @@ function normalizeGitHubEvent(eventName, source, resolved) {
       case "issues": {
         if (!action || !["opened", "edited", "labeled", "unlabeled", "reopened"].includes(action)) unsupported();
         const issue3 = { issue: issuePayload3(raw) };
-        return action === "labeled" || action === "unlabeled" ? { kind: `github.issue.${action}`, ...issue3, label: changedLabel2(raw) } : { kind: `github.issue.${action}`, ...issue3 };
+        if (action === "labeled" || action === "unlabeled") {
+          return { kind: `github.issue.${action}`, ...issue3, label: changedLabel2(raw) };
+        }
+        return { kind: `github.issue.${action}`, ...issue3, ...action === "edited" ? previousBody(raw) : {} };
       }
       case "issue_comment": {
-        if (action !== "created") unsupported();
-        return { kind: "github.issue_comment.created", issue: issuePayload3(raw), comment: commentPayload(raw) };
+        if (action !== "created" && action !== "edited") unsupported();
+        return {
+          kind: `github.issue_comment.${action}`,
+          issue: issuePayload3(raw),
+          comment: commentPayload(raw),
+          ...action === "edited" ? previousBody(raw) : {}
+        };
       }
       case "pull_request": {
         const supported = ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "edited", "labeled", "unlabeled"];
         if (!action || !supported.includes(action)) unsupported();
         const pullRequest = { pullRequest: pullRequestPayload3(raw) };
-        return action === "labeled" || action === "unlabeled" ? { kind: `github.pull_request.${action}`, ...pullRequest, label: changedLabel2(raw) } : { kind: `github.pull_request.${action}`, ...pullRequest };
+        if (action === "labeled" || action === "unlabeled") {
+          return { kind: `github.pull_request.${action}`, ...pullRequest, label: changedLabel2(raw) };
+        }
+        return { kind: `github.pull_request.${action}`, ...pullRequest, ...action === "edited" ? previousBody(raw) : {} };
       }
       case "pull_request_review": {
         if (action !== "submitted") unsupported();
@@ -45405,16 +45515,18 @@ function normalizeGitHubEvent(eventName, source, resolved) {
             id: String(review.id ?? ""),
             state: String(review.state ?? "").toLowerCase(),
             body: review.body ?? null,
-            author: actor(review.user, "a review author")
+            author: actor(review.user, "a review author"),
+            ...association(review)
           }
         };
       }
       case "pull_request_review_comment": {
-        if (action !== "created") unsupported();
+        if (action !== "created" && action !== "edited") unsupported();
         return {
-          kind: "github.pull_request_review_comment.created",
+          kind: `github.pull_request_review_comment.${action}`,
           pullRequest: pullRequestPayload3(raw),
-          comment: commentPayload(raw)
+          comment: commentPayload(raw),
+          ...action === "edited" ? previousBody(raw) : {}
         };
       }
       case "push":
@@ -45451,20 +45563,25 @@ function normalizeGitHubEvent(eventName, source, resolved) {
         const supported = ["created", "edited", "answered", "unanswered", "labeled", "unlabeled"];
         if (!action || !supported.includes(action)) unsupported();
         const discussion = { discussion: discussionPayload3(raw) };
-        return action === "labeled" || action === "unlabeled" ? { kind: `github.discussion.${action}`, ...discussion, label: changedLabel2(raw) } : { kind: `github.discussion.${action}`, ...discussion };
+        if (action === "labeled" || action === "unlabeled") {
+          return { kind: `github.discussion.${action}`, ...discussion, label: changedLabel2(raw) };
+        }
+        return { kind: `github.discussion.${action}`, ...discussion, ...action === "edited" ? previousBody(raw) : {} };
       }
       case "discussion_comment": {
-        if (action !== "created") unsupported();
+        if (action !== "created" && action !== "edited") unsupported();
         const comment = object2(raw.comment, "a discussion comment");
         return {
-          kind: "github.discussion_comment.created",
+          kind: `github.discussion_comment.${action}`,
+          ...action === "edited" ? previousBody(raw) : {},
           discussion: discussionPayload3(raw),
           comment: {
             id: String(comment.id ?? ""),
             nodeId: comment.node_id,
             body: comment.body ?? null,
             updatedAt: comment.updated_at,
-            author: actor(comment.user, "a discussion comment author")
+            author: actor(comment.user, "a discussion comment author"),
+            ...association(comment)
           }
         };
       }

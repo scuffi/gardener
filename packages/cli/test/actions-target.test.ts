@@ -31,7 +31,7 @@ function bundle(overrides: Partial<TaskBundleV1> = {}): TaskBundleV1 {
       outputTokens: 4_000,
     },
     ...overrides,
-    triggers: withManual(overrides.triggers ?? [{ kind: "github.issue.opened", labelsAll: ["gardener-demo"] }]),
+    triggers: withManual(overrides.triggers ?? [{ kind: "github.issue.opened", labelsAll: ["gardener-demo"], mentions: [], authors: "any" }]),
   });
 }
 
@@ -136,7 +136,7 @@ describe("github-actions/v1 target adapter", () => {
       bundle({
         tools: ["repository.list_files", "provider.api.read"],
         effects: ["pull_request.merge", "discussion.close"],
-        triggers: [{ kind: "github.issue_comment.created", labelsAll: [] }],
+        triggers: [{ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "any" }],
       }),
       bundle({ effects: [], triggers: [{ kind: "github.workflow_dispatch" }] }),
     ]) {
@@ -180,16 +180,16 @@ describe("github-actions/v1 target adapter", () => {
   it("binds every common trigger to an exact provider filter and excludes pull_request_target", () => {
     const plan = compileGitHubActionsTask(bundle({
       triggers: [
-        { kind: "github.issue.opened", labelsAll: [] },
-        { kind: "github.issue_comment.created", labelsAll: [] },
+        { kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" },
+        { kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "any" },
         { kind: "github.pull_request.synchronize", labelsAll: [] },
-        { kind: "github.pull_request_review.submitted", labelsAll: [] },
-        { kind: "github.pull_request_review_comment.created", labelsAll: [] },
+        { kind: "github.pull_request_review.submitted", labelsAll: [], mentions: [], authors: "any" },
+        { kind: "github.pull_request_review_comment.created", labelsAll: [], mentions: [], authors: "any" },
         { kind: "github.push", branches: ["main"] },
         { kind: "github.workflow_dispatch" },
         { kind: "github.schedule", cron: "0 3 * * 1" },
         { kind: "github.discussion.answered", labelsAll: [] },
-        { kind: "github.discussion_comment.created", labelsAll: [] },
+        { kind: "github.discussion_comment.created", labelsAll: [], mentions: [], authors: "any" },
       ],
     }));
     expect(plan.triggers.map((trigger) => trigger.event)).toEqual([
@@ -230,7 +230,7 @@ describe("github-actions/v1 target adapter", () => {
 
   it("lets apply read every kind of target a manual run can name", () => {
     const plan = compileGitHubActionsTask(bundle({
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }],
       effects: ["issue.comment.create"],
     }));
     expect(plan.effectsPermissions).toMatchObject({ issues: "write", "pull-requests": "read", "id-token": "write" });
@@ -239,7 +239,7 @@ describe("github-actions/v1 target adapter", () => {
 
   it("listens only for manual runs when the task is a draft", () => {
     const plan = compileGitHubActionsTask(bundle({
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }],
       draft: true,
     }));
     expect(plan.triggers.map((trigger) => trigger.kind)).toEqual(["github.workflow_dispatch"]);
@@ -249,7 +249,7 @@ describe("github-actions/v1 target adapter", () => {
   it("flags pull-request tasks for the same-repository guard with no opt-in", () => {
     expect(compileGitHubActionsTask(bundle()).requiresSameRepositoryGuard).toBe(false);
     expect(compileGitHubActionsTask(bundle({
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: [] }],
+      triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }],
     })).requiresSameRepositoryGuard).toBe(true);
     expect("allowForkExecution" in compileGitHubActionsTask(bundle())).toBe(false);
   });
@@ -259,15 +259,15 @@ describe("github-actions/v1 target adapter", () => {
     // so a bundle reaching it from any other path cannot skip the ordering.
     expect(() => bundle({
       triggers: [
-        { kind: "github.pull_request.opened", labelsAll: [] },
-        { kind: "github.issue.opened", labelsAll: [] },
+        { kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" },
+        { kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" },
       ],
     })).toThrow(/canonical/);
     expect(() => compileGitHubActionsTask({
       ...bundle(),
       triggers: [
-        { kind: "github.pull_request.opened", labelsAll: [] },
-        { kind: "github.issue.opened", labelsAll: [] },
+        { kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" },
+        { kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" },
       ],
     })).toThrow(/canonical order/);
     expect(() => compileGitHubActionsTask(bundle({

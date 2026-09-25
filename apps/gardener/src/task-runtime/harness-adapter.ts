@@ -1,5 +1,9 @@
 import {
+  authoredTriggerSubject,
   dispatchTargetKinds,
+  isAuthoredTriggerKind,
+  isEditedTriggerKind,
+  maintainerAssociations,
   eventHeadIsSameRepository,
   normalizedPullRequest,
   operationOutputCatalog,
@@ -233,20 +237,90 @@ function assertTriggerMatches(
   event: NormalizedEventV1,
   triggers: TaskRunRequestV1["bundle"]["triggers"],
 ): void {
-  const matches = triggers.some((trigger) => {
-    if (trigger.kind !== event.kind) return false;
-    if (trigger.kind === "github.push") {
-      return event.kind === "github.push" && branchMatches(trigger.branches, event.push.ref);
-    }
-    if (trigger.kind === "github.schedule") {
-      return event.kind === "github.schedule" && trigger.cron === event.cron;
-    }
-    if (trigger.kind === "github.workflow_dispatch") return true;
-    const labels = new Set(eventLabels(event));
-    return trigger.labelsAll.every((label) => labels.has(label));
-  });
+  const matches = triggers.some((trigger) => triggerSelects(trigger, event) && authoredFiltersPass(trigger, event));
   if (!matches) throw new Error(`Task does not declare trigger ${event.kind}`);
   assertDispatchTargetOffered(event, triggers);
+}
+
+type TaskTrigger = TaskRunRequestV1["bundle"]["triggers"][number];
+
+/** Kind, branches, cron and labels: what the generated workflow filters exactly. */
+function triggerSelects(trigger: TaskTrigger, event: NormalizedEventV1): boolean {
+  if (trigger.kind !== event.kind) return false;
+  if (trigger.kind === "github.push") {
+    return event.kind === "github.push" && branchMatches(trigger.branches, event.push.ref);
+  }
+  if (trigger.kind === "github.schedule") {
+    return event.kind === "github.schedule" && trigger.cron === event.cron;
+  }
+  if (trigger.kind === "github.workflow_dispatch") return true;
+  const labels = new Set(eventLabels(event));
+  return trigger.labelsAll.every((label) => labels.has(label));
+}
+
+/**
+ * True when the event is one a declared trigger selects, but every such
+ * trigger's `mentions` or `authors` filter excludes it. The workflow can only
+ * approximate those filters, so this is an expected outcome, not tampering:
+ * the run completes as a skip. Any other mismatch still fails the run.
+ */
+export function triggerFiltersExclude(event: NormalizedEventV1, triggers: readonly TaskTrigger[]): boolean {
+  const selecting = triggers.filter((trigger) => triggerSelects(trigger, event));
+  return selecting.length > 0 && !selecting.some((trigger) => authoredFiltersPass(trigger, event));
+}
+
+/**
+ * True when a selecting `authors: maintainers` trigger saw no association at
+ * all. Current bridges always send one, so this points at an older pinned
+ * bridge rather than a non-maintainer.
+ */
+export function triggerAssociationMissing(event: NormalizedEventV1, triggers: readonly TaskTrigger[]): boolean {
+  return triggers.some((trigger) => triggerSelects(trigger, event)
+    && "authors" in trigger
+    && trigger.authors === "maintainers"
+    && isAuthoredTriggerKind(trigger.kind)
+    && eventSubject(event, authoredTriggerSubject[trigger.kind])?.authorAssociation === undefined);
+}
+
+/**
+ * `authors` and `mentions` on an authored trigger. The author is whoever wrote
+ * the text the trigger names; on an edit that is still the original author,
+ * which fails safe because only the author or someone with write access can
+ * edit it.
+ */
+function authoredFiltersPass(trigger: TaskTrigger, event: NormalizedEventV1): boolean {
+  if (!("authors" in trigger) || !isAuthoredTriggerKind(trigger.kind)) return true;
+  const subject = eventSubject(event, authoredTriggerSubject[trigger.kind]);
+  if (subject === undefined) return false;
+  if (trigger.authors === "maintainers") {
+    const association = subject.authorAssociation;
+    if (association === undefined || !(maintainerAssociations as readonly string[]).includes(association)) return false;
+  }
+  if (trigger.mentions.length === 0) return true;
+  const body = subject.body ?? "";
+  if (!isEditedTriggerKind(trigger.kind)) return trigger.mentions.some((handle) => mentions(body, handle));
+  // On an edit, only a mention the edit added counts. No previous body means
+  // the edit left the body alone, so it added nothing.
+  const previous = "previousBody" in event ? event.previousBody : undefined;
+  if (previous === undefined) return false;
+  return trigger.mentions.some((handle) => mentions(body, handle) && !mentions(previous, handle));
+}
+
+function eventSubject(
+  event: NormalizedEventV1,
+  key: (typeof authoredTriggerSubject)[keyof typeof authoredTriggerSubject],
+): { body: string | null; authorAssociation?: string | undefined } | undefined {
+  const value = (event as Record<string, unknown>)[key];
+  return value !== null && typeof value === "object" ? value as { body: string | null; authorAssociation?: string } : undefined;
+}
+
+/**
+ * GitHub's mention rule, closely enough: `@handle`, case-insensitive, not
+ * inside a longer word or email address, and not the start of `@org/team`.
+ * Handles are letters, digits and hyphens, so they are safe inside a pattern.
+ */
+function mentions(body: string, handle: string): boolean {
+  return new RegExp(`(?<![A-Za-z0-9_.+-])@${handle}(?![A-Za-z0-9_/-])`, "i").test(body);
 }
 
 /**
