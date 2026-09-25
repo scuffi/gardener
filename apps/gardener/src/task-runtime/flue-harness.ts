@@ -91,7 +91,7 @@ export class FlueTaskHarness implements AgentHarness {
           events: [],
         };
       }
-      console.error("Gardener task Flue read failed", error instanceof AgentRunError ? error.cause : error);
+      console.error("Gardener task Flue read failed", describeReadFailure(error));
       const cancelled = error instanceof AgentRunError && error.outcome === "aborted";
       const limitFailure = !cancelled && error instanceof AgentRunError
         ? boundedTaskLimitFailure(error.cause)
@@ -159,4 +159,27 @@ function isSignalAbort(error: unknown, signal: AbortSignal | undefined): boolean
 
 function emptyUsage(): HarnessModelUsage {
   return { inputTokens: 0, outputTokens: 0, totalTokens: 0, model: "unknown", turns: 0, toolCalls: 0 };
+}
+
+/**
+ * A bounded, structured description of a failed read: each error's name and
+ * truncated message along the cause chain. Used to see why a failure was not
+ * mapped to a specific limit message.
+ */
+function describeReadFailure(error: unknown): { outcome?: string; chain: { name: string; message: string }[] } {
+  const chain: { name: string; message: string }[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
+    if (current instanceof Error) {
+      chain.push({ name: current.name, message: current.message.slice(0, 300) });
+      current = current.cause;
+    } else {
+      chain.push({ name: typeof current, message: String(current).slice(0, 300) });
+      break;
+    }
+  }
+  return {
+    ...(error instanceof AgentRunError ? { outcome: String(error.outcome) } : {}),
+    chain,
+  };
 }

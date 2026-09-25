@@ -63,6 +63,7 @@ import { FlueTaskHarness } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
+import { instrumentD1 } from "./d1-diagnostics";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 
 interface Enrollment {
@@ -116,6 +117,16 @@ export class TaskRunnerSession extends DurableObject<Env> {
   #runner: RpcStub<RunnerCapability> | undefined;
   #identity: AuthenticatedIdentity | undefined;
   #resultWaiters = new Map<string, Set<(result: RunnerActionResultV1) => void>>();
+  #instrumentedDb: D1Database | undefined;
+
+  /**
+   * D1, instrumented so a failed query logs its call site before the runner
+   * sees the rejection. A true private method, so it is never reachable over RPC.
+   */
+  #db(): D1Database {
+    this.#instrumentedDb ??= instrumentD1(this.env.DB, "TaskRunnerSession");
+    return this.#instrumentedDb;
+  }
 
   override fetch(request: Request): Promise<Response> {
     if (new URL(request.url).pathname !== "/rpc") return Promise.resolve(new Response("Not found", { status: 404 }));
@@ -131,7 +142,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
   async authenticate(helloInput: RunnerHelloV1, oidcToken: string, runner: RpcStub<RunnerCapability>, routedSessionId: string): Promise<void> {
     const hello = runnerHelloV1Schema.parse(helloInput);
     if (runnerSessionId(hello) !== routedSessionId) throw new Error("Runner identity does not match the routed durable session");
-    const enrollment = await this.env.DB.prepare(
+    const enrollment = await this.#db().prepare(
       "SELECT repository_id,owner_id,owner_login,repository_name,visibility,plan_job_workflow_ref,effects_job_workflow_ref,oidc_audience " +
       "FROM actions_repository_enrollments WHERE repository_id=? AND owner_id=? AND enabled=1",
     ).bind(hello.repositoryId, hello.ownerId).first<Enrollment>();
@@ -426,7 +437,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
 
   /** The admitted immutable request, which is the only source of authority. */
   private async loadRunRequest(runId: string, purpose: string): Promise<TaskRunRequestV1> {
-    const row = await this.env.DB.prepare("SELECT request_json FROM actions_task_runs WHERE id=?")
+    const row = await this.#db().prepare("SELECT request_json FROM actions_task_runs WHERE id=?")
       .bind(runId).first<{ request_json: string }>();
     if (!row) throw new Error(`Task run request is unavailable for ${purpose}`);
     return taskRunRequestV1Schema.parse(JSON.parse(row.request_json));
@@ -576,7 +587,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (existing) assertMonotonicReceipt(existing, receipt);
 
     const previous = row.effect_receipt_json;
-    const update = await this.env.DB.prepare(
+    const update = await this.#db().prepare(
       previous === null
         ? "UPDATE actions_task_runs SET effect_receipt_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND effect_receipt_json IS NULL"
         : "UPDATE actions_task_runs SET effect_receipt_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND effect_receipt_json=?",
@@ -584,14 +595,14 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ? [JSON.stringify(receipt), receipt.planRunId]
       : [JSON.stringify(receipt), receipt.planRunId, previous])).run();
     if ((update.meta.changes ?? 0) !== 1) {
-      const raced = await this.env.DB.prepare("SELECT effect_receipt_json FROM actions_task_runs WHERE id=?")
+      const raced = await this.#db().prepare("SELECT effect_receipt_json FROM actions_task_runs WHERE id=?")
         .bind(receipt.planRunId).first<{ effect_receipt_json: string | null }>();
       if (!raced?.effect_receipt_json) throw new Error("Effect receipt persistence conflict");
       const settled = runnerEffectReceiptV1Schema.parse(JSON.parse(raced.effect_receipt_json));
       if (canonicalJson(settled) !== canonicalJson(receipt)) throw new Error("Effect receipt persistence conflict");
       return settled;
     }
-    await this.env.DB.prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,'effect.progress',?)")
+    await this.#db().prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,'effect.progress',?)")
       .bind(receipt.planRunId, JSON.stringify(receipt)).run();
     return receipt;
   }
@@ -603,7 +614,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const identity = this.#identity;
     if (!identity || identity.hello.phase !== "effects") throw new Error("Effects receipt requires an authenticated effects session");
     if (!/^[a-f0-9]{64}$/.test(artifactSha256)) throw new Error("Effect artifact digest is invalid");
-    const row = await this.env.DB.prepare(
+    const row = await this.#db().prepare(
       "SELECT request_json,outcome_json,effect_receipt_json FROM actions_task_runs WHERE id=?",
     ).bind(planRunId).first<{ request_json: string; outcome_json: string | null; effect_receipt_json: string | null }>();
     if (!row?.outcome_json) throw new Error("Effect plan has no completed planning outcome");
@@ -644,7 +655,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       );
     }
     const { bundle, bundleHash, sourcePath, manualOnly } = await loadEnabledTaskBundle(
-      this.env.DB,
+      this.#db(),
       identity.enrollment.repository_id,
       identity.hello.agentHash,
     );
@@ -687,7 +698,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       admittedAt,
       deadlineAt: new Date(Date.parse(admittedAt) + bundle.limits.runtimeSeconds * 1_000).toISOString(),
     };
-    const existing = await this.env.DB.prepare(
+    const existing = await this.#db().prepare(
       "SELECT status,request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(identity.sessionId).first<{ status: string; request_json: string; harness_submission_json: string | null; outcome_json: string | null }>();
     const request = existing
@@ -696,7 +707,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (request.runId !== identity.sessionId || request.bundleHash !== bundleHash) {
       throw new Error("Persisted task request does not match the authenticated run");
     }
-    await this.env.DB.prepare(
+    await this.#db().prepare(
       "INSERT OR IGNORE INTO actions_task_runs (id,repository_id,github_run_id,github_run_attempt,phase,bundle_hash,request_json,status) VALUES (?,?,?,?,?,?,?,'admitted')",
     ).bind(identity.sessionId, identity.enrollment.repository_id, identity.hello.runId, identity.hello.runAttempt, identity.hello.phase, bundleHash, JSON.stringify(request)).run();
     if (existing?.outcome_json) {
@@ -711,7 +722,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       submission = JSON.parse(existing.harness_submission_json) as HarnessSubmission;
     } else {
       submission = await harness.start(harnessRequest);
-      await this.env.DB.prepare(
+      await this.#db().prepare(
         "UPDATE actions_task_runs SET harness_submission_json=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE id=? AND harness_submission_json IS NULL",
       ).bind(JSON.stringify(submission), identity.sessionId).run();
     }
@@ -726,11 +737,11 @@ export class TaskRunnerSession extends DurableObject<Env> {
         status: "failed",
         error: { code: "runtime.deadline_exceeded", message: "Task runtime deadline expired", retryable: false },
       });
-      await this.env.DB.batch([
-        this.env.DB.prepare(
+      await this.#db().batch([
+        this.#db().prepare(
           "UPDATE actions_task_runs SET status='failed',outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
         ).bind(JSON.stringify(failed), identity.sessionId),
-        this.env.DB.prepare(
+        this.#db().prepare(
           "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
           "SELECT ?,'task.settled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.settled')",
         ).bind(identity.sessionId, JSON.stringify({ status: "failed", code: "runtime.deadline_exceeded", bundleHash }), identity.sessionId),
@@ -740,17 +751,17 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const harnessOutcome = await harness.read(submission, {
       signal: AbortSignal.timeout(Math.max(1, remainingRuntimeMs)),
     });
-    const terminalRow = await this.env.DB.prepare("SELECT outcome_json FROM actions_task_runs WHERE id=?")
+    const terminalRow = await this.#db().prepare("SELECT outcome_json FROM actions_task_runs WHERE id=?")
       .bind(identity.sessionId).first<{ outcome_json: string | null }>();
     const outcome = terminalRow?.outcome_json
       ? taskOutcomeV1Schema.parse(JSON.parse(terminalRow.outcome_json))
       : translateHarnessOutcome(request, harnessOutcome);
     if (outcome.status === "cancelled") {
-      await this.env.DB.batch([
-        this.env.DB.prepare(
+      await this.#db().batch([
+        this.#db().prepare(
           "UPDATE actions_task_runs SET status='cancelled',outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
         ).bind(JSON.stringify(outcome), identity.sessionId),
-        this.env.DB.prepare(
+        this.#db().prepare(
           "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
           "SELECT ?,'task.cancelled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.cancelled')",
         ).bind(identity.sessionId, JSON.stringify({ reason: outcome.reason }), identity.sessionId),
@@ -761,11 +772,11 @@ export class TaskRunnerSession extends DurableObject<Env> {
     // validation a run gets, and a plan that cannot be built is a failed run,
     // not a completed one whose terminal happens to throw.
     const settled = await this.settleTerminal(request, outcome);
-    await this.env.DB.batch([
-      this.env.DB.prepare(
+    await this.#db().batch([
+      this.#db().prepare(
         "UPDATE actions_task_runs SET status=?,outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
       ).bind(settled.outcome.status, JSON.stringify(settled.outcome), identity.sessionId),
-      this.env.DB.prepare(
+      this.#db().prepare(
         "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
         "SELECT ?,'task.settled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.settled')",
       ).bind(identity.sessionId, JSON.stringify({ status: settled.outcome.status, bundleHash }), identity.sessionId),
@@ -819,7 +830,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (!identity || identity.hello.phase !== "plan") throw new Error("Only an authenticated planning session can be cancelled");
     const reason = reasonInput.trim().slice(0, 500) || "Planning runner cancelled";
     await this.ctx.storage.put("cancel-intent", reason);
-    const row = await this.env.DB.prepare(
+    const row = await this.#db().prepare(
       "SELECT request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(identity.sessionId).first<{
       request_json: string;
@@ -860,7 +871,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
 
   private async assertRunActive(runId: string): Promise<void> {
     if (await this.ctx.storage.get("cancel-intent")) throw new Error("Task run is cancelled");
-    const row = await this.env.DB.prepare(
+    const row = await this.#db().prepare(
       "SELECT status,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(runId).first<{ status: string; outcome_json: string | null }>();
     if (!row || row.outcome_json || (row.status !== "admitted" && row.status !== "running")) {
@@ -877,11 +888,11 @@ export class TaskRunnerSession extends DurableObject<Env> {
       status: "cancelled",
       reason,
     });
-    await this.env.DB.batch([
-      this.env.DB.prepare(
+    await this.#db().batch([
+      this.#db().prepare(
         "UPDATE actions_task_runs SET status='cancelled',outcome_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND outcome_json IS NULL",
       ).bind(JSON.stringify(outcome), request.runId),
-      this.env.DB.prepare(
+      this.#db().prepare(
         "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
         "SELECT ?,'task.cancelled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.cancelled')",
       ).bind(request.runId, JSON.stringify({ reason }), request.runId),
@@ -942,7 +953,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
   private async runDeadline(runId?: string): Promise<number> {
     const id = runId ?? await this.ctx.storage.get<string>("session-id");
     if (!id) return Date.now() + 10 * 60_000;
-    const row = await this.env.DB.prepare("SELECT request_json FROM actions_task_runs WHERE id=?")
+    const row = await this.#db().prepare("SELECT request_json FROM actions_task_runs WHERE id=?")
       .bind(id).first<{ request_json: string }>();
     if (!row) return Date.now() + 10 * 60_000;
     try {

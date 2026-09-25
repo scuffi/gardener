@@ -276,15 +276,28 @@ export function GardenerTaskFlueAgent(): string {
       durable: true,
       async run({ data, toolCallId }) {
         return sequentialTool(async () => {
-        const output = await narrowed!.invoke({
-          runId: request.runId,
-          requestId: request.requestId,
-          toolCallId,
-          toolName: descriptor.name,
-          input: normalizeJson(data),
-        });
-        console.log("gardener task repository tool completed", { taskId, tool: descriptor.name });
-        return { output: taskToolModelOutput(output) };
+          try {
+            const output = await narrowed!.invoke({
+              runId: request.runId,
+              requestId: request.requestId,
+              toolCallId,
+              toolName: descriptor.name,
+              input: normalizeJson(data),
+            });
+            const modelOutput = taskToolModelOutput(output);
+            console.log("gardener task repository tool completed", { taskId, tool: descriptor.name });
+            return { output: modelOutput };
+          } catch (error) {
+            // The model sees this as a failed tool call and may retry, spending
+            // turns. Log it so a run that runs out of turns can be explained.
+            // Inputs are never logged; the message is truncated.
+            console.warn("gardener task repository tool failed", {
+              taskId,
+              tool: descriptor.name,
+              error: error instanceof Error ? error.message.slice(0, 300) : "non-error rejection",
+            });
+            throw error;
+          }
         });
       },
     });
