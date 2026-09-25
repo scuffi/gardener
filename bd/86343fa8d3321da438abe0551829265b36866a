@@ -1,0 +1,25 @@
+apps/gardener/src/task-runtime/flue-harness.ts
+  s_de0b486c128948::t_3ef3c18643f54a 65-67,167-178
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_109e9d43dbef5d 35,62,123,127-137,143,666-670,779-795
+  s_de0b486c128948::t_c46f96e4e3e822 125-126,138
+  s_de0b486c128948::t_dcec15063c2768 124,139-142
+apps/gardener/test/task-flue-harness-read.test.ts
+  s_de0b486c128948::t_fd357033cd8b2c 24,38,60-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bd86343fa8d3321da438abe0551829265b36866a",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
