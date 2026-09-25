@@ -64,6 +64,7 @@ import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
+import { taskToolInputKeys } from "./tool-input-schemas";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 
 interface Enrollment {
@@ -1028,16 +1029,16 @@ function toolAction(sequence: number, operationId: string, invocation: HarnessTo
   let timeoutMs = 30_000;
   let maxOutputBytes = 256 * 1_024;
   if (invocation.toolName === "repository_read_file") {
-    exactKeys(value, ["path"]);
+    exactKeys(value, taskToolInputKeys("repository_read_file"));
     const path = repositoryPath(value.path);
     command = `python3 -c 'import pathlib,sys; root=pathlib.Path.cwd().resolve(); target=pathlib.Path(sys.argv[1]).resolve(); target.relative_to(root); print(target.read_text(encoding="utf-8"), end="")' ${shellQuote(path)}`;
   } else if (invocation.toolName === "repository_list_files") {
-    exactKeys(value, ["path", "maxEntries"], true);
+    exactKeys(value, taskToolInputKeys("repository_list_files"), true);
     const path = value.path === undefined || value.path === "." ? "." : repositoryPath(value.path);
     const maxEntries = integer(value.maxEntries ?? 1_000, 1, 10_000, "maxEntries");
     command = `git ls-files --cached --others --exclude-standard -- ${shellQuote(path)} | sed -n '1,${maxEntries}p'`;
   } else if (invocation.toolName === "repository_exec") {
-    exactKeys(value, ["command", "cwd", "timeoutMs", "maxOutputBytes"], true);
+    exactKeys(value, taskToolInputKeys("repository_exec"), true);
     if (typeof value.command !== "string" || value.command.length < 1 || value.command.length > 64 * 1_024) throw new Error("Invalid repository command");
     command = value.command;
     if (value.cwd !== undefined) cwd = `/workspace/${repositoryPath(value.cwd)}`.replace(/\/$/, "");
@@ -1059,7 +1060,7 @@ const MAX_GRAPHQL_VARIABLES = 64;
  * before any request leaves the runner.
  */
 function providerReadAction(sequence: number, operationId: string, value: Record<string, JsonValue>): RunnerActionV1 {
-  exactKeys(value, ["transport", "method", "path", "query", "variables", "operationName", "timeoutMs", "maxOutputBytes"], true);
+  exactKeys(value, taskToolInputKeys("provider_api_read"), true);
   const timeoutMs = value.timeoutMs === undefined ? 30_000 : integer(value.timeoutMs, 1, 10 * 60_000, "timeoutMs");
   const maxOutputBytes = value.maxOutputBytes === undefined
     ? 256 * 1_024

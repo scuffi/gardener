@@ -21,6 +21,7 @@ import { extend, type CloudflareAgentLike } from "@flue/runtime/cloudflare";
 import type { CloudflareAIBinding } from "@flue/runtime/cloudflare/workers-ai";
 import * as v from "valibot";
 import { NarrowedHarnessToolFacade } from "../harness/adapter";
+import { taskToolInputSchema } from "./tool-input-schemas";
 import type { Env } from "../env";
 import type { HarnessRequest, JsonValue } from "../harness/types";
 import { assertHarnessRequest, expectedHarnessBinding } from "../harness/validation";
@@ -60,14 +61,6 @@ const finishTaskSchema = v.strictObject({
   observationsJson: v.optional(v.pipe(v.string(), v.maxLength(256 * 1_024))),
 });
 
-const taskToolInputSchema = v.objectWithRest({
-  path: v.optional(v.string()),
-  maxEntries: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(2_000))),
-  command: v.optional(v.string()),
-  cwd: v.optional(v.string()),
-  timeoutMs: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-  maxOutputBytes: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-}, v.unknown());
 const taskToolOutputSchema = v.strictObject({
   content: v.string(),
 });
@@ -271,7 +264,7 @@ export function GardenerTaskFlueAgent(): string {
     useTool({
       name: descriptor.name,
       description: descriptor.description,
-      input: taskToolInputSchema,
+      input: taskToolInputSchema(descriptor.name),
       output: taskToolOutputSchema,
       durable: true,
       async run({ data, toolCallId }) {
