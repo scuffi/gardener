@@ -1,0 +1,21 @@
+apps/gardener/src/task-runtime/repository-paths.ts
+  s_de0b486c128948::t_a6c9325c1e74b0 21-26,28-32
+apps/gardener/src/task-runtime/tool-input-schemas.ts
+  s_de0b486c128948::t_a0125167079fe7 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "82420b77d973e0788841365ac46f63e023b5f8f7",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
