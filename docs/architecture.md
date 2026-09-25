@@ -117,6 +117,14 @@ whenever a later step may target it, and records the new `updated_at` in the ste
 step on that resource accepts either value. Releases and comments are not chained, so a second write
 to one of them in the same plan conflicts.
 
+Creating a comment on an issue, pull request or discussion is the one exception to an exact
+`updated_at`. Every comment on a thread moves that timestamp, so on an active thread the check would
+refuse most replies. A new comment only adds to the thread, so apply accepts a moved `updated_at`
+while still requiring the open/closed state, and for a pull request the head, base and draft state,
+seen at planning, and refuses a locked conversation. A moved version is not read back into the chain,
+so a later exact step on the same resource still refuses. On an active thread, a plan such as comment
+then label can therefore post the comment and stop at the label step.
+
 If a step cannot become a valid operation with the values earlier steps produced, for example a
 placeholder value longer than its type allows, apply records it as a terminal conflict and stops.
 

@@ -574,11 +574,32 @@ async function loadIssue(scope: ExecutionScope, issueNumber: number, expectPull:
   return data;
 }
 
-function assertIssueState(scope: ExecutionScope, issue: JsonRecord, expectedState: string, expectedUpdatedAt: string): void {
+/**
+ * How strictly a step checks that its resource is still the version it was
+ * planned against. `exact` refuses any change. `append` is for new comments:
+ * every comment on a thread moves its `updated_at`, and adding one more never
+ * rewrites what others wrote, so a moved version is accepted. The open/closed
+ * state is still enforced, and only a version that did match extends the chain
+ * a later exact step can rely on.
+ */
+type VersionCheck = "exact" | "append";
+
+function assertIssueState(
+  scope: ExecutionScope,
+  issue: JsonRecord,
+  expectedState: string,
+  expectedUpdatedAt: string,
+  check: VersionCheck = "exact",
+): void {
   if (issue.state !== expectedState) {
     throw conflict("issue_state_changed", `Precondition failed: issue state is ${String(issue.state)}`);
   }
-  if (!atExpectedVersion(scope, issue.updated_at, expectedUpdatedAt)) {
+  // Locking moves updated_at, so an exact check already refuses it; an append
+  // must refuse it explicitly rather than reach a 403 from the comment POST.
+  if (check === "append" && issue.locked === true) {
+    throw conflict("issue_locked", "Precondition failed: the conversation is locked");
+  }
+  if (!atExpectedVersion(scope, issue.updated_at, expectedUpdatedAt) && check === "exact") {
     throw conflict("issue_changed", "Precondition failed: issue changed after the operation was planned");
   }
 }
@@ -616,14 +637,22 @@ interface PullStateExpectation {
   expectedPullUpdatedAt: string;
 }
 
-function assertPullState(scope: ExecutionScope, pull: JsonRecord, expected: PullStateExpectation): void {
+function assertPullState(
+  scope: ExecutionScope,
+  pull: JsonRecord,
+  expected: PullStateExpectation,
+  check: VersionCheck = "exact",
+): void {
   if (pull.state !== expected.expectedState) {
     throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
   }
   if (pull.draft !== expected.expectedDraft) {
     throw conflict("pull_draft_changed", "Precondition failed: pull request draft state changed");
   }
-  if (!atExpectedVersion(scope, pull.updated_at, expected.expectedPullUpdatedAt)) {
+  if (check === "append" && pull.locked === true) {
+    throw conflict("pull_locked", "Precondition failed: the conversation is locked");
+  }
+  if (!atExpectedVersion(scope, pull.updated_at, expected.expectedPullUpdatedAt) && check === "exact") {
     throw conflict("pull_changed", "Precondition failed: pull request changed after the operation was planned");
   }
 }
@@ -727,7 +756,7 @@ async function executeIssueCommentCreate(
     };
   }
   const issue = await loadIssue(scope, operation.issueNumber, false);
-  assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt, "append");
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Issue comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body }),
@@ -865,7 +894,7 @@ async function executePullCommentCreate(
   }
   const pull = await loadPull(scope, operation.pullNumber);
   assertPullRevision(pull, operation);
-  assertPullState(scope, pull, operation);
+  assertPullState(scope, pull, operation, "append");
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body }),
@@ -1532,12 +1561,18 @@ async function loadDiscussion(scope: ExecutionScope, number: number): Promise<Di
   };
 }
 
-function assertDiscussionState(scope: ExecutionScope, discussion: DiscussionNode, expectedState: string, expectedUpdatedAt: string): void {
+function assertDiscussionState(
+  scope: ExecutionScope,
+  discussion: DiscussionNode,
+  expectedState: string,
+  expectedUpdatedAt: string,
+  check: VersionCheck = "exact",
+): void {
   const state = discussion.closed ? "closed" : "open";
   if (state !== expectedState) {
     throw conflict("discussion_state_changed", `Precondition failed: discussion state is ${state}`);
   }
-  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt)) {
+  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt) && check === "exact") {
     throw conflict("discussion_changed", "Precondition failed: discussion changed after the operation was planned");
   }
 }
@@ -1609,7 +1644,7 @@ async function executeDiscussionCommentCreate(
     };
   }
   const discussion = await loadDiscussion(scope, operation.discussionNumber);
-  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt, "append");
   const data = await scope.api.graphql(
     `mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id databaseId url}}}`,
     { id: discussion.id, body: operation.body },

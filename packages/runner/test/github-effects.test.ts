@@ -836,6 +836,65 @@ describe("precondition conflicts", () => {
     expect(receipt.error?.retryable).toBe(false);
   });
 
+  it("adds a comment to a thread that moved since planning, without extending the version chain", async () => {
+    const moved = "2026-01-09T00:00:00Z";
+    const issue = scenarioFor("issue.comment.create");
+    const onIssue = await run(issue.operation, [
+      get(`${REPO}/issues/5/comments`, []),
+      get(`${REPO}/issues/5`, { ...OPEN_ISSUE, updated_at: moved }),
+      send("POST", `${REPO}/issues/5/comments`, issueComment(marked("op-issue-comment", "Triage summary"))),
+    ], { readBackVersion: true });
+    expect(onIssue.receipt.status, JSON.stringify(onIssue.receipt.error)).toBe("succeeded");
+    // Someone else moved the issue, so a later exact step must not inherit a version it never checked.
+    expect(onIssue.resourceVersion).toBeUndefined();
+
+    const onPull = await run(scenarioFor("pull_request.comment.create").operation, [
+      get(`${REPO}/issues/7/comments`, []),
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, updated_at: moved }),
+      send("POST", `${REPO}/issues/7/comments`, issueComment("Review note", COMMENT_UPDATED, 7)),
+    ]);
+    expect(onPull.receipt.status, JSON.stringify(onPull.receipt.error)).toBe("succeeded");
+
+    const onDiscussion = await run(scenarioFor("discussion.comment.create").operation, [
+      gql("comments(first:100", discussionComments([])),
+      gql("answer{ id databaseId }", discussionNode({ updatedAt: moved })),
+      gql("{addDiscussionComment", {
+        addDiscussionComment: { comment: { id: "DC_1", databaseId: 501, url: DISCUSSION_COMMENT_URL } },
+      }),
+    ]);
+    expect(onDiscussion.receipt.status, JSON.stringify(onDiscussion.receipt.error)).toBe("succeeded");
+  });
+
+  it("still refuses a comment when the thread's state or pull request revision changed", async () => {
+    const pull = await run(scenarioFor("pull_request.comment.create").operation, [
+      get(`${REPO}/issues/7/comments`, []),
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, head: { ...OPEN_PULL.head, sha: NEW_COMMIT } }),
+    ]);
+    expect(pull.receipt.status).toBe("conflicted");
+    expect(pull.receipt.error?.code).toBe("pull_head_changed");
+    const discussion = await run(scenarioFor("discussion.comment.create").operation, [
+      gql("comments(first:100", discussionComments([])),
+      gql("answer{ id databaseId }", discussionNode({ closed: true })),
+    ]);
+    expect(discussion.receipt.status).toBe("conflicted");
+    expect(discussion.receipt.error?.code).toBe("discussion_state_changed");
+  });
+
+  it("refuses a comment on a locked conversation as a conflict", async () => {
+    const issue = await run(scenarioFor("issue.comment.create").operation, [
+      get(`${REPO}/issues/5/comments`, []),
+      get(`${REPO}/issues/5`, { ...OPEN_ISSUE, locked: true, updated_at: "2026-01-09T00:00:00Z" }),
+    ]);
+    expect(issue.receipt.status).toBe("conflicted");
+    expect(issue.receipt.error?.code).toBe("issue_locked");
+    const pull = await run(scenarioFor("pull_request.comment.create").operation, [
+      get(`${REPO}/issues/7/comments`, []),
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, locked: true }),
+    ]);
+    expect(pull.receipt.status).toBe("conflicted");
+    expect(pull.receipt.error?.code).toBe("pull_locked");
+  });
+
   it("conflicts when the issue state changed after planning", async () => {
     const { receipt } = await run(scenarioFor("issue.comment.create").operation, [
       get(`${REPO}/issues/5/comments`, []),

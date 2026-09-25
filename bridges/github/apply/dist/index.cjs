@@ -45917,11 +45917,14 @@ async function loadIssue(scope, issueNumber, expectPull) {
   }
   return data;
 }
-function assertIssueState(scope, issue3, expectedState, expectedUpdatedAt) {
+function assertIssueState(scope, issue3, expectedState, expectedUpdatedAt, check2 = "exact") {
   if (issue3.state !== expectedState) {
     throw conflict("issue_state_changed", `Precondition failed: issue state is ${String(issue3.state)}`);
   }
-  if (!atExpectedVersion(scope, issue3.updated_at, expectedUpdatedAt)) {
+  if (check2 === "append" && issue3.locked === true) {
+    throw conflict("issue_locked", "Precondition failed: the conversation is locked");
+  }
+  if (!atExpectedVersion(scope, issue3.updated_at, expectedUpdatedAt) && check2 === "exact") {
     throw conflict("issue_changed", "Precondition failed: issue changed after the operation was planned");
   }
 }
@@ -45944,14 +45947,17 @@ function assertPullRevision(pull, expected) {
     throw conflict("pull_base_changed", `Precondition failed: pull request base is ${pull.base.ref} at ${pull.base.sha}`);
   }
 }
-function assertPullState(scope, pull, expected) {
+function assertPullState(scope, pull, expected, check2 = "exact") {
   if (pull.state !== expected.expectedState) {
     throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
   }
   if (pull.draft !== expected.expectedDraft) {
     throw conflict("pull_draft_changed", "Precondition failed: pull request draft state changed");
   }
-  if (!atExpectedVersion(scope, pull.updated_at, expected.expectedPullUpdatedAt)) {
+  if (check2 === "append" && pull.locked === true) {
+    throw conflict("pull_locked", "Precondition failed: the conversation is locked");
+  }
+  if (!atExpectedVersion(scope, pull.updated_at, expected.expectedPullUpdatedAt) && check2 === "exact") {
     throw conflict("pull_changed", "Precondition failed: pull request changed after the operation was planned");
   }
 }
@@ -46029,7 +46035,7 @@ async function executeIssueCommentCreate(scope, operation) {
     };
   }
   const issue3 = await loadIssue(scope, operation.issueNumber, false);
-  assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt, "append");
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Issue comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body })
@@ -46138,7 +46144,7 @@ async function executePullCommentCreate(scope, operation) {
   }
   const pull = await loadPull(scope, operation.pullNumber);
   assertPullRevision(pull, operation);
-  assertPullState(scope, pull, operation);
+  assertPullState(scope, pull, operation, "append");
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
     method: "POST",
     body: JSON.stringify({ body: operation.body })
@@ -46653,12 +46659,12 @@ async function loadDiscussion(scope, number4) {
     answerNodeId: answer && typeof answer.id === "string" ? answer.id : null
   };
 }
-function assertDiscussionState(scope, discussion, expectedState, expectedUpdatedAt) {
+function assertDiscussionState(scope, discussion, expectedState, expectedUpdatedAt, check2 = "exact") {
   const state = discussion.closed ? "closed" : "open";
   if (state !== expectedState) {
     throw conflict("discussion_state_changed", `Precondition failed: discussion state is ${state}`);
   }
-  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt)) {
+  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt) && check2 === "exact") {
     throw conflict("discussion_changed", "Precondition failed: discussion changed after the operation was planned");
   }
 }
@@ -46710,7 +46716,7 @@ async function executeDiscussionCommentCreate(scope, operation) {
     };
   }
   const discussion = await loadDiscussion(scope, operation.discussionNumber);
-  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt);
+  assertDiscussionState(scope, discussion, operation.expectedDiscussionState, operation.expectedDiscussionUpdatedAt, "append");
   const data = await scope.api.graphql(
     `mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id databaseId url}}}`,
     { id: discussion.id, body: operation.body },
