@@ -21,7 +21,7 @@ vi.mock("@flue/runtime", () => ({
 vi.mock("../src/task-runtime/flue-agent", () => ({ GardenerTaskFlueAgent: () => "" }));
 
 import { HARNESS_ADAPTER_VERSIONS } from "../src/harness";
-import { FlueTaskHarness } from "../src/task-runtime/flue-harness";
+import { FlueTaskHarness, SupersededReadError } from "../src/task-runtime/flue-harness";
 
 const submission = {
   schemaVersion: "gardener.harness.submission/v1" as const,
@@ -35,6 +35,7 @@ const submission = {
 describe("Flue task harness read", () => {
   beforeEach(() => {
     flue.read.mockReset();
+    flue.abort.mockClear();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
@@ -52,6 +53,26 @@ describe("Flue task harness read", () => {
     controller.abort(new DOMException("deadline", "TimeoutError"));
     flue.read.mockRejectedValue(controller.signal.reason);
     const outcome = await new FlueTaskHarness().read(submission, { signal: controller.signal });
+    expect(outcome).toMatchObject({ status: "failed", error: { message: "Task execution exceeded its runtime deadline" } });
+    expect(flue.abort).toHaveBeenCalled();
+  });
+
+  it("ends a superseded wait without stopping the run a newer wait is watching", async () => {
+    const controller = new AbortController();
+    const superseded = new SupersededReadError();
+    controller.abort(superseded);
+    flue.read.mockRejectedValue(new DOMException("aborted", "AbortError"));
+    const signal = AbortSignal.any([AbortSignal.timeout(60_000), controller.signal]);
+    await expect(new FlueTaskHarness().read(submission, { signal })).rejects.toBe(superseded);
+    expect(flue.abort).not.toHaveBeenCalled();
+  });
+
+  it("still treats a combined signal's deadline as the run deadline", async () => {
+    const control = new AbortController();
+    const signal = AbortSignal.any([AbortSignal.timeout(1), control.signal]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    flue.read.mockRejectedValue(signal.reason);
+    const outcome = await new FlueTaskHarness().read(submission, { signal });
     expect(outcome).toMatchObject({ status: "failed", error: { message: "Task execution exceeded its runtime deadline" } });
     expect(flue.abort).toHaveBeenCalled();
   });

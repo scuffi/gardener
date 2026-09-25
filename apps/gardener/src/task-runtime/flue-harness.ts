@@ -62,6 +62,9 @@ export class FlueTaskHarness implements AgentHarness {
         options?.signal ? { signal: options.signal } : undefined,
       );
     } catch (error) {
+      // A reconnect superseded this wait; the submission is still running and a
+      // newer runTask is waiting on it, so only this observation stops.
+      if (options?.signal?.aborted && options.signal.reason instanceof SupersededReadError) throw options.signal.reason;
       if (isSignalAbort(error, options?.signal)) {
         await handle.abort().catch(() => undefined);
         return {
@@ -159,6 +162,18 @@ function replyUsage(reply: AgentReply): HarnessModelUsage {
     toolCalls: integer("toolCalls"),
     model: typeof usage.model === "string" ? usage.model : "unknown",
   };
+}
+
+/**
+ * The abort reason the session gives an older wait when a reconnect starts a
+ * new one. Flue's read signal cancels only the observation, never the
+ * submission, so a superseded wait ends without touching the run.
+ */
+export class SupersededReadError extends Error {
+  constructor() {
+    super("A reconnect superseded this wait for the task agent");
+    this.name = "SupersededReadError";
+  }
 }
 
 function isSignalAbort(error: unknown, signal: AbortSignal | undefined): boolean {

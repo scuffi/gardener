@@ -32,7 +32,7 @@ import {
   type TaskRunRequestV1,
 } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
-import type { HarnessSubmission, HarnessToolInvocation } from "../harness";
+import type { HarnessOutcome, HarnessSubmission, HarnessToolInvocation } from "../harness";
 import type { Env } from "../env";
 import { transportableError } from "./transportable-error";
 import {
@@ -59,7 +59,7 @@ import {
   type TaskEffectProposalInvocationV1,
 } from "./effect-plan";
 import { createTaskHarnessRequest, translateHarnessOutcome } from "./harness-adapter";
-import { FlueTaskHarness } from "./flue-harness";
+import { FlueTaskHarness, SupersededReadError } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
@@ -120,6 +120,27 @@ export class TaskRunnerSession extends DurableObject<Env> {
   #identity: AuthenticatedIdentity | undefined;
   #resultWaiters = new Map<string, Set<(result: RunnerActionResultV1) => void>>();
   #instrumentedDb: D1Database | undefined;
+  #activeRead: AbortController | undefined;
+  #waitGeneration = 0;
+
+  /**
+   * Best-effort trace that a wait broke, so a run that exhausts its reconnects
+   * still leaves an explanation. A failure here must not mask the interruption.
+   */
+  async #recordInterruption(runId: string): Promise<void> {
+    try {
+      await this.#db().prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,'task.interrupted',?)")
+        .bind(runId, JSON.stringify({ message: "Waiting for the task agent was interrupted" })).run();
+    } catch {
+      // The D1 instrumentation has already logged the failure.
+    }
+  }
+
+  /** Ends the observation an earlier runTask call opened, if any. */
+  #supersedeActiveRead(): void {
+    this.#activeRead?.abort(new SupersededReadError());
+    this.#activeRead = undefined;
+  }
 
   /**
    * D1, instrumented so a failed query logs its call site before the runner
@@ -642,6 +663,11 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   async runTask(eventInput?: RunnerEventV1): Promise<RunnerTerminalV1> {
+    // A reconnect re-enters runTask while the previous wait may still be open on
+    // the same submission. The newest attempt owns the wait: it stops any older
+    // observation now, and an older attempt that reaches its read later gives up.
+    const waitGeneration = ++this.#waitGeneration;
+    this.#supersedeActiveRead();
     const identity = this.#identity;
     if (!identity) throw new Error("Runner session is not authenticated");
     if (identity.hello.phase !== "plan") {
@@ -750,9 +776,23 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ]);
       return terminalFromOutcome(failed, await this.completedSequence(), request);
     }
-    const harnessOutcome = await harness.read(submission, {
-      signal: AbortSignal.timeout(Math.max(1, remainingRuntimeMs)),
-    });
+    if (waitGeneration !== this.#waitGeneration) throw new SupersededReadError();
+    // An older call may have reached its read while this one awaited.
+    this.#supersedeActiveRead();
+    const readControl = new AbortController();
+    this.#activeRead = readControl;
+    let harnessOutcome: HarnessOutcome;
+    try {
+      harnessOutcome = await harness.read(submission, {
+        signal: AbortSignal.any([AbortSignal.timeout(Math.max(1, remainingRuntimeMs)), readControl.signal]),
+      });
+    } catch (error) {
+      // Written in the background so a slow D1 never delays the runner's reconnect.
+      if (!(error instanceof SupersededReadError)) this.ctx.waitUntil(this.#recordInterruption(identity.sessionId));
+      throw error;
+    } finally {
+      if (this.#activeRead === readControl) this.#activeRead = undefined;
+    }
     const terminalRow = await this.#db().prepare("SELECT outcome_json FROM actions_task_runs WHERE id=?")
       .bind(identity.sessionId).first<{ outcome_json: string | null }>();
     const outcome = terminalRow?.outcome_json
