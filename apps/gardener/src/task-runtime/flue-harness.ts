@@ -185,6 +185,22 @@ function describeReadFailure(error: unknown): { outcome?: string; chain: { name:
     if (current instanceof Error) {
       chain.push({ name: current.name, message: current.message.slice(0, 300) });
       current = current.cause;
+    } else if (typeof current === "object") {
+      // Flue's serialized settlement error: { name, message, type, meta }.
+      const serialized = current as { name?: unknown; message?: unknown; type?: unknown; meta?: { reason?: unknown } };
+      chain.push({
+        name: [serialized.name, serialized.type].filter((part) => typeof part === "string").join("/") || "object",
+        message: [
+          serialized.message,
+          // OperationFailedError already embeds its reason in the message.
+          typeof serialized.message === "string" && typeof serialized.meta?.reason === "string"
+            && serialized.message.includes(serialized.meta.reason) ? undefined : serialized.meta?.reason,
+        ]
+          .filter((part): part is string => typeof part === "string")
+          .join(" | ")
+          .slice(0, 300),
+      });
+      break;
     } else {
       chain.push({ name: typeof current, message: String(current).slice(0, 300) });
       break;

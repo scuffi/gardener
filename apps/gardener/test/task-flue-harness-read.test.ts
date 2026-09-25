@@ -81,5 +81,11 @@ describe("Flue task harness read", () => {
     }));
     const outcome = await new FlueTaskHarness().read(submission);
     expect(outcome).toMatchObject({ status: "failed", error: { message: "Task model-turn limit was exceeded" } });
+    // The log unpacks the serialized cause instead of printing [object Object].
+    const logged = vi.mocked(console.error).mock.calls.find(([label]) => label === "Gardener task Flue read failed")?.[1] as { chain: { name: string; message: string }[] };
+    expect(logged.chain[1]).toEqual({
+      name: "Error/operation_failed",
+      message: "dispatch(sub_1) failed: Gardener native profile permits at most 12 model turns",
+    });
   });
 });

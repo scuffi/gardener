@@ -297,21 +297,33 @@ export function GardenerTaskFlueAgent(): string {
   }
 
   useAgentFinish(({ response }) => {
+    const inputTokens = response.usage.input + response.usage.cacheRead + response.usage.cacheWrite;
+    const terminal = response.toolCalls.filter((call) => call.tool === TASK_TERMINAL_TOOL && !call.isError);
     console.log("gardener task finish evaluation", {
       taskId,
       tools: response.toolCalls.map((call) => ({ tool: call.tool, isError: call.isError })),
+      terminalCalls: terminal.length,
+      inputTokens,
+      outputTokens: response.usage.output,
+      budget: {
+        maxToolCalls: request.budget.maxToolCalls,
+        maxInputTokens: request.budget.maxInputTokens,
+        maxOutputTokens: request.budget.maxOutputTokens,
+      },
     });
+    const refuse: (reason: string) => never = (reason) => {
+      console.warn("gardener task finish refused", { taskId, reason });
+      throw new Error(reason);
+    };
     // There is deliberately no required-evidence check here. A task may
     // declare only `provider.api.read`, or no tools at all, and a run that
     // legitimately proposes nothing is a normal outcome, so demanding a
     // particular repository call would fail correct tasks.
-    const terminal = response.toolCalls.filter((call) => call.tool === TASK_TERMINAL_TOOL && !call.isError);
-    if (terminal.length === 0) throw new Error("task_completed_without_terminal_outcome");
-    if (terminal.length !== 1) throw new Error("task_has_multiple_terminal_outcomes");
-    if (response.toolCalls.length > request.budget.maxToolCalls) throw new Error("task_tool_budget_exceeded");
-    const inputTokens = response.usage.input + response.usage.cacheRead + response.usage.cacheWrite;
+    if (terminal.length === 0) refuse("task_completed_without_terminal_outcome");
+    if (terminal.length !== 1) refuse("task_has_multiple_terminal_outcomes");
+    if (response.toolCalls.length > request.budget.maxToolCalls) refuse("task_tool_budget_exceeded");
     if (inputTokens > request.budget.maxInputTokens || response.usage.output > request.budget.maxOutputTokens) {
-      throw new Error("task_model_token_budget_exceeded");
+      refuse("task_model_token_budget_exceeded");
     }
   });
 
