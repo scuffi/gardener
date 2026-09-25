@@ -22,7 +22,7 @@ export const taskToolInputSchemas = {
     path: v.pipe(v.string(), v.description("Repository-relative path of the file to read.")),
   }),
   repository_list_files: v.strictObject({
-    path: v.optional(v.pipe(v.string(), v.description("Repository-relative directory to list. Defaults to the repository root."))),
+    path: v.optional(v.pipe(v.string(), v.description("Repository-relative directory to list, with no leading ./ and no trailing /. Omit it, or use \".\", for the repository root."))),
     maxEntries: v.optional(integerInRange(1, 10_000, "Maximum number of paths to return. Defaults to 1000.")),
   }),
   repository_exec: v.strictObject({

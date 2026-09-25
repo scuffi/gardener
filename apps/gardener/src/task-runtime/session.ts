@@ -65,6 +65,7 @@ import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundl
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
 import { taskToolInputKeys } from "./tool-input-schemas";
+import { listFilesPath, repositoryPath } from "./repository-paths";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 
 interface Enrollment {
@@ -1034,7 +1035,7 @@ function toolAction(sequence: number, operationId: string, invocation: HarnessTo
     command = `python3 -c 'import pathlib,sys; root=pathlib.Path.cwd().resolve(); target=pathlib.Path(sys.argv[1]).resolve(); target.relative_to(root); print(target.read_text(encoding="utf-8"), end="")' ${shellQuote(path)}`;
   } else if (invocation.toolName === "repository_list_files") {
     exactKeys(value, taskToolInputKeys("repository_list_files"), true);
-    const path = value.path === undefined || value.path === "." ? "." : repositoryPath(value.path);
+    const path = listFilesPath(value.path);
     const maxEntries = integer(value.maxEntries ?? 1_000, 1, 10_000, "maxEntries");
     command = `git ls-files --cached --others --exclude-standard -- ${shellQuote(path)} | sed -n '1,${maxEntries}p'`;
   } else if (invocation.toolName === "repository_exec") {
@@ -1124,13 +1125,6 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 function exactKeys(value: Record<string, JsonValue>, allowed: readonly string[], optional = false): void {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Error(`Unknown repository tool input ${key}`);
   if (!optional) for (const key of allowed) if (!(key in value)) throw new Error(`Missing repository tool input ${key}`);
-}
-
-function repositoryPath(value: JsonValue | undefined): string {
-  if (typeof value !== "string" || value.length < 1 || value.length > 4_096 || value.includes("\\") || value.startsWith("/")) throw new Error("Invalid repository path");
-  const parts = value.split("/");
-  if (parts.some((part) => part === "" || part === "." || part === "..")) throw new Error("Repository path escapes the workspace");
-  return value;
 }
 
 function integer(value: JsonValue, min: number, max: number, name: string): number {
