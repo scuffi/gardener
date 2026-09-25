@@ -1,0 +1,49 @@
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_f5baeae8728c1c 39984,39991-39992,40059,40062-40063,40070-40082,40102-40103,40191,40201-40204,40247,40254-40255
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_2d9f8569bf48ad 58-59
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_bf3d5d052d50fd 61-62,458-463,465-466,482,719,735-837,2251-2255
+apps/gardener/test/task-effect-plan.test.ts
+  s_de0b486c128948::t_a9870334ee3b91 246
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_a0df58c166ba9f 204-214,306-323,402-420,946-1007
+  s_de0b486c128948::t_53ab74eb6b4a58 1008
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_47f2935f0ff960 6,8,95,99-100,107-119,137-138,205,221-225,237,352,359-360
+packages/contracts/test/task-v1.test.ts
+  s_de0b486c128948::t_afc9ec134bdc9f 129
+packages/provider-github/src/permissions.ts
+  s_de0b486c128948::t_62e7e6719a017c 60,67-69
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_217c4daa3878e2 151-159
+  s_de0b486c128948::t_bddab0cd4a2b52 96
+  s_de0b486c128948::t_2ae90ec879331a 160-161
+docs/task-authoring.md
+  s_de0b486c128948::t_e38bfeac29679a 213-214,247-257,260
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_6d44f20870221e 153
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_b5d5abc06f6a79 39991,39998-39999,40066,40069-40070,40077-40089,40109-40110,40198,40208-40211,40254,40261-40262,45638,45645-45647,45866-45868,45882,46032,46043-46119,47204-47208,47554
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_5f080dccb9b99e 373,384-393
+  s_de0b486c128948::t_8146ccb3567340 394-395
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_0f77208b606b9f 298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d930be95732e77a6931f17dd63e41a8cfa4a8d06",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
