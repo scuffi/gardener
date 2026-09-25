@@ -7,6 +7,14 @@ describe("repository paths", () => {
     expect(listFilesPath("src/lib")).toBe("src/lib");
   });
 
+  it("drops one leading ./ and one trailing / before the strict check", () => {
+    for (const spelling of ["./src", "src/", "./src/"]) expect(listFilesPath(spelling)).toBe("src");
+    expect(listFilesPath("./src/lib/")).toBe("src/lib");
+    for (const bad of ["././src", "src//", "./../x", "../", "./a/../b", "/src/", "./.."]) {
+      expect(() => listFilesPath(bad)).toThrow();
+    }
+  });
+
   it("keeps every other path strict", () => {
     for (const bad of ["/etc", "../x", "a/../b", "a//b", ".//", "//", "a\\b", 3]) {
       expect(() => listFilesPath(bad)).toThrow();

@@ -18,7 +18,16 @@ export function repositoryPath(value: unknown): string {
  */
 const ROOT_ALIASES: readonly unknown[] = [undefined, ".", "", "/", "./"];
 
-/** The directory `list_files` should list: `.` for the root, else a validated relative path. */
+/**
+ * The directory `list_files` should list: `.` for the root, else a validated
+ * relative path. One leading `./` and one trailing `/` are dropped first, since
+ * models write `./src` and `src/` for `src`; the strict check then runs on what
+ * remains, so `..`, absolute paths and empty segments are still refused.
+ */
 export function listFilesPath(value: unknown): string {
-  return ROOT_ALIASES.includes(value) ? "." : repositoryPath(value);
+  if (ROOT_ALIASES.includes(value)) return ".";
+  if (typeof value !== "string") return repositoryPath(value);
+  let path = value.startsWith("./") ? value.slice(2) : value;
+  if (path.endsWith("/")) path = path.slice(0, -1);
+  return repositoryPath(path);
 }
