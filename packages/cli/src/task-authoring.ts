@@ -74,7 +74,7 @@ const triggerAuthoringSchema = z.strictObject({
 });
 
 /** The model a task uses when its TASK.md names none. Written into the bundle. */
-export const DEFAULT_TASK_MODEL = "@cf/moonshotai/kimi-k2.6";
+export const DEFAULT_TASK_MODEL = "@cf/zai-org/glm-5.3";
 
 /**
  * Model id prefixes Flue's Cloudflare provider has a native request format

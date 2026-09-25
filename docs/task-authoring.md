@@ -233,10 +233,13 @@ passes cannot exceed a field's limit once the real values are in.
 through the Workers AI binding:
 
 ```yaml
-model: openai/gpt-5.1
+model: "@cf/zai-org/glm-5.3"
 ```
 
-If you omit it, `gardener build` writes Gardener's default, `@cf/moonshotai/kimi-k2.6`, into the
+Quote `@cf/…` IDs: YAML does not allow a plain value to start with `@`. Other IDs, such as
+`model: openai/gpt-5.1`, need no quotes.
+
+If you omit it, `gardener build` writes Gardener's default, `@cf/zai-org/glm-5.3`, into the
 bundle. The bundle, and so the repository, always states the model, and changing it changes the
 bundle hash, so it takes effect only after you rebuild and reconnect.
 
@@ -253,7 +256,7 @@ A non-Cloudflare model receives everything the task's model sees: its instructio
 (such as issue or pull request text) and any repository content it reads. Choose one only where
 sending that to the provider is acceptable.
 
-`gardener build` warns about any other prefix. Every task depends on tool calls, so a model that
+`gardener build` warns about any prefix other than `@cf/`, `openai/` and `anthropic/`. Every task depends on tool calls, so a model that
 cannot make them fails the run. Non-Cloudflare models also need provider keys or Unified Billing
 on the account's `default` AI Gateway. See [Operations](operations.md#prerequisites).
 
