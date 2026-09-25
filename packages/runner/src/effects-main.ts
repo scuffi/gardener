@@ -295,6 +295,7 @@ function laterStepMayTarget(plan: TaskEffectPlanV1, index: number, resource: str
 
 const MARKER_BODY_KINDS = new Set<OperationKind>([
   "issue.comment.create",
+  "issue.create",
   "pull_request.review.submit",
   "pull_request.open_draft",
 ]);

@@ -243,7 +243,7 @@ describe("ordered effect plan derivation", () => {
     for (const kind of operationKindValues) {
       expect(request.bundle.effects).toContain(kind);
     }
-    expect(request.bundle.effects).toHaveLength(29);
+    expect(request.bundle.effects).toHaveLength(32);
   });
 });
 

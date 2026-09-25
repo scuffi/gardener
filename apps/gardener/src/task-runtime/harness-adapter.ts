@@ -370,6 +370,7 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
       "Outputs each kind publishes once it runs, which later steps may use through referencesJson, whole or as {{placeholders}} in text (nullable outputs cannot fill a placeholder):",
       ...request.bundle.effects.map((kind) => `  ${kind}: ${Object.entries(operationOutputCatalog[kind]).map(([name, type]) => `${name} (${type})`).join(", ")}`),
     ]),
+    ...effectGuidance(request.bundle.effects),
     ...(limits.maxEffectOperations === undefined
       ? []
       : [`This task may propose at most ${limits.maxEffectOperations} steps.`]),
@@ -378,6 +379,18 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
     `taskId=${request.bundle.taskId}`,
     `bundleHash=${request.bundleHash}`,
   ].join("\n");
+}
+
+/** Trusted per-kind notes, stated only for the kinds this task declares. */
+function effectGuidance(effects: readonly string[]): string[] {
+  const notes: string[] = [];
+  if (effects.includes("issue.create")) {
+    notes.push("issue.create: set labels and assigneeIds only when the task instructions call for them.");
+  }
+  if (effects.some((kind) => kind === "issue.create" || kind.endsWith(".label.add"))) {
+    notes.push("Labels must already exist in the repository; Gardener never creates a label.");
+  }
+  return notes.length === 0 ? [] : ["", ...notes];
 }
 
 /** Keep the boundary explicitly JSON-only when passed through Flue. */

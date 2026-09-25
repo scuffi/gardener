@@ -39981,12 +39981,15 @@ var operationKindValues = [
   "issue.reopen",
   "issue.assignee.add",
   "issue.assignee.remove",
+  "issue.create",
   "pull_request.comment.create",
   "pull_request.comment.update",
   "pull_request.review.submit",
   "pull_request.reviewer.request",
   "pull_request.reviewer.remove",
   "pull_request.update",
+  "pull_request.label.add",
+  "pull_request.label.remove",
   "branch.create",
   "commit.create",
   "pull_request.open_draft",
@@ -40053,16 +40056,30 @@ var pullBase = operationBase.extend({
 });
 var discussionBase = operationBase.extend({ discussionNumber: external_exports.number().int().positive(), expectedDiscussionState: external_exports.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
 var commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body };
+var labelName = external_exports.string().trim().min(1).max(100);
 var requiredCheckSchema = external_exports.object({ context: external_exports.string().trim().min(1).max(255), appId: external_exports.number().int().positive() }).strict();
 var operationOptions = [
-  issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: external_exports.string().trim().min(1).max(100) }).strict(),
-  issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: external_exports.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: labelName }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: labelName }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.comment.create"), body }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.comment.update"), ...commentUpdate }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.close"), expectedIssueState: external_exports.literal("open") }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.reopen"), expectedIssueState: external_exports.literal("closed") }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),
+  /**
+   * A new issue. There is no resource to check a version against; resume finds
+   * the issue by the operation marker apply appends to the body. Labels must
+   * already exist and assignees must be assignable, so creating an issue never
+   * invents repository taxonomy or silently drops a person.
+   */
+  operationBase.extend({
+    kind: external_exports.literal("issue.create"),
+    title: external_exports.string().trim().min(1).max(256),
+    body,
+    labels: external_exports.array(labelName).min(1).max(10).optional(),
+    assigneeIds: external_exports.array(githubNumericIdSchema).min(1).max(10).optional()
+  }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.comment.create"), body }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.comment.update"), ...commentUpdate }).strict(),
   pullBase.extend({
@@ -40082,6 +40099,8 @@ var operationOptions = [
       context.addIssue({ code: "custom", message: "draft state must be updated in a separate exact operation" });
     }
   }),
+  pullBase.extend({ kind: external_exports.literal("pull_request.label.add"), label: labelName }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
   operationBase.extend({ kind: external_exports.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
@@ -40169,7 +40188,7 @@ function collectStrings(value, output2) {
 }
 var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
   const strings = [];
-  if (operation.kind === "issue.comment.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
+  if (operation.kind === "issue.comment.create" || operation.kind === "issue.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
     const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
 ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
@@ -40179,6 +40198,10 @@ ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
   }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
+  if (operation.kind === "issue.create") {
+    if (operation.labels && new Set(operation.labels.map((label) => label.toLowerCase())).size !== operation.labels.length) context.addIssue({ code: "custom", path: ["labels"], message: "labels must be unique" });
+    if (operation.assigneeIds && new Set(operation.assigneeIds).size !== operation.assigneeIds.length) context.addIssue({ code: "custom", path: ["assigneeIds"], message: "assignee IDs must be unique" });
+  }
   if (operation.kind === "pull_request.merge") {
     const checks = operation.requiredChecks.map((check2) => `${check2.appId}:${check2.context}`);
     if (new Set(checks).size !== checks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
@@ -40221,12 +40244,15 @@ var operationOutputCatalog = {
   "issue.reopen": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
   "issue.assignee.add": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
   "issue.assignee.remove": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "issue.create": { ...issueOutputs, issueUrl: "url" },
   "pull_request.comment.create": { ...pullOutputs, ...commentOutputs },
   "pull_request.comment.update": { ...pullOutputs, ...commentOutputs },
   "pull_request.review.submit": { ...pullOutputs, reviewId: "githubId", reviewUrl: "url", reviewState: "string" },
   "pull_request.reviewer.request": { ...pullOutputs },
   "pull_request.reviewer.remove": { ...pullOutputs },
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
+  "pull_request.label.add": { ...pullOutputs, label: "string" },
+  "pull_request.label.remove": { ...pullOutputs, label: "string" },
   "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "gardenerBranch",

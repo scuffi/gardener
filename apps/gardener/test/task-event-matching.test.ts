@@ -93,7 +93,7 @@ function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"
 
 async function request(
   event: NormalizedEventV1,
-  overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools">> = {},
+  overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools" | "effects">> = {},
 ): Promise<TaskRunRequestV1> {
   const bundle = {
     ...structuredClone(inspectRepositoryFixtureBundle()),
@@ -146,6 +146,17 @@ describe("trigger matching", () => {
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
       triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "maintainers" }],
     }))).rejects.toThrow(/does not declare trigger/);
+  });
+
+  it("adds label and issue guidance only for tasks that declare those kinds", async () => {
+    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }];
+    const withCreate = await createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
+      triggers, effects: ["issue.create", "pull_request.label.add"],
+    }));
+    expect(withCreate.prompt).toContain("issue.create: set labels and assigneeIds only when the task instructions call for them.");
+    expect(withCreate.prompt).toContain("Gardener never creates a label.");
+    const without = await createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), { triggers, effects: [] }));
+    expect(without.prompt).not.toContain("never creates a label");
   });
 
   it("evaluates push branch filters including negations", async () => {

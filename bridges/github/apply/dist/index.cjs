@@ -39988,12 +39988,15 @@ var operationKindValues = [
   "issue.reopen",
   "issue.assignee.add",
   "issue.assignee.remove",
+  "issue.create",
   "pull_request.comment.create",
   "pull_request.comment.update",
   "pull_request.review.submit",
   "pull_request.reviewer.request",
   "pull_request.reviewer.remove",
   "pull_request.update",
+  "pull_request.label.add",
+  "pull_request.label.remove",
   "branch.create",
   "commit.create",
   "pull_request.open_draft",
@@ -40060,16 +40063,30 @@ var pullBase = operationBase.extend({
 });
 var discussionBase = operationBase.extend({ discussionNumber: external_exports.number().int().positive(), expectedDiscussionState: external_exports.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
 var commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body };
+var labelName = external_exports.string().trim().min(1).max(100);
 var requiredCheckSchema = external_exports.object({ context: external_exports.string().trim().min(1).max(255), appId: external_exports.number().int().positive() }).strict();
 var operationOptions = [
-  issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: external_exports.string().trim().min(1).max(100) }).strict(),
-  issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: external_exports.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: labelName }).strict(),
+  issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: labelName }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.comment.create"), body }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.comment.update"), ...commentUpdate }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.close"), expectedIssueState: external_exports.literal("open") }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.reopen"), expectedIssueState: external_exports.literal("closed") }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),
+  /**
+   * A new issue. There is no resource to check a version against; resume finds
+   * the issue by the operation marker apply appends to the body. Labels must
+   * already exist and assignees must be assignable, so creating an issue never
+   * invents repository taxonomy or silently drops a person.
+   */
+  operationBase.extend({
+    kind: external_exports.literal("issue.create"),
+    title: external_exports.string().trim().min(1).max(256),
+    body,
+    labels: external_exports.array(labelName).min(1).max(10).optional(),
+    assigneeIds: external_exports.array(githubNumericIdSchema).min(1).max(10).optional()
+  }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.comment.create"), body }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.comment.update"), ...commentUpdate }).strict(),
   pullBase.extend({
@@ -40089,6 +40106,8 @@ var operationOptions = [
       context.addIssue({ code: "custom", message: "draft state must be updated in a separate exact operation" });
     }
   }),
+  pullBase.extend({ kind: external_exports.literal("pull_request.label.add"), label: labelName }).strict(),
+  pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
   operationBase.extend({ kind: external_exports.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
@@ -40176,7 +40195,7 @@ function collectStrings(value, output2) {
 }
 var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
   const strings = [];
-  if (operation.kind === "issue.comment.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
+  if (operation.kind === "issue.comment.create" || operation.kind === "issue.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
     const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
 ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
@@ -40186,6 +40205,10 @@ ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
   }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
+  if (operation.kind === "issue.create") {
+    if (operation.labels && new Set(operation.labels.map((label) => label.toLowerCase())).size !== operation.labels.length) context.addIssue({ code: "custom", path: ["labels"], message: "labels must be unique" });
+    if (operation.assigneeIds && new Set(operation.assigneeIds).size !== operation.assigneeIds.length) context.addIssue({ code: "custom", path: ["assigneeIds"], message: "assignee IDs must be unique" });
+  }
   if (operation.kind === "pull_request.merge") {
     const checks = operation.requiredChecks.map((check2) => `${check2.appId}:${check2.context}`);
     if (new Set(checks).size !== checks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
@@ -40228,12 +40251,15 @@ var operationOutputCatalog = {
   "issue.reopen": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
   "issue.assignee.add": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
   "issue.assignee.remove": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "issue.create": { ...issueOutputs, issueUrl: "url" },
   "pull_request.comment.create": { ...pullOutputs, ...commentOutputs },
   "pull_request.comment.update": { ...pullOutputs, ...commentOutputs },
   "pull_request.review.submit": { ...pullOutputs, reviewId: "githubId", reviewUrl: "url", reviewState: "string" },
   "pull_request.reviewer.request": { ...pullOutputs },
   "pull_request.reviewer.remove": { ...pullOutputs },
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
+  "pull_request.label.add": { ...pullOutputs, label: "string" },
+  "pull_request.label.remove": { ...pullOutputs, label: "string" },
   "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "gardenerBranch",
@@ -45609,12 +45635,16 @@ var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
   "issue.reopen": ["issues:write"],
   "issue.assignee.add": ["issues:write"],
   "issue.assignee.remove": ["issues:write"],
+  "issue.create": ["issues:write"],
   "pull_request.comment.create": ["pull-requests:write"],
   "pull_request.comment.update": ["pull-requests:write"],
   "pull_request.review.submit": ["pull-requests:write"],
   "pull_request.reviewer.request": ["pull-requests:write"],
   "pull_request.reviewer.remove": ["pull-requests:write"],
   "pull_request.update": ["pull-requests:write"],
+  // The issues labels API accepts pull-requests:write for a pull request.
+  "pull_request.label.add": ["pull-requests:write"],
+  "pull_request.label.remove": ["pull-requests:write"],
   "branch.create": ["contents:write"],
   "commit.create": ["contents:write"],
   "pull_request.open_draft": ["contents:read", "pull-requests:write"],
@@ -45833,8 +45863,9 @@ var GitHubApi = class {
    * `link` rel="next" marker and falls back to a short-page check, with a hard
    * page ceiling so a hostile or enormous collection cannot hang the job.
    */
-  async findPaginated(path3, label, matches, envelopeKey) {
-    for (let page = 1; page <= this.#maxPages; page++) {
+  async findPaginated(path3, label, matches, envelopeKey, recentPages) {
+    const pages = recentPages ?? this.#maxPages;
+    for (let page = 1; page <= pages; page++) {
       const separator = path3.includes("?") ? "&" : "?";
       const { response, requestId: requestId2 } = await this.raw(`${path3}${separator}per_page=100&page=${page}`);
       if (!response.ok) throw await httpError(response, label, requestId2);
@@ -45848,6 +45879,7 @@ var GitHubApi = class {
       if (!hasNext && data.length < 100) return null;
       if (!hasNext && data.length === 100 && link !== "") return null;
     }
+    if (recentPages !== void 0) return null;
     throw failure2("github_pagination_exhausted", `${label} exceeded the ${this.#maxPages}-page idempotency scan`);
   }
   async graphql(query, variables, label) {
@@ -45997,15 +46029,7 @@ async function executeLabel(scope, operation) {
     return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels };
   }
   assertIssueState(scope, issue3, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
-  if (desired) {
-    const defined = await scope.api.restOptional(
-      `${scope.repoPath}/labels/${encodedLabel}`,
-      "Repository label lookup"
-    );
-    if (defined === null) {
-      throw conflict("label_not_defined", `Label ${operation.label} is not defined in this repository`);
-    }
-  }
+  if (desired) await assertLabelDefined(scope, operation.label);
   const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}`;
   const { data } = desired ? await scope.api.rest(`${issuePath}/labels`, "Issue label add", {
     method: "POST",
@@ -46015,6 +46039,83 @@ async function executeLabel(scope, operation) {
   });
   const applied = Array.isArray(data) ? data.flatMap((label) => record2(label) && typeof label.name === "string" ? [label.name] : []) : labels;
   return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels: applied };
+}
+async function assertLabelDefined(scope, label) {
+  const defined = await scope.api.restOptional(
+    `${scope.repoPath}/labels/${encodeSegment(label, "Label name")}`,
+    "Repository label lookup"
+  );
+  if (defined === null) {
+    throw conflict("label_not_defined", `Label ${label} is not defined in this repository`);
+  }
+}
+async function executeIssueCreate(scope, operation) {
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure2("canonical_marker_missing", "Exact issue body is missing its operation marker");
+  }
+  const existing = await scope.api.findPaginated(
+    `${scope.repoPath}/issues?state=all&sort=created&direction=desc`,
+    "Issue creation idempotency lookup",
+    (candidate) => candidate.pull_request === void 0 && authoredByActor(candidate, scope) && candidate.body === operation.body,
+    void 0,
+    ISSUE_CREATE_RECENT_PAGES
+  );
+  if (existing) {
+    assertIssueCreatedComplete(operation, existing);
+    return { kind: operation.kind, issueNumber: issueNumberOf(existing), issueUrl: htmlUrl(existing) };
+  }
+  for (const label of operation.labels ?? []) await assertLabelDefined(scope, label);
+  const logins = [];
+  for (const id of operation.assigneeIds ?? []) logins.push(await resolveLogin(scope, id));
+  const { data } = await scope.api.rest(`${scope.repoPath}/issues`, "Issue creation", {
+    method: "POST",
+    body: JSON.stringify({
+      title: operation.title,
+      body: operation.body,
+      ...operation.labels ? { labels: operation.labels } : {},
+      ...logins.length > 0 ? { assignees: logins } : {}
+    })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Issue creation response was invalid");
+  assertIssueCreatedComplete(operation, data);
+  return { kind: operation.kind, issueNumber: issueNumberOf(data), issueUrl: htmlUrl(data) };
+}
+var ISSUE_CREATE_RECENT_PAGES = 5;
+function assertIssueCreatedComplete(operation, issue3) {
+  const applied = new Set(labelNames2(issue3).map((label) => label.toLowerCase()));
+  const missingLabel = (operation.labels ?? []).find((label) => !applied.has(label.toLowerCase()));
+  const assigned = accountIds(issue3.assignees);
+  const missingAssignee = (operation.assigneeIds ?? []).find((id) => !assigned.includes(id));
+  if (missingLabel !== void 0 || missingAssignee !== void 0) {
+    throw conflict(
+      "issue_create_incomplete",
+      `GitHub created issue #${String(issue3.number)} without ${missingLabel !== void 0 ? `label ${missingLabel}` : `assignee ${missingAssignee}`}`
+    );
+  }
+}
+function issueNumberOf(value) {
+  if (!positiveInteger(value.number)) throw failure2("github_response_invalid", "Issue response had no number");
+  return value.number;
+}
+async function executePullLabel(scope, operation) {
+  const encodedLabel = encodeSegment(operation.label, "Label name");
+  const pull = await loadPull(scope, operation.pullNumber);
+  const labels = labelNames2(pull);
+  const present = labels.some((label) => label.toLowerCase() === operation.label.toLowerCase());
+  const desired = operation.kind === "pull_request.label.add";
+  if (present === desired) {
+    return { kind: operation.kind, pullNumber: operation.pullNumber, label: operation.label, labels };
+  }
+  assertPullRevision(pull, operation);
+  assertPullState(scope, pull, operation);
+  if (desired) await assertLabelDefined(scope, operation.label);
+  const issuePath = `${scope.repoPath}/issues/${operation.pullNumber}`;
+  const { data } = desired ? await scope.api.rest(`${issuePath}/labels`, "Pull request label add", {
+    method: "POST",
+    body: JSON.stringify({ labels: [operation.label] })
+  }) : await scope.api.rest(`${issuePath}/labels/${encodedLabel}`, "Pull request label remove", { method: "DELETE" });
+  const applied = Array.isArray(data) ? data.flatMap((label) => record2(label) && typeof label.name === "string" ? [label.name] : []) : labels;
+  return { kind: operation.kind, pullNumber: operation.pullNumber, label: operation.label, labels: applied };
 }
 async function executeIssueCommentCreate(scope, operation) {
   if (!hasExactOperationMarker(operation.body, operation.id)) {
@@ -47100,6 +47201,11 @@ async function dispatch(scope, operation) {
     case "issue.assignee.add":
     case "issue.assignee.remove":
       return executeAssignee(scope, operation);
+    case "issue.create":
+      return executeIssueCreate(scope, operation);
+    case "pull_request.label.add":
+    case "pull_request.label.remove":
+      return executePullLabel(scope, operation);
     case "pull_request.comment.create":
       return executePullCommentCreate(scope, operation);
     case "pull_request.comment.update":
@@ -47445,6 +47551,7 @@ function laterStepMayTarget(plan, index, resource) {
 }
 var MARKER_BODY_KINDS = /* @__PURE__ */ new Set([
   "issue.comment.create",
+  "issue.create",
   "pull_request.review.submit",
   "pull_request.open_draft"
 ]);

@@ -210,8 +210,8 @@ collapse without duplication.
 
 | Family glob | Expands to |
 | --- | --- |
-| `issue.*` | label add/remove, comment create/update, close, reopen, assignee add/remove |
-| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, open draft, merge |
+| `issue.*` | label add/remove, comment create/update, close, reopen, assignee add/remove, create |
+| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, label add/remove, open draft, merge |
 | `git.*` | `branch.create`, `commit.create` |
 | `discussion.*` | comment create/update, answer mark/unmark, close, reopen |
 | `check.*` | `check.rerun` |
@@ -244,9 +244,20 @@ effects:
 
 An empty `effects` list produces an inspection-only task with no apply write scopes.
 
+`issue.create` opens a new issue with a title and body, and optionally `labels` and `assigneeIds`.
+Labels must already exist, and every assignee must be assignable; if GitHub drops either, the step
+fails as a conflict and names what was dropped. Apply finds an issue it already created by a marker
+it adds to the body, so a resumed run does not open a duplicate. It looks among the 500 newest issues
+and pull requests, so resuming a run after 500 more have been opened would create a second issue.
+If GitHub dropped a label or assignee, a rerun still reports the conflict. Its outputs are
+`issueNumber` and `issueUrl`.
+
+`pull_request.label.add` and `.remove` label a pull request. Like the issue label kinds, the label
+must already exist, and the step refuses if the pull request changed after planning.
+
 ### Automatic V1 effects
 
-All 29 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
+All 32 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
 read-only permission union for planning plus only the write scopes implied by the task's declared
 effects. The model-facing planning job downgrades that grant to read-only; the checkout-free apply
 job receives the write grant and executes only the exact Worker-validated plan. Ordered receipts,

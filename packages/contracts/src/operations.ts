@@ -3,8 +3,9 @@ import { githubNumericIdSchema } from "./identity";
 import { operationRepositoryRefSchema } from "./repository";
 
 export const operationKindValues = [
-  "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove",
+  "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove", "issue.create",
   "pull_request.comment.create", "pull_request.comment.update", "pull_request.review.submit", "pull_request.reviewer.request", "pull_request.reviewer.remove", "pull_request.update",
+  "pull_request.label.add", "pull_request.label.remove",
   "branch.create", "commit.create", "pull_request.open_draft", "pull_request.merge",
   "discussion.comment.create", "discussion.comment.update", "discussion.answer.mark", "discussion.answer.unmark", "discussion.close", "discussion.reopen",
   "check.rerun",
@@ -91,17 +92,31 @@ const pullBase = operationBase.extend({
 });
 const discussionBase = operationBase.extend({ discussionNumber: z.number().int().positive(), expectedDiscussionState: z.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
 const commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body } as const;
+const labelName = z.string().trim().min(1).max(100);
 const requiredCheckSchema = z.object({ context: z.string().trim().min(1).max(255), appId: z.number().int().positive() }).strict();
 
 const operationOptions = [
-  issueBase.extend({ kind: z.literal("issue.label.add"), label: z.string().trim().min(1).max(100) }).strict(),
-  issueBase.extend({ kind: z.literal("issue.label.remove"), label: z.string().trim().min(1).max(100) }).strict(),
+  issueBase.extend({ kind: z.literal("issue.label.add"), label: labelName }).strict(),
+  issueBase.extend({ kind: z.literal("issue.label.remove"), label: labelName }).strict(),
   issueBase.extend({ kind: z.literal("issue.comment.create"), body }).strict(),
   issueBase.extend({ kind: z.literal("issue.comment.update"), ...commentUpdate }).strict(),
   issueBase.extend({ kind: z.literal("issue.close"), expectedIssueState: z.literal("open") }).strict(),
   issueBase.extend({ kind: z.literal("issue.reopen"), expectedIssueState: z.literal("closed") }).strict(),
   issueBase.extend({ kind: z.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
   issueBase.extend({ kind: z.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),
+  /**
+   * A new issue. There is no resource to check a version against; resume finds
+   * the issue by the operation marker apply appends to the body. Labels must
+   * already exist and assignees must be assignable, so creating an issue never
+   * invents repository taxonomy or silently drops a person.
+   */
+  operationBase.extend({
+    kind: z.literal("issue.create"),
+    title: z.string().trim().min(1).max(256),
+    body,
+    labels: z.array(labelName).min(1).max(10).optional(),
+    assigneeIds: z.array(githubNumericIdSchema).min(1).max(10).optional(),
+  }).strict(),
 
   pullBase.extend({ kind: z.literal("pull_request.comment.create"), body }).strict(),
   pullBase.extend({ kind: z.literal("pull_request.comment.update"), ...commentUpdate }).strict(),
@@ -119,6 +134,8 @@ const operationOptions = [
       context.addIssue({ code: "custom", message: "draft state must be updated in a separate exact operation" });
     }
   }),
+  pullBase.extend({ kind: z.literal("pull_request.label.add"), label: labelName }).strict(),
+  pullBase.extend({ kind: z.literal("pull_request.label.remove"), label: labelName }).strict(),
   operationBase.extend({ kind: z.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
   operationBase.extend({
     kind: z.literal("commit.create"), branch: gardenerBranchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
@@ -185,6 +202,7 @@ export const operationSchema = z.discriminatedUnion("kind", operationOptions).su
   const strings: string[] = [];
   if (
     operation.kind === "issue.comment.create" ||
+    operation.kind === "issue.create" ||
     operation.kind === "pull_request.review.submit" ||
     operation.kind === "pull_request.open_draft"
   ) {
@@ -200,6 +218,11 @@ export const operationSchema = z.discriminatedUnion("kind", operationOptions).su
   }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
+  if (operation.kind === "issue.create") {
+    // GitHub label names are case-insensitive.
+    if (operation.labels && new Set(operation.labels.map((label) => label.toLowerCase())).size !== operation.labels.length) context.addIssue({ code: "custom", path: ["labels"], message: "labels must be unique" });
+    if (operation.assigneeIds && new Set(operation.assigneeIds).size !== operation.assigneeIds.length) context.addIssue({ code: "custom", path: ["assigneeIds"], message: "assignee IDs must be unique" });
+  }
   if (operation.kind === "pull_request.merge") {
     const checks = operation.requiredChecks.map((check) => `${check.appId}:${check.context}`);
     if (new Set(checks).size !== checks.length) context.addIssue({ code: "custom", path: ["requiredChecks"], message: "required checks must be unique" });
@@ -211,7 +234,7 @@ export type Operation = z.infer<typeof operationSchema>;
  * Compact JSON Schema for the model-authored payload of one exact operation.
  *
  * The provider tool remains flat (`kind` plus a JSON string), avoiding the
- * 29-arm `oneOf` that Workers AI models fail to call reliably. The trusted
+ * many-armed `oneOf` that Workers AI models fail to call reliably. The trusted
  * prompt can still state the exact field names and types for only the kinds a
  * task declared. Plan-owned identity/repository fields are removed, as are
  * capture-owned commit files.
@@ -326,12 +349,15 @@ export const operationOutputCatalog = {
   "issue.reopen": { ...issueOutputs, state: "openClosedState", issueUrl: "url" },
   "issue.assignee.add": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
   "issue.assignee.remove": { ...issueOutputs, assigneeId: "githubId", assigneeLogin: "string" },
+  "issue.create": { ...issueOutputs, issueUrl: "url" },
   "pull_request.comment.create": { ...pullOutputs, ...commentOutputs },
   "pull_request.comment.update": { ...pullOutputs, ...commentOutputs },
   "pull_request.review.submit": { ...pullOutputs, reviewId: "githubId", reviewUrl: "url", reviewState: "string" },
   "pull_request.reviewer.request": { ...pullOutputs },
   "pull_request.reviewer.remove": { ...pullOutputs },
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
+  "pull_request.label.add": { ...pullOutputs, label: "string" },
+  "pull_request.label.remove": { ...pullOutputs, label: "string" },
   "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "gardenerBranch",

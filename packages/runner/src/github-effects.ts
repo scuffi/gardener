@@ -58,6 +58,8 @@ type JsonRecord = Record<string, unknown>;
  */
 export type OperationOutputsV1 =
   | { kind: "issue.label.add" | "issue.label.remove"; issueNumber: number; label: string; labels: string[] }
+  | { kind: "issue.create"; issueNumber: number; issueUrl: string }
+  | { kind: "pull_request.label.add" | "pull_request.label.remove"; pullNumber: number; label: string; labels: string[] }
   | { kind: "issue.comment.create" | "issue.comment.update"; issueNumber: number; commentId: string; commentUrl: string }
   | { kind: "issue.close" | "issue.reopen"; issueNumber: number; state: "open" | "closed"; issueUrl: string }
   | {
@@ -453,8 +455,15 @@ class GitHubApi {
      * `{ total_count, <key>: [...] }`.
      */
     envelopeKey?: string,
+    /**
+     * Scan only this many of the newest pages and report no match past them,
+     * for lookups whose target, if it exists, can only be recent. Without it,
+     * running out of pages is an error rather than a guess.
+     */
+    recentPages?: number,
   ): Promise<JsonRecord | null> {
-    for (let page = 1; page <= this.#maxPages; page++) {
+    const pages = recentPages ?? this.#maxPages;
+    for (let page = 1; page <= pages; page++) {
       const separator = path.includes("?") ? "&" : "?";
       const { response, requestId } = await this.raw(`${path}${separator}per_page=100&page=${page}`);
       if (!response.ok) throw await httpError(response, label, requestId);
@@ -470,6 +479,7 @@ class GitHubApi {
       if (!hasNext && data.length < 100) return null;
       if (!hasNext && data.length === 100 && link !== "") return null;
     }
+    if (recentPages !== undefined) return null;
     throw failure("github_pagination_exhausted", `${label} exceeded the ${this.#maxPages}-page idempotency scan`);
   }
 
@@ -706,17 +716,7 @@ async function executeLabel(scope: ExecutionScope, operation: LabelOperation): P
     return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels };
   }
   assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
-  if (desired) {
-    // `POST /issues/{n}/labels` silently creates an unknown label, inventing
-    // repository taxonomy as a side effect. Require it to exist already.
-    const defined = await scope.api.restOptional(
-      `${scope.repoPath}/labels/${encodedLabel}`,
-      "Repository label lookup",
-    );
-    if (defined === null) {
-      throw conflict("label_not_defined", `Label ${operation.label} is not defined in this repository`);
-    }
-  }
+  if (desired) await assertLabelDefined(scope, operation.label);
   const issuePath = `${scope.repoPath}/issues/${operation.issueNumber}`;
   const { data } = desired
     ? await scope.api.rest(`${issuePath}/labels`, "Issue label add", {
@@ -730,6 +730,109 @@ async function executeLabel(scope: ExecutionScope, operation: LabelOperation): P
     ? data.flatMap((label) => (record(label) && typeof label.name === "string" ? [label.name] : []))
     : labels;
   return { kind: operation.kind, issueNumber: operation.issueNumber, label: operation.label, labels: applied };
+}
+
+/**
+ * GitHub silently creates an unknown label when one is applied, inventing
+ * repository taxonomy as a side effect. Every label write requires it to exist.
+ */
+async function assertLabelDefined(scope: ExecutionScope, label: string): Promise<void> {
+  const defined = await scope.api.restOptional(
+    `${scope.repoPath}/labels/${encodeSegment(label, "Label name")}`,
+    "Repository label lookup",
+  );
+  if (defined === null) {
+    throw conflict("label_not_defined", `Label ${label} is not defined in this repository`);
+  }
+}
+
+type IssueCreate = Extract<Operation, { kind: "issue.create" }>;
+
+async function executeIssueCreate(scope: ExecutionScope, operation: IssueCreate): Promise<OperationOutputsV1> {
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure("canonical_marker_missing", "Exact issue body is missing its operation marker");
+  }
+  // Resume: an earlier attempt of this run may already have created it, and
+  // would have done so recently, so only the newest issues are scanned. The
+  // list includes pull requests, which are never a match.
+  const existing = await scope.api.findPaginated(
+    `${scope.repoPath}/issues?state=all&sort=created&direction=desc`,
+    "Issue creation idempotency lookup",
+    (candidate) => candidate.pull_request === undefined && authoredByActor(candidate, scope) && candidate.body === operation.body,
+    undefined,
+    ISSUE_CREATE_RECENT_PAGES,
+  );
+  if (existing) {
+    // Re-verified so an issue GitHub created without a label or assignee stays
+    // a conflict on every rerun, not a success the second time round.
+    assertIssueCreatedComplete(operation, existing);
+    return { kind: operation.kind, issueNumber: issueNumberOf(existing), issueUrl: htmlUrl(existing) };
+  }
+  for (const label of operation.labels ?? []) await assertLabelDefined(scope, label);
+  const logins: string[] = [];
+  for (const id of operation.assigneeIds ?? []) logins.push(await resolveLogin(scope, id));
+  const { data } = await scope.api.rest(`${scope.repoPath}/issues`, "Issue creation", {
+    method: "POST",
+    body: JSON.stringify({
+      title: operation.title,
+      body: operation.body,
+      ...(operation.labels ? { labels: operation.labels } : {}),
+      ...(logins.length > 0 ? { assignees: logins } : {}),
+    }),
+  });
+  if (!record(data)) throw failure("github_response_invalid", "Issue creation response was invalid");
+  assertIssueCreatedComplete(operation, data);
+  return { kind: operation.kind, issueNumber: issueNumberOf(data), issueUrl: htmlUrl(data) };
+}
+
+/** The newest pages of issues a resumed `issue.create` searches for its own issue. */
+const ISSUE_CREATE_RECENT_PAGES = 5;
+
+/** GitHub silently drops labels and assignees it will not apply. */
+function assertIssueCreatedComplete(operation: IssueCreate, issue: JsonRecord): void {
+  const applied = new Set(labelNames(issue).map((label) => label.toLowerCase()));
+  const missingLabel = (operation.labels ?? []).find((label) => !applied.has(label.toLowerCase()));
+  const assigned = accountIds(issue.assignees);
+  const missingAssignee = (operation.assigneeIds ?? []).find((id) => !assigned.includes(id));
+  if (missingLabel !== undefined || missingAssignee !== undefined) {
+    throw conflict(
+      "issue_create_incomplete",
+      `GitHub created issue #${String(issue.number)} without ${missingLabel !== undefined ? `label ${missingLabel}` : `assignee ${missingAssignee}`}`,
+    );
+  }
+}
+
+function issueNumberOf(value: JsonRecord): number {
+  if (!positiveInteger(value.number)) throw failure("github_response_invalid", "Issue response had no number");
+  return value.number;
+}
+
+type PullLabelOperation = Extract<Operation, { kind: "pull_request.label.add" | "pull_request.label.remove" }>;
+
+async function executePullLabel(scope: ExecutionScope, operation: PullLabelOperation): Promise<OperationOutputsV1> {
+  const encodedLabel = encodeSegment(operation.label, "Label name");
+  const pull = await loadPull(scope, operation.pullNumber);
+  const labels = labelNames(pull);
+  const present = labels.some((label) => label.toLowerCase() === operation.label.toLowerCase());
+  const desired = operation.kind === "pull_request.label.add";
+  if (present === desired) {
+    return { kind: operation.kind, pullNumber: operation.pullNumber, label: operation.label, labels };
+  }
+  assertPullRevision(pull, operation);
+  assertPullState(scope, pull, operation);
+  if (desired) await assertLabelDefined(scope, operation.label);
+  // Pull requests are issues for labels; the pulls API has no label endpoint.
+  const issuePath = `${scope.repoPath}/issues/${operation.pullNumber}`;
+  const { data } = desired
+    ? await scope.api.rest(`${issuePath}/labels`, "Pull request label add", {
+      method: "POST",
+      body: JSON.stringify({ labels: [operation.label] }),
+    })
+    : await scope.api.rest(`${issuePath}/labels/${encodedLabel}`, "Pull request label remove", { method: "DELETE" });
+  const applied = Array.isArray(data)
+    ? data.flatMap((label) => (record(label) && typeof label.name === "string" ? [label.name] : []))
+    : labels;
+  return { kind: operation.kind, pullNumber: operation.pullNumber, label: operation.label, labels: applied };
 }
 
 type IssueCommentCreate = Extract<Operation, { kind: "issue.comment.create" }>;
@@ -2145,6 +2248,11 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
     case "issue.assignee.add":
     case "issue.assignee.remove":
       return executeAssignee(scope, operation);
+    case "issue.create":
+      return executeIssueCreate(scope, operation);
+    case "pull_request.label.add":
+    case "pull_request.label.remove":
+      return executePullLabel(scope, operation);
     case "pull_request.comment.create":
       return executePullCommentCreate(scope, operation);
     case "pull_request.comment.update":

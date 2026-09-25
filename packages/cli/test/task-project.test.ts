@@ -150,6 +150,7 @@ describe("TASK.md compiler", () => {
       "issue.reopen",
       "issue.assignee.add",
       "issue.assignee.remove",
+      "issue.create",
     ]);
     expect(expandEffectSelectors(["git.*"])).toEqual(["branch.create", "commit.create"]);
     expect(expandEffectSelectors(["check.*"])).toEqual(["check.rerun"]);

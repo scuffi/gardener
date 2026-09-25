@@ -201,6 +201,17 @@ const OPEN_PULL = {
 };
 
 const OCTOCAT = { id: 42, login: "octocat" };
+const CREATED_ISSUE = {
+  id: 900,
+  number: 9,
+  state: "open",
+  user: BOT,
+  title: "Flaky test",
+  body: marked("op-issue-create", "Seen twice."),
+  labels: [],
+  assignees: [],
+  html_url: "https://github.com/acme/widgets/issues/9",
+};
 const DISCUSSION_URL = "https://github.com/acme/widgets/discussions/3";
 const DISCUSSION_COMMENT_URL = `${DISCUSSION_URL}#discussioncomment-501`;
 const RELEASE_URL = "https://github.com/acme/widgets/releases/tag/v1.0.0";
@@ -292,6 +303,24 @@ const scenarios: Record<string, Scenario> = {
     duplicate: [get(`${REPO}/issues/5`, { ...OPEN_ISSUE, labels: [{ name: "bug" }] })],
     outputs: { issueNumber: 5, label: "bug", labels: ["bug"] },
   },
+  "issue.create": {
+    operation: operationSchema.parse({
+      schemaVersion: "v2", repository: REPOSITORY, id: "op-issue-create", kind: "issue.create",
+      title: "Flaky test", body: marked("op-issue-create", "Seen twice."), labels: ["bug"], assigneeIds: ["42"],
+    }),
+    apply: [
+      get(`${REPO}/issues`, []),
+      get(`${REPO}/labels/bug`, { id: 1, name: "bug" }),
+      get("/user/42", OCTOCAT),
+      send("POST", `${REPO}/issues`, { ...CREATED_ISSUE, labels: [{ name: "bug" }], assignees: [OCTOCAT] }),
+    ],
+    duplicate: [get(`${REPO}/issues`, [
+      { ...OPEN_PULL, user: BOT, body: marked("op-issue-create", "Seen twice.") },
+      { ...CREATED_ISSUE, labels: [{ name: "bug" }], assignees: [OCTOCAT] },
+    ])],
+    outputs: { issueNumber: 9, issueUrl: "https://github.com/acme/widgets/issues/9" },
+    resourceUrl: "https://github.com/acme/widgets/issues/9",
+  },
   "issue.label.remove": {
     operation: operationSchema.parse({ ...issueBase, id: "op-label-remove", kind: "issue.label.remove", label: "bug" }),
     apply: [
@@ -369,6 +398,25 @@ const scenarios: Record<string, Scenario> = {
     ],
     duplicate: [get(`${REPO}/issues/5`, OPEN_ISSUE), get("/user/42", OCTOCAT)],
     outputs: { assigneeLogin: "octocat", assigneeIds: [] },
+  },
+  "pull_request.label.add": {
+    operation: operationSchema.parse({ ...pullBase, id: "op-pull-label-add", kind: "pull_request.label.add", label: "ready" }),
+    apply: [
+      get(`${REPO}/pulls/7`, OPEN_PULL),
+      get(`${REPO}/labels/ready`, { id: 2, name: "ready" }),
+      send("POST", `${REPO}/issues/7/labels`, [{ name: "ready" }]),
+    ],
+    duplicate: [get(`${REPO}/pulls/7`, { ...OPEN_PULL, labels: [{ name: "Ready" }] })],
+    outputs: { pullNumber: 7, label: "ready", labels: ["ready"] },
+  },
+  "pull_request.label.remove": {
+    operation: operationSchema.parse({ ...pullBase, id: "op-pull-label-remove", kind: "pull_request.label.remove", label: "ready" }),
+    apply: [
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, labels: [{ name: "ready" }] }),
+      send("DELETE", `${REPO}/issues/7/labels/ready`, []),
+    ],
+    duplicate: [get(`${REPO}/pulls/7`, OPEN_PULL)],
+    outputs: { pullNumber: 7, label: "ready", labels: [] },
   },
   "pull_request.comment.create": {
     operation: operationSchema.parse({
@@ -893,6 +941,69 @@ describe("precondition conflicts", () => {
     ]);
     expect(pull.receipt.status).toBe("conflicted");
     expect(pull.receipt.error?.code).toBe("pull_locked");
+  });
+
+  it("creates an issue only with labels that exist and assignees GitHub applied", async () => {
+    const create = scenarioFor("issue.create").operation;
+    const undefinedLabel = await run(create, [get(`${REPO}/issues`, []), get(`${REPO}/labels/bug`, {}, 404)]);
+    expect(undefinedLabel.receipt.status).toBe("conflicted");
+    expect(undefinedLabel.receipt.error?.code).toBe("label_not_defined");
+    expect(undefinedLabel.calls.some((call) => call.method === "POST")).toBe(false);
+
+    const dropped = await run(create, [
+      get(`${REPO}/issues`, []),
+      get(`${REPO}/labels/bug`, { id: 1, name: "bug" }),
+      get("/user/42", OCTOCAT),
+      send("POST", `${REPO}/issues`, { ...CREATED_ISSUE, labels: [{ name: "bug" }], assignees: [] }),
+    ]);
+    expect(dropped.receipt.status).toBe("conflicted");
+    expect(dropped.receipt.error?.code).toBe("issue_create_incomplete");
+    expect(dropped.receipt.error?.message).toContain("#9 without assignee 42");
+
+    // A rerun finds the issue it created and still reports what was dropped.
+    const rerun = await run(create, [get(`${REPO}/issues`, [{ ...CREATED_ISSUE, labels: [{ name: "bug" }], assignees: [] }])]);
+    expect(rerun.receipt.status).toBe("conflicted");
+    expect(rerun.receipt.error?.code).toBe("issue_create_incomplete");
+  });
+
+  it("searches only the newest issues when resuming issue.create", async () => {
+    // Five full pages with no match: treated as not yet created rather than failing the scan.
+    const page = Array.from({ length: 100 }, (_, index) => ({ ...CREATED_ISSUE, number: 1000 + index, body: "other" }));
+    const busy: Handler = {
+      when: (call) => call.method === "GET" && matches(call.path, `${REPO}/issues`),
+      json: page,
+      headers: { link: '<https://api.github.com/next>; rel="next"' },
+    };
+    const { receipt, calls } = await run(scenarioFor("issue.create").operation, [
+      busy,
+      get(`${REPO}/labels/bug`, { id: 1, name: "bug" }),
+      get("/user/42", OCTOCAT),
+      send("POST", `${REPO}/issues`, { ...CREATED_ISSUE, labels: [{ name: "bug" }], assignees: [OCTOCAT] }),
+    ]);
+    expect(receipt.status, JSON.stringify(receipt.error)).toBe("succeeded");
+    expect(calls.filter((call) => call.method === "GET" && call.path.startsWith(`${REPO}/issues?`))).toHaveLength(5);
+  });
+
+  it("never treats someone else's issue or a pull request as the created issue", async () => {
+    const { receipt, calls } = await run(scenarioFor("issue.create").operation, [
+      get(`${REPO}/issues`, [
+        { ...CREATED_ISSUE, number: 3, user: { login: "mallory" } },
+        { ...OPEN_PULL, user: BOT, body: CREATED_ISSUE.body },
+      ]),
+      get(`${REPO}/labels/bug`, { id: 1, name: "bug" }),
+      get("/user/42", OCTOCAT),
+      send("POST", `${REPO}/issues`, { ...CREATED_ISSUE, labels: [{ name: "bug" }], assignees: [OCTOCAT] }),
+    ]);
+    expect(receipt.status, JSON.stringify(receipt.error)).toBe("succeeded");
+    expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
+  });
+
+  it("refuses a pull request label change when the pull request moved", async () => {
+    const { receipt } = await run(scenarioFor("pull_request.label.add").operation, [
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, updated_at: "2026-01-09T00:00:00Z" }),
+    ]);
+    expect(receipt.status).toBe("conflicted");
+    expect(receipt.error?.code).toBe("pull_changed");
   });
 
   it("conflicts when the issue state changed after planning", async () => {
