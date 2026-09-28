@@ -1,0 +1,43 @@
+README.md
+  s_de0b486c128948::t_298d4583bb3449 157
+SECURITY.md
+  s_de0b486c128948::t_92d019ca878f12 149-151
+apps/gardener/migrations/0002_actions_installation.sql
+  s_de0b486c128948::t_345f15ac55e66b 1-7
+docs/onboarding.md
+  s_de0b486c128948::t_10b36f6bbd1eac 20,87,127-129
+docs/operations.md
+  s_de0b486c128948::t_6505fb47e03e18 8,51,59-64,139,162-164,166-167
+packages/cli/src/actions-d1.ts
+  s_de0b486c128948::t_c8e15298d86b07 1-67
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_3c2ad920c5a85f 1-2,8,18-34,36-41,94-95,97-101,103-105,107-120,122-143,145-165,167-173,175-211,217-237,240,242-253,260-262,264-267,292-293,308,337-347,364-367,371,378,385,388,403,415
+packages/cli/src/actions-operations.ts
+  s_de0b486c128948::t_2c76c3e7b45849 1-2,10-11,13,15,29-30,38,40,54-55,65,67,69,80,83,85,95-96,99,107,114
+packages/cli/src/actions-qualify.ts
+  s_de0b486c128948::t_63e3b12b0a3012 4-5,45,102,172,327,348,368,373,436,440
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_207436253a6c60 41,77-78,185,189
+packages/cli/test/actions-installation.test.ts
+  s_de0b486c128948::t_d78c47e2847adf 2,6-33,38-40,44,51-55,60-61,73-132
+packages/cli/test/actions-operations.test.ts
+  s_de0b486c128948::t_dcb6ab33055592 1-2,5,13-15,26,31,47
+scripts/check-cli-package.mjs
+  s_de0b486c128948::t_281f668647192d 15,20-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f6cd74c98c3c30ca5a4f68f73497f41da492d4c5",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
