@@ -3,6 +3,20 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.2 (2026-09-28)
+
+- The CLI keeps no local state. It finds an installation by its `gardener-<workspace>` name on the
+  Cloudflare account, and `deploy` records the runtime URL, CLI version and deployment digest in
+  the workspace's D1 (migration `0002_actions_installation`). Any operator with access to the
+  account can run every command.
+- `deploy` adopts existing `gardener-<workspace>` resources, and refuses to replace a runtime
+  deployed by a newer CLI.
+- Removed `rollback` and `down`. To go back, release a revert. To remove an installation, delete
+  its Worker and D1 database in the Cloudflare dashboard.
+- `connect` no longer rewrites `GARDENER_RUNTIME_URL` when it is already correct.
+- Installations from v0.1.1 or earlier must run `upgrade` or `deploy` once with this release
+  before other commands work.
+
 ## v0.1.1 (2026-09-28)
 
 - The CLI is published to npm as `@scuffi/gardener`, so `npx @scuffi/gardener generate` works
