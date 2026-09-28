@@ -5,6 +5,13 @@ packages:
 allowBuilds:
   esbuild: true
   workerd: true
+  # Transitive install scripts that nothing here needs; denied explicitly so a
+  # clean CI install does not fail on unreviewed builds.
+  "@google/genai": false
+  "@mongodb-js/zstd": false
+  core-js-pure: false
+  node-liblzma: false
+  protobufjs: false
 
 # Exact pins that were version-checked against npm and are required to keep the
 # runtime and test tooling current despite the release-age gate.
