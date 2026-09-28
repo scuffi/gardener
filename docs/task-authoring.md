@@ -42,7 +42,7 @@ Inspect the issue and repository evidence, then propose one concise issue commen
 - `network` declares the task's egress posture honestly. See [Network](#network); for
   `github-actions/v1` the host lists must be empty.
 - `limits` are immutable ceilings enforced by the runtime.
-- `model` names the model every run uses. `build` fills in the default when it is omitted. See
+- `model` names the model every run uses. `generate` fills in the default when it is omitted. See
   [Model](#model).
 - The instruction body cannot grant tools, effects, network access, or GitHub permissions.
 
@@ -92,7 +92,7 @@ handle, set as `handle` in `.gardener/gardener.json`:
 { "schemaVersion": "gardener.project/v1", "target": "github-actions/v1", "handle": "my-bot", "release": { "workflowRef": "…" } }
 ```
 
-`gardener build` fails if a task mentions `self` and no handle is set. There is no default handle.
+`gardener generate` fails if a task mentions `self` and no handle is set. There is no default handle.
 
 `authors` is `maintainers` or `any`. `maintainers` admits text written by the repository owner, an
 organization member, or a collaborator, using GitHub's `author_association`. It is the default for
@@ -185,7 +185,7 @@ target has no mechanism to enforce per-host filtering, and a filter that silentl
 more dangerous than no filter at all, because it invites authors to believe egress is contained
 when it is not.
 
-`gardener build` prints a warning for every task that declares `repository.exec`, so the exposure is
+`gardener generate` prints a warning for every task that declares `repository.exec`, so the exposure is
 visible at the point the capability is introduced.
 
 If you need genuinely restricted egress, do not use `repository.exec` in V1.
@@ -364,7 +364,7 @@ model: "@cf/zai-org/glm-5.3"
 Quote `@cf/…` IDs: YAML does not allow a plain value to start with `@`. Other IDs, such as
 `model: openai/gpt-5.1`, need no quotes.
 
-If you omit it, `gardener build` writes Gardener's default, `@cf/zai-org/glm-5.3`, into the
+If you omit it, `gardener generate` writes Gardener's default, `@cf/zai-org/glm-5.3`, into the
 bundle. The bundle, and so the repository, always states the model, and changing it changes the
 bundle hash, so it takes effect only after you rebuild and reconnect.
 
@@ -381,7 +381,7 @@ A non-Cloudflare model receives everything the task's model sees: its instructio
 (such as issue or pull request text) and any repository content it reads. Choose one only where
 sending that to the provider is acceptable.
 
-`gardener build` warns about any prefix other than `@cf/`, `openai/` and `anthropic/`. Every task depends on tool calls, so a model that
+`gardener generate` warns about any prefix other than `@cf/`, `openai/` and `anthropic/`. Every task depends on tool calls, so a model that
 cannot make them fails the run. Non-Cloudflare models also need provider keys or Unified Billing
 on the account's `default` AI Gateway. See [Operations](operations.md#prerequisites).
 
@@ -519,7 +519,7 @@ trigger and the runtime can verify the cron it was started with.
 
 ## Build and enrollment
 
-`gardener build` parses and validates source, emits canonical `TaskBundleV1`, computes its SHA-256,
+`gardener generate` parses and validates source, emits canonical `TaskBundleV1`, computes its SHA-256,
 validates target support, and writes deterministic lock/workflow files. `gardener connect` stores the
 canonical bundle and trusted source path in customer-owned D1 and enables that exact hash for the
 numeric repository identity.

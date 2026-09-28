@@ -40,7 +40,7 @@ Customer repository
 
 ## Tasks
 
-`TASK.md` is an authoring format. `gardener build` compiles each task into canonical `TaskBundleV1`
+`TASK.md` is an authoring format. `gardener generate` compiles each task into canonical `TaskBundleV1`
 JSON. It records the bundle's SHA-256 in `.gardener/gardener.lock.json` and writes one caller
 workflow per task. `gardener connect` then does three things:
 
@@ -166,6 +166,6 @@ source.
 
 The model runtime is Flue `2.0.3`, with `@earendil-works/pi-ai` `0.83.0`. Every model call goes
 through the Workers AI binding to the account's AI Gateway named `default`. Each bundle names its
-model; `gardener build` writes `@cf/zai-org/glm-5.3` when a task names none. Dependencies
+model; `gardener generate` writes `@cf/zai-org/glm-5.3` when a task names none. Dependencies
 are pinned exactly. `pnpm versions:check` reports drift from the latest npm releases, and any
 intentionally held version is listed in `scripts/check-versions.mjs`.

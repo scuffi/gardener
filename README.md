@@ -39,7 +39,7 @@ Requirements:
 git clone https://github.com/scuffi/gardener && cd gardener
 pnpm install
 
-pnpm gardener -- up \
+pnpm gardener -- yolo \
   --workspace my-gardener \
   --repository my-org/my-repo \
   --repository-root /path/to/my-repo \
@@ -47,7 +47,7 @@ pnpm gardener -- up \
   --demos
 ```
 
-`up` does five things:
+`yolo` does five things:
 
 1. scaffolds `.gardener/` with two demo tasks;
 2. compiles them and generates their workflows;
@@ -98,7 +98,7 @@ Read the issue and the relevant code. If the report is missing reproduction step
 behaviour, or version information, post one comment asking for exactly what is missing.
 ```
 
-Save it as `.gardener/tasks/bug-intake/TASK.md` and run `pnpm gardener -- build`, then
+Save it as `.gardener/tasks/bug-intake/TASK.md` and run `pnpm gardener -- generate`, then
 `pnpm gardener -- connect`.
 
 Tasks can respond to 26 kinds of issue, pull request, discussion, push, schedule, and manual

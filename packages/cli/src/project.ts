@@ -429,7 +429,7 @@ function renderTaskWorkflow(task: BuiltTask, workflowRef: string): string {
 # Source: .gardener/${task.source}
 # Task: ${task.bundle.taskId}
 # Bundle: sha256:${task.bundleHash}
-# Regenerate: gardener build
+# Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: ${yamlString(`Gardener · ${task.bundle.name}`)}
 

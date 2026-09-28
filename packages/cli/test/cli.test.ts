@@ -58,7 +58,7 @@ describe("Gardener CLI", () => {
       cwd: root, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" },
     });
     expect(init.status, init.stderr).toBe(0);
-    const quiet = spawnSync(process.execPath, [cliPath, "--", "build"], {
+    const quiet = spawnSync(process.execPath, [cliPath, "--", "generate"], {
       cwd: root, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" },
     });
     expect(quiet.status, quiet.stderr).toBe(0);
@@ -67,7 +67,7 @@ describe("Gardener CLI", () => {
     // Adding a repository.exec task makes the exposure visible at build time.
     await mkdir(join(root, ".gardener/tasks/egress"), { recursive: true });
     await writeFile(join(root, ".gardener/tasks/egress/TASK.md"), EXEC_TASK);
-    const loud = spawnSync(process.execPath, [cliPath, "--", "build"], {
+    const loud = spawnSync(process.execPath, [cliPath, "--", "generate"], {
       cwd: root, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" },
     });
     expect(loud.status, loud.stderr).toBe(0);
@@ -89,9 +89,20 @@ describe("Gardener CLI", () => {
     });
     expect(root.status).toBe(0);
     expect(root.stdout).toContain("init                         Create");
-    expect(root.stdout).toContain("build                        Compile");
-    expect(root.stdout).toContain("up                           Init, build, deploy, connect, and verify");
-    expect(root.stdout).toContain("qualify                      Run both demo workflows");
+    expect(root.stdout).toContain("generate                     Compile");
+    expect(root.stdout).toContain("yolo                         Init, generate, deploy, connect, and verify");
+    expect(root.stdout).toContain("debug                        Run both demo workflows");
+    expect(root.stdout).toContain("runs view                    Show one run");
+    // Still available, but not advertised.
+    for (const hidden of ["connect ", "rollback", "repositories", "down "]) expect(root.stdout).not.toContain(hidden);
+
+    for (const [old, renamed] of [["build", "generate"], ["up", "yolo"], ["qualify", "debug"]]) {
+      const legacy = spawnSync(process.execPath, ["dist/cli.js", "--", old!, "--help"], { cwd: process.cwd(), encoding: "utf8" });
+      expect(legacy.status).toBe(1);
+      expect(legacy.stderr).toContain(`gardener ${old} was renamed to gardener ${renamed}`);
+    }
+    const runShow = spawnSync(process.execPath, ["dist/cli.js", "--", "run", "show", "--run", "x"], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runShow.stderr).toContain("gardener run show was renamed to gardener runs view");
     expect(root.stdout).not.toContain("gateway");
     expect(root.stdout).not.toContain("setup");
 
@@ -103,12 +114,12 @@ describe("Gardener CLI", () => {
     expect(init.stdout).toContain("gardener init");
     expect(init.stdout).toContain("--demos");
 
-    const build = spawnSync(process.execPath, ["dist/cli.js", "--", "build", "--help"], {
+    const build = spawnSync(process.execPath, ["dist/cli.js", "--", "generate", "--help"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
     expect(build.status).toBe(0);
-    expect(build.stdout).toContain("gardener build");
+    expect(build.stdout).toContain("gardener generate");
     expect(build.stdout).toContain("TaskBundleV1");
 
     const incompleteUpgrade = spawnSync(process.execPath, [

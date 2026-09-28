@@ -25,26 +25,26 @@ const HELP = `gardener <command>
 
 Commands:
   init                         Create a local .gardener project
-  build                        Compile TASK.md files and generate caller workflows
+  generate                     Compile TASK.md files and generate caller workflows
   deploy                       Deploy the Gardener runtime to Cloudflare
   upgrade                      Upgrade runtime and one repository bridge pin
-  rollback                     Redeploy an explicitly confirmed historical source digest
-  connect                      Enroll a GitHub repository and its compiled task bundles
-  up                           Init, build, deploy, connect, and verify
+  yolo                         Init, generate, deploy, connect, and verify
   doctor                       Verify an existing installation
-  qualify                      Run both demo workflows and verify exact receipts
-  task <enable|disable>        Immediately enable or disable one enrolled task
-  repository <enable|disable>  Immediately enable or disable one repository
-  repositories                 List enrolled repositories
-  tasks                        List enrolled task bundles
+  debug                        Run both demo workflows and verify exact receipts
   runs                         List recent runs
-  run show                     Show one run and its audit records
-  down                         Preview or execute manifest-guarded teardown
+  runs view                    Show one run and its audit records
 
 Run \`gardener <command> --help\` for command options.
 `;
 
-const OPERATIONS_HELP = `gardener <repositories|tasks|runs|run show|task enable|task disable|repository enable|repository disable>
+/**
+ * Renamed commands fail with a pointer to the new name rather than working
+ * silently, so scripts are fixed once. Commands left out of HELP (connect,
+ * rollback, task, repository, repositories, tasks, down) still work.
+ */
+const RENAMED: Record<string, string> = { build: "generate", up: "yolo", qualify: "debug" };
+
+const OPERATIONS_HELP = `gardener <repositories|tasks|runs|runs view|task enable|task disable|repository enable|repository disable>
 
 Options:
   --workspace <name>           Existing Gardener installation
@@ -65,7 +65,7 @@ Options:
   --repository-root <path>     Customer repository (defaults to current directory)
 `;
 
-const BUILD_HELP = `gardener build
+const GENERATE_HELP = `gardener generate
 
 Compiles .gardener/tasks/*/TASK.md into canonical TaskBundleV1 records, writes the
 reproducible lock file, and generates one GitHub caller workflow per task.
@@ -118,7 +118,7 @@ Options:
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
 
-const QUALIFY_HELP = `gardener qualify
+const DEBUG_HELP = `gardener debug
 
 Create one disposable issue per compiled task, wait for both generated workflows, and verify the
 unique GitHub comment and D1 receipt for each bundle. Add --drills for kill-switch, cancellation,
@@ -144,7 +144,7 @@ Options:
   --confirm <intent-digest>    Exact digest returned by the planning invocation
 `;
 
-const UP_HELP = `gardener up
+const YOLO_HELP = `gardener yolo
 
 Scaffold, compile, deploy, connect, and verify a reproducible Gardener installation.
 
@@ -163,7 +163,10 @@ async function main(argv: string[]): Promise<void> {
     console.log(HELP);
     return;
   }
-  const operationCommand = command === "task" || command === "repository" || command === "repositories" || command === "tasks" || command === "runs" || command === "run";
+  const renamed = RENAMED[command];
+  if (renamed) throw new Error(`gardener ${command} was renamed to gardener ${renamed}`);
+  if (command === "run") throw new Error("gardener run show was renamed to gardener runs view");
+  const operationCommand = command === "task" || command === "repository" || command === "repositories" || command === "tasks" || command === "runs";
   if (operationCommand && (rest.includes("help") || rest.includes("--help"))) {
     console.log(OPERATIONS_HELP);
     return;
@@ -174,14 +177,14 @@ async function main(argv: string[]): Promise<void> {
   }
   if (rest[0] === "help" || rest[0] === "--help") {
     const help = command === "init" ? INIT_HELP
-      : command === "build" ? BUILD_HELP
+      : command === "generate" ? GENERATE_HELP
       : command === "deploy" || command === "doctor" ? DEPLOY_HELP
       : command === "upgrade" ? UPGRADE_HELP
       : command === "rollback" ? ROLLBACK_HELP
       : command === "connect" ? CONNECT_HELP
-      : command === "qualify" ? QUALIFY_HELP
+      : command === "debug" ? DEBUG_HELP
       : command === "down" ? DOWN_HELP
-      : command === "up" ? UP_HELP
+      : command === "yolo" ? YOLO_HELP
       : null;
     if (!help) throw new Error(`Unknown Gardener command: ${command}`);
     console.log(help);
@@ -199,7 +202,7 @@ async function main(argv: string[]): Promise<void> {
     }));
     return;
   }
-  if (command === "build") {
+  if (command === "generate") {
     printBuild(await buildProject({ repositoryRoot }));
     return;
   }
@@ -255,7 +258,7 @@ async function main(argv: string[]): Promise<void> {
     console.log(JSON.stringify(doctor, null, 2));
     return;
   }
-  if (command === "qualify") {
+  if (command === "debug") {
     console.log(JSON.stringify(await qualifyActions({
       workspace: requiredStringFlag(flags, "workspace"),
       repository: requiredStringFlag(flags, "repository"),
@@ -276,7 +279,7 @@ async function main(argv: string[]): Promise<void> {
     }), null, 2));
     return;
   }
-  if (command === "up") {
+  if (command === "yolo") {
     const workspace = requiredStringFlag(flags, "workspace");
     const repository = requiredStringFlag(flags, "repository");
     printInit(await initializeProject({ repositoryRoot, demos: flags.get("demos") === true }));
@@ -300,7 +303,7 @@ async function main(argv: string[]): Promise<void> {
 async function operate(command: string, args: string[]): Promise<void> {
   const [subcommand, ...rest] = args;
   const actionCommand = command === "task" || command === "repository";
-  const runShow = command === "run";
+  const runShow = command === "runs" && subcommand === "view";
   const parsed = parse(actionCommand || runShow ? rest : args);
   const repositoryRoot = stringFlag(parsed.flags, "repository-root") ?? process.cwd();
   const sourceRoot = stringFlag(parsed.flags, "source-root") ?? defaultSourceRoot();
@@ -345,6 +348,15 @@ async function operate(command: string, args: string[]): Promise<void> {
     }), null, 2));
     return;
   }
+  if (runShow) {
+    if (parsed.positional.length) throw new Error("Usage: gardener runs view --run <id>");
+    console.log(JSON.stringify(await showActionsRun({
+      workspace,
+      runId: requiredStringFlag(parsed.flags, "run"),
+      sourceRoot,
+    }), null, 2));
+    return;
+  }
   if (command === "runs") {
     if (parsed.positional.length) throw new Error("gardener runs does not accept positional arguments");
     const limitValue = stringFlag(parsed.flags, "limit");
@@ -357,15 +369,6 @@ async function operate(command: string, args: string[]): Promise<void> {
       ...(repository ? { repository } : {}),
       sourceRoot,
       ...(limit === undefined ? {} : { limit }),
-    }), null, 2));
-    return;
-  }
-  if (command === "run") {
-    if (subcommand !== "show" || parsed.positional.length) throw new Error("Usage: gardener run show --run <id>");
-    console.log(JSON.stringify(await showActionsRun({
-      workspace,
-      runId: requiredStringFlag(parsed.flags, "run"),
-      sourceRoot,
     }), null, 2));
     return;
   }

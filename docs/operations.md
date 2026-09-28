@@ -22,7 +22,7 @@ take these three flags:
   approve pull requests** in the customer repository's **Settings → Actions → General → Workflow
   permissions**. It is off by default for new repositories. Without it, apply stops at the
   pull-request step with `GitHub Actions is not permitted to create or approve pull requests`,
-  and rerunning the failed job after enabling it resumes from that step. `doctor`, which `up` and
+  and rerunning the failed job after enabling it resumes from that step. `doctor`, which `yolo` and
   `upgrade` also run, warns when the setting is off. Leave the default workflow
   permissions at read-only: each generated workflow requests exactly the permissions its task needs.
 - If any task sets a non-Cloudflare `model:` (for example `openai/…` or `anthropic/…`), add that
@@ -33,7 +33,7 @@ take these three flags:
 ## Install
 
 ```bash
-pnpm gardener -- up \
+pnpm gardener -- yolo \
   --workspace my-gardener \
   --repository my-org/my-repo \
   --repository-root /path/to/my-repo \
@@ -41,18 +41,18 @@ pnpm gardener -- up \
   --demos
 ```
 
-`up` runs `init`, `build`, `deploy`, `connect`, and `doctor` in order. Each step can also be run on
+`yolo` runs `init`, `generate`, `deploy`, `connect`, and `doctor` in order. Each step can also be run on
 its own:
 
 | Command | Effect | Remote changes |
 | --- | --- | --- |
 | `init [--demos]` | Creates `.gardener/`, optionally with the two demo tasks | None |
-| `build` | Compiles tasks, writes the lock file and one workflow per task | None |
+| `generate` | Compiles tasks, writes the lock file and one workflow per task | None |
 | `deploy` | Creates the D1 database, applies the migration, deploys the Worker, checks `/health` | Cloudflare |
 | `connect` | Enrolls the repository and its bundle hashes, sets `GARDENER_RUNTIME_URL` | D1, GitHub variable |
 | `doctor` | Verifies the installation. Warns about enrollments whose workflow pin differs from this CLI, and repositories whose tasks open or approve pull requests without the setting below | None |
 
-`init` and `build` never overwrite existing task files or workflows that Gardener did not generate.
+`init` and `generate` never overwrite existing task files or workflows that Gardener did not generate.
 Rebuilding unchanged tasks produces byte-identical output. No command commits or pushes, so review
 the generated files and commit them yourself.
 
@@ -83,7 +83,7 @@ reachable without Access.
 Edit `.gardener/tasks/<task>/TASK.md`, then:
 
 ```bash
-pnpm gardener -- build --repository-root /path/to/my-repo
+pnpm gardener -- generate --repository-root /path/to/my-repo
 pnpm gardener -- connect --workspace my-gardener --repository my-org/my-repo \
   --repository-root /path/to/my-repo --source-root "$PWD"
 ```
@@ -99,10 +99,10 @@ disabled.
 pnpm gardener -- repositories --workspace my-gardener --source-root "$PWD"
 pnpm gardener -- tasks        --workspace my-gardener --source-root "$PWD"
 pnpm gardener -- runs         --workspace my-gardener --source-root "$PWD"
-pnpm gardener -- run show --run <run-id> --workspace my-gardener --source-root "$PWD"
+pnpm gardener -- runs view --run <run-id> --workspace my-gardener --source-root "$PWD"
 ```
 
-`run show` prints the run, its effect receipt, and its audit records.
+`runs view` prints the run, its effect receipt, and its audit records.
 
 ## Kill switches
 
@@ -124,11 +124,11 @@ them.
 After pushing the generated demo workflows:
 
 ```bash
-pnpm gardener -- qualify --workspace my-gardener --repository my-org/my-repo \
+pnpm gardener -- debug --workspace my-gardener --repository my-org/my-repo \
   --repository-root /path/to/my-repo --source-root "$PWD"
 ```
 
-`qualify` opens one issue per demo task and waits for both workflows. It then checks for exactly
+`debug` opens one issue per demo task and waits for both workflows. It then checks for exactly
 one Gardener comment and one matching receipt in D1. Add `--drills` to also check that disabled
 repositories and tasks are refused and that cancellation settles correctly.
 
@@ -194,7 +194,7 @@ Set up Gardener in this repository using only the Gardener CLI.
 
 1. Check `gh auth status` and `wrangler whoami` without printing credentials.
 2. Ask me for a short lowercase workspace name.
-3. Run `pnpm gardener -- up --workspace <name> --repository <owner/name> --demos`, passing
+3. Run `pnpm gardener -- yolo --workspace <name> --repository <owner/name> --demos`, passing
    --repository-root and --source-root explicitly.
 4. If it stops, rerun the identical command. Do not recreate any step by hand.
 5. Show me the generated files, runtime URL, bundle hashes, and doctor result.
