@@ -1,0 +1,31 @@
+README.md
+  s_de0b486c128948::t_6d4cf8dc468f0c 42,50,101
+docs/architecture.md
+  s_de0b486c128948::t_ecc7b37a79bec4 43,169
+docs/operations.md
+  s_de0b486c128948::t_2aad5f5255ea38 25,36,44,50,55,86,102,105,127,131,197
+docs/task-authoring.md
+  s_de0b486c128948::t_fd9c82080e5faa 45,95,188,367,384,522
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_5a65ef043479d2 28,31,33,35,40-47,68,121,147,166-169,180,185,187,205,261,282,306,351-359
+packages/cli/src/project.ts
+  s_de0b486c128948::t_54d35efecbdbaa 432
+packages/cli/test/cli.test.ts
+  s_de0b486c128948::t_8bf1331873c469 61,70,92-105,117,122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b9614cab66c12bf965212067f7d30c394a7c2a46",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
