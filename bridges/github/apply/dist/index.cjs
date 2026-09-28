@@ -40273,7 +40273,8 @@ var operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
-  "pull_request.update_branch": { ...pullOutputs, headSha: "commitSha" },
+  // No head output: GitHub finishes the update after the mutation returns.
+  "pull_request.update_branch": pullOutputs,
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",
@@ -46310,7 +46311,7 @@ async function executePullUpdateBranch(scope, operation) {
     "Pull request branch comparison"
   );
   if (record2(comparison) && comparison.behind_by === 0) {
-    return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: head };
+    return { kind: operation.kind, pullNumber: operation.pullNumber };
   }
   if (head !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${head}`);
   assertPullState(scope, pull, operation, "append");
@@ -46320,15 +46321,16 @@ async function executePullUpdateBranch(scope, operation) {
   const data = await scope.api.graphql(
     `mutation($id: ID!, $head: GitObjectID!, $method: PullRequestBranchUpdateMethod!) {
       updatePullRequestBranch(input: { pullRequestId: $id, expectedHeadOid: $head, updateMethod: $method }) {
-        pullRequest { headRefOid }
+        pullRequest { number }
       }
     }`,
     { id: pull.node_id, head: operation.expectedHeadSha, method: operation.method === "rebase" ? "REBASE" : "MERGE" },
     "Pull request branch update"
   );
-  const updated = record2(data.updatePullRequestBranch) && record2(data.updatePullRequestBranch.pullRequest) ? data.updatePullRequestBranch.pullRequest.headRefOid : void 0;
-  if (typeof updated !== "string") throw failure2("github_response_invalid", "Pull request branch update response was invalid");
-  return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: updated };
+  if (!record2(data.updatePullRequestBranch) || !record2(data.updatePullRequestBranch.pullRequest)) {
+    throw failure2("github_response_invalid", "Pull request branch update response was invalid");
+  }
+  return { kind: operation.kind, pullNumber: operation.pullNumber };
 }
 async function executeIssueCommentCreate(scope, operation) {
   if (!hasExactOperationMarker(operation.body, operation.id)) {

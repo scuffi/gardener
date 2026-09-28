@@ -364,7 +364,8 @@ export const operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
-  "pull_request.update_branch": { ...pullOutputs, headSha: "commitSha" },
+  // No head output: GitHub finishes the update after the mutation returns.
+  "pull_request.update_branch": pullOutputs,
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",

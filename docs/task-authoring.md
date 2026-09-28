@@ -265,7 +265,8 @@ straight away, so prefer `open_draft` unless the task should hand over finished 
 branch" button does. `method: rebase` rebases the head onto the base and force-updates the branch;
 `method: merge` merges the base in. GitHub does the work, and only if the head is still the one the
 task saw, so it needs no checkout and works from a comment such as "@bot rebase this". It stops if
-the rebase or merge conflicts, and does nothing if the branch already contains its base. It needs
+the rebase or merge conflicts, and does nothing if the branch already contains its base. GitHub
+finishes the update a few seconds after the effect succeeds, so the effect reports no new head. It needs
 `contents: write`, and like other workflow-token pushes it does not re-run the pull request's checks.
 
 ### Branches

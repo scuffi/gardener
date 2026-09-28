@@ -575,14 +575,14 @@ const scenarios: Record<string, Scenario> = {
       get(`${REPO}/pulls/7`, OPEN_PULL),
       get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE_TIP } }),
       get(`${REPO}/compare/${BASE_TIP}...${HEAD}`, { behind_by: 2 }),
-      gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { headRefOid: NEW_COMMIT } } }),
+      gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { number: 7 } } }),
     ],
     duplicate: [
       get(`${REPO}/pulls/7`, { ...OPEN_PULL, head: { ...OPEN_PULL.head, sha: NEW_COMMIT } }),
       get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE_TIP } }),
       get(`${REPO}/compare/${BASE_TIP}...${NEW_COMMIT}`, { behind_by: 0 }),
     ],
-    outputs: { pullNumber: 7, headSha: NEW_COMMIT },
+    outputs: { pullNumber: 7 },
   },
   "pull_request.open": {
     operation: operationSchema.parse({
@@ -1686,7 +1686,7 @@ describe("git ref path encoding", () => {
       get(`${REPO}/pulls/7`, { ...OPEN_PULL, base: { ...OPEN_PULL.base, sha: BLOB } }),
       get(`${REPO}/git/ref/heads/main`, { object: { sha: BLOB } }),
       get(`${REPO}/compare/${BLOB}...${HEAD}`, { behind_by: 3 }),
-      gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { headRefOid: NEW_COMMIT } } }),
+      gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { number: 7 } } }),
     ]);
     expect(baseMoved.receipt.status, JSON.stringify(baseMoved.receipt.error)).toBe("succeeded");
   });

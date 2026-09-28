@@ -63,7 +63,7 @@ export type OperationOutputsV1 =
   | { kind: "issue.label.add" | "issue.label.remove"; issueNumber: number; label: string; labels: string[] }
   | { kind: "issue.create"; issueNumber: number; issueUrl: string }
   | { kind: "pull_request.label.add" | "pull_request.label.remove"; pullNumber: number; label: string; labels: string[] }
-  | { kind: "pull_request.update_branch"; pullNumber: number; headSha: string }
+  | { kind: "pull_request.update_branch"; pullNumber: number }
   | { kind: "issue.comment.create" | "issue.comment.update"; issueNumber: number; commentId: string; commentUrl: string }
   | { kind: "issue.close" | "issue.reopen"; issueNumber: number; state: "open" | "closed"; issueUrl: string }
   | {
@@ -877,7 +877,7 @@ async function executePullUpdateBranch(scope: ExecutionScope, operation: PullUpd
     "Pull request branch comparison",
   );
   if (record(comparison) && comparison.behind_by === 0) {
-    return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: head };
+    return { kind: operation.kind, pullNumber: operation.pullNumber };
   }
   // The base is expected to have moved; that is why the branch is updated.
   // Only its name is held. The head is held here and leased at GitHub.
@@ -889,17 +889,18 @@ async function executePullUpdateBranch(scope: ExecutionScope, operation: PullUpd
   const data = await scope.api.graphql(
     `mutation($id: ID!, $head: GitObjectID!, $method: PullRequestBranchUpdateMethod!) {
       updatePullRequestBranch(input: { pullRequestId: $id, expectedHeadOid: $head, updateMethod: $method }) {
-        pullRequest { headRefOid }
+        pullRequest { number }
       }
     }`,
     { id: pull.node_id, head: operation.expectedHeadSha, method: operation.method === "rebase" ? "REBASE" : "MERGE" },
     "Pull request branch update",
   );
-  const updated = record(data.updatePullRequestBranch) && record(data.updatePullRequestBranch.pullRequest)
-    ? data.updatePullRequestBranch.pullRequest.headRefOid
-    : undefined;
-  if (typeof updated !== "string") throw failure("github_response_invalid", "Pull request branch update response was invalid");
-  return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: updated };
+  // GitHub accepts the update and finishes it asynchronously, so the head it
+  // returns here is still the old one and is not reported.
+  if (!record(data.updatePullRequestBranch) || !record(data.updatePullRequestBranch.pullRequest)) {
+    throw failure("github_response_invalid", "Pull request branch update response was invalid");
+  }
+  return { kind: operation.kind, pullNumber: operation.pullNumber };
 }
 
 type IssueCommentCreate = Extract<Operation, { kind: "issue.comment.create" }>;
