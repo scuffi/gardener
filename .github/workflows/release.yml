@@ -1,0 +1,53 @@
+name: Release
+
+# Publishes @scuffi/gardener when a v* tag is pushed. npm trusted publishing
+# authenticates this workflow through GitHub OIDC, so no npm token is stored.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    # npm's trusted publisher can be restricted to this environment. Protect
+    # it (required reviewers) and add a v* tag ruleset in repository settings.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11.11.0
+      - run: pnpm install --frozen-lockfile
+      - name: Check the tag matches the package version
+        run: |
+          version=$(node -p "require('./packages/cli/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match @scuffi/gardener $version" >&2
+            exit 1
+          fi
+      - name: Skip a version that is already published
+        id: published
+        run: |
+          version=$(node -p "require('./packages/cli/package.json').version")
+          if npm view "@scuffi/gardener@$version" version >/dev/null 2>&1; then
+            echo "@scuffi/gardener $version is already on npm"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      # Builds the runtime, packs the CLI, and verifies the tarball's contents.
+      - if: steps.published.outputs.skip != 'true'
+        run: pnpm check:cli-package
+      - if: steps.published.outputs.skip != 'true'
+        run: npm publish .tmp/cli-pack/scuffi-gardener-*.tgz --access public --provenance

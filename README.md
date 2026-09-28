@@ -175,4 +175,4 @@ pnpm check   # versions, typecheck, tests, builds, package and bridge checks, de
 
 ## License
 
-Apache-2.0
+MIT. See [LICENSE](LICENSE).

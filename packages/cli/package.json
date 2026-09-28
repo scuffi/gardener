@@ -1,7 +1,16 @@
 {
-  "name": "gardener-cli-demo",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@scuffi/gardener",
+  "version": "0.1.1",
+  "description": "Actions-native repository steward: compile .gardener tasks into GitHub Actions workflows and deploy the Gardener runtime to Cloudflare",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scuffi/gardener.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "files": [
     "assets",

@@ -17,7 +17,7 @@ Get the CLI at a release tag:
 
 ```bash
 git clone https://github.com/scuffi/gardener && cd gardener
-git checkout v0.1.0
+git checkout v0.1.1
 pnpm install
 ```
 
@@ -77,6 +77,20 @@ To change a task, edit its `TASK.md` and rerun the `yolo` command above, which r
 re-enrolls it, then commit and push. Limits can go up to `runtime-seconds: 480` and
 `input-tokens: 128000`. See [task-authoring.md](task-authoring.md) for the format.
 
+## Writing your own task (anyone)
+
+Writing and checking a task needs only Node.js 24+ and the published CLI, with no Cloudflare access:
+
+```bash
+cd /path/to/my-repo
+mkdir -p .gardener/tasks/my-task   # write .gardener/tasks/my-task/TASK.md
+npx @scuffi/gardener@0.1.1 generate
+```
+
+`generate` validates every task, then writes the lock file and one workflow per task. Commit both
+and open a pull request. After it merges, ask the operator to enroll it (they rerun `yolo`). Until
+then, that task's runs are refused. Use the same CLI version as the repository's pinned release.
+
 ## Day to day
 
 All of these take `--workspace internal --source-root "$PWD"`:
@@ -98,12 +112,12 @@ was refused. A run that ends in `budget-exceeded` needs higher limits or narrowe
 When a new tag is released, upgrade every connected repository to it:
 
 ```bash
-cd gardener && git fetch --tags && git checkout v0.1.1 && pnpm install
+cd gardener && git fetch --tags && git checkout v0.1.2 && pnpm install
 
 pnpm gardener -- upgrade --workspace internal --repository my-org/my-repo \
   --repository-root "$REPO" --source-root "$PWD"
 
-cd "$REPO" && git add .gardener .github/workflows && git commit -m "Upgrade Gardener to v0.1.1" && git push
+cd "$REPO" && git add .gardener .github/workflows && git commit -m "Upgrade Gardener to v0.1.2" && git push
 ```
 
 `upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned
@@ -113,5 +127,7 @@ commit, and re-enrolls its tasks. Keep every repository on the same tag.
 
 1. Land the change on `main`. If it touches contracts, protocol or runner code, finish its pin chain
    ("Pin bridge actions", then "Pin CLI workflow ref") first.
-2. Add a section to `CHANGELOG.md` and commit it.
-3. `git tag v0.1.N && git push origin v0.1.N`, then tell users to upgrade.
+2. Bump `version` in `packages/cli/package.json`, add a matching section to `CHANGELOG.md`, and
+   commit both.
+3. `git tag v0.1.N && git push origin v0.1.N`. The Release workflow checks that the tag matches the
+   package version, then publishes `@scuffi/gardener` to npm. Tell users to upgrade.
