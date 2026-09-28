@@ -57,6 +57,7 @@ function payloadFor(kind: typeof operationKindValues[number]): Record<string, un
     case "issue.assignee.add": case "issue.assignee.remove": return { ...issue, assigneeId: "42" };
     case "issue.create": return { title: "Flaky test in math", body: "Seen twice this week.", labels: ["bug"], assigneeIds: ["42"] };
     case "pull_request.label.add": case "pull_request.label.remove": return { ...pull, label: "ready" };
+    case "pull_request.update_branch": return { ...pull, method: "rebase" };
     case "pull_request.comment.create": return { ...pull, body: "Looks good." };
     case "pull_request.comment.update": return { ...pull, commentId: "44", expectedCommentUpdatedAt: now, body: "Updated" };
     case "pull_request.review.submit": return { ...pull, event: "approve", body: "", comments: [] };

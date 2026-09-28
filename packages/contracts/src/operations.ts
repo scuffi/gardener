@@ -5,7 +5,7 @@ import { operationRepositoryRefSchema } from "./repository";
 export const operationKindValues = [
   "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove", "issue.create",
   "pull_request.comment.create", "pull_request.comment.update", "pull_request.review.submit", "pull_request.reviewer.request", "pull_request.reviewer.remove", "pull_request.update",
-  "pull_request.label.add", "pull_request.label.remove",
+  "pull_request.label.add", "pull_request.label.remove", "pull_request.update_branch",
   "branch.create", "commit.create", "pull_request.open", "pull_request.open_draft", "pull_request.merge",
   "discussion.comment.create", "discussion.comment.update", "discussion.answer.mark", "discussion.answer.unmark", "discussion.close", "discussion.reopen",
   "check.rerun",
@@ -135,6 +135,8 @@ const operationOptions = [
   }),
   pullBase.extend({ kind: z.literal("pull_request.label.add"), label: labelName }).strict(),
   pullBase.extend({ kind: z.literal("pull_request.label.remove"), label: labelName }).strict(),
+  // GitHub rebases or merges the base in itself, leased on expectedHeadSha.
+  pullBase.extend({ kind: z.literal("pull_request.update_branch"), method: z.enum(["merge", "rebase"]) }).strict(),
   operationBase.extend({ kind: z.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
   operationBase.extend({
     kind: z.literal("commit.create"), branch: branchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
@@ -362,6 +364,7 @@ export const operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
+  "pull_request.update_branch": { ...pullOutputs, headSha: "commitSha" },
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",

@@ -63,6 +63,7 @@ export type OperationOutputsV1 =
   | { kind: "issue.label.add" | "issue.label.remove"; issueNumber: number; label: string; labels: string[] }
   | { kind: "issue.create"; issueNumber: number; issueUrl: string }
   | { kind: "pull_request.label.add" | "pull_request.label.remove"; pullNumber: number; label: string; labels: string[] }
+  | { kind: "pull_request.update_branch"; pullNumber: number; headSha: string }
   | { kind: "issue.comment.create" | "issue.comment.update"; issueNumber: number; commentId: string; commentUrl: string }
   | { kind: "issue.close" | "issue.reopen"; issueNumber: number; state: "open" | "closed"; issueUrl: string }
   | {
@@ -849,6 +850,53 @@ async function executePullLabel(scope: ExecutionScope, operation: PullLabelOpera
     ? data.flatMap((label) => (record(label) && typeof label.name === "string" ? [label.name] : []))
     : labels;
   return { kind: operation.kind, pullNumber: operation.pullNumber, label: operation.label, labels: applied };
+}
+
+type PullUpdateBranch = Extract<Operation, { kind: "pull_request.update_branch" }>;
+
+/**
+ * GitHub's "Update branch": it rebases the head onto the base, or merges the
+ * base in, and force-updates the head only if it is still at expectedHeadSha.
+ * No history comes from the task. `updated_at` is not held exactly, because a
+ * reply earlier in the same plan moves it; the head and base are.
+ */
+async function executePullUpdateBranch(scope: ExecutionScope, operation: PullUpdateBranch): Promise<OperationOutputsV1> {
+  const pull = await loadPull(scope, operation.pullNumber);
+  const head = record(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : "";
+  const baseSha = record(pull.base) && typeof pull.base.sha === "string" ? pull.base.sha : "";
+  // Already containing its base means there is nothing to update, whether an
+  // earlier attempt did it or the branch was current all along.
+  const { data: comparison } = await scope.api.rest(
+    `${scope.repoPath}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(head)}`,
+    "Pull request branch comparison",
+  );
+  if (record(comparison) && comparison.behind_by === 0) {
+    return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: head };
+  }
+  // The base is expected to have moved; that is why the branch is updated.
+  // Only its name is held. The head is held here and leased at GitHub.
+  if (head !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${head}`);
+  if (!record(pull.base) || pull.base.ref !== operation.expectedBaseRef) {
+    throw conflict("pull_base_changed", "Precondition failed: pull request base branch changed");
+  }
+  assertPullState(scope, pull, operation, "append");
+  if (typeof pull.node_id !== "string" || pull.node_id === "") {
+    throw failure("github_response_invalid", "Pull request response omitted its node id");
+  }
+  const data = await scope.api.graphql(
+    `mutation($id: ID!, $head: GitObjectID!, $method: PullRequestBranchUpdateMethod!) {
+      updatePullRequestBranch(input: { pullRequestId: $id, expectedHeadOid: $head, updateMethod: $method }) {
+        pullRequest { headRefOid }
+      }
+    }`,
+    { id: pull.node_id, head: operation.expectedHeadSha, method: operation.method === "rebase" ? "REBASE" : "MERGE" },
+    "Pull request branch update",
+  );
+  const updated = record(data.updatePullRequestBranch) && record(data.updatePullRequestBranch.pullRequest)
+    ? data.updatePullRequestBranch.pullRequest.headRefOid
+    : undefined;
+  if (typeof updated !== "string") throw failure("github_response_invalid", "Pull request branch update response was invalid");
+  return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: updated };
 }
 
 type IssueCommentCreate = Extract<Operation, { kind: "issue.comment.create" }>;
@@ -2306,6 +2354,8 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
     case "pull_request.label.add":
     case "pull_request.label.remove":
       return executePullLabel(scope, operation);
+    case "pull_request.update_branch":
+      return executePullUpdateBranch(scope, operation);
     case "pull_request.comment.create":
       return executePullCommentCreate(scope, operation);
     case "pull_request.comment.update":

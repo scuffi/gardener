@@ -126,9 +126,12 @@ code adds:
 Gardener branches, commits and pull request heads are limited to `gardener/**` branches unless a
 task lists other `branches` on that effect. A wildcard never matches the default branch: a task can
 write to it directly only if it names it exactly. Every commit sits directly on the commit the task
-checked out. `pull_request.merge` is the other way to change the default branch, and branch lists do
-not limit it: a task that declares it can merge a pull request into any base, so its required
-checks are the gate. No operation can force-push or delete a branch.
+checked out. Branch lists do not limit two pull request kinds. `pull_request.merge` can merge a pull
+request into any base, including the default branch, so its required checks are the gate.
+`pull_request.update_branch` can update any pull request's head with its base; with
+`method: rebase` GitHub rebases and force-updates that branch, which changes its commits and can
+dismiss reviews. GitHub computes that history and applies it only if the head is still the one the
+task saw. No other operation can force-push, and none can delete a branch.
 
 ## Known limitations
 

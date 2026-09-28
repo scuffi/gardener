@@ -70,6 +70,7 @@ export const OPERATION_TOKEN_PERMISSIONS: Readonly<Record<OperationKind, readonl
     "branch.create": ["contents:write"],
     "commit.create": ["contents:write"],
     "pull_request.open": ["contents:read", "pull-requests:write"],
+    "pull_request.update_branch": ["contents:write", "pull-requests:write"],
     "pull_request.open_draft": ["contents:read", "pull-requests:write"],
     "pull_request.merge": ["contents:write", "pull-requests:write", "checks:read", "statuses:read"],
     "discussion.comment.create": ["discussions:write"],

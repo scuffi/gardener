@@ -39990,6 +39990,7 @@ var operationKindValues = [
   "pull_request.update",
   "pull_request.label.add",
   "pull_request.label.remove",
+  "pull_request.update_branch",
   "branch.create",
   "commit.create",
   "pull_request.open",
@@ -40101,6 +40102,8 @@ var operationOptions = [
   }),
   pullBase.extend({ kind: external_exports.literal("pull_request.label.add"), label: labelName }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
+  // GitHub rebases or merges the base in itself, leased on expectedHeadSha.
+  pullBase.extend({ kind: external_exports.literal("pull_request.update_branch"), method: external_exports.enum(["merge", "rebase"]) }).strict(),
   operationBase.extend({ kind: external_exports.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
@@ -40262,6 +40265,7 @@ var operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
+  "pull_request.update_branch": { ...pullOutputs, headSha: "commitSha" },
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",

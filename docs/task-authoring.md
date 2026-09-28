@@ -211,7 +211,7 @@ collapse without duplication.
 | Family glob | Expands to |
 | --- | --- |
 | `issue.*` | label add/remove, comment create/update, close, reopen, assignee add/remove, create |
-| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, label add/remove, open, open draft, merge |
+| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, label add/remove, update branch, open, open draft, merge |
 | `git.*` | `branch.create`, `commit.create` |
 | `discussion.*` | comment create/update, answer mark/unmark, close, reopen |
 | `check.*` | `check.rerun` |
@@ -260,6 +260,13 @@ must already exist, and the step refuses if the pull request changed after plann
 `pull_request.open` opens a pull request ready for review, with the same fields and outputs as
 `pull_request.open_draft`. Opening it ready can notify code owners and start required reviews
 straight away, so prefer `open_draft` unless the task should hand over finished work.
+
+`pull_request.update_branch` brings a pull request up to date with its base, as GitHub's "Update
+branch" button does. `method: rebase` rebases the head onto the base and force-updates the branch;
+`method: merge` merges the base in. GitHub does the work, and only if the head is still the one the
+task saw, so it needs no checkout and works from a comment such as "@bot rebase this". It stops if
+the rebase or merge conflicts, and does nothing if the branch already contains its base. It needs
+`contents: write`, and like other workflow-token pushes it does not re-run the pull request's checks.
 
 ### Branches
 
@@ -312,7 +319,7 @@ again with its own commit.
 
 ### Automatic V1 effects
 
-All 33 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
+All 34 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
 read-only permission union for planning plus only the write scopes implied by the task's declared
 effects. The model-facing planning job downgrades that grant to read-only; the checkout-free apply
 job receives the write grant and executes only the exact Worker-validated plan. Ordered receipts,

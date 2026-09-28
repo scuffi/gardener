@@ -39998,6 +39998,7 @@ var operationKindValues = [
   "pull_request.update",
   "pull_request.label.add",
   "pull_request.label.remove",
+  "pull_request.update_branch",
   "branch.create",
   "commit.create",
   "pull_request.open",
@@ -40109,6 +40110,8 @@ var operationOptions = [
   }),
   pullBase.extend({ kind: external_exports.literal("pull_request.label.add"), label: labelName }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
+  // GitHub rebases or merges the base in itself, leased on expectedHeadSha.
+  pullBase.extend({ kind: external_exports.literal("pull_request.update_branch"), method: external_exports.enum(["merge", "rebase"]) }).strict(),
   operationBase.extend({ kind: external_exports.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
@@ -40270,6 +40273,7 @@ var operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
+  "pull_request.update_branch": { ...pullOutputs, headSha: "commitSha" },
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",
@@ -45822,6 +45826,7 @@ var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
   "branch.create": ["contents:write"],
   "commit.create": ["contents:write"],
   "pull_request.open": ["contents:read", "pull-requests:write"],
+  "pull_request.update_branch": ["contents:write", "pull-requests:write"],
   "pull_request.open_draft": ["contents:read", "pull-requests:write"],
   "pull_request.merge": ["contents:write", "pull-requests:write", "checks:read", "statuses:read"],
   "discussion.comment.create": ["discussions:write"],
@@ -46291,6 +46296,38 @@ async function executePullLabel(scope, operation) {
   }) : await scope.api.rest(`${issuePath}/labels/${encodedLabel}`, "Pull request label remove", { method: "DELETE" });
   const applied = Array.isArray(data) ? data.flatMap((label) => record2(label) && typeof label.name === "string" ? [label.name] : []) : labels;
   return { kind: operation.kind, pullNumber: operation.pullNumber, label: operation.label, labels: applied };
+}
+async function executePullUpdateBranch(scope, operation) {
+  const pull = await loadPull(scope, operation.pullNumber);
+  const head = record2(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : "";
+  const baseSha = record2(pull.base) && typeof pull.base.sha === "string" ? pull.base.sha : "";
+  const { data: comparison } = await scope.api.rest(
+    `${scope.repoPath}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(head)}`,
+    "Pull request branch comparison"
+  );
+  if (record2(comparison) && comparison.behind_by === 0) {
+    return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: head };
+  }
+  if (head !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${head}`);
+  if (!record2(pull.base) || pull.base.ref !== operation.expectedBaseRef) {
+    throw conflict("pull_base_changed", "Precondition failed: pull request base branch changed");
+  }
+  assertPullState(scope, pull, operation, "append");
+  if (typeof pull.node_id !== "string" || pull.node_id === "") {
+    throw failure2("github_response_invalid", "Pull request response omitted its node id");
+  }
+  const data = await scope.api.graphql(
+    `mutation($id: ID!, $head: GitObjectID!, $method: PullRequestBranchUpdateMethod!) {
+      updatePullRequestBranch(input: { pullRequestId: $id, expectedHeadOid: $head, updateMethod: $method }) {
+        pullRequest { headRefOid }
+      }
+    }`,
+    { id: pull.node_id, head: operation.expectedHeadSha, method: operation.method === "rebase" ? "REBASE" : "MERGE" },
+    "Pull request branch update"
+  );
+  const updated = record2(data.updatePullRequestBranch) && record2(data.updatePullRequestBranch.pullRequest) ? data.updatePullRequestBranch.pullRequest.headRefOid : void 0;
+  if (typeof updated !== "string") throw failure2("github_response_invalid", "Pull request branch update response was invalid");
+  return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: updated };
 }
 async function executeIssueCommentCreate(scope, operation) {
   if (!hasExactOperationMarker(operation.body, operation.id)) {
@@ -47405,6 +47442,8 @@ async function dispatch(scope, operation) {
     case "pull_request.label.add":
     case "pull_request.label.remove":
       return executePullLabel(scope, operation);
+    case "pull_request.update_branch":
+      return executePullUpdateBranch(scope, operation);
     case "pull_request.comment.create":
       return executePullCommentCreate(scope, operation);
     case "pull_request.comment.update":

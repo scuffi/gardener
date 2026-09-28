@@ -567,6 +567,19 @@ const scenarios: Record<string, Scenario> = {
     ],
     outputs: { branch: "gardener/feature", commitSha: NEW_COMMIT, treeSha: NEW_TREE, parentSha: HEAD },
   },
+  "pull_request.update_branch": {
+    operation: operationSchema.parse({ ...pullBase, id: "op-update-branch", kind: "pull_request.update_branch", method: "rebase" }),
+    apply: [
+      get(`${REPO}/pulls/7`, OPEN_PULL),
+      get(`${REPO}/compare/${BASE}...${HEAD}`, { behind_by: 2 }),
+      gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { headRefOid: NEW_COMMIT } } }),
+    ],
+    duplicate: [
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, head: { ...OPEN_PULL.head, sha: NEW_COMMIT } }),
+      get(`${REPO}/compare/${BASE}...${NEW_COMMIT}`, { behind_by: 0 }),
+    ],
+    outputs: { pullNumber: 7, headSha: NEW_COMMIT },
+  },
   "pull_request.open": {
     operation: operationSchema.parse({
       schemaVersion: "v2",
@@ -1649,6 +1662,27 @@ describe("git ref path encoding", () => {
     expect(receipt.error?.code).toBe("commit_base_mismatch");
     expect(calls).toHaveLength(0);
     expect(repositoryReads).toBe(0);
+  });
+
+  it("updates a pull request branch through GitHub with the head as its lease", async () => {
+    const update = scenarioFor("pull_request.update_branch");
+    const { calls } = await run(update.operation, update.apply);
+    const mutation = calls.find((call) => call.path === "/graphql");
+    expect((mutation?.body as { variables: unknown }).variables).toEqual({ id: "PR_node", head: HEAD, method: "REBASE" });
+    // A head that moved since planning is refused before GitHub is asked.
+    const moved = await run(update.operation, [
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, head: { ...OPEN_PULL.head, sha: BLOB } }),
+      get(`${REPO}/compare/${BASE}...${BLOB}`, { behind_by: 1 }),
+    ]);
+    expect(moved.receipt.error?.code).toBe("pull_head_changed");
+    expect(moved.calls.some((call) => call.path === "/graphql")).toBe(false);
+    // A base that moved on since planning is the normal case, not a conflict.
+    const baseMoved = await run(update.operation, [
+      get(`${REPO}/pulls/7`, { ...OPEN_PULL, base: { ...OPEN_PULL.base, sha: BLOB } }),
+      get(`${REPO}/compare/${BLOB}...${HEAD}`, { behind_by: 3 }),
+      gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { headRefOid: NEW_COMMIT } } }),
+    ]);
+    expect(baseMoved.receipt.status, JSON.stringify(baseMoved.receipt.error)).toBe("succeeded");
   });
 
   it("opens a ready pull request as non-draft and never reconciles with a draft", async () => {
