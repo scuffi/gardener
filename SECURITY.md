@@ -123,8 +123,12 @@ code adds:
   bodies;
 - a `Gardener-Operation:` trailer on commits.
 
-Gardener branches and commits are limited to `gardener/*` branches. No operation can force-push or
-delete a branch.
+Gardener branches, commits and pull request heads are limited to `gardener/**` branches unless a
+task lists other `branches` on that effect. A wildcard never matches the default branch: a task can
+write to it directly only if it names it exactly. Every commit sits directly on the commit the task
+checked out. `pull_request.merge` is the other way to change the default branch, and branch lists do
+not limit it: a task that declares it can merge a pull request into any base, so its required
+checks are the gate. No operation can force-push or delete a branch.
 
 ## Known limitations
 

@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import {
+  DEFAULT_WRITE_BRANCHES,
+  branchWriteRefusal,
   isProtectedCapturePath,
   isValidGitBranchName,
   operationReceiptSchema,
   operationSchema,
+  type BranchWriteKind,
   type Operation,
   type OperationReceipt,
 } from "@gardener/contracts";
@@ -81,7 +84,7 @@ export type OperationOutputsV1 =
   | { kind: "branch.create"; branch: string; ref: string; commitSha: string; branchUrl: string }
   | { kind: "commit.create"; branch: string; commitSha: string; treeSha: string; parentSha: string; commitUrl: string }
   | {
-    kind: "pull_request.open_draft";
+    kind: "pull_request.open" | "pull_request.open_draft";
     pullNumber: number;
     pullUrl: string;
     pullNodeId: string;
@@ -170,6 +173,16 @@ export interface GitHubEffectsContext {
    * read-back would only spend requests and time budget.
    */
   readBackVersion?: boolean;
+  /**
+   * Branch patterns the plan grants this operation's kind, for the kinds that
+   * write to a branch. Absent means the `gardener/**` default.
+   */
+  branchPatterns?: readonly string[];
+  /**
+   * Commit the plan's capture was taken from. A `commit.create` must sit
+   * directly on it, because its files are whole contents from that tree.
+   */
+  captureBaseSha?: string;
 }
 
 /** A resource's version as read back after a step of the plan wrote to it. */
@@ -542,6 +555,9 @@ interface ExecutionScope {
   operationHash: string;
   readCapturedFile?: GitHubEffectsContext["readCapturedFile"];
   chainedResourceVersion?: string;
+  branchPatterns: readonly string[];
+  defaultBranch: string;
+  captureBaseSha?: string;
   /** Set once this attempt has verified the resource's `updated_at` precondition. */
   versionVerified: boolean;
 }
@@ -1193,12 +1209,37 @@ async function executePullUpdate(scope: ExecutionScope, operation: PullUpdate): 
 /* Git family                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** Refuses a branch the plan's patterns for this kind do not allow. Makes no request. */
+function assertBranchWrite(scope: ExecutionScope, kind: BranchWriteKind, branch: string): void {
+  const refusal = branchWriteRefusal(kind, branch, scope.branchPatterns, scope.defaultBranch);
+  if (refusal !== undefined) throw failure("branch_not_allowed", refusal);
+}
+
+/**
+ * Confirms the plan's default branch with GitHub, just before a branch write.
+ *
+ * The plan's default branch came from the planning job's event payload, which
+ * that job could misreport; without this, "a wildcard never matches the
+ * default branch" would rest on an untrusted value. It runs after any
+ * idempotency lookup, so a step that already landed still reconciles.
+ */
+async function confirmDefaultBranch(scope: ExecutionScope): Promise<void> {
+  const { data } = await scope.api.rest(scope.repoPath, "Repository default branch lookup");
+  if (!record(data) || typeof data.default_branch !== "string") {
+    throw failure("github_response_invalid", "Repository response had no default branch");
+  }
+  if (data.default_branch !== scope.defaultBranch) {
+    throw conflict(
+      "default_branch_changed",
+      `The repository's default branch is ${data.default_branch}, not ${scope.defaultBranch} as planned`,
+    );
+  }
+}
+
 type BranchCreate = Extract<Operation, { kind: "branch.create" }>;
 
 async function executeBranchCreate(scope: ExecutionScope, operation: BranchCreate): Promise<OperationOutputsV1> {
-  if (!isValidGitBranchName(operation.branch) || !operation.branch.startsWith("gardener/")) {
-    throw failure("branch_namespace_violation", "Branch name must use the gardener/ namespace");
-  }
+  assertBranchWrite(scope, operation.kind, operation.branch);
   const branchUrl = `https://github.com/${scope.owner}/${scope.name}/tree/${encodeRefPath(operation.branch)}`;
   const existing = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
   if (existing !== null) {
@@ -1213,6 +1254,7 @@ async function executeBranchCreate(scope: ExecutionScope, operation: BranchCreat
     }
     throw conflict("branch_exists", `Branch already exists at ${existing}, not ${operation.fromSha}`);
   }
+  await confirmDefaultBranch(scope);
   const { data } = await scope.api.rest(`${scope.repoPath}/git/refs`, "Branch creation", {
     method: "POST",
     body: JSON.stringify({ ref: `refs/heads/${operation.branch}`, sha: operation.fromSha }),
@@ -1267,8 +1309,16 @@ async function readVerifiedCapturedContent(
 }
 
 async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreate): Promise<OperationOutputsV1> {
-  if (!isValidGitBranchName(operation.branch) || !operation.branch.startsWith("gardener/")) {
-    throw failure("branch_namespace_violation", "Commit target must use the gardener/ branch namespace");
+  // Checked before anything is read: a commit built on any other parent would
+  // write the captured files over changes the task never saw.
+  if (scope.captureBaseSha === undefined) {
+    throw failure("capture_base_missing", "commit.create requires the plan's capture base commit");
+  }
+  if (operation.expectedHeadSha.toLowerCase() !== scope.captureBaseSha.toLowerCase()) {
+    throw failure(
+      "commit_base_mismatch",
+      `commit.create must build on the captured commit ${scope.captureBaseSha}, not ${operation.expectedHeadSha}`,
+    );
   }
   if (operation.files.some((file) => !isSafeFilePath(file.path))) {
     throw failure("invalid_commit_path", "Commit contains an invalid file path");
@@ -1286,6 +1336,7 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
     // committing an empty or partial tree — unrepresentable.
     throw new Error("commit.create requires capture-backed content but no capture reader was provided");
   }
+  assertBranchWrite(scope, operation.kind, operation.branch);
   const marker = commitMarker(operation.id, scope.operationHash);
   const head = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
   if (head === null) throw conflict("branch_missing", "Target branch does not exist");
@@ -1320,6 +1371,7 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
     }
     throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
   }
+  await confirmDefaultBranch(scope);
   const { data: parent } = await scope.api.rest(
     `${scope.repoPath}/git/commits/${encodeURIComponent(operation.expectedHeadSha)}`,
     "Parent commit lookup",
@@ -1398,7 +1450,7 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
   };
 }
 
-type PullOpenDraft = Extract<Operation, { kind: "pull_request.open_draft" }>;
+type PullOpenDraft = Extract<Operation, { kind: "pull_request.open" | "pull_request.open_draft" }>;
 
 function draftPullOutputs(operation: PullOpenDraft, pull: JsonRecord): OperationOutputsV1 {
   // Later plan steps reference these by name, so an unresolvable field must
@@ -1421,9 +1473,9 @@ function draftPullOutputs(operation: PullOpenDraft, pull: JsonRecord): Operation
 }
 
 async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDraft): Promise<OperationOutputsV1> {
-  if (!isValidGitBranchName(operation.head) || !isValidGitBranchName(operation.base) || !operation.head.startsWith("gardener/")) {
-    throw failure("branch_namespace_violation", "Pull request head must use the gardener/ namespace");
-  }
+  assertBranchWrite(scope, operation.kind, operation.head);
+  if (!isValidGitBranchName(operation.base)) throw failure("invalid_branch_name", "Pull request base is not a valid branch name");
+  const draft = operation.kind === "pull_request.open_draft";
   if (!hasExactOperationMarker(operation.body, operation.id)) {
     throw failure("canonical_marker_missing", "Exact pull request body is missing its operation marker");
   }
@@ -1434,17 +1486,17 @@ async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDr
     (candidate) => authoredByActor(candidate, scope) && candidate.body === operation.body,
   );
   if (existing) {
-    // A closed or merged pull request does not satisfy "open a draft pull
-    // request", so it must never reconcile as already-applied.
+    // A closed or merged pull request does not satisfy "open a pull request",
+    // so it must never reconcile as already-applied.
     if (existing.state !== "open") {
       throw conflict(
         "pull_request_not_open",
-        `A matching Gardener pull request exists but is ${String(existing.state)}, so the draft was not opened`,
+        `A matching Gardener pull request exists but is ${String(existing.state)}, so the pull request was not opened`,
       );
     }
     const headMatches = record(existing.head) && existing.head.sha === operation.expectedHeadSha;
     const baseMatches = record(existing.base) && existing.base.ref === operation.base;
-    if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== operation.draft) {
+    if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== draft) {
       throw conflict("pull_request_mismatch", "Existing Gardener pull request does not match the planned operation");
     }
     return draftPullOutputs(operation, existing);
@@ -1455,6 +1507,7 @@ async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDr
   if (base === null) throw conflict("base_branch_missing", "Pull request base branch does not exist");
   if (head !== operation.expectedHeadSha) throw conflict("head_branch_changed", "Precondition failed: head branch changed");
   if (base !== operation.expectedBaseSha) throw conflict("base_branch_changed", "Precondition failed: base branch changed");
+  await confirmDefaultBranch(scope);
   const { data } = await scope.api.rest(`${scope.repoPath}/pulls`, "Pull request creation", {
     method: "POST",
     body: JSON.stringify({
@@ -1462,7 +1515,7 @@ async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDr
       base: operation.base,
       title: operation.title,
       body: operation.body,
-      draft: operation.draft,
+      draft,
     }),
   });
   if (!record(data) || !positiveInteger(data.number) || !record(data.head) || !record(data.base)) {
@@ -2268,6 +2321,7 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
       return executeBranchCreate(scope, operation);
     case "commit.create":
       return executeCommitCreate(scope, operation);
+    case "pull_request.open":
     case "pull_request.open_draft":
       return executePullOpenDraft(scope, operation);
     case "pull_request.merge":
@@ -2336,6 +2390,9 @@ function assertContext(context: GitHubEffectsContext, operation: Operation, oper
     operationHash,
     ...(context.readCapturedFile === undefined ? {} : { readCapturedFile: context.readCapturedFile }),
     ...(context.chainedResourceVersion === undefined ? {} : { chainedResourceVersion: context.chainedResourceVersion }),
+    branchPatterns: context.branchPatterns ?? DEFAULT_WRITE_BRANCHES,
+    defaultBranch: operation.repository.defaultBranch,
+    ...(context.captureBaseSha === undefined ? {} : { captureBaseSha: context.captureBaseSha }),
     versionVerified: false,
   };
 }

@@ -93,7 +93,7 @@ function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"
 
 async function request(
   event: NormalizedEventV1,
-  overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools" | "effects">> = {},
+  overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools" | "effects" | "effectOptions">> = {},
 ): Promise<TaskRunRequestV1> {
   const bundle = {
     ...structuredClone(inspectRepositoryFixtureBundle()),
@@ -157,6 +157,20 @@ describe("trigger matching", () => {
     expect(withCreate.prompt).toContain("Gardener never creates a label.");
     const without = await createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), { triggers, effects: [] }));
     expect(without.prompt).not.toContain("never creates a label");
+  });
+
+  it("states each branch-writing kind's patterns and the commit base in the prompt", async () => {
+    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }];
+    const event = pullRequestEvent("1374842705");
+    const harness = await createTaskHarnessRequest(await request(event, {
+      triggers,
+      effects: ["branch.create", "commit.create"],
+      effectOptions: { "commit.create": { branches: ["docs/*", "gardener/**"] } },
+    }));
+    expect(harness.prompt).toContain("  branch.create (branch must match: gardener/**)");
+    expect(harness.prompt).toContain("  commit.create (branch must match: docs/*, gardener/**)");
+    expect(harness.prompt).toContain(`never matches the default branch (${event.repository.defaultBranch}) unless it names it exactly`);
+    expect(harness.prompt).toContain(`commit.create must build directly on the checked-out commit ${event.repository.commitSha}`);
   });
 
   it("evaluates push branch filters including negations", async () => {

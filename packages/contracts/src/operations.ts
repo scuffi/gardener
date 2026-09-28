@@ -6,7 +6,7 @@ export const operationKindValues = [
   "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove", "issue.create",
   "pull_request.comment.create", "pull_request.comment.update", "pull_request.review.submit", "pull_request.reviewer.request", "pull_request.reviewer.remove", "pull_request.update",
   "pull_request.label.add", "pull_request.label.remove",
-  "branch.create", "commit.create", "pull_request.open_draft", "pull_request.merge",
+  "branch.create", "commit.create", "pull_request.open", "pull_request.open_draft", "pull_request.merge",
   "discussion.comment.create", "discussion.comment.update", "discussion.answer.mark", "discussion.answer.unmark", "discussion.close", "discussion.reopen",
   "check.rerun",
   "release.create", "release.update", "release.publish", "release.delete",
@@ -31,7 +31,6 @@ export function isValidGitBranchName(value: string): boolean {
     components.every((component) => component.length > 0 && !component.startsWith(".") && !component.endsWith(".") && !component.endsWith(".lock"));
 }
 export const branchNameSchema = z.string().trim().min(1).max(255).refine(isValidGitBranchName, "invalid Git branch name");
-export const gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
 
 const operationIdSchema = z.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
 /**
@@ -136,9 +135,9 @@ const operationOptions = [
   }),
   pullBase.extend({ kind: z.literal("pull_request.label.add"), label: labelName }).strict(),
   pullBase.extend({ kind: z.literal("pull_request.label.remove"), label: labelName }).strict(),
-  operationBase.extend({ kind: z.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
+  operationBase.extend({ kind: z.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
   operationBase.extend({
-    kind: z.literal("commit.create"), branch: gardenerBranchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
+    kind: z.literal("commit.create"), branch: branchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
     files: z.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
   }).strict().superRefine((value, context) => {
     const paths = new Set<string>();
@@ -148,7 +147,11 @@ const operationOptions = [
     });
   }),
   operationBase.extend({
-    kind: z.literal("pull_request.open_draft"), head: gardenerBranchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
+    kind: z.literal("pull_request.open"), head: branchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
+    title: z.string().trim().min(1).max(256), body: z.string().max(65_536),
+  }).strict(),
+  operationBase.extend({
+    kind: z.literal("pull_request.open_draft"), head: branchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
     title: z.string().trim().min(1).max(256), body: z.string().max(65_536), draft: z.literal(true),
   }).strict(),
   pullBase.extend({
@@ -204,6 +207,7 @@ export const operationSchema = z.discriminatedUnion("kind", operationOptions).su
     operation.kind === "issue.comment.create" ||
     operation.kind === "issue.create" ||
     operation.kind === "pull_request.review.submit" ||
+    operation.kind === "pull_request.open" ||
     operation.kind === "pull_request.open_draft"
   ) {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
@@ -311,7 +315,7 @@ export const operationOutputTypeValues = [
   "commitSha",
   "githubId",
   "nullableGithubId",
-  "gardenerBranch",
+  "branch",
   "gitRef",
   "url",
   "nodeId",
@@ -358,19 +362,27 @@ export const operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
-  "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
+  "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
-    branch: "gardenerBranch",
+    branch: "branch",
     commitSha: "commitSha",
     treeSha: "commitSha",
     parentSha: "commitSha",
     commitUrl: "url",
   },
+  "pull_request.open": {
+    ...pullOutputs,
+    pullUrl: "url",
+    pullNodeId: "nodeId",
+    headRef: "branch",
+    headSha: "commitSha",
+    baseRef: "string",
+  },
   "pull_request.open_draft": {
     ...pullOutputs,
     pullUrl: "url",
     pullNodeId: "nodeId",
-    headRef: "gardenerBranch",
+    headRef: "branch",
     headSha: "commitSha",
     baseRef: "string",
   },
@@ -408,7 +420,7 @@ const outputSentinels = {
   commitSha: "0".repeat(40),
   githubId: "1",
   nullableGithubId: "1",
-  gardenerBranch: "gardener/step-output",
+  branch: "gardener/step-output",
   gitRef: "refs/heads/gardener/step-output",
   url: "https://github.com/gardener/step-output",
   nodeId: "GardenerStepOutput",
@@ -423,7 +435,7 @@ const outputRenderedMaxLengths = {
   commitSha: 40,
   githubId: 20,
   nullableGithubId: 20,
-  gardenerBranch: 255,
+  branch: 255,
   gitRef: 266,
   url: 1_024,
   nodeId: 256,

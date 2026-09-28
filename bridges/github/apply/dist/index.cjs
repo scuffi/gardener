@@ -39999,6 +39999,7 @@ var operationKindValues = [
   "pull_request.label.remove",
   "branch.create",
   "commit.create",
+  "pull_request.open",
   "pull_request.open_draft",
   "pull_request.merge",
   "discussion.comment.create",
@@ -40028,7 +40029,6 @@ function isValidGitBranchName(value) {
   return value !== "@" && !value.startsWith("/") && !value.endsWith("/") && !value.endsWith(".") && !value.includes("..") && !value.includes("//") && !value.includes("@{") && !/[~^:?*[\\\x00-\x20\x7f]/.test(value) && components.every((component) => component.length > 0 && !component.startsWith(".") && !component.endsWith(".") && !component.endsWith(".lock"));
 }
 var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(isValidGitBranchName, "invalid Git branch name");
-var gardenerBranchNameSchema = branchNameSchema.refine((value) => value.startsWith("gardener/"), "branch must use the gardener/ namespace");
 var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
 var COMMIT_FILE_LIMIT = 1e3;
 var commitFilePathSchema = external_exports.string().min(1).max(1024).refine(
@@ -40108,10 +40108,10 @@ var operationOptions = [
   }),
   pullBase.extend({ kind: external_exports.literal("pull_request.label.add"), label: labelName }).strict(),
   pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
-  operationBase.extend({ kind: external_exports.literal("branch.create"), branch: gardenerBranchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
+  operationBase.extend({ kind: external_exports.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
-    branch: gardenerBranchNameSchema,
+    branch: branchNameSchema,
     expectedHeadSha: shaSchema,
     message: external_exports.string().trim().min(1).max(1e3),
     files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT)
@@ -40123,8 +40123,17 @@ var operationOptions = [
     });
   }),
   operationBase.extend({
+    kind: external_exports.literal("pull_request.open"),
+    head: branchNameSchema,
+    base: branchNameSchema,
+    expectedHeadSha: shaSchema,
+    expectedBaseSha: shaSchema,
+    title: external_exports.string().trim().min(1).max(256),
+    body: external_exports.string().max(65536)
+  }).strict(),
+  operationBase.extend({
     kind: external_exports.literal("pull_request.open_draft"),
-    head: gardenerBranchNameSchema,
+    head: branchNameSchema,
     base: branchNameSchema,
     expectedHeadSha: shaSchema,
     expectedBaseSha: shaSchema,
@@ -40195,7 +40204,7 @@ function collectStrings(value, output2) {
 }
 var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
   const strings = [];
-  if (operation.kind === "issue.comment.create" || operation.kind === "issue.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open_draft") {
+  if (operation.kind === "issue.comment.create" || operation.kind === "issue.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open" || operation.kind === "pull_request.open_draft") {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
     const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
 ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
@@ -40260,19 +40269,27 @@ var operationOutputCatalog = {
   "pull_request.update": { ...pullOutputs, pullUrl: "url", title: "string", state: "openClosedState", draft: "boolean" },
   "pull_request.label.add": { ...pullOutputs, label: "string" },
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
-  "branch.create": { branch: "gardenerBranch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
+  "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
-    branch: "gardenerBranch",
+    branch: "branch",
     commitSha: "commitSha",
     treeSha: "commitSha",
     parentSha: "commitSha",
     commitUrl: "url"
   },
+  "pull_request.open": {
+    ...pullOutputs,
+    pullUrl: "url",
+    pullNodeId: "nodeId",
+    headRef: "branch",
+    headSha: "commitSha",
+    baseRef: "string"
+  },
   "pull_request.open_draft": {
     ...pullOutputs,
     pullUrl: "url",
     pullNodeId: "nodeId",
-    headRef: "gardenerBranch",
+    headRef: "branch",
     headSha: "commitSha",
     baseRef: "string"
   },
@@ -40303,7 +40320,7 @@ var outputSentinels = {
   commitSha: "0".repeat(40),
   githubId: "1",
   nullableGithubId: "1",
-  gardenerBranch: "gardener/step-output",
+  branch: "gardener/step-output",
   gitRef: "refs/heads/gardener/step-output",
   url: "https://github.com/gardener/step-output",
   nodeId: "GardenerStepOutput",
@@ -40317,7 +40334,7 @@ var outputRenderedMaxLengths = {
   commitSha: 40,
   githubId: 20,
   nullableGithubId: 20,
-  gardenerBranch: 255,
+  branch: 255,
   gitRef: 266,
   url: 1024,
   nodeId: 256,
@@ -40328,6 +40345,101 @@ function operationOutputRenderedMaxLength(type) {
 }
 function operationOutputSentinel(type) {
   return outputSentinels[type];
+}
+
+// ../contracts/src/branches.ts
+var branchWriteFields = {
+  "branch.create": "branch",
+  "commit.create": "branch",
+  "pull_request.open": "head",
+  "pull_request.open_draft": "head"
+};
+var branchWriteKinds = Object.keys(branchWriteFields);
+function isBranchWriteKind(kind) {
+  return Object.hasOwn(branchWriteFields, kind);
+}
+var DEFAULT_WRITE_BRANCHES = Object.freeze(["gardener/**"]);
+var MAX_BRANCH_PATTERNS = 20;
+function isValidBranchPattern(pattern) {
+  if (pattern.length === 0 || pattern.length > 255) return false;
+  const segments = pattern.split("/");
+  if (segments.some((segment) => segment.includes("**") && segment !== "**")) return false;
+  return isValidGitBranchName(segments.map((segment) => segment.replaceAll("*", "x")).join("/"));
+}
+var branchPatternSchema = external_exports.string().trim().min(1).max(255).refine(isValidBranchPattern, "branch patterns are branch names whose segments may use * or be **");
+var branchPatternsSchema = external_exports.array(branchPatternSchema).min(1).max(MAX_BRANCH_PATTERNS).refine((patterns) => new Set(patterns).size === patterns.length, "branch patterns must be unique");
+function segmentMatches(patternText, segmentText) {
+  const pattern = [...patternText];
+  const segment = [...segmentText];
+  let previous = new Array(segment.length + 1).fill(false);
+  previous[0] = true;
+  for (const character of pattern) {
+    const current = new Array(segment.length + 1).fill(false);
+    if (character === "*") {
+      let reachable = false;
+      for (let index = 0; index <= segment.length; index++) {
+        reachable ||= previous[index];
+        current[index] = reachable;
+      }
+    } else {
+      for (let index = 1; index <= segment.length; index++) {
+        current[index] = previous[index - 1] && segment[index - 1] === character;
+      }
+    }
+    previous = current;
+  }
+  return previous[segment.length];
+}
+function branchPatternMatches(pattern, branch) {
+  const patternSegments = pattern.split("/");
+  const branchSegments = branch.split("/");
+  let matched = new Array(branchSegments.length + 1).fill(false);
+  matched[0] = true;
+  for (const patternSegment of patternSegments) {
+    const next = new Array(branchSegments.length + 1).fill(false);
+    if (patternSegment === "**") {
+      let reachable = false;
+      for (let index = 1; index <= branchSegments.length; index++) {
+        reachable ||= matched[index - 1];
+        next[index] = reachable;
+      }
+    } else {
+      for (let index = 1; index <= branchSegments.length; index++) {
+        next[index] = matched[index - 1] && segmentMatches(patternSegment, branchSegments[index - 1]);
+      }
+    }
+    matched = next;
+  }
+  return matched[branchSegments.length];
+}
+function branchAllowed(branch, patterns, defaultBranch) {
+  if (!isValidGitBranchName(branch)) return false;
+  if (branch === defaultBranch) return patterns.includes(branch);
+  return patterns.some((pattern) => branchPatternMatches(pattern, branch));
+}
+function branchWriteRefusal(kind, branch, patterns, defaultBranch) {
+  if (branchAllowed(branch, patterns, defaultBranch)) return void 0;
+  const field = branchWriteFields[kind];
+  const allowed = patterns.join(", ");
+  return branch === defaultBranch ? `${kind} ${field} ${branch} is the default branch, which this task may write only if its branches list names it exactly (allowed: ${allowed})` : `${kind} ${field} ${branch} is outside this task's branches (allowed: ${allowed})`;
+}
+function commitBaseRefusal(commit, earlier, captureBaseSha) {
+  const reference = commit.references["/expectedHeadSha"];
+  if (reference === void 0) {
+    const expected = commit.payload.expectedHeadSha;
+    return typeof expected === "string" && expected.toLowerCase() === captureBaseSha.toLowerCase() ? void 0 : `commit.create must build on the captured commit ${captureBaseSha}: set expectedHeadSha to it, or to the commitSha of a branch.create made from it`;
+  }
+  const ref = reference;
+  if (typeof ref.step !== "string" || ref.output !== "commitSha") {
+    return "commit.create expectedHeadSha may only reference a branch.create step's commitSha";
+  }
+  const source = earlier.find((step) => step.stepName === ref.step);
+  if (source === void 0 || source.kind !== "branch.create") {
+    return "commit.create expectedHeadSha may only reference a branch.create step's commitSha";
+  }
+  if (source.references["/fromSha"] !== void 0) return void 0;
+  const from = source.payload.fromSha;
+  return typeof from === "string" && from.toLowerCase() === captureBaseSha.toLowerCase() ? void 0 : `branch.create step ${source.stepName} must start from the captured commit ${captureBaseSha} for commit.create to build on it`;
 }
 
 // ../contracts/src/task.ts
@@ -40538,6 +40650,19 @@ var taskModelIdSchema = external_exports.string().min(1).max(256).regex(/^[A-Za-
   (id) => !id.split("/").some((segment) => segment === "" || segment === "." || segment === ".."),
   "model path segments must be non-empty and cannot be . or .."
 ).refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
+var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branchPatternsSchema });
+var taskEffectOptionsMapV1Schema = external_exports.strictObject({
+  "branch.create": taskEffectOptionsV1Schema.optional(),
+  "commit.create": taskEffectOptionsV1Schema.optional(),
+  "pull_request.open": taskEffectOptionsV1Schema.optional(),
+  "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
+});
+var taskBranchPatternsV1Schema = external_exports.strictObject({
+  "branch.create": branchPatternsSchema.optional(),
+  "commit.create": branchPatternsSchema.optional(),
+  "pull_request.open": branchPatternsSchema.optional(),
+  "pull_request.open_draft": branchPatternsSchema.optional()
+});
 var taskBundleV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-bundle/v1"),
   taskId: identifier,
@@ -40547,6 +40672,8 @@ var taskBundleV1Schema = external_exports.strictObject({
   triggers: external_exports.array(taskTriggerV1Schema).min(1).max(taskTriggerKindValues.length),
   tools: external_exports.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
   effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
+  /** Absent when no declared effect has options, so such bundles hash as before. */
+  effectOptions: taskEffectOptionsMapV1Schema.optional(),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
   /**
@@ -40564,6 +40691,17 @@ var taskBundleV1Schema = external_exports.strictObject({
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+    }
+  }
+  if (bundle.effectOptions !== void 0) {
+    const optioned = Object.entries(bundle.effectOptions).filter(([, options]) => options !== void 0);
+    if (optioned.length === 0) {
+      context.addIssue({ code: "custom", path: ["effectOptions"], message: "effectOptions must be omitted when no effect has options" });
+    }
+    for (const [kind] of optioned) {
+      if (!bundle.effects.includes(kind)) {
+        context.addIssue({ code: "custom", path: ["effectOptions", kind], message: `options are given for ${kind}, which the task does not declare` });
+      }
     }
   }
   const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
@@ -41520,6 +41658,11 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
     maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
     maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
   }),
+  /**
+   * Copied from the bundle so apply enforces the same branch patterns planning
+   * did. Absent when every branch-writing kind keeps the `gardener/**` default.
+   */
+  branchPatterns: taskBranchPatternsV1Schema.optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -41586,6 +41729,28 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   if (plan.capture !== void 0 && plan.capture.baseSha !== plan.provenance.commitSha) {
     context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
   }
+  if (plan.branchPatterns !== void 0 && Object.values(plan.branchPatterns).every((patterns) => patterns === void 0)) {
+    context.addIssue({ code: "custom", path: ["branchPatterns"], message: "branchPatterns must be omitted when every kind keeps its default" });
+  }
+  plan.operations.forEach((operation, index) => {
+    if (isBranchWriteKind(operation.kind)) {
+      const field = branchWriteFields[operation.kind];
+      const branch = operation.payload[field];
+      if (operation.references[`/${field}`] === void 0 && typeof branch === "string") {
+        const refusal = branchWriteRefusal(
+          operation.kind,
+          branch,
+          plan.branchPatterns?.[operation.kind] ?? DEFAULT_WRITE_BRANCHES,
+          plan.repository.defaultBranch
+        );
+        if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal });
+      }
+    }
+    if (operation.kind === "commit.create" && plan.capture !== void 0) {
+      const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
+      if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
+    }
+  });
 });
 var taskObservationV1Schema = external_exports.strictObject({
   kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
@@ -45647,6 +45812,7 @@ var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
   "pull_request.label.remove": ["pull-requests:write"],
   "branch.create": ["contents:write"],
   "commit.create": ["contents:write"],
+  "pull_request.open": ["contents:read", "pull-requests:write"],
   "pull_request.open_draft": ["contents:read", "pull-requests:write"],
   "pull_request.merge": ["contents:write", "pull-requests:write", "checks:read", "statuses:read"],
   "discussion.comment.create": ["discussions:write"],
@@ -46397,10 +46563,24 @@ async function executePullUpdate(scope, operation) {
   }
   return pullUpdateOutputs(operation, current);
 }
-async function executeBranchCreate(scope, operation) {
-  if (!isValidGitBranchName(operation.branch) || !operation.branch.startsWith("gardener/")) {
-    throw failure2("branch_namespace_violation", "Branch name must use the gardener/ namespace");
+function assertBranchWrite(scope, kind, branch) {
+  const refusal = branchWriteRefusal(kind, branch, scope.branchPatterns, scope.defaultBranch);
+  if (refusal !== void 0) throw failure2("branch_not_allowed", refusal);
+}
+async function confirmDefaultBranch(scope) {
+  const { data } = await scope.api.rest(scope.repoPath, "Repository default branch lookup");
+  if (!record2(data) || typeof data.default_branch !== "string") {
+    throw failure2("github_response_invalid", "Repository response had no default branch");
   }
+  if (data.default_branch !== scope.defaultBranch) {
+    throw conflict(
+      "default_branch_changed",
+      `The repository's default branch is ${data.default_branch}, not ${scope.defaultBranch} as planned`
+    );
+  }
+}
+async function executeBranchCreate(scope, operation) {
+  assertBranchWrite(scope, operation.kind, operation.branch);
   const branchUrl = `https://github.com/${scope.owner}/${scope.name}/tree/${encodeRefPath(operation.branch)}`;
   const existing = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
   if (existing !== null) {
@@ -46415,6 +46595,7 @@ async function executeBranchCreate(scope, operation) {
     }
     throw conflict("branch_exists", `Branch already exists at ${existing}, not ${operation.fromSha}`);
   }
+  await confirmDefaultBranch(scope);
   const { data } = await scope.api.rest(`${scope.repoPath}/git/refs`, "Branch creation", {
     method: "POST",
     body: JSON.stringify({ ref: `refs/heads/${operation.branch}`, sha: operation.fromSha })
@@ -46451,8 +46632,14 @@ async function readVerifiedCapturedContent(scope, file2) {
   return Buffer.from(bytes).toString("base64");
 }
 async function executeCommitCreate(scope, operation) {
-  if (!isValidGitBranchName(operation.branch) || !operation.branch.startsWith("gardener/")) {
-    throw failure2("branch_namespace_violation", "Commit target must use the gardener/ branch namespace");
+  if (scope.captureBaseSha === void 0) {
+    throw failure2("capture_base_missing", "commit.create requires the plan's capture base commit");
+  }
+  if (operation.expectedHeadSha.toLowerCase() !== scope.captureBaseSha.toLowerCase()) {
+    throw failure2(
+      "commit_base_mismatch",
+      `commit.create must build on the captured commit ${scope.captureBaseSha}, not ${operation.expectedHeadSha}`
+    );
   }
   if (operation.files.some((file2) => !isSafeFilePath(file2.path))) {
     throw failure2("invalid_commit_path", "Commit contains an invalid file path");
@@ -46463,6 +46650,7 @@ async function executeCommitCreate(scope, operation) {
   if (operation.files.some((file2) => file2.captured.status !== "deleted") && scope.readCapturedFile === void 0) {
     throw new Error("commit.create requires capture-backed content but no capture reader was provided");
   }
+  assertBranchWrite(scope, operation.kind, operation.branch);
   const marker = commitMarker(operation.id, scope.operationHash);
   const head = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
   if (head === null) throw conflict("branch_missing", "Target branch does not exist");
@@ -46492,6 +46680,7 @@ async function executeCommitCreate(scope, operation) {
     }
     throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
   }
+  await confirmDefaultBranch(scope);
   const { data: parent } = await scope.api.rest(
     `${scope.repoPath}/git/commits/${encodeURIComponent(operation.expectedHeadSha)}`,
     "Parent commit lookup"
@@ -46583,9 +46772,9 @@ function draftPullOutputs(operation, pull) {
   };
 }
 async function executePullOpenDraft(scope, operation) {
-  if (!isValidGitBranchName(operation.head) || !isValidGitBranchName(operation.base) || !operation.head.startsWith("gardener/")) {
-    throw failure2("branch_namespace_violation", "Pull request head must use the gardener/ namespace");
-  }
+  assertBranchWrite(scope, operation.kind, operation.head);
+  if (!isValidGitBranchName(operation.base)) throw failure2("invalid_branch_name", "Pull request base is not a valid branch name");
+  const draft = operation.kind === "pull_request.open_draft";
   if (!hasExactOperationMarker(operation.body, operation.id)) {
     throw failure2("canonical_marker_missing", "Exact pull request body is missing its operation marker");
   }
@@ -46599,12 +46788,12 @@ async function executePullOpenDraft(scope, operation) {
     if (existing.state !== "open") {
       throw conflict(
         "pull_request_not_open",
-        `A matching Gardener pull request exists but is ${String(existing.state)}, so the draft was not opened`
+        `A matching Gardener pull request exists but is ${String(existing.state)}, so the pull request was not opened`
       );
     }
     const headMatches = record2(existing.head) && existing.head.sha === operation.expectedHeadSha;
     const baseMatches = record2(existing.base) && existing.base.ref === operation.base;
-    if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== operation.draft) {
+    if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== draft) {
       throw conflict("pull_request_mismatch", "Existing Gardener pull request does not match the planned operation");
     }
     return draftPullOutputs(operation, existing);
@@ -46615,6 +46804,7 @@ async function executePullOpenDraft(scope, operation) {
   if (base === null) throw conflict("base_branch_missing", "Pull request base branch does not exist");
   if (head !== operation.expectedHeadSha) throw conflict("head_branch_changed", "Precondition failed: head branch changed");
   if (base !== operation.expectedBaseSha) throw conflict("base_branch_changed", "Precondition failed: base branch changed");
+  await confirmDefaultBranch(scope);
   const { data } = await scope.api.rest(`${scope.repoPath}/pulls`, "Pull request creation", {
     method: "POST",
     body: JSON.stringify({
@@ -46622,7 +46812,7 @@ async function executePullOpenDraft(scope, operation) {
       base: operation.base,
       title: operation.title,
       body: operation.body,
-      draft: operation.draft
+      draft
     })
   });
   if (!record2(data) || !positiveInteger(data.number) || !record2(data.head) || !record2(data.base)) {
@@ -47221,6 +47411,7 @@ async function dispatch(scope, operation) {
       return executeBranchCreate(scope, operation);
     case "commit.create":
       return executeCommitCreate(scope, operation);
+    case "pull_request.open":
     case "pull_request.open_draft":
       return executePullOpenDraft(scope, operation);
     case "pull_request.merge":
@@ -47277,6 +47468,9 @@ function assertContext(context, operation, operationHash) {
     operationHash,
     ...context.readCapturedFile === void 0 ? {} : { readCapturedFile: context.readCapturedFile },
     ...context.chainedResourceVersion === void 0 ? {} : { chainedResourceVersion: context.chainedResourceVersion },
+    branchPatterns: context.branchPatterns ?? DEFAULT_WRITE_BRANCHES,
+    defaultBranch: operation.repository.defaultBranch,
+    ...context.captureBaseSha === void 0 ? {} : { captureBaseSha: context.captureBaseSha },
     versionVerified: false
   };
 }
@@ -47504,6 +47698,7 @@ async function applyOrderedPlan(input2) {
       await input2.record(stopped);
       return { receipt: stopped, outputs };
     }
+    const branchPatterns = isBranchWriteKind(operation.kind) ? plan.branchPatterns?.[operation.kind] : void 0;
     const context = {
       token: input2.token,
       repositoryFullName: plan.repository.fullName,
@@ -47511,7 +47706,9 @@ async function applyOrderedPlan(input2) {
       budgetMs: Math.max(1e3, remaining),
       timeoutMs: Math.min(1e4, Math.max(1e3, remaining)),
       ...input2.fetch ? { fetch: input2.fetch } : {},
-      ...input2.captureDirectory ? { readCapturedFile: captureReader(input2.captureDirectory) } : {}
+      ...input2.captureDirectory ? { readCapturedFile: captureReader(input2.captureDirectory) } : {},
+      ...branchPatterns === void 0 ? {} : { branchPatterns },
+      ...plan.capture === void 0 ? {} : { captureBaseSha: plan.capture.baseSha }
     };
     const resource = resourceVersionKey(operation);
     const chained = resource === null ? void 0 : versions.get(resource);
@@ -47553,6 +47750,7 @@ var MARKER_BODY_KINDS = /* @__PURE__ */ new Set([
   "issue.comment.create",
   "issue.create",
   "pull_request.review.submit",
+  "pull_request.open",
   "pull_request.open_draft"
 ]);
 function bodyWithOperationMarker(body2, operationId) {

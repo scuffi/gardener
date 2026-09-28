@@ -1,4 +1,5 @@
 import {
+  bundleBranchPatterns,
   captureDeferredPointers,
   operationOutputNames,
   operationOutputType,
@@ -376,7 +377,9 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   }
   // The capture's base commit is not re-checked here: the plan schema binds it
   // to the planning commit, so a drifted capture is rejected once, in the
-  // contract, rather than by two rules that could disagree.
+  // contract, rather than by two rules that could disagree. Branch patterns
+  // and the rule that a commit sits on the capture are checked there too.
+  const branchPatterns = bundleBranchPatterns(request.bundle);
 
   return taskEffectPlanV1Schema.parse({
     schemaVersion: "gardener.task-effect-plan/v1",
@@ -404,6 +407,7 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
         ? {}
         : { maxEffectBytes: request.bundle.limits.maxEffectBytes }),
     },
+    ...(branchPatterns === undefined ? {} : { branchPatterns }),
     ...(capture === undefined ? {} : { capture: capture.manifest, changesSha256: capture.changesSha256 }),
     operations,
   });

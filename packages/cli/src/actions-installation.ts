@@ -448,7 +448,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
  * Actions to create and approve pull requests. A review only needs it to
  * approve, but the task may approve, so it is checked too.
  */
-const PULL_REQUEST_PERMISSION_KINDS = ["pull_request.open_draft", "pull_request.review.submit"] as const;
+const PULL_REQUEST_PERMISSION_KINDS = ["pull_request.open", "pull_request.open_draft", "pull_request.review.submit"] as const;
 
 export interface PullRequestPermissionWarning {
   repository: string;
@@ -468,7 +468,9 @@ export function pullRequestPermissionWarningsFor(
 ): PullRequestPermissionWarning[] {
   const warnings: PullRequestPermissionWarning[] = [];
   for (const { repositoryId, repository, kinds } of repositories) {
-    const needs = kinds.includes("pull_request.open_draft") ? "open pull requests" : "approve pull requests";
+    const needs = kinds.includes("pull_request.open") || kinds.includes("pull_request.open_draft")
+      ? "open pull requests"
+      : "approve pull requests";
     let allowed: boolean | null;
     try {
       const value = readWorkflowPermissions(repositoryId) as { can_approve_pull_request_reviews?: unknown } | null;

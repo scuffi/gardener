@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   decodeJsonPointer,
+  isBranchWriteKind,
   isTemplateReference,
   operationOutputNames,
   operationOutputRenderedMaxLength,
@@ -237,6 +238,7 @@ export async function applyOrderedPlan(input: {
       await input.record(stopped);
       return { receipt: stopped, outputs };
     }
+    const branchPatterns = isBranchWriteKind(operation.kind) ? plan.branchPatterns?.[operation.kind] : undefined;
     const context: GitHubEffectsContext = {
       token: input.token,
       repositoryFullName: plan.repository.fullName,
@@ -245,6 +247,8 @@ export async function applyOrderedPlan(input: {
       timeoutMs: Math.min(10_000, Math.max(1_000, remaining)),
       ...(input.fetch ? { fetch: input.fetch } : {}),
       ...(input.captureDirectory ? { readCapturedFile: captureReader(input.captureDirectory) } : {}),
+      ...(branchPatterns === undefined ? {} : { branchPatterns }),
+      ...(plan.capture === undefined ? {} : { captureBaseSha: plan.capture.baseSha }),
     };
     const resource = resourceVersionKey(operation);
     const chained = resource === null ? undefined : versions.get(resource);
@@ -297,6 +301,7 @@ const MARKER_BODY_KINDS = new Set<OperationKind>([
   "issue.comment.create",
   "issue.create",
   "pull_request.review.submit",
+  "pull_request.open",
   "pull_request.open_draft",
 ]);
 

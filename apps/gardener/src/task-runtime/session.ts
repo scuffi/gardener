@@ -67,6 +67,7 @@ import {
 import { FlueTaskHarness, SupersededReadError } from "./flue-harness";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
+import { proposalAuthorityRefusal } from "./proposal-authority";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
 import { taskToolInputKeys } from "./tool-input-schemas";
@@ -278,9 +279,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
     }
     await this.assertRunActive(input.runId);
     const request = await this.loadRunRequest(input.runId, "effect authority enforcement");
-    if (!(request.bundle.effects as readonly string[]).includes(proposal.kind)) {
-      throw new Error(`Task did not declare the ${proposal.kind} effect`);
-    }
+    const refusal = proposalAuthorityRefusal(request, proposal, await readProposalLedger(this.ctx.storage));
+    if (refusal !== undefined) throw new Error(refusal);
     // Proposals are model tool calls and share the one declared tool budget
     // with repository reads, so a task cannot buy extra turns by proposing.
     // Charging and appending are one transaction: a budget spent without a

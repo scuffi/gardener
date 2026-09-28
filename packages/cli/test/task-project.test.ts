@@ -140,6 +140,29 @@ describe("TASK.md compiler", () => {
     ))).rejects.toThrow(/tools must be unique/);
   });
 
+  it("compiles branches options on branch-writing effect entries", async () => {
+    const withOptions = (effects: string) => TASK.replace("effects:\n  - issue.comment.create\n", `effects:\n${effects}`);
+    const compiled = await compileTaskSource(withOptions(
+      "  - issue.comment.create\n  - kind: commit.create\n    branches: [gardener/**, docs/*]\n  - branch.create\n",
+    ));
+    expect(compiled.bundle.effects).toEqual(["issue.comment.create", "branch.create", "commit.create"]);
+    // Sorted, so the order the author listed them in does not move the hash.
+    expect(compiled.bundle.effectOptions).toEqual({ "commit.create": { branches: ["docs/*", "gardener/**"] } });
+    const reordered = await compileTaskSource(withOptions(
+      "  - issue.comment.create\n  - kind: commit.create\n    branches: [docs/*, gardener/**]\n  - branch.create\n",
+    ));
+    expect(reordered.bundleHash).toBe(compiled.bundleHash);
+    // Without options the bundle is unchanged, so existing hashes hold.
+    expect((await compileTaskSource(TASK)).bundle).not.toHaveProperty("effectOptions");
+
+    await expect(compileTaskSource(withOptions("  - kind: issue.create\n    branches: [docs/*]\n"))).rejects.toThrow();
+    await expect(compileTaskSource(withOptions("  - kind: commit.create\n"))).rejects.toThrow();
+    await expect(compileTaskSource(withOptions("  - kind: commit.create\n    branches: [docs/**x]\n"))).rejects.toThrow();
+    await expect(compileTaskSource(withOptions(
+      "  - commit.create\n  - kind: commit.create\n    branches: [docs/*]\n",
+    ))).rejects.toThrow(/unique/);
+  });
+
   it("expands family globs into the deterministic exact allowlist", async () => {
     expect(expandEffectSelectors(["issue.*"])).toEqual([
       "issue.label.add",

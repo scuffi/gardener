@@ -17,6 +17,7 @@ import {
   type TaskEffectPlanCaptureV1,
 } from "../src/task-runtime/effect-plan";
 import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
+import { proposalAuthorityRefusal } from "../src/task-runtime/proposal-authority";
 
 const COMMIT = "b".repeat(40);
 const ISSUE_PRECONDITIONS = {
@@ -76,12 +77,14 @@ async function runRequest(overrides: {
   event?: NormalizedEventV1;
   maxEffectOperations?: number;
   maxEffectBytes?: number;
+  effectOptions?: TaskBundleV1["effectOptions"];
 } = {}): Promise<TaskRunRequestV1> {
   const bundle = structuredClone(inspectRepositoryFixtureBundle()) as TaskBundleV1;
   bundle.effects = [...(overrides.effects ?? operationKindValues)] as TaskBundleV1["effects"];
   bundle.triggers = [{ kind: "github.issue.opened", labelsAll: [], mentions: [], authors: "any" }, { kind: "github.workflow_dispatch" }];
   if (overrides.maxEffectOperations !== undefined) bundle.limits.maxEffectOperations = overrides.maxEffectOperations;
   if (overrides.maxEffectBytes !== undefined) bundle.limits.maxEffectBytes = overrides.maxEffectBytes;
+  if (overrides.effectOptions !== undefined) bundle.effectOptions = overrides.effectOptions;
   return {
     schemaVersion: "gardener.task-run-request/v1",
     runId: "run:fixture:1",
@@ -124,6 +127,42 @@ const branch = {
   references: {},
   rationale: "Work needs a branch.",
 } as const;
+
+describe("branch authority", () => {
+  const docsBranch = { ...branch, payload: { ...branch.payload, branch: "docs/fix" } };
+
+  it("copies the bundle's branch patterns into the plan and enforces them there", async () => {
+    const allowed = await runRequest({ effectOptions: { "branch.create": { branches: ["docs/*"] } } });
+    const plan = await buildTaskEffectPlan({ request: allowed, outcome: outcome(allowed, [docsBranch]) });
+    expect(plan.branchPatterns).toEqual({ "branch.create": ["docs/*"] });
+
+    const defaults = await runRequest();
+    expect((await buildTaskEffectPlan({ request: defaults, outcome: outcome(defaults, [branch]) })).branchPatterns).toBeUndefined();
+    await expect(buildTaskEffectPlan({ request: defaults, outcome: outcome(defaults, [docsBranch]) }))
+      .rejects.toThrow(/outside this task's branches/);
+  });
+
+  it("refuses a proposal as it arrives, so the model can change course", async () => {
+    const request = await runRequest({ effectOptions: { "branch.create": { branches: ["**"] } } });
+    const parse = (value: unknown) => taskEffectProposalV1Schema.parse(value);
+    expect(proposalAuthorityRefusal(request, parse(docsBranch), [])).toBeUndefined();
+    expect(proposalAuthorityRefusal(request, parse({ ...branch, payload: { ...branch.payload, branch: "main" } }), []))
+      .toMatch(/is the default branch/);
+    const narrow = await runRequest({ effects: ["issue.comment.create"] });
+    expect(proposalAuthorityRefusal(narrow, parse(branch), [])).toBe("Task did not declare the branch.create effect");
+
+    const onBranch = parse({
+      stepName: "commit",
+      kind: "commit.create",
+      payload: { branch: "gardener/fix-1", message: "Fix" },
+      references: { "/expectedHeadSha": { step: "branch", output: "commitSha" } },
+      rationale: "Commit the fix.",
+    });
+    expect(proposalAuthorityRefusal(request, onBranch, [parse(branch)])).toBeUndefined();
+    const elsewhere = parse({ ...branch, payload: { ...branch.payload, fromSha: "e".repeat(40) } });
+    expect(proposalAuthorityRefusal(request, onBranch, [elsewhere])).toMatch(/must start from the captured commit/);
+  });
+});
 
 describe("ordered effect plan derivation", () => {
   it("binds the run, task, bundle, repository, provenance, and triggering event", async () => {
@@ -243,7 +282,7 @@ describe("ordered effect plan derivation", () => {
     for (const kind of operationKindValues) {
       expect(request.bundle.effects).toContain(kind);
     }
-    expect(request.bundle.effects).toHaveLength(32);
+    expect(request.bundle.effects).toHaveLength(33);
   });
 });
 

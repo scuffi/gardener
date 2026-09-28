@@ -108,7 +108,8 @@ function harness(handlers: Handler[]): { fetchImpl: typeof fetch; calls: Call[] 
       body: typeof raw === "string" && raw.length > 0 ? JSON.parse(raw) : undefined,
     };
     calls.push(call);
-    const handler = handlers.find((candidate) => candidate.when(call));
+    // Branch writes confirm the default branch first; tests that care override this.
+    const handler = [...handlers, get(REPO, { default_branch: REPOSITORY.defaultBranch })].find((candidate) => candidate.when(call));
     if (!handler) throw new Error(`Unhandled request: ${call.method} ${call.path}`);
     const status = handler.status ?? 200;
     return new Response(status === 204 ? null : JSON.stringify(handler.json ?? {}), {
@@ -132,14 +133,22 @@ function context(
     fetch: fetchImpl,
     now: () => new Date("2026-02-01T00:00:00Z"),
     readCapturedFile: readCapturedFixture,
+    // The capture fixture was taken at HEAD, which commit fixtures build on.
+    captureBaseSha: HEAD,
     ...overrides,
   };
 }
 
+/**
+ * Runs one operation. `calls` leaves out the default-branch read every branch
+ * write starts with, so tests about the write itself can index its requests;
+ * `repositoryReads` counts them, and the test that pins the read uses it.
+ */
 async function run(operation: Operation, handlers: Handler[], overrides: Partial<GitHubEffectsContext> = {}) {
   const { fetchImpl, calls } = harness(handlers);
   const result = await executeActionsOperation(operation, context(fetchImpl, operation, overrides));
-  return { ...result, calls };
+  const isRepositoryRead = (call: Call) => call.method === "GET" && call.path === REPO;
+  return { ...result, calls: calls.filter((call) => !isRepositoryRead(call)), repositoryReads: calls.filter(isRepositoryRead).length };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -557,6 +566,47 @@ const scenarios: Record<string, Scenario> = {
       }]),
     ],
     outputs: { branch: "gardener/feature", commitSha: NEW_COMMIT, treeSha: NEW_TREE, parentSha: HEAD },
+  },
+  "pull_request.open": {
+    operation: operationSchema.parse({
+      schemaVersion: "v2",
+      repository: REPOSITORY,
+      id: "op-ready-pr",
+      kind: "pull_request.open",
+      head: "gardener/feature",
+      base: "main",
+      expectedHeadSha: HEAD,
+      expectedBaseSha: BASE,
+      title: "Gardener changes",
+      body: marked("op-ready-pr", "Automated changes"),
+    }),
+    apply: [
+      get(`${REPO}/pulls`, []),
+      get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: HEAD } }),
+      get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE } }),
+      send("POST", `${REPO}/pulls`, {
+        number: 13,
+        node_id: "PR_ready",
+        head: { sha: HEAD },
+        base: { ref: "main", sha: BASE },
+        html_url: "https://github.com/acme/widgets/pull/13",
+      }),
+    ],
+    duplicate: [
+      get(`${REPO}/pulls`, [{
+        number: 13,
+        node_id: "PR_ready",
+        user: BOT,
+        state: "open",
+        draft: false,
+        title: "Gardener changes",
+        body: marked("op-ready-pr", "Automated changes"),
+        head: { sha: HEAD },
+        base: { ref: "main" },
+        html_url: "https://github.com/acme/widgets/pull/13",
+      }]),
+    ],
+    outputs: { pullNumber: 13, pullNodeId: "PR_ready", headRef: "gardener/feature", baseRef: "main" },
   },
   "pull_request.open_draft": {
     operation: operationSchema.parse({
@@ -1542,6 +1592,78 @@ describe("git ref path encoding", () => {
       expect(calls).toHaveLength(1);
     });
   }
+
+  it("writes outside gardener/ only where the plan's patterns allow, and never to the default branch by wildcard", async () => {
+    const branchCreate = (branch: string) => operationSchema.parse({
+      schemaVersion: "v2", repository: REPOSITORY, id: `op-branch-${branch.replaceAll("/", "-")}`, kind: "branch.create",
+      branch, fromSha: HEAD, expectedAbsent: true,
+    });
+    const refused = await run(branchCreate("docs/usage"), []);
+    expect(refused.receipt.status).toBe("failed");
+    expect(refused.receipt.error?.code).toBe("branch_not_allowed");
+    expect(refused.calls).toHaveLength(0);
+    expect(refused.repositoryReads).toBe(0);
+
+    const allowed = await run(branchCreate("docs/usage"), [
+      get(`${REPO}/git/ref/heads/docs/usage`, {}, 404),
+      send("POST", `${REPO}/git/refs`, { object: { sha: HEAD } }),
+    ], { branchPatterns: ["docs/*"] });
+    expect(allowed.receipt.status, JSON.stringify(allowed.receipt.error)).toBe("succeeded");
+
+    const main = await run(branchCreate(REPOSITORY.defaultBranch), [], { branchPatterns: ["**"] });
+    expect(main.receipt.error?.code).toBe("branch_not_allowed");
+    expect(main.receipt.error?.message).toContain("is the default branch");
+    expect(main.calls).toHaveLength(0);
+    expect(main.repositoryReads).toBe(0);
+  });
+
+  it("confirms the planned default branch with GitHub before a branch write", async () => {
+    const branchCreate = operationSchema.parse({
+      schemaVersion: "v2", repository: REPOSITORY, id: "op-branch-docs", kind: "branch.create",
+      branch: "docs/usage", fromSha: HEAD, expectedAbsent: true,
+    });
+    // The planning job reported main, but the repository's default branch is
+    // docs/usage, which the ** wildcard must not reach.
+    const changed = get(REPO, { default_branch: "docs/usage" });
+    const { receipt, calls, repositoryReads } = await run(branchCreate, [
+      changed,
+      get(`${REPO}/git/ref/heads/docs/usage`, {}, 404),
+    ], { branchPatterns: ["**"] });
+    expect(receipt.status).toBe("conflicted");
+    expect(receipt.error?.code).toBe("default_branch_changed");
+    expect(repositoryReads).toBe(1);
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+
+    // A step that already landed reconciles without the read, so a later
+    // default-branch change cannot turn it into a failure.
+    const landed = await run(branchCreate, [changed, get(`${REPO}/git/ref/heads/docs/usage`, { object: { sha: HEAD } })], {
+      branchPatterns: ["**"],
+    });
+    expect(landed.receipt.status).toBe("skipped");
+    expect(landed.repositoryReads).toBe(0);
+  });
+
+  it("refuses a commit whose parent is not the captured commit before reading anything", async () => {
+    const { receipt, calls, repositoryReads } = await run(COMMIT_OPERATION, [], { captureBaseSha: BASE });
+    expect(receipt.status).toBe("failed");
+    expect(receipt.error?.code).toBe("commit_base_mismatch");
+    expect(calls).toHaveLength(0);
+    expect(repositoryReads).toBe(0);
+  });
+
+  it("opens a ready pull request as non-draft and never reconciles with a draft", async () => {
+    const ready = scenarioFor("pull_request.open");
+    const applied = await run(ready.operation, ready.apply);
+    const post = applied.calls.find((call) => call.method === "POST");
+    expect((post?.body as { draft?: unknown }).draft).toBe(false);
+    const { receipt } = await run(ready.operation, [get(`${REPO}/pulls`, [{
+      number: 13, node_id: "PR_ready", user: BOT, state: "open", draft: true, title: "Gardener changes",
+      body: marked("op-ready-pr", "Automated changes"), head: { sha: HEAD }, base: { ref: "main" },
+      html_url: "https://github.com/acme/widgets/pull/13",
+    }])]);
+    expect(receipt.status).toBe("conflicted");
+    expect(receipt.error?.code).toBe("pull_request_mismatch");
+  });
 
   it("fast-forwards a nested branch through the segmented refs path", async () => {
     const branch = "gardener/fix/nested";

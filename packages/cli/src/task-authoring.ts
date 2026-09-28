@@ -1,4 +1,6 @@
 import {
+  branchPatternsSchema,
+  branchWriteKinds,
   defaultTriggerAuthors,
   githubHandleV1Schema,
   isAuthoredTriggerKind,
@@ -33,6 +35,19 @@ const effectSelectorSchema = z.union([
   z.enum(operationKindValues),
   z.enum(effectFamilyGlobValues),
 ]);
+
+/** An exact branch-writing kind with the branches it may write to. */
+const effectWithOptionsSchema = z.strictObject({
+  kind: z.enum(branchWriteKinds as [string, ...string[]]),
+  branches: branchPatternsSchema,
+});
+
+const effectEntrySchema = z.union([effectSelectorSchema, effectWithOptionsSchema]);
+type EffectEntry = z.infer<typeof effectEntrySchema>;
+
+function effectSelector(entry: EffectEntry): string {
+  return typeof entry === "string" ? entry : entry.kind;
+}
 
 const PUSH_TRIGGER = "github.push";
 const SCHEDULE_TRIGGER = "github.schedule";
@@ -115,7 +130,7 @@ const authoringSchema = z.strictObject({
   draft: z.boolean().optional(),
   model: taskModelIdSchema.optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
-  effects: z.array(effectSelectorSchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
+  effects: z.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
   network: z.strictObject({
     default: z.enum(["deny", "allow"]),
     allow: z.array(z.string()),
@@ -141,7 +156,7 @@ const authoringSchema = z.strictObject({
   if (new Set(authoring.tools).size !== authoring.tools.length) {
     context.addIssue({ code: "custom", path: ["tools"], message: "tools must be unique" });
   }
-  if (new Set(authoring.effects).size !== authoring.effects.length) {
+  if (new Set(authoring.effects.map(effectSelector)).size !== authoring.effects.length) {
     context.addIssue({ code: "custom", path: ["effects"], message: "effect selectors must be unique" });
   }
 });
@@ -150,6 +165,17 @@ export interface CompiledTask {
   bundle: TaskBundleV1;
   bundleHash: string;
   canonicalBundle: string;
+}
+
+/**
+ * Options given on effect entries, as the bundle carries them. Patterns are
+ * sorted so listing them in another order does not change the bundle hash.
+ */
+function effectOptionsOf(entries: readonly EffectEntry[]): { effectOptions?: TaskBundleV1["effectOptions"] } {
+  const optioned = entries.flatMap((entry) => typeof entry === "string"
+    ? []
+    : [[entry.kind, { branches: [...entry.branches].sort() }] as const]);
+  return optioned.length === 0 ? {} : { effectOptions: Object.fromEntries(optioned) as TaskBundleV1["effectOptions"] };
 }
 
 /** Deterministic expansion of exact kinds and family globs into the canonical allowlist. */
@@ -250,7 +276,8 @@ export async function compileTaskSource(
     instructions,
     triggers: authoredTriggers.map((trigger) => toContractTrigger(trigger, options, sourceName)),
     tools: authoring.tools,
-    effects: expandEffectSelectors(authoring.effects),
+    effects: expandEffectSelectors(authoring.effects.map(effectSelector)),
+    ...effectOptionsOf(authoring.effects),
     network: authoring.network,
     limits: {
       runtimeSeconds: authoring.limits["runtime-seconds"],

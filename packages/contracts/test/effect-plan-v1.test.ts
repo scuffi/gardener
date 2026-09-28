@@ -69,6 +69,9 @@ function payloadFor(kind: typeof operationKindValues[number]): Record<string, un
       message: "Fix issue",
       files: [{ path: "src/a.ts", captured: { status: "modified", mode: "100644", sizeBytes: 5, sha256: "c".repeat(64) } }],
     };
+    case "pull_request.open": return {
+      head: "gardener/fix-2", base: "main", expectedHeadSha: sha1, expectedBaseSha: sha1, title: "Fix", body: "",
+    };
     case "pull_request.open_draft": return {
       head: "gardener/fix-2", base: "main", expectedHeadSha: sha1, expectedBaseSha: sha1,
       title: "Fix", body: "", draft: true,
@@ -193,7 +196,7 @@ describe("scalar operation output catalog", () => {
   it("produces sentinels that satisfy the validators the outputs feed", () => {
     expect(operationOutputSentinel("commitSha")).toMatch(/^[a-f0-9]{40}$/);
     expect(operationOutputSentinel("githubId")).toMatch(/^[1-9][0-9]{0,19}$/);
-    expect(operationOutputSentinel("gardenerBranch")).toMatch(/^gardener\//);
+    expect(operationOutputSentinel("branch")).toMatch(/^gardener\//);
     expect(operationOutputSentinel("gitRef")).toMatch(/^refs\/heads\//);
   });
 });
@@ -334,7 +337,7 @@ describe("effect proposals", () => {
     })).toThrow();
     expect(() => taskEffectProposalV1Schema.parse({
       ...proposalFor("branch.create"),
-      payload: { ...payloadFor("branch.create"), branch: "main" },
+      payload: { ...payloadFor("branch.create"), branch: "bad..name" },
     })).toThrow();
   });
 

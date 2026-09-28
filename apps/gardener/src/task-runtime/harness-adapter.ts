@@ -1,7 +1,11 @@
 import {
+  DEFAULT_WRITE_BRANCHES,
   authoredTriggerSubject,
+  branchWriteFields,
+  bundleBranchPatterns,
   dispatchTargetKinds,
   isAuthoredTriggerKind,
+  isBranchWriteKind,
   isEditedTriggerKind,
   maintainerAssociations,
   eventHeadIsSameRepository,
@@ -359,7 +363,7 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
     "Effect kinds this task is allowed to propose, and no others:",
     request.bundle.effects.length === 0
       ? "  (none - this task is inspect-only and must propose nothing)"
-      : request.bundle.effects.map((kind) => `  ${kind}`).join("\n"),
+      : request.bundle.effects.map((kind) => `  ${kind}${branchNote(request.bundle, kind)}`).join("\n"),
     ...(request.bundle.effects.length === 0 ? [] : [
       "",
       "Exact payloadJson contracts for the declared kinds follow. Use these field names and JSON types exactly.",
@@ -370,7 +374,7 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
       "Outputs each kind publishes once it runs, which later steps may use through referencesJson, whole or as {{placeholders}} in text (nullable outputs cannot fill a placeholder):",
       ...request.bundle.effects.map((kind) => `  ${kind}: ${Object.entries(operationOutputCatalog[kind]).map(([name, type]) => `${name} (${type})`).join(", ")}`),
     ]),
-    ...effectGuidance(request.bundle.effects),
+    ...effectGuidance(request),
     ...(limits.maxEffectOperations === undefined
       ? []
       : [`This task may propose at most ${limits.maxEffectOperations} steps.`]),
@@ -381,9 +385,27 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
   ].join("\n");
 }
 
+/** The branches a branch-writing kind may name, stated next to the kind. */
+function branchNote(bundle: TaskRunRequestV1["bundle"], kind: string): string {
+  if (!isBranchWriteKind(kind)) return "";
+  const patterns = bundleBranchPatterns(bundle)?.[kind] ?? DEFAULT_WRITE_BRANCHES;
+  return ` (${branchWriteFields[kind]} must match: ${patterns.join(", ")})`;
+}
+
 /** Trusted per-kind notes, stated only for the kinds this task declares. */
-function effectGuidance(effects: readonly string[]): string[] {
+function effectGuidance(request: TaskRunRequestV1): string[] {
+  const effects: readonly string[] = request.bundle.effects;
   const notes: string[] = [];
+  if (effects.some(isBranchWriteKind)) {
+    notes.push(
+      `Branch patterns: * matches within one path segment and ** matches one or more segments. A pattern never matches the default branch (${request.event.repository.defaultBranch}) unless it names it exactly.`,
+    );
+  }
+  if (effects.includes("commit.create")) {
+    notes.push(
+      `commit.create must build directly on the checked-out commit ${request.event.repository.commitSha}: set expectedHeadSha to it, or reference the commitSha of a branch.create whose fromSha is that commit.`,
+    );
+  }
   if (effects.includes("issue.create")) {
     notes.push("issue.create: set labels and assigneeIds only when the task instructions call for them.");
   }

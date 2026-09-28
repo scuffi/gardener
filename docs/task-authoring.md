@@ -211,7 +211,7 @@ collapse without duplication.
 | Family glob | Expands to |
 | --- | --- |
 | `issue.*` | label add/remove, comment create/update, close, reopen, assignee add/remove, create |
-| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, label add/remove, open draft, merge |
+| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, label add/remove, open, open draft, merge |
 | `git.*` | `branch.create`, `commit.create` |
 | `discussion.*` | comment create/update, answer mark/unmark, close, reopen |
 | `check.*` | `check.rerun` |
@@ -223,9 +223,11 @@ collapse without duplication.
 > - `git.*` is **repository write authority**. `branch.create` and `commit.create` let the task add
 >   commits and branches through the Git Data API, which is how a coding task produces changes. It
 >   compiles to `contents: write`. It does **not** grant force-push, branch deletion, tag or release
->   authority, or the ability to merge; V1 confines these writes to `gardener/*` branches.
-> - `pull_request.*` includes `pull_request.merge`, which merges code, and `pull_request.update`,
->   which can take a pull request out of draft.
+>   authority, or the ability to merge. Writes stay on `gardener/**` branches unless an effect
+>   entry lists other `branches` (see [Branches](#branches)).
+> - `pull_request.*` includes `pull_request.merge`, which merges code, `pull_request.open`, which
+>   opens a pull request ready for review, and `pull_request.update`, which can take a pull request
+>   out of draft.
 > - `release.*` includes `release.publish` and `release.delete`, which are externally visible and,
 >   in the delete case, destructive.
 > - `check.*` includes `check.rerun`, which re-requests an Actions-owned check run and compiles to
@@ -255,9 +257,48 @@ If GitHub dropped a label or assignee, a rerun still reports the conflict. Its o
 `pull_request.label.add` and `.remove` label a pull request. Like the issue label kinds, the label
 must already exist, and the step refuses if the pull request changed after planning.
 
+`pull_request.open` opens a pull request ready for review, with the same fields and outputs as
+`pull_request.open_draft`. Opening it ready can notify code owners and start required reviews
+straight away, so prefer `open_draft` unless the task should hand over finished work.
+
+### Branches
+
+`branch.create`, `commit.create`, `pull_request.open` and `pull_request.open_draft` write to a named
+branch (for the pull request kinds, the head branch). By default each may only use branches under
+`gardener/`. To allow others, write that kind as an entry with `branches`:
+
+```yaml
+effects:
+  - issue.comment.create
+  - kind: branch.create
+    branches: ["gardener/**", "docs/*"]
+  - kind: commit.create
+    branches: ["gardener/**", "docs/*"]
+  - pull_request.open_draft
+```
+
+The list replaces the default, so include `gardener/**` if the task should still use it. Each kind
+has its own list; above, `pull_request.open_draft` still only opens pull requests from `gardener/`
+branches. `*` matches within one path segment and `**` matches one or more whole segments, so
+`docs/*` matches `docs/usage` but not `docs/a/b`, and `gardener/**` matches both
+`gardener/fix` and `gardener/fix/2`. Quote patterns in YAML: an unquoted `*` at the start of a value
+is read as an alias.
+
+**A pattern never matches the default branch.** To let a task write straight to it, name it exactly,
+for example `branches: [main]`. Such a task commits without a pull request, limited only by the
+branch's protection rules, so do this only for automation you would let push to `main` yourself.
+
+The Worker refuses a step on any other branch while planning, and apply checks every branch again
+before writing, including branch names that come from an earlier step.
+
+A commit is made from the files the task changed in its checkout, so it must sit directly on the
+commit that was checked out: its branch must be created from that commit, or already point at it.
+A commit on any other parent would write the task's files over changes it never saw, so planning
+and apply both refuse it.
+
 ### Automatic V1 effects
 
-All 32 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
+All 33 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
 read-only permission union for planning plus only the write scopes implied by the task's declared
 effects. The model-facing planning job downgrades that grant to read-only; the checkout-free apply
 job receives the write grant and executes only the exact Worker-validated plan. Ordered receipts,

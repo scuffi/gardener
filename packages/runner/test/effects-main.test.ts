@@ -199,6 +199,72 @@ describe("ordered effect application", () => {
     expect(result.outputs.get("release")?.releaseId).toBe("99");
   });
 
+  it("hands each branch-writing step only its own kind's patterns from the plan", async () => {
+    const value = plan([
+      step("branch", "op_branch", "branch.create", { branch: "docs/fix", fromSha: SHA, expectedAbsent: true }),
+      step("open", "op_open", "pull_request.open", {
+        head: "docs/fix", base: "main", expectedHeadSha: SHA, expectedBaseSha: SHA, title: "Docs", body: "Docs fix.",
+      }),
+      commentStep("comment", "op_comment"),
+    ], { branchPatterns: { "branch.create": ["docs/*"], "pull_request.open": ["docs/**"] } });
+    const seen: Array<readonly string[] | undefined> = [];
+    const outputs: Record<string, OperationOutputsV1> = {
+      "branch.create": { kind: "branch.create", branch: "docs/fix", ref: "refs/heads/docs/fix", commitSha: SHA, branchUrl: "https://github.com/owner/repo/tree/docs/fix" },
+      "pull_request.open": { kind: "pull_request.open", pullNumber: 3, pullUrl: "https://github.com/owner/repo/pull/3", pullNodeId: "PR_3", headRef: "docs/fix", headSha: SHA, baseRef: "main" },
+      "issue.comment.create": { kind: "issue.comment.create", issueNumber: 7, commentId: "1", commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-1" },
+    };
+    await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation, context) => {
+        seen.push(context.branchPatterns);
+        return success(operation, outputs[operation.kind]!);
+      },
+      record: async () => undefined,
+    });
+    expect(seen).toEqual([["docs/*"], ["docs/**"], undefined]);
+  });
+
+  it("refuses at apply a branch that an earlier step's output puts outside the patterns", async () => {
+    // Planning cannot see a referenced head, so only apply can refuse it.
+    const value = plan([
+      step("branch", "op_branch", "branch.create", { branch: "docs/fix", fromSha: SHA, expectedAbsent: true }),
+      step("open", "op_open", "pull_request.open", {
+        base: "main", expectedHeadSha: SHA, expectedBaseSha: SHA, title: "Docs", body: "Docs fix.",
+      }, { "/head": { step: "branch", output: "branch" } }),
+    ], { branchPatterns: { "branch.create": ["docs/*"] } });
+    const requests: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const method = (init?.method ?? "GET").toUpperCase();
+      requests.push(`${method} ${url.pathname}`);
+      const json = url.pathname === "/repos/owner/repo"
+        ? { default_branch: "main" }
+        : method === "POST"
+          ? { object: { sha: SHA } }
+          : { message: "Not Found" };
+      return new Response(JSON.stringify(json), {
+        status: method === "GET" && url.pathname !== "/repos/owner/repo" ? 404 : 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      fetch: fetchImpl,
+      record: async () => undefined,
+    });
+    expect(result.receipt.operations.map((operation) => operation.receipt.status)).toEqual(["succeeded", "failed"]);
+    expect(result.receipt.operations[1]?.receipt.error?.code).toBe("branch_not_allowed");
+    expect(requests.filter((request) => request.includes("/pulls"))).toEqual([]);
+  });
+
   it("derives provider-visible idempotency markers after planning", async () => {
     const value = plan([
       commentStep("issue-comment", "op_issue", "Thanks."),

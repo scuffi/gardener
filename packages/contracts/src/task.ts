@@ -10,6 +10,14 @@ import {
   type OperationKind,
   type OperationOutputType,
 } from "./operations";
+import {
+  DEFAULT_WRITE_BRANCHES,
+  branchPatternsSchema,
+  branchWriteFields,
+  branchWriteRefusal,
+  commitBaseRefusal,
+  isBranchWriteKind,
+} from "./branches";
 
 const identifier = z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
 const boundIdentifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
@@ -318,6 +326,39 @@ export const taskModelIdSchema = z.string().min(1).max(256)
   // model that still carries one, so reject it here rather than mid-run.
   .refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
 
+const taskEffectOptionsV1Schema = z.strictObject({ branches: branchPatternsSchema });
+
+/**
+ * Options on declared effects. Only the kinds that write to a branch take any,
+ * and a kind without an entry keeps its defaults.
+ */
+export const taskEffectOptionsMapV1Schema = z.strictObject({
+  "branch.create": taskEffectOptionsV1Schema.optional(),
+  "commit.create": taskEffectOptionsV1Schema.optional(),
+  "pull_request.open": taskEffectOptionsV1Schema.optional(),
+  "pull_request.open_draft": taskEffectOptionsV1Schema.optional(),
+});
+export type TaskEffectOptionsMapV1 = z.infer<typeof taskEffectOptionsMapV1Schema>;
+
+/**
+ * Branch patterns each branch-writing kind may use, as a plan carries them.
+ * A kind without an entry is confined to `gardener/**`.
+ */
+export const taskBranchPatternsV1Schema = z.strictObject({
+  "branch.create": branchPatternsSchema.optional(),
+  "commit.create": branchPatternsSchema.optional(),
+  "pull_request.open": branchPatternsSchema.optional(),
+  "pull_request.open_draft": branchPatternsSchema.optional(),
+});
+export type TaskBranchPatternsV1 = z.infer<typeof taskBranchPatternsV1Schema>;
+
+/** The branch patterns a bundle grants each branch-writing kind it declares with options. */
+export function bundleBranchPatterns(bundle: Pick<TaskBundleV1, "effectOptions">): TaskBranchPatternsV1 | undefined {
+  const entries = Object.entries(bundle.effectOptions ?? {})
+    .flatMap(([kind, options]) => options === undefined ? [] : [[kind, options.branches] as const]);
+  return entries.length === 0 ? undefined : Object.fromEntries(entries) as TaskBranchPatternsV1;
+}
+
 /**
  * Repository-independent executable semantics. Authoring formats compile to
  * this contract; the runtime never parses Markdown or YAML.
@@ -331,6 +372,8 @@ export const taskBundleV1Schema = z.strictObject({
   triggers: z.array(taskTriggerV1Schema).min(1).max(taskTriggerKindValues.length),
   tools: z.array(taskToolV1Schema).max(taskToolV1Schema.options.length),
   effects: z.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
+  /** Absent when no declared effect has options, so such bundles hash as before. */
+  effectOptions: taskEffectOptionsMapV1Schema.optional(),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
   /**
@@ -348,6 +391,17 @@ export const taskBundleV1Schema = z.strictObject({
   for (const key of ["tools", "effects"] as const) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
+    }
+  }
+  if (bundle.effectOptions !== undefined) {
+    const optioned = Object.entries(bundle.effectOptions).filter(([, options]) => options !== undefined);
+    if (optioned.length === 0) {
+      context.addIssue({ code: "custom", path: ["effectOptions"], message: "effectOptions must be omitted when no effect has options" });
+    }
+    for (const [kind] of optioned) {
+      if (!(bundle.effects as readonly string[]).includes(kind)) {
+        context.addIssue({ code: "custom", path: ["effectOptions", kind], message: `options are given for ${kind}, which the task does not declare` });
+      }
     }
   }
   const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
@@ -1929,6 +1983,11 @@ export const taskEffectPlanV1Schema = z.strictObject({
     maxEffectOperations: z.number().int().positive().max(1_000).optional(),
     maxEffectBytes: z.number().int().min(1_024).max(50_000_000).optional(),
   }),
+  /**
+   * Copied from the bundle so apply enforces the same branch patterns planning
+   * did. Absent when every branch-writing kind keeps the `gardener/**` default.
+   */
+  branchPatterns: taskBranchPatternsV1Schema.optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -2005,6 +2064,30 @@ export const taskEffectPlanV1Schema = z.strictObject({
   if (plan.capture !== undefined && plan.capture.baseSha !== plan.provenance.commitSha) {
     context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
   }
+
+  if (plan.branchPatterns !== undefined && Object.values(plan.branchPatterns).every((patterns) => patterns === undefined)) {
+    context.addIssue({ code: "custom", path: ["branchPatterns"], message: "branchPatterns must be omitted when every kind keeps its default" });
+  }
+  plan.operations.forEach((operation, index) => {
+    if (isBranchWriteKind(operation.kind)) {
+      const field = branchWriteFields[operation.kind];
+      const branch = (operation.payload as Record<string, unknown>)[field];
+      // A referenced branch is only known at apply, which checks it there.
+      if (operation.references[`/${field}`] === undefined && typeof branch === "string") {
+        const refusal = branchWriteRefusal(
+          operation.kind,
+          branch,
+          plan.branchPatterns?.[operation.kind] ?? DEFAULT_WRITE_BRANCHES,
+          plan.repository.defaultBranch,
+        );
+        if (refusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal });
+      }
+    }
+    if (operation.kind === "commit.create" && plan.capture !== undefined) {
+      const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
+      if (refusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
+    }
+  });
 });
 export type TaskEffectPlanV1 = z.infer<typeof taskEffectPlanV1Schema>;
 
