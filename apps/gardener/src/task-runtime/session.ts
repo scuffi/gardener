@@ -143,6 +143,23 @@ export class TaskRunnerSession extends DurableObject<Env> {
     }
   }
 
+  /**
+   * Best-effort trace of a refusal the model saw, so a run that runs out of
+   * turns can be explained from D1. Inputs are never recorded; values are
+   * truncated.
+   */
+  #recordRefusal(runId: string, event: "proposal.refused" | "tool.failed", detail: Record<string, string>): void {
+    const bounded = Object.fromEntries(Object.entries(detail).map(([key, value]) => [key, value.slice(0, 300)]));
+    this.ctx.waitUntil((async () => {
+      try {
+        await this.#db().prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,?,?)")
+          .bind(runId, event, JSON.stringify(bounded)).run();
+      } catch {
+        // The D1 instrumentation has already logged the failure.
+      }
+    })());
+  }
+
   /** Ends the observation an earlier runTask call opened, if any. */
   #supersedeActiveRead(): void {
     this.#activeRead?.abort(new SupersededReadError());
@@ -198,6 +215,19 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   async invokeHarnessTool(invocation: HarnessToolInvocation): Promise<RunnerActionResultV1> {
+    try {
+      const result = await this.invokeHarnessToolChecked(invocation);
+      if (result.status !== "completed") {
+        this.#recordRefusal(invocation.runId, "tool.failed", { tool: invocation.toolName, status: result.status });
+      }
+      return result;
+    } catch (error) {
+      this.#recordRefusal(invocation.runId, "tool.failed", { tool: invocation.toolName, reason: errorText(error) });
+      throw error;
+    }
+  }
+
+  private async invokeHarnessToolChecked(invocation: HarnessToolInvocation): Promise<RunnerActionResultV1> {
     const sessionId = await this.ctx.storage.get<string>("session-id");
     if (!sessionId || invocation.runId !== sessionId) throw new Error("Harness tool invocation is not bound to this runner session");
     const operationId = `op_${await canonicalSha256({
@@ -264,6 +294,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
     try {
       return await this.recordProposalChecked(input);
     } catch (error) {
+      const proposal = (typeof input.proposal === "object" && input.proposal !== null ? input.proposal : {}) as Record<string, unknown>;
+      this.#recordRefusal(input.runId, "proposal.refused", {
+        kind: typeof proposal.kind === "string" ? proposal.kind : "",
+        step: typeof proposal.stepName === "string" ? proposal.stepName : "",
+        reason: errorText(error),
+      });
       throw transportableError(error);
     }
   }
@@ -1323,4 +1359,8 @@ function canonicalValue(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalValue).join(",")}]`;
   const record = value as Record<string, unknown>;
   return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalValue(record[key])}`).join(",")}}`;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : "non-error rejection";
 }
