@@ -152,6 +152,7 @@ Gardener is pre-release.
 
 ## Documentation
 
+- [Onboarding](docs/onboarding.md): connecting a repository, starter tasks, and upgrading between releases
 - [Task authoring](docs/task-authoring.md): task format, triggers, tools, effects, and limits
 - [Operations](docs/operations.md): deploying, upgrading, kill switches, and teardown
 - [Architecture](docs/architecture.md): components, data, and the plan/apply protocol

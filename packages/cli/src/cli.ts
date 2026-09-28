@@ -86,7 +86,7 @@ Options:
 const UPGRADE_HELP = `gardener upgrade
 
 Upgrade an existing runtime and one repository's pinned GitHub bridge release, rebuild its
-workflows, re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the up command.
+workflows, re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the yolo command.
 
 Options:
   --workspace <name>           Existing Gardener installation
