@@ -91,6 +91,9 @@ npx @scuffi/gardener@0.1.1 generate
 and open a pull request. After it merges, ask the operator to enroll it (they rerun `yolo`). Until
 then, that task's runs are refused. Use the same CLI version as the repository's pinned release.
 
+If your npm config sets `min-release-age` (a supply-chain delay), npm refuses versions published
+in the last few days. Add `--min-release-age=0` to the `npx` command to use a new release.
+
 ## Day to day
 
 All of these take `--workspace internal --source-root "$PWD"`:
