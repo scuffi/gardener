@@ -1,0 +1,78 @@
+packages/contracts/src/branches.ts
+  s_de0b486c128948::t_ea86d514a0f2c5 1-166
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_8f1db4a7d79c94 72-74,199,340
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_9062b2527a00fd 2-3,39-51,133,159,170-180,279-280
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_99e2e5a683bcce 9,138,140,150-154,210,318,365,367,373-380,385,423,438
+packages/contracts/src/index.ts
+  s_de0b486c128948::t_3f873ba9e8a984 4
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_b8e38540c17ce8 451,471-473
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_df6841f633cfa1 2,4-5,8,366,377,388-394,396-397,399-408
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_5e03e0a4ac7eaf 40002,40111,40114,40125-40133,40136,40207,40272,40274,40280-40287,40292,40323,40337,40350-40444,40653-40665,40675-40676,40696-40706,41661-41665,41732-41753,45815,46566-46579,46581-46583,46598,46635-46642,46653,46683,46775-46777,46791,46796,46807,46815,47414,47471-47473,47701,47709-47711,47753
+packages/contracts/test/task-v1.test.ts
+  s_de0b486c128948::t_dae60626320f92 129
+docs/task-authoring.md
+  s_de0b486c128948::t_616c6cd59ec8e9 214,226-230,260-298,301
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_837fac6db48ad1 39995,40104,40107,40118-40126,40129,40200,40265,40267,40273-40280,40285,40316,40330,40343-40437,40646-40658,40668-40669,40689-40699,41618-41622,41689-41710
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_8087094761c877 143-165
+packages/runner/test/github-effects.test.ts
+  s_695d5569772103::t_d3c3f495a61fad 112,151
+  s_de0b486c128948::t_4a85e204a451c4 111,142-146,150
+  s_de0b486c128948::t_f13183a68ee5cd 136-137,570-610,1596-1667
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_fdc0260fb2016e 96,162-175
+packages/runner/test/effects-main.test.ts
+  s_de0b486c128948::t_82a900beb876e1 202-230,233-235,255-259,261-262,266
+  s_de0b486c128948::t_39f9433a2e6c1d 231-232,236-254,260,263-265,267
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_22be5db3f028a5 13-20,329-361,375-376,396-406,1986-1990,2067-2090
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_253c5be4816aba 70,282-283
+packages/contracts/test/branches.test.ts
+  s_de0b486c128948::t_970bac180eaad5 1-181
+SECURITY.md
+  s_de0b486c128948::t_b8a114d99f4417 126-131
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_de0b486c128948::t_c9147b1a3e8935 2,380-382,410
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_de0b486c128948::t_e9f59a10c9b661 1-45
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_5bb76a96e136fb 3-4,9,87,176-185,558-560,1212-1238,1242,1257,1312-1321,1339,1374,1453,1476-1478,1489-1490,1494,1499,1510,1518,2324,2393-2395
+apps/gardener/test/task-effect-plan.test.ts
+  s_de0b486c128948::t_c1f66db504bf61 20,80,87,131-166,285
+packages/provider-github/src/permissions.ts
+  s_de0b486c128948::t_da8846493d4f2d 72
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_2c75ac4b7e6574 7,241,250-251,304
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "17031434a95e09ddc4ecedd24cc8007198f59263",
+  "prompts": {},
+  "sessions": {
+    "s_695d5569772103": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "c9531bf8-8d68-4ff0-989b-b7dd5ed6a7c5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
