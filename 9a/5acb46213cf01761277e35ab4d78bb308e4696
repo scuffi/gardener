@@ -1,0 +1,23 @@
+.github/workflows/release.yml
+  s_de0b486c128948::t_ddfd7c9702fbd1 3,5-6,33-34,55
+CHANGELOG.md
+  s_de0b486c128948::t_7a02d5d086d256 9-10
+docs/onboarding.md
+  s_de0b486c128948::t_ffc60e8db9908c 133-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9a5acb46213cf01761277e35ab4d78bb308e4696",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
