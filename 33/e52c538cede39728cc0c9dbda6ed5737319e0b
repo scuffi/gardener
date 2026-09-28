@@ -1,0 +1,21 @@
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_4f8f0987caac0b 866-872,876
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_3b97b2d7f2381a 44,573,576-577,582-583,1679-1680,1687
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "33e52c538cede39728cc0c9dbda6ed5737319e0b",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
