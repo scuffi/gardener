@@ -1,7 +1,9 @@
 name: Release
 
-# Publishes @scuffi/gardener when a v* tag is pushed. npm trusted publishing
+# Stages @scuffi/gardener on npm when a v* tag is pushed. npm trusted publishing
 # authenticates this workflow through GitHub OIDC, so no npm token is stored.
+# The trusted publisher allows only staging: a maintainer approves each release
+# with 2FA (`npm stage approve` or npmjs.com) before anyone can install it.
 on:
   push:
     tags: ["v*"]
@@ -28,8 +30,8 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
-      # Trusted publishing needs npm 11.5.1 or later.
-      - run: npm install -g npm@11.11.0
+      # `npm stage` needs npm 11.20.0 or later.
+      - run: npm install -g npm@11.20.0
       - run: pnpm install --frozen-lockfile
       - name: Check the tag matches the package version
         run: |
@@ -50,4 +52,4 @@ jobs:
       - if: steps.published.outputs.skip != 'true'
         run: pnpm check:cli-package
       - if: steps.published.outputs.skip != 'true'
-        run: npm publish .tmp/cli-pack/scuffi-gardener-*.tgz --access public --provenance
+        run: npm stage publish .tmp/cli-pack/scuffi-gardener-*.tgz --access public --provenance

@@ -130,4 +130,7 @@ commit, and re-enrolls its tasks. Keep every repository on the same tag.
 2. Bump `version` in `packages/cli/package.json`, add a matching section to `CHANGELOG.md`, and
    commit both.
 3. `git tag v0.1.N && git push origin v0.1.N`. The Release workflow checks that the tag matches the
-   package version, then publishes `@scuffi/gardener` to npm. Tell users to upgrade.
+   package version, then stages `@scuffi/gardener@0.1.N` on npm.
+4. Approve the staged release with 2FA: `npm stage list @scuffi/gardener`, then
+   `npm stage approve <stage-id>` (or approve it on npmjs.com). Nothing is installable until then.
+   Tell users to upgrade.

@@ -6,7 +6,8 @@ Gardener is released as git tags. To move a connected repository to a release, f
 ## v0.1.1 (2026-09-28)
 
 - The CLI is published to npm as `@scuffi/gardener`, so `npx @scuffi/gardener generate` works
-  without a checkout. Tags publish automatically through the Release workflow.
+  without a checkout. Tags stage a release through the Release workflow, and a maintainer
+  approves it with 2FA.
 - Relicensed under MIT, matching cloudflare/computer.
 
 ## v0.1.0 (2026-09-28)
