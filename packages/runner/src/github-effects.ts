@@ -863,11 +863,17 @@ type PullUpdateBranch = Extract<Operation, { kind: "pull_request.update_branch" 
 async function executePullUpdateBranch(scope: ExecutionScope, operation: PullUpdateBranch): Promise<OperationOutputsV1> {
   const pull = await loadPull(scope, operation.pullNumber);
   const head = record(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : "";
-  const baseSha = record(pull.base) && typeof pull.base.sha === "string" ? pull.base.sha : "";
+  if (!record(pull.base) || pull.base.ref !== operation.expectedBaseRef) {
+    throw conflict("pull_base_changed", "Precondition failed: pull request base branch changed");
+  }
+  // The pull's own base.sha is a snapshot GitHub does not advance with the
+  // branch, so the comparison uses the base branch's live tip.
+  const baseTip = await loadRef(scope, `heads/${encodeRefPath(operation.expectedBaseRef)}`);
+  if (baseTip === null) throw conflict("pull_base_changed", "Precondition failed: pull request base branch no longer exists");
   // Already containing its base means there is nothing to update, whether an
   // earlier attempt did it or the branch was current all along.
   const { data: comparison } = await scope.api.rest(
-    `${scope.repoPath}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(head)}`,
+    `${scope.repoPath}/compare/${baseTip}...${encodeURIComponent(head)}`,
     "Pull request branch comparison",
   );
   if (record(comparison) && comparison.behind_by === 0) {
@@ -876,9 +882,6 @@ async function executePullUpdateBranch(scope: ExecutionScope, operation: PullUpd
   // The base is expected to have moved; that is why the branch is updated.
   // Only its name is held. The head is held here and leased at GitHub.
   if (head !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${head}`);
-  if (!record(pull.base) || pull.base.ref !== operation.expectedBaseRef) {
-    throw conflict("pull_base_changed", "Precondition failed: pull request base branch changed");
-  }
   assertPullState(scope, pull, operation, "append");
   if (typeof pull.node_id !== "string" || pull.node_id === "") {
     throw failure("github_response_invalid", "Pull request response omitted its node id");

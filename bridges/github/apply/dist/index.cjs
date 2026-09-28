@@ -46300,18 +46300,19 @@ async function executePullLabel(scope, operation) {
 async function executePullUpdateBranch(scope, operation) {
   const pull = await loadPull(scope, operation.pullNumber);
   const head = record2(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : "";
-  const baseSha = record2(pull.base) && typeof pull.base.sha === "string" ? pull.base.sha : "";
+  if (!record2(pull.base) || pull.base.ref !== operation.expectedBaseRef) {
+    throw conflict("pull_base_changed", "Precondition failed: pull request base branch changed");
+  }
+  const baseTip = await loadRef(scope, `heads/${encodeRefPath(operation.expectedBaseRef)}`);
+  if (baseTip === null) throw conflict("pull_base_changed", "Precondition failed: pull request base branch no longer exists");
   const { data: comparison } = await scope.api.rest(
-    `${scope.repoPath}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(head)}`,
+    `${scope.repoPath}/compare/${baseTip}...${encodeURIComponent(head)}`,
     "Pull request branch comparison"
   );
   if (record2(comparison) && comparison.behind_by === 0) {
     return { kind: operation.kind, pullNumber: operation.pullNumber, headSha: head };
   }
   if (head !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${head}`);
-  if (!record2(pull.base) || pull.base.ref !== operation.expectedBaseRef) {
-    throw conflict("pull_base_changed", "Precondition failed: pull request base branch changed");
-  }
   assertPullState(scope, pull, operation, "append");
   if (typeof pull.node_id !== "string" || pull.node_id === "") {
     throw failure2("github_response_invalid", "Pull request response omitted its node id");

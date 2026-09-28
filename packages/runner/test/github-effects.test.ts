@@ -41,6 +41,7 @@ const NEW_COMMIT = "c".repeat(40);
 const PARENT_TREE = "d".repeat(40);
 const NEW_TREE = "e".repeat(40);
 const BLOB = "f".repeat(40);
+const BASE_TIP = "7".repeat(40);
 const MERGE_SHA = "9".repeat(40);
 const BOT = { login: "github-actions[bot]" };
 /** GraphQL exposes the same account as a Bot node with a bare login. */
@@ -569,14 +570,17 @@ const scenarios: Record<string, Scenario> = {
   },
   "pull_request.update_branch": {
     operation: operationSchema.parse({ ...pullBase, id: "op-update-branch", kind: "pull_request.update_branch", method: "rebase" }),
+    // The pull's base.sha (BASE) is a stale snapshot; the live tip is compared.
     apply: [
       get(`${REPO}/pulls/7`, OPEN_PULL),
-      get(`${REPO}/compare/${BASE}...${HEAD}`, { behind_by: 2 }),
+      get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE_TIP } }),
+      get(`${REPO}/compare/${BASE_TIP}...${HEAD}`, { behind_by: 2 }),
       gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { headRefOid: NEW_COMMIT } } }),
     ],
     duplicate: [
       get(`${REPO}/pulls/7`, { ...OPEN_PULL, head: { ...OPEN_PULL.head, sha: NEW_COMMIT } }),
-      get(`${REPO}/compare/${BASE}...${NEW_COMMIT}`, { behind_by: 0 }),
+      get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE_TIP } }),
+      get(`${REPO}/compare/${BASE_TIP}...${NEW_COMMIT}`, { behind_by: 0 }),
     ],
     outputs: { pullNumber: 7, headSha: NEW_COMMIT },
   },
@@ -1672,13 +1676,15 @@ describe("git ref path encoding", () => {
     // A head that moved since planning is refused before GitHub is asked.
     const moved = await run(update.operation, [
       get(`${REPO}/pulls/7`, { ...OPEN_PULL, head: { ...OPEN_PULL.head, sha: BLOB } }),
-      get(`${REPO}/compare/${BASE}...${BLOB}`, { behind_by: 1 }),
+      get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE_TIP } }),
+      get(`${REPO}/compare/${BASE_TIP}...${BLOB}`, { behind_by: 1 }),
     ]);
     expect(moved.receipt.error?.code).toBe("pull_head_changed");
     expect(moved.calls.some((call) => call.path === "/graphql")).toBe(false);
     // A base that moved on since planning is the normal case, not a conflict.
     const baseMoved = await run(update.operation, [
       get(`${REPO}/pulls/7`, { ...OPEN_PULL, base: { ...OPEN_PULL.base, sha: BLOB } }),
+      get(`${REPO}/git/ref/heads/main`, { object: { sha: BLOB } }),
       get(`${REPO}/compare/${BLOB}...${HEAD}`, { behind_by: 3 }),
       gql("updatePullRequestBranch", { updatePullRequestBranch: { pullRequest: { headRefOid: NEW_COMMIT } } }),
     ]);
