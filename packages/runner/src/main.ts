@@ -6,7 +6,7 @@ import { taskEffectPlanV1Schema } from "@gardener/contracts";
 import { type RunnerEventV1 } from "@gardener/protocol";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
-import { createPlanningExecutor } from "./executor";
+import { createPlanningExecutor, planningCaptureBase } from "./executor";
 import { GitHubReadClient } from "./github-read";
 import { runPlanningSession } from "./session";
 
@@ -30,6 +30,8 @@ async function main(): Promise<void> {
     const agentHash = requiredInput("task-bundle-hash");
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
+    // Set only when the workflow checked out a pull request's head.
+    const baseSha = planningCaptureBase(process.env["INPUT_CHECKOUT-REF"], process.env.GITHUB_SHA);
     if (providerReadToken) core.setSecret(providerReadToken);
     // Built before the event is read and long before the session connects, so
     // the capture baseline is taken while the checkout is still exactly what
@@ -37,7 +39,7 @@ async function main(): Promise<void> {
     const executor = await createPlanningExecutor({
       workspace: requiredEnvironment("GITHUB_WORKSPACE"),
       runnerTemp: process.env.RUNNER_TEMP,
-      baseSha: process.env.GITHUB_SHA,
+      baseSha,
       ...(providerReadToken
         ? {
           createReadClient: (signal: AbortSignal, maxResponseBytes: number) => new GitHubReadClient({

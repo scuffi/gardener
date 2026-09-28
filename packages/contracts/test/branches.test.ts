@@ -169,6 +169,24 @@ describe("branch rules in the plan", () => {
     expect(taskEffectPlanV1Schema.parse(plan([onBase], patterns)).operations).toHaveLength(1);
   });
 
+  it("lets a capture sit on the checked-out pull request head the plan records", () => {
+    const head = "e".repeat(40);
+    const patterns = { branchPatterns: { "commit.create": ["feature/*"] } };
+    const onHead = operation("commit", "commit.create", { branch: "feature/x", expectedHeadSha: head, message: "Fix" });
+    const headCapture = { ...capture, baseSha: head };
+    const provenance = { sourcePath: ".gardener/tasks/fix/TASK.md", commitSha: base, workflowRunId: "1", workflowRunAttempt: 1 };
+    expect(taskEffectPlanV1Schema.parse(plan([onHead], {
+      ...patterns, capture: headCapture, provenance: { ...provenance, checkoutSha: head },
+    })).provenance.checkoutSha).toBe(head);
+    // Without the recorded checkout the capture must sit on the event commit.
+    expect(() => taskEffectPlanV1Schema.parse(plan([onHead], { ...patterns, capture: headCapture })))
+      .toThrow(/capture base must equal the checked-out commit/);
+    // One canonical encoding: checkoutSha only when it differs.
+    expect(() => taskEffectPlanV1Schema.parse(plan([], {
+      capture: undefined, changesSha256: undefined, provenance: { ...provenance, checkoutSha: base },
+    }))).toThrow(/only when it differs/);
+  });
+
   it("only follows a head reference to a branch.create commitSha", () => {
     const fromIssue = operation("issue", "issue.create", { title: "t", body: "b" });
     expect(commitBaseRefusal(

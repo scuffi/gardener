@@ -41606,6 +41606,11 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   provenance: external_exports.strictObject({
     sourcePath: relativePath,
     commitSha: sha1,
+    /**
+     * The commit the planning job checked out, when it is not `commitSha`:
+     * a pull request's head, for tasks that commit to pull request branches.
+     */
+    checkoutSha: sha1.optional(),
     workflowRunId: githubNumericId,
     workflowRunAttempt: external_exports.number().int().positive()
   }),
@@ -41683,8 +41688,11 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   if (!anyStepDefersToCapture && plan.capture !== void 0) {
     context.addIssue({ code: "custom", path: ["capture"], message: "the plan carries a capture manifest that no step materializes" });
   }
-  if (plan.capture !== void 0 && plan.capture.baseSha !== plan.provenance.commitSha) {
-    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
+  if (plan.provenance.checkoutSha === plan.provenance.commitSha) {
+    context.addIssue({ code: "custom", path: ["provenance", "checkoutSha"], message: "checkoutSha is given only when it differs from commitSha" });
+  }
+  if (plan.capture !== void 0 && plan.capture.baseSha !== (plan.provenance.checkoutSha ?? plan.provenance.commitSha)) {
+    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the checked-out commit" });
   }
   if (plan.branchPatterns !== void 0 && Object.values(plan.branchPatterns).every((patterns) => patterns === void 0)) {
     context.addIssue({ code: "custom", path: ["branchPatterns"], message: "branchPatterns must be omitted when every kind keeps its default" });
@@ -43800,6 +43808,12 @@ function byPath(left, right) {
 }
 
 // src/executor.ts
+function planningCaptureBase(checkoutRef, githubSha) {
+  const ref = checkoutRef?.trim() ?? "";
+  if (ref === "") return githubSha;
+  if (!/^[a-f0-9]{40}$/.test(ref)) throw new Error("checkout-ref must be a lowercase 40-character commit SHA");
+  return ref;
+}
 async function createPlanningExecutor(options) {
   const { workspace, runnerTemp, baseSha, ...rest } = options;
   return new PlanningShellExecutor(workspace, {
@@ -47369,11 +47383,12 @@ async function main() {
     const agentHash = requiredInput("task-bundle-hash");
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
+    const baseSha = planningCaptureBase(process.env["INPUT_CHECKOUT-REF"], process.env.GITHUB_SHA);
     if (providerReadToken) setSecret(providerReadToken);
     const executor = await createPlanningExecutor({
       workspace: requiredEnvironment2("GITHUB_WORKSPACE"),
       runnerTemp: process.env.RUNNER_TEMP,
-      baseSha: process.env.GITHUB_SHA,
+      baseSha,
       ...providerReadToken ? {
         createReadClient: (signal, maxResponseBytes) => new GitHubReadClient({
           token: providerReadToken,

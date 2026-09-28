@@ -797,6 +797,34 @@ export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
 export type NormalizedEventV1 = z.infer<typeof normalizedEventV1Schema>;
 export type NormalizedPullRequestV1 = z.infer<typeof normalizedPullRequestV1Schema>;
 
+/**
+ * Whether the planning job checks out a pull request's head instead of the
+ * commit GitHub supplies (for pull request events, a merge preview). Only a
+ * task that may commit beyond `gardener/**` needs it, to build on the head of
+ * the pull request branch it pushes to. The generated workflow and the runtime
+ * both derive the checkout from this one rule.
+ */
+export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptions">): boolean {
+  const patterns = bundle.effectOptions?.["commit.create"]?.branches;
+  if (patterns === undefined) return false;
+  // Restating the default changes nothing, so it must not change the checkout.
+  return !(patterns.length === DEFAULT_WRITE_BRANCHES.length
+    && patterns.every((pattern, index) => pattern === DEFAULT_WRITE_BRANCHES[index]));
+}
+
+/**
+ * The commit the planning job checks out for this event, which every capture
+ * and commit builds on. A pull request head is used only for events whose
+ * payload carries the pull request, because that is what the workflow can
+ * check out; a manual run naming a pull request keeps the default checkout.
+ */
+export function taskCheckoutSha(bundle: Pick<TaskBundleV1, "effectOptions">, event: NormalizedEventV1): string {
+  if (checksOutPullRequestHead(bundle) && event.kind !== "github.workflow_dispatch" && "pullRequest" in event && event.pullRequest !== undefined) {
+    return event.pullRequest.head.sha;
+  }
+  return event.repository.commitSha;
+}
+
 /** Narrowed accessor for the pull-request payload, when the event carries one. */
 export function normalizedPullRequest(event: NormalizedEventV1): NormalizedPullRequestV1 | undefined {
   return "pullRequest" in event ? event.pullRequest : undefined;
@@ -1974,6 +2002,11 @@ export const taskEffectPlanV1Schema = z.strictObject({
   provenance: z.strictObject({
     sourcePath: relativePath,
     commitSha: sha1,
+    /**
+     * The commit the planning job checked out, when it is not `commitSha`:
+     * a pull request's head, for tasks that commit to pull request branches.
+     */
+    checkoutSha: sha1.optional(),
     workflowRunId: githubNumericId,
     workflowRunAttempt: z.number().int().positive(),
   }),
@@ -2061,8 +2094,11 @@ export const taskEffectPlanV1Schema = z.strictObject({
   if (!anyStepDefersToCapture && plan.capture !== undefined) {
     context.addIssue({ code: "custom", path: ["capture"], message: "the plan carries a capture manifest that no step materializes" });
   }
-  if (plan.capture !== undefined && plan.capture.baseSha !== plan.provenance.commitSha) {
-    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
+  if (plan.provenance.checkoutSha === plan.provenance.commitSha) {
+    context.addIssue({ code: "custom", path: ["provenance", "checkoutSha"], message: "checkoutSha is given only when it differs from commitSha" });
+  }
+  if (plan.capture !== undefined && plan.capture.baseSha !== (plan.provenance.checkoutSha ?? plan.provenance.commitSha)) {
+    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the checked-out commit" });
   }
 
   if (plan.branchPatterns !== undefined && Object.values(plan.branchPatterns).every((patterns) => patterns === undefined)) {

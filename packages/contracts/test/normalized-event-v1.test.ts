@@ -6,6 +6,7 @@ import {
   normalizedEventV1Schema,
   dispatchTargetKinds,
   taskBundleV1Schema,
+  taskCheckoutSha,
   taskEventBindingFromNormalizedEvent,
   taskTriggerKindValues,
   triggerKindOrder,
@@ -261,5 +262,33 @@ describe("trigger validation hardening", () => {
       { kind: "github.issue.opened", authors: "any" },
       { kind: "github.pull_request.opened", authors: "any" },
     ]))).not.toThrow();
+  });
+});
+
+describe("checkout commit", () => {
+  const commits = { effectOptions: { "commit.create": { branches: ["**"] } } };
+  const parse = (kind: string, payload: Record<string, unknown>) => normalizedEventV1Schema.parse(event(kind, payload));
+
+  it("uses the pull request head only for tasks that commit beyond gardener/** on pull request events", () => {
+    const opened = parse("github.pull_request.opened", { pullRequest: pullRequest("1374842705") });
+    expect(taskCheckoutSha(commits, opened)).toBe("d".repeat(40));
+    expect(taskCheckoutSha({}, opened)).toBe(opened.repository.commitSha);
+    // Restating the default is not "beyond gardener/**".
+    expect(taskCheckoutSha({ effectOptions: { "commit.create": { branches: ["gardener/**"] } } }, opened))
+      .toBe(opened.repository.commitSha);
+    const review = parse("github.pull_request_review.submitted", {
+      pullRequest: pullRequest("1374842705"),
+      review: { id: "9", state: "approved", body: null, author: actor },
+    });
+    expect(taskCheckoutSha(commits, review)).toBe("d".repeat(40));
+  });
+
+  it("keeps the default checkout where the workflow cannot check out the head", () => {
+    const manual = parse("github.workflow_dispatch", { pullRequest: pullRequest("1374842705") });
+    expect(taskCheckoutSha(commits, manual)).toBe(manual.repository.commitSha);
+    const comment = parse("github.issue_comment.created", {
+      issue, comment: { id: "3", body: "hi", updatedAt: "2026-09-22T12:00:00.000Z", author: actor },
+    });
+    expect(taskCheckoutSha(commits, comment)).toBe(comment.repository.commitSha);
   });
 });

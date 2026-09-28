@@ -18970,6 +18970,7 @@ var effects_main_exports = {};
 __export(effects_main_exports, {
   applyEventBinding: () => applyEventBinding,
   applyOrderedPlan: () => applyOrderedPlan,
+  checkoutBindingHolds: () => checkoutBindingHolds,
   runEffectsMain: () => runEffectsMain
 });
 module.exports = __toCommonJS(effects_main_exports);
@@ -41649,6 +41650,11 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   provenance: external_exports.strictObject({
     sourcePath: relativePath,
     commitSha: sha1,
+    /**
+     * The commit the planning job checked out, when it is not `commitSha`:
+     * a pull request's head, for tasks that commit to pull request branches.
+     */
+    checkoutSha: sha1.optional(),
     workflowRunId: githubNumericId,
     workflowRunAttempt: external_exports.number().int().positive()
   }),
@@ -41726,8 +41732,11 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
   if (!anyStepDefersToCapture && plan.capture !== void 0) {
     context.addIssue({ code: "custom", path: ["capture"], message: "the plan carries a capture manifest that no step materializes" });
   }
-  if (plan.capture !== void 0 && plan.capture.baseSha !== plan.provenance.commitSha) {
-    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the planning commit" });
+  if (plan.provenance.checkoutSha === plan.provenance.commitSha) {
+    context.addIssue({ code: "custom", path: ["provenance", "checkoutSha"], message: "checkoutSha is given only when it differs from commitSha" });
+  }
+  if (plan.capture !== void 0 && plan.capture.baseSha !== (plan.provenance.checkoutSha ?? plan.provenance.commitSha)) {
+    context.addIssue({ code: "custom", path: ["capture", "baseSha"], message: "capture base must equal the checked-out commit" });
   }
   if (plan.branchPatterns !== void 0 && Object.values(plan.branchPatterns).every((patterns) => patterns === void 0)) {
     context.addIssue({ code: "custom", path: ["branchPatterns"], message: "branchPatterns must be omitted when every kind keeps its default" });
@@ -47911,6 +47920,7 @@ async function assertApplyBindings(plan, token) {
   const raw = JSON.parse(await (0, import_promises3.readFile)(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
   const rawRepository = raw && typeof raw === "object" ? raw.repository : void 0;
   if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
+  if (!checkoutBindingHolds(plan, raw)) throw new Error("Effect checkout binding mismatch");
   const { defaultBranch, binding } = await applyEventBinding({
     eventName: requiredEnvironment("GITHUB_EVENT_NAME"),
     raw,
@@ -47919,6 +47929,14 @@ async function assertApplyBindings(plan, token) {
   });
   if (defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
   if (canonicalJson2(binding) !== canonicalJson2(plan.event)) throw new Error("Effect event binding mismatch");
+}
+function checkoutBindingHolds(plan, raw) {
+  const checkoutSha = plan.provenance.checkoutSha;
+  if (checkoutSha === void 0) return true;
+  const pullRequest = raw && typeof raw === "object" ? raw.pull_request : void 0;
+  const head = pullRequest && typeof pullRequest === "object" ? pullRequest.head : void 0;
+  const sha = head && typeof head === "object" ? head.sha : void 0;
+  return typeof sha === "string" && sha === checkoutSha;
 }
 async function applyEventBinding(input2) {
   const target = dispatchTargetRequest(input2.eventName, input2.raw);
@@ -48009,6 +48027,7 @@ void runEffectsMain();
 0 && (module.exports = {
   applyEventBinding,
   applyOrderedPlan,
+  checkoutBindingHolds,
   runEffectsMain
 });
 /*! Bundled license information:

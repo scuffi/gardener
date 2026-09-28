@@ -392,6 +392,26 @@ describe("local Gardener project", () => {
     expect(workflow).toContain("  issue_comment:\n    types: [created, edited]");
   });
 
+  it("checks out the pull request head only for tasks that commit beyond gardener/**", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-checkout-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const prTask = (effects: string) => TASK
+      .replace("trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example", "trigger:\n  event: github.pull_request.labeled\n  labels-all:\n    - gardener-fix")
+      .replace("effects:\n  - issue.comment.create\n", `effects:\n${effects}`);
+    await mkdir(join(root, ".gardener/tasks/pusher"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/pusher/TASK.md"), prTask(
+      "  - kind: commit.create\n    branches: [\"**\"]\n",
+    ).replace("id: example-task", "id: pusher"));
+    await mkdir(join(root, ".gardener/tasks/drafter"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/drafter/TASK.md"), prTask(
+      "  - branch.create\n  - commit.create\n",
+    ).replace("id: example-task", "id: drafter"));
+    const built = await buildProject({ repositoryRoot: root });
+    const workflowOf = async (id: string) => readFile(join(root, built.tasks.find((task) => task.taskId === id)!.workflow), "utf8");
+    expect(await workflowOf("pusher")).toContain("      checkout-ref: ${{ github.event.pull_request.head.sha }}\n");
+    expect(await workflowOf("drafter")).not.toContain("checkout-ref");
+  });
+
   it("renders deterministic multi-trigger workflows with derived permissions", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-project-triggers-"));
     await initializeProject({ repositoryRoot: root, demos: false });

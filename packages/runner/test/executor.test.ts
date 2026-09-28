@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PlanningShellExecutor } from "../src/executor";
+import { PlanningShellExecutor, planningCaptureBase } from "../src/executor";
 import type { RunnerShellActionV1 } from "@gardener/protocol";
 
 const directories: string[] = [];
@@ -11,6 +11,17 @@ afterEach(async () => {
   delete process.env.GITHUB_TOKEN;
   delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+describe("planningCaptureBase", () => {
+  it("uses a checked-out pull request head when given, and GITHUB_SHA otherwise", () => {
+    const head = "e".repeat(40);
+    expect(planningCaptureBase(head, "a".repeat(40))).toBe(head);
+    expect(planningCaptureBase("", "a".repeat(40))).toBe("a".repeat(40));
+    expect(planningCaptureBase(undefined, "a".repeat(40))).toBe("a".repeat(40));
+    expect(() => planningCaptureBase("refs/pull/5/head", "a".repeat(40))).toThrow(/commit SHA/);
+    expect(() => planningCaptureBase("E".repeat(40), "a".repeat(40))).toThrow(/commit SHA/);
+  });
 });
 
 describe("PlanningShellExecutor", () => {

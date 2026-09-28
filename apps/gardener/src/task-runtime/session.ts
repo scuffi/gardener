@@ -24,6 +24,7 @@ import {
 } from "@gardener/protocol";
 import {
   eventNameByTriggerKind,
+  taskCheckoutSha,
   taskEffectProposalV1Schema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
@@ -347,7 +348,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (existing) return { ...existing.ack, duplicate: true };
     await this.assertRunActive(input.runId);
     const request = await this.loadRunRequest(input.runId, "repository capture admission");
-    const baseSha = request.event.repository.commitSha;
+    // The commit the planning job checked out, which the runner took its
+    // capture baseline from; a mismatch fails the capture closed.
+    const baseSha = taskCheckoutSha(request.bundle, request.event);
     // The generation changes only after a terminal attempt produced no capture.
     // It keeps replay within an attempt idempotent while allowing the model to
     // repair an unchanged/failed tree and request a genuinely fresh photograph.

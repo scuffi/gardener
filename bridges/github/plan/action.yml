@@ -8,6 +8,12 @@ inputs:
   task-bundle-hash:
     description: Lowercase SHA-256 digest of the compiled TaskBundleV1.
     required: true
+  checkout-ref:
+    description: >-
+      Commit the workflow checked out instead of GITHUB_SHA, for tasks that
+      commit to pull request branches. Empty means GITHUB_SHA.
+    required: false
+    default: ""
   max-reconnects:
     description: Maximum Cap'n Web reconnection attempts after the initial connection.
     required: false

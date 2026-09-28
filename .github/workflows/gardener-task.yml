@@ -18,6 +18,11 @@ on:
       task-bundle-hash:
         required: true
         type: string
+      checkout-ref:
+        description: Commit to check out instead of the event's, for tasks that commit to pull request branches.
+        required: false
+        type: string
+        default: ""
 
 jobs:
   plan:
@@ -42,12 +47,14 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          ref: ${{ inputs.checkout-ref }}
       - name: Run Gardener task
         id: gardener
         uses: scuffi/gardener/bridges/github/plan@17031434a95e09ddc4ecedd24cc8007198f59263
         with:
           runtime-url: ${{ inputs.runtime-url }}
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
+          checkout-ref: ${{ inputs.checkout-ref }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload exact effect plan
         if: ${{ steps.gardener.outputs.effect-artifact-sha256 != '' }}

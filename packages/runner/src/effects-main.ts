@@ -511,6 +511,7 @@ async function assertApplyBindings(plan: TaskEffectPlanV1, token: string): Promi
   const raw = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8")) as unknown;
   const rawRepository = raw && typeof raw === "object" ? (raw as Record<string, any>).repository : undefined;
   if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
+  if (!checkoutBindingHolds(plan, raw)) throw new Error("Effect checkout binding mismatch");
   const { defaultBranch, binding } = await applyEventBinding({
     eventName: requiredEnvironment("GITHUB_EVENT_NAME"),
     raw,
@@ -519,6 +520,21 @@ async function assertApplyBindings(plan: TaskEffectPlanV1, token: string): Promi
   });
   if (defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
   if (canonicalJson(binding) !== canonicalJson(plan.event)) throw new Error("Effect event binding mismatch");
+}
+
+/**
+ * Whether the plan's recorded checkout is the pull request head in this job's
+ * own event payload, the same value the workflow checked out. Without a
+ * recorded checkout the capture must sit on `GITHUB_SHA`, which is bound
+ * separately, so every commit's parent is a value apply verified itself.
+ */
+export function checkoutBindingHolds(plan: Pick<TaskEffectPlanV1, "provenance">, raw: unknown): boolean {
+  const checkoutSha = plan.provenance.checkoutSha;
+  if (checkoutSha === undefined) return true;
+  const pullRequest = raw && typeof raw === "object" ? (raw as Record<string, unknown>).pull_request : undefined;
+  const head = pullRequest && typeof pullRequest === "object" ? (pullRequest as Record<string, unknown>).head : undefined;
+  const sha = head && typeof head === "object" ? (head as Record<string, unknown>).sha : undefined;
+  return typeof sha === "string" && sha === checkoutSha;
 }
 
 /**

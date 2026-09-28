@@ -5,6 +5,7 @@ import {
   branchWriteRefusal,
   commitBaseRefusal,
   isBranchWriteKind,
+  taskCheckoutSha,
   type TaskEffectProposalV1,
   type TaskRunRequestV1,
 } from "@gardener/contracts";
@@ -39,7 +40,7 @@ export function proposalAuthorityRefusal(
   }
   if (proposal.kind === "commit.create") {
     // The capture is taken from the checked-out commit.
-    return commitBaseRefusal(proposal, earlier, request.event.repository.commitSha);
+    return commitBaseRefusal(proposal, earlier, taskCheckoutSha(request.bundle, request.event));
   }
   return undefined;
 }

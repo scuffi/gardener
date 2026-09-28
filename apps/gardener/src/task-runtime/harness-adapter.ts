@@ -3,10 +3,12 @@ import {
   authoredTriggerSubject,
   branchWriteFields,
   bundleBranchPatterns,
+  checksOutPullRequestHead,
   dispatchTargetKinds,
   isAuthoredTriggerKind,
   isBranchWriteKind,
   isEditedTriggerKind,
+  taskCheckoutSha,
   maintainerAssociations,
   eventHeadIsSameRepository,
   normalizedPullRequest,
@@ -401,9 +403,18 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
       `Branch patterns: * matches within one path segment and ** matches one or more segments. A pattern never matches the default branch (${request.event.repository.defaultBranch}) unless it names it exactly.`,
     );
   }
+  if (
+    effects.includes("commit.create")
+    && checksOutPullRequestHead(request.bundle)
+    && taskCheckoutSha(request.bundle, request.event) === request.event.repository.commitSha
+  ) {
+    notes.push(
+      "This event does not check out a pull request head, so commit.create cannot add to an existing pull request branch in this run; commit to a new branch created from the checked-out commit instead.",
+    );
+  }
   if (effects.includes("commit.create")) {
     notes.push(
-      `commit.create must build directly on the checked-out commit ${request.event.repository.commitSha}: set expectedHeadSha to it, or reference the commitSha of a branch.create whose fromSha is that commit.`,
+      `commit.create must build directly on the checked-out commit ${taskCheckoutSha(request.bundle, request.event)}: set expectedHeadSha to it, or reference the commitSha of a branch.create whose fromSha is that commit.`,
     );
   }
   if (effects.includes("issue.create")) {

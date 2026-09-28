@@ -296,6 +296,20 @@ commit that was checked out: its branch must be created from that commit, or alr
 A commit on any other parent would write the task's files over changes it never saw, so planning
 and apply both refuse it.
 
+To push to an existing pull request branch, give `commit.create` a `branches` list that matches it,
+for example `branches: ["**"]`. A task whose `commit.create` list is anything other than the
+default `gardener/**` checks out the pull request's head on pull request, review and review
+comment events, instead of the merge preview GitHub checks out by default, so its commit lands on
+top of the branch. The generated workflow passes the head to the
+reusable workflow as `checkout-ref`. Manual runs and issue comment triggers keep the default
+checkout, so they cannot push to a pull request branch; Gardener refuses such a commit rather than
+build it on the wrong parent. Pull requests from forks are never planned.
+
+GitHub does not start other workflows for commits pushed with a workflow's token, so a pull
+request's checks do not re-run on Gardener's commit until someone pushes again or re-runs them.
+The same rule stops a task triggered by `github.pull_request.synchronize` from triggering itself
+again with its own commit.
+
 ### Automatic V1 effects
 
 All 33 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed

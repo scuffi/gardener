@@ -7,6 +7,7 @@ import {
   taskCaptureManifestV1Schema,
   taskEffectPlanV1Schema,
   taskEffectProposalV1Schema,
+  taskCheckoutSha,
   taskStepIssues,
   taskEventBindingFromNormalizedEvent,
   taskOutcomeV1Schema,
@@ -380,6 +381,7 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   // contract, rather than by two rules that could disagree. Branch patterns
   // and the rule that a commit sits on the capture are checked there too.
   const branchPatterns = bundleBranchPatterns(request.bundle);
+  const checkoutSha = taskCheckoutSha(request.bundle, request.event);
 
   return taskEffectPlanV1Schema.parse({
     schemaVersion: "gardener.task-effect-plan/v1",
@@ -395,6 +397,7 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     provenance: {
       sourcePath: request.sourcePath,
       commitSha: request.event.repository.commitSha,
+      ...(checkoutSha === request.event.repository.commitSha ? {} : { checkoutSha }),
       workflowRunId: request.event.workflow.runId,
       workflowRunAttempt: request.event.workflow.runAttempt,
     },

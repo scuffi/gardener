@@ -142,6 +142,34 @@ describe("branch authority", () => {
       .rejects.toThrow(/outside this task's branches/);
   });
 
+  it("records a pull request head checkout in the plan only for tasks that commit beyond gardener/**", async () => {
+    const head = "e".repeat(40);
+    const pullEvent: NormalizedEventV1 = {
+      schemaVersion: "gardener.normalized-event/v1",
+      eventId: "event:3",
+      occurredAt: "2026-09-17T12:00:00.000Z",
+      kind: "github.pull_request.opened",
+      repository,
+      workflow: { ...workflow, eventName: "pull_request" },
+      actor: { id: "45369682", login: "scuffi" },
+      pullRequest: {
+        id: "700", number: 7, title: "Fix", body: "Fix it", labels: [], author: { id: "45369682", login: "scuffi" },
+        draft: false, state: "open", merged: false,
+        base: { ref: "main", sha: "a".repeat(40), repo: { id: repository.id, fullName: repository.fullName } },
+        head: { ref: "feature/x", sha: head, repo: { id: repository.id, fullName: repository.fullName } },
+      },
+    };
+    const onHead = { ...branch, payload: { ...branch.payload, fromSha: head } };
+    const pushing = await runRequest({ event: pullEvent, effectOptions: { "commit.create": { branches: ["**"] } } });
+    const plan = await buildTaskEffectPlan({ request: pushing, outcome: outcome(pushing, [onHead]) });
+    expect(plan.provenance.checkoutSha).toBe(head);
+    expect(plan.provenance.commitSha).toBe(COMMIT);
+
+    const drafting = await runRequest({ event: pullEvent });
+    expect((await buildTaskEffectPlan({ request: drafting, outcome: outcome(drafting, [branch]) })).provenance.checkoutSha)
+      .toBeUndefined();
+  });
+
   it("refuses a proposal as it arrives, so the model can change course", async () => {
     const request = await runRequest({ effectOptions: { "branch.create": { branches: ["**"] } } });
     const parse = (value: unknown) => taskEffectProposalV1Schema.parse(value);
@@ -391,7 +419,7 @@ describe("capture-dependent steps", () => {
       request,
       outcome: outcome(request, [deferredCommit]),
       capture: { ...capture, manifest: { ...capture.manifest, baseSha: "a".repeat(40) } },
-    })).rejects.toThrow(/capture base must equal the planning commit/);
+    })).rejects.toThrow(/capture base must equal the checked-out commit/);
   });
 });
 

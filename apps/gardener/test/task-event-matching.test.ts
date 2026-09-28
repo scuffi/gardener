@@ -170,7 +170,21 @@ describe("trigger matching", () => {
     expect(harness.prompt).toContain("  branch.create (branch must match: gardener/**)");
     expect(harness.prompt).toContain("  commit.create (branch must match: docs/*, gardener/**)");
     expect(harness.prompt).toContain(`never matches the default branch (${event.repository.defaultBranch}) unless it names it exactly`);
-    expect(harness.prompt).toContain(`commit.create must build directly on the checked-out commit ${event.repository.commitSha}`);
+    // A task that commits beyond gardener/** checks out the pull request head, not the merge commit.
+    if (!("pullRequest" in event) || event.pullRequest === undefined) throw new Error("fixture has no pull request");
+    expect(event.pullRequest.head.sha).not.toBe(event.repository.commitSha);
+    expect(harness.prompt).toContain(`commit.create must build directly on the checked-out commit ${event.pullRequest.head.sha}`);
+    expect(harness.prompt).not.toContain("does not check out a pull request head");
+
+    // A manual run keeps the default checkout, and the model is told it cannot push to the pull request.
+    const manual = baseEvent("github.workflow_dispatch") as NormalizedEventV1;
+    const manualHarness = await createTaskHarnessRequest(await request(manual, {
+      triggers,
+      effects: ["branch.create", "commit.create"],
+      effectOptions: { "commit.create": { branches: ["docs/*", "gardener/**"] } },
+    }));
+    expect(manualHarness.prompt).toContain("does not check out a pull request head");
+    expect(manualHarness.prompt).toContain(`checked-out commit ${manual.repository.commitSha}`);
   });
 
   it("evaluates push branch filters including negations", async () => {

@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import {
   authoredTriggerSubject,
+  checksOutPullRequestHead,
   dispatchTargetKinds,
   githubHandleV1Schema,
   isAuthoredTriggerKind,
@@ -452,7 +453,11 @@ ${renderPermissions(task)}
       task-name: ${yamlString(task.bundle.name)}
       task-source: ${yamlString(`.gardener/${task.source}`)}
       task-bundle-hash: ${task.bundleHash}
-`;
+${checksOutPullRequestHead(task.bundle)
+  // Tasks that commit beyond gardener/** build on the pull request's head, not
+  // GitHub's merge preview. Empty for events without a pull request.
+  ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n"
+  : ""}`;
 }
 
 function yamlString(value: string): string {

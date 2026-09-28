@@ -265,6 +265,17 @@ describe("ordered effect application", () => {
     expect(requests.filter((request) => request.includes("/pulls"))).toEqual([]);
   });
 
+  it("binds a recorded checkout to the pull request head in apply's own event", () => {
+    const head = "e".repeat(40);
+    const withCheckout = { provenance: { ...plan([]).provenance, checkoutSha: head } };
+    expect(effects.checkoutBindingHolds(withCheckout, { pull_request: { head: { sha: head } } })).toBe(true);
+    expect(effects.checkoutBindingHolds(withCheckout, { pull_request: { head: { sha: "f".repeat(40) } } })).toBe(false);
+    expect(effects.checkoutBindingHolds(withCheckout, { inputs: { pull_request: "5" } })).toBe(false);
+    expect(effects.checkoutBindingHolds(withCheckout, null)).toBe(false);
+    // Without a recorded checkout the capture sits on GITHUB_SHA, bound separately.
+    expect(effects.checkoutBindingHolds(plan([]), { pull_request: { head: { sha: head } } })).toBe(true);
+  });
+
   it("derives provider-visible idempotency markers after planning", async () => {
     const value = plan([
       commentStep("issue-comment", "op_issue", "Thanks."),

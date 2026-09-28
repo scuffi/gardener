@@ -710,7 +710,7 @@ describe("ordered effect plan", () => {
     expect(() => taskEffectPlanV1Schema.parse({
       ...withCapture,
       capture: { ...capture, baseSha: "d".repeat(40) },
-    })).toThrow(/capture base must equal the planning commit/);
+    })).toThrow(/capture base must equal the checked-out commit/);
   });
 
   it("refuses a planned commit that carries its own contents", () => {

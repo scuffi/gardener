@@ -67,6 +67,18 @@ export interface CreatePlanningExecutorOptions extends PlanningExecutorOptions {
 }
 
 /**
+ * The commit the capture baseline is taken from: the `checkout-ref` input when
+ * the workflow checked out a pull request head, otherwise `GITHUB_SHA`. The
+ * runtime asks for the commit it expects, and a mismatch fails closed.
+ */
+export function planningCaptureBase(checkoutRef: string | undefined, githubSha: string | undefined): string | undefined {
+  const ref = checkoutRef?.trim() ?? "";
+  if (ref === "") return githubSha;
+  if (!/^[a-f0-9]{40}$/.test(ref)) throw new Error("checkout-ref must be a lowercase 40-character commit SHA");
+  return ref;
+}
+
+/**
  * Builds a planning executor with its capture baseline already taken.
  *
  * This ordering is the whole point. `WorkingTreeCapture.initialize` digests
