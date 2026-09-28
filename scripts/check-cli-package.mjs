@@ -12,12 +12,14 @@ const required = [
   "package/assets/gardener-distribution.json",
   "package/assets/apps/gardener/dist/gardener_runtime/index.js",
   "package/assets/apps/gardener/migrations/0001_actions_baseline.sql",
+  "package/assets/apps/gardener/migrations/0002_actions_installation.sql",
 ];
 for (const path of required) {
   if (!files.includes(path)) throw new Error(`CLI tarball is missing ${path}`);
 }
-const migrations = files.filter((path) => path.includes("/migrations"));
-if (migrations.length !== 1 || migrations[0] !== required[3]) {
+const migrations = files.filter((path) => path.includes("/migrations")).sort();
+const expectedMigrations = required.filter((path) => path.includes("/migrations"));
+if (migrations.join("\n") !== expectedMigrations.join("\n")) {
   throw new Error(`CLI tarball contains an unexpected migration graph: ${migrations.join(", ")}`);
 }
 for (const fragment of ["github-gateway", "runner-ingress", "0001_initial", "0004_agent_native_reset"]) {

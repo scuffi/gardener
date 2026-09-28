@@ -2,9 +2,7 @@
 import {
   connectActions,
   deployActions,
-  destroyActions,
   doctorActions,
-  rollbackActions,
   upgradeActions,
 } from "./actions-installation.js";
 import {
@@ -40,7 +38,7 @@ Run \`gardener <command> --help\` for command options.
 /**
  * Renamed commands fail with a pointer to the new name rather than working
  * silently, so scripts are fixed once. Commands left out of HELP (connect,
- * rollback, task, repository, repositories, tasks, down) still work.
+ * task, repository, repositories, tasks) still work.
  */
 const RENAMED: Record<string, string> = { build: "generate", up: "yolo", qualify: "debug" };
 
@@ -76,7 +74,8 @@ Options:
 
 const DEPLOY_HELP = `gardener deploy
 
-Deploy or resume the Gardener runtime on Cloudflare.
+Deploy or update the Gardener runtime on Cloudflare. Existing gardener-<workspace>
+resources on the account are adopted; a runtime from a newer CLI is never replaced.
 
 Options:
   --workspace <name>           Stable installation name
@@ -93,17 +92,6 @@ Options:
   --repository <owner/name>    Connected GitHub repository to upgrade
   --repository-root <path>     Customer repository (defaults to current directory)
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
-`;
-
-const ROLLBACK_HELP = `gardener rollback
-
-Redeploy a trusted prior source checkout only when its digest matches recorded deployment history.
-Database migrations remain forward-only; rollback restores code, not schema.
-
-Options:
-  --workspace <name>           Existing Gardener installation
-  --source-root <path>         Explicit trusted prior Gardener source checkout (required)
-  --confirm <source-digest>    Historical deployment digest to restore (required)
 `;
 
 const CONNECT_HELP = `gardener connect
@@ -131,17 +119,6 @@ Options:
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
   --drills                     Also run negative admission and cancellation drills
   --drills-only                Reuse recent successful runs and execute only the drills
-`;
-
-const DOWN_HELP = `gardener down
-
-Create or execute a manifest-bound teardown intent for the recorded Cloudflare resources.
-
-Options:
-  --workspace <name>           Existing Gardener installation
-  --source-root <path>         Trusted source checkout override (packaged runtime by default)
-  --execute                    Execute a previously written teardown intent
-  --confirm <intent-digest>    Exact digest returned by the planning invocation
 `;
 
 const YOLO_HELP = `gardener yolo
@@ -180,10 +157,8 @@ async function main(argv: string[]): Promise<void> {
       : command === "generate" ? GENERATE_HELP
       : command === "deploy" || command === "doctor" ? DEPLOY_HELP
       : command === "upgrade" ? UPGRADE_HELP
-      : command === "rollback" ? ROLLBACK_HELP
       : command === "connect" ? CONNECT_HELP
       : command === "debug" ? DEBUG_HELP
-      : command === "down" ? DOWN_HELP
       : command === "yolo" ? YOLO_HELP
       : null;
     if (!help) throw new Error(`Unknown Gardener command: ${command}`);
@@ -207,11 +182,11 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   if (command === "deploy") {
-    const manifest = await deployActions({
+    const installation = await deployActions({
       workspace: requiredStringFlag(flags, "workspace"),
       sourceRoot,
     });
-    console.log(JSON.stringify(manifest, null, 2));
+    console.log(JSON.stringify(installation, null, 2));
     return;
   }
   if (command === "upgrade") {
@@ -233,14 +208,6 @@ async function main(argv: string[]): Promise<void> {
         { cause: error },
       );
     }
-    return;
-  }
-  if (command === "rollback") {
-    console.log(JSON.stringify(await rollbackActions({
-      workspace: requiredStringFlag(flags, "workspace"),
-      sourceRoot: requiredStringFlag(flags, "source-root"),
-      confirm: requiredStringFlag(flags, "confirm"),
-    }), null, 2));
     return;
   }
   if (command === "connect") {
@@ -266,16 +233,6 @@ async function main(argv: string[]): Promise<void> {
       sourceRoot,
       drills: flags.get("drills") === true,
       drillsOnly: flags.get("drills-only") === true,
-    }), null, 2));
-    return;
-  }
-  if (command === "down") {
-    const confirm = stringFlag(flags, "confirm");
-    console.log(JSON.stringify(await destroyActions({
-      workspace: requiredStringFlag(flags, "workspace"),
-      sourceRoot,
-      execute: flags.get("execute") === true,
-      ...(confirm ? { confirm } : {}),
     }), null, 2));
     return;
   }

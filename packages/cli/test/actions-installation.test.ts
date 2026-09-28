@@ -1,29 +1,63 @@
 /// <reference types="node" />
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// The installation is read from Cloudflare, so the account, D1 and wrangler
+// calls are stubbed; each test says what the account holds.
+const cloudflare = vi.hoisted(() => ({
+  databases: [] as Array<{ name: string; uuid: string }>,
+  facts: null as Array<{ key: string; value: string }> | null,
+  tables: [] as string[],
+  workerExists: true,
+  wrangler: vi.fn(),
+}));
+vi.mock("../src/provision", () => ({
+  listDatabases: () => cloudflare.databases,
+  selectedAccountId: () => "account-1",
+  workerExists: () => cloudflare.workerExists,
+}));
+vi.mock("../src/actions-d1", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/actions-d1")>()),
+  isolatedWranglerDirectory: () => "/isolated",
+  queryD1IfTableExists: () => cloudflare.facts,
+  executeD1: vi.fn(),
+  queryD1: vi.fn(() => cloudflare.tables.map((name) => ({ name }))),
+}));
+vi.mock("../src/commands", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/commands")>()),
+  wrangler: cloudflare.wrangler,
+  runCommand: vi.fn(() => ({ status: 0, stdout: "", stderr: "" })),
+}));
+
 import {
   actionsDeploymentHash,
-  actionsInstallationDirectory,
   actionsRepositoryTaskEnrollmentSql,
   actionsResourceNames,
-  destroyActions,
+  cliVersion,
+  compareVersions,
+  deployActions,
   ensurePublicRuntime,
   pullRequestPermissionWarningsFor,
   renderRuntimeConfig,
+  resolveInstallation,
   upgradeActions,
 } from "../src/actions-installation";
 
 const originalToken = process.env.CLOUDFLARE_API_TOKEN;
-const originalConfigHome = process.env.GARDENER_CONFIG_HOME;
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
+  cloudflare.databases = [];
+  cloudflare.facts = null;
+  cloudflare.tables = [];
+  cloudflare.workerExists = true;
   if (originalToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
   else process.env.CLOUDFLARE_API_TOKEN = originalToken;
-  if (originalConfigHome === undefined) delete process.env.GARDENER_CONFIG_HOME;
-  else process.env.GARDENER_CONFIG_HOME = originalConfigHome;
 });
+
+const PROD_DATABASE = { name: "gardener-demo-team", uuid: "11111111-1111-4111-8111-111111111111" };
 
 describe("Actions-native installation topology", () => {
   it("derives isolated deterministic Cloudflare names", () => {
@@ -35,9 +69,67 @@ describe("Actions-native installation topology", () => {
   });
 
   it("fails upgrade before provisioning when the workspace does not exist", async () => {
-    process.env.GARDENER_CONFIG_HOME = await mkdtemp(join(tmpdir(), "gardener-missing-upgrade-"));
     await expect(upgradeActions({ workspace: "missing-team", sourceRoot: "." }))
-      .rejects.toThrow(/No Actions installation exists/);
+      .rejects.toThrow(/No Gardener installation named missing-team/);
+    expect(cloudflare.wrangler).not.toHaveBeenCalled();
+  });
+
+  it("derives an installation from the account and the facts its deploy recorded", async () => {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = [
+      { key: "runtime_origin", value: "https://gardener-demo-team.example.workers.dev" },
+      { key: "cli_version", value: "0.1.2" },
+      { key: "deployment_hash", value: "a".repeat(64) },
+    ];
+    await expect(resolveInstallation("demo-team")).resolves.toMatchObject({
+      workspace: "demo-team",
+      cloudflare: {
+        accountId: "account-1",
+        database: { name: "gardener-demo-team", id: PROD_DATABASE.uuid },
+        runtimeWorker: "gardener-demo-team",
+        runtimeOrigin: "https://gardener-demo-team.example.workers.dev",
+      },
+      cliVersion: "0.1.2",
+      deploymentHash: "a".repeat(64),
+    });
+  });
+
+  it("asks for an upgrade when a runtime predates recorded installation facts", async () => {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = null;
+    await expect(resolveInstallation("demo-team")).rejects.toThrow(/deployed by an older CLI/);
+    await expect(resolveInstallation("other-team")).rejects.toThrow(/No Gardener installation named other-team/);
+  });
+
+  it("never replaces a runtime deployed by a newer CLI", async () => {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = [{ key: "cli_version", value: "99.0.0" }];
+    const version = await cliVersion();
+    await expect(deployActions({ workspace: "demo-team", sourceRoot: "." }))
+      .rejects.toThrow(`runs 99.0.0, newer than this CLI (${version})`);
+    expect(cloudflare.wrangler).not.toHaveBeenCalled();
+  });
+
+  it("adopts only an empty or Gardener database of the workspace name", async () => {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.tables = ["_cf_KV", "d1_migrations", "users", "orders"];
+    await expect(deployActions({ workspace: "demo-team", sourceRoot: "." }))
+      .rejects.toThrow(/exists but is not a Gardener installation/);
+    expect(cloudflare.wrangler).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Worker of the workspace name that has no database", async () => {
+    cloudflare.workerExists = true;
+    await expect(deployActions({ workspace: "demo-team", sourceRoot: "." }))
+      .rejects.toThrow(/exists without a gardener-demo-team database/);
+    expect(cloudflare.wrangler).not.toHaveBeenCalled();
+  });
+
+  it("compares release versions numerically", () => {
+    expect(compareVersions("0.1.10", "0.1.9")).toBe(1);
+    expect(compareVersions("0.1.2", "0.1.2")).toBe(0);
+    expect(compareVersions("0.1.2-rc.1", "0.1.2")).toBe(0);
+    expect(compareVersions("0.2.0", "1.0.0")).toBe(-1);
   });
 
   it("preserves a task kill-switch while enrolling only the current bundle", () => {
@@ -135,50 +227,6 @@ describe("Actions-native installation topology", () => {
     expect(await actionsDeploymentHash(root)).toBe(first);
     await writeFile(join(root, "apps/gardener/dist/gardener_runtime/index.js"), "export default 2;\n");
     expect(await actionsDeploymentHash(root)).not.toBe(first);
-  });
-
-  it("writes a stable manifest-bound teardown intent before permitting deletion", async () => {
-    process.env.GARDENER_CONFIG_HOME = await mkdtemp(join(tmpdir(), "gardener-actions-down-"));
-    const directory = actionsInstallationDirectory("demo-team");
-    await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, "installation.json"), JSON.stringify({
-      schemaVersion: "gardener.actions-installation/v2",
-      workspace: "demo-team",
-      cloudflare: {
-        accountId: "account-1",
-        database: { name: "gardener-demo-team", id: "11111111-1111-4111-8111-111111111111" },
-        runtimeWorker: "gardener-demo-team",
-        runtimeOrigin: "https://runner.example.workers.dev",
-        runnerAccessBypassAppId: null,
-        runtimeConfig: "/private/runtime.json",
-      },
-      createdAt: "2026-09-21T00:00:00.000Z",
-      updatedAt: "2026-09-21T00:00:00.000Z",
-    }));
-
-    const first = await destroyActions({ workspace: "demo-team", sourceRoot: ".", execute: false });
-    const second = await destroyActions({ workspace: "demo-team", sourceRoot: ".", execute: false });
-    expect(first).toEqual(second);
-    expect(first).toMatchObject({ destroyed: false, intentDigest: expect.stringMatching(/^[a-f0-9]{64}$/) });
-    await expect(destroyActions({
-      workspace: "demo-team",
-      sourceRoot: ".",
-      execute: true,
-      confirm: "wrong",
-    })).rejects.toThrow(`--confirm ${first.intentDigest}`);
-
-    const intentPath = join(directory, "teardown-intent.json");
-    const expired = JSON.parse(await readFile(intentPath, "utf8")) as Record<string, unknown>;
-    expired.createdAt = "2020-01-01T00:00:00.000Z";
-    await writeFile(intentPath, JSON.stringify(expired));
-    await expect(destroyActions({
-      workspace: "demo-team",
-      sourceRoot: ".",
-      execute: true,
-      confirm: first.intentDigest,
-    })).rejects.toThrow(/intent expired/i);
-    expect((await destroyActions({ workspace: "demo-team", sourceRoot: ".", execute: false })).intentDigest)
-      .not.toBe(first.intentDigest);
   });
 
   it("renders one narrow public runtime Worker", () => {

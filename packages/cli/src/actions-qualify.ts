@@ -1,7 +1,8 @@
 import { basename, resolve } from "node:path";
 import { runnerEffectReceiptV1Schema } from "@gardener/protocol";
 import { z } from "zod";
-import { readActionsManifest, readProjectLock } from "./actions-installation.js";
+import { isolatedWranglerDirectory } from "./actions-d1.js";
+import { readProjectLock, resolveInstallation, type ActionsInstallation } from "./actions-installation.js";
 import { setTaskEnabled } from "./actions-operations.js";
 import { runCommand, wrangler } from "./commands.js";
 
@@ -41,8 +42,7 @@ export async function qualifyActions(input: {
   const repository = repositorySlug.parse(input.repository);
   const repositoryRoot = resolve(input.repositoryRoot);
   const sourceRoot = resolve(input.sourceRoot);
-  const manifest = await readActionsManifest(input.workspace);
-  if (!manifest) throw new Error(`No Actions installation exists for workspace ${input.workspace}`);
+  const manifest = await resolveInstallation(input.workspace);
   const lock = await readProjectLock(repositoryRoot);
   const results: ActionsQualificationReport["tasks"] = [];
   if (input.drillsOnly && !input.drills) throw new Error("--drills-only requires --drills");
@@ -99,7 +99,7 @@ export async function qualifyActions(input: {
 
     const d1 = await executeD1WithRetry(sourceRoot, [
       "d1", "execute", manifest.cloudflare.database.name,
-      "--remote", "--config", manifest.cloudflare.runtimeConfig, "--json",
+      "--remote", "--json",
       "--command", `SELECT bundle_hash,effect_receipt_json FROM actions_task_runs WHERE github_run_id='${run.databaseId.replaceAll("'", "''")}' AND effect_receipt_json IS NOT NULL;`,
     ]);
     const rows = d1Rows(JSON.parse(d1.stdout));
@@ -169,7 +169,7 @@ async function qualifyFailureDrills(input: {
   repository: string;
   repositoryRoot: string;
   sourceRoot: string;
-  manifest: NonNullable<Awaited<ReturnType<typeof readActionsManifest>>>;
+  manifest: ActionsInstallation;
   lock: Awaited<ReturnType<typeof readProjectLock>>;
   successfulRuns: string[];
 }): Promise<NonNullable<ActionsQualificationReport["drills"]>> {
@@ -324,7 +324,7 @@ function assertNoMarkedComment(cwd: string, repository: string, issueNumber: num
 
 async function waitForTaskRun(
   sourceRoot: string,
-  manifest: NonNullable<Awaited<ReturnType<typeof readActionsManifest>>>,
+  manifest: ActionsInstallation,
   githubRunId: string,
   accept: (row: Record<string, unknown>) => boolean,
 ): Promise<Record<string, unknown>> {
@@ -345,7 +345,7 @@ async function waitForTaskRun(
 
 async function queryRunsFast(
   sourceRoot: string,
-  manifest: NonNullable<Awaited<ReturnType<typeof readActionsManifest>>>,
+  manifest: ActionsInstallation,
   command: string,
 ): Promise<Array<Record<string, unknown>>> {
   const token = process.env.CLOUDFLARE_API_TOKEN ?? process.env.CF_API_TOKEN;
@@ -365,12 +365,12 @@ async function queryRunsFast(
 
 async function queryRuns(
   sourceRoot: string,
-  manifest: NonNullable<Awaited<ReturnType<typeof readActionsManifest>>>,
+  manifest: ActionsInstallation,
   command: string,
 ): Promise<Array<Record<string, unknown>>> {
   const result = await executeD1WithRetry(sourceRoot, [
     "d1", "execute", manifest.cloudflare.database.name,
-    "--remote", "--config", manifest.cloudflare.runtimeConfig, "--json", "--command", command,
+    "--remote", "--json", "--command", command,
   ]);
   return d1Rows(JSON.parse(result.stdout));
 }
@@ -433,11 +433,11 @@ async function waitForWorkflowRun(input: {
   throw new Error(`Timed out waiting for ${input.workflow}`);
 }
 
-async function executeD1WithRetry(sourceRoot: string, args: string[]) {
+async function executeD1WithRetry(_sourceRoot: string, args: string[]) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return wrangler(sourceRoot, "apps/gardener", args, undefined, { quiet: true });
+      return wrangler(isolatedWranglerDirectory(), ".", args, undefined, { quiet: true });
     } catch (error) {
       lastError = error;
       if (attempt < 2) await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000));

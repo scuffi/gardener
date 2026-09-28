@@ -17,7 +17,7 @@ Get the CLI at a release tag:
 
 ```bash
 git clone https://github.com/scuffi/gardener && cd gardener
-git checkout v0.1.1
+git checkout v0.1.2
 pnpm install
 ```
 
@@ -84,7 +84,7 @@ Writing and checking a task needs only Node.js 24+ and the published CLI, with n
 ```bash
 cd /path/to/my-repo
 mkdir -p .gardener/tasks/my-task   # write .gardener/tasks/my-task/TASK.md
-npx @scuffi/gardener@0.1.1 generate
+npx @scuffi/gardener@0.1.2 generate
 ```
 
 `generate` validates every task, then writes the lock file and one workflow per task. Commit both
@@ -124,7 +124,9 @@ cd "$REPO" && git add .gardener .github/workflows && git commit -m "Upgrade Gard
 ```
 
 `upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned
-commit, and re-enrolls its tasks. Keep every repository on the same tag.
+commit, and re-enrolls its tasks. Keep every repository on the same tag. The CLI keeps no local
+state, so any operator logged in to the Cloudflare account can run it. It refuses to replace a
+runtime that a newer release deployed.
 
 ## Cutting a release (Gardener maintainers)
 

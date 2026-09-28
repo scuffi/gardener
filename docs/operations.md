@@ -5,7 +5,7 @@ take these three flags:
 
 | Flag | Meaning |
 | --- | --- |
-| `--workspace <name>` | Names the installation. It picks the Cloudflare resource names and the local state directory. |
+| `--workspace <name>` | Names the installation. Its Worker and D1 database are both `gardener-<workspace>`. |
 | `--repository-root <path>` | Points at the customer repository. It defaults to the current directory. |
 | `--source-root <path>` | Points at the trusted Gardener checkout used to build and deploy the Worker. |
 
@@ -48,7 +48,7 @@ its own:
 | --- | --- | --- |
 | `init [--demos]` | Creates `.gardener/`, optionally with the two demo tasks | None |
 | `generate` | Compiles tasks, writes the lock file and one workflow per task | None |
-| `deploy` | Creates the D1 database, applies the migration, deploys the Worker, checks `/health` | Cloudflare |
+| `deploy` | Creates or adopts the D1 database, applies migrations, deploys the Worker, records installation facts, checks `/health` | Cloudflare |
 | `connect` | Enrolls the repository and its bundle hashes, sets `GARDENER_RUNTIME_URL` | D1, GitHub variable |
 | `doctor` | Verifies the installation. Warns about enrollments whose workflow pin differs from this CLI, and repositories whose tasks open or approve pull requests without the setting below | None |
 
@@ -56,8 +56,12 @@ its own:
 Rebuilding unchanged tasks produces byte-identical output. No command commits or pushes, so review
 the generated files and commit them yourself.
 
-Deployment is checkpointed in `~/.config/gardener/<workspace>/actions/`, with files readable only
-by you. If a command is interrupted, rerun it unchanged. Do not edit these files by hand.
+The CLI keeps no local state. Every command finds the installation on the Cloudflare account that
+`wrangler` is logged in to (set `CLOUDFLARE_ACCOUNT_ID` if it can see several) by the
+`gardener-<workspace>` name. `deploy` records the runtime URL, CLI version and deployment digest in
+the workspace's own D1, so any operator with access to the account can run any command. `deploy`
+adopts existing `gardener-<workspace>` resources, and refuses to replace a runtime that a newer CLI
+deployed. If a command is interrupted, rerun it unchanged.
 
 ### Cloudflare Access
 
@@ -132,7 +136,7 @@ pnpm gardener -- debug --workspace my-gardener --repository my-org/my-repo \
 one Gardener comment and one matching receipt in D1. Add `--drills` to also check that disabled
 repositories and tasks are refused and that cancellation settles correctly.
 
-## Upgrade and rollback
+## Upgrade
 
 Existing repositories keep their workflow pin until you move them:
 
@@ -155,34 +159,12 @@ Some releases change the bundle format, which changes every bundle hash. After s
 Worker is deployed, runs for a repository fail with `Stored task bundle predates this Gardener
 runtime` until that repository has been upgraded and its regenerated workflows pushed.
 
-Each deploy records a digest of the Worker bundle and migrations. To roll back code, check out the
-earlier Gardener source and pass its recorded digest:
+To go back to an earlier release, deploy or upgrade from that release's CLI. `deploy` refuses to
+replace a newer runtime, so this needs a newer release that reverts the change. Migrations are
+forward-only.
 
-```bash
-pnpm gardener -- rollback --workspace my-gardener \
-  --source-root /path/to/earlier/gardener --confirm <source-digest>
-```
-
-Rollback refuses a digest that is not in the deployment history. Migrations are forward-only:
-rollback restores code, not schema.
-
-Rollback deploys the earlier code with the Worker settings of the CLI you run it from. Rolling back
-to a Worker from before per-task model selection is therefore not supported: that Worker reads
-its model from an `AI_MODEL` setting the current CLI no longer writes, so every run would fail.
-
-## Teardown
-
-Teardown takes two steps. The first prints a digest describing exactly what will be deleted. The
-digest is valid for 24 hours.
-
-```bash
-pnpm gardener -- down --workspace my-gardener --source-root "$PWD"
-pnpm gardener -- down --workspace my-gardener --source-root "$PWD" --execute --confirm <digest>
-```
-
-It deletes the Worker, the D1 database, and any Access bypass Gardener created. It refuses to run
-if the resources no longer match the recorded installation. Generated files in your repository are
-left in place.
+Gardener has no teardown command. To remove an installation, delete its `gardener-<workspace>`
+Worker and D1 database, and any Access application for its hostname, in the Cloudflare dashboard.
 
 ## Using a coding agent
 

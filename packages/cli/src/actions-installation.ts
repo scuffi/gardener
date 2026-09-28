@@ -1,69 +1,44 @@
-import { readFile, readdir, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { taskBundleV1Schema } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { z } from "zod";
 import { actionsEnrollmentSql } from "./actions.js";
+import { executeD1, isolatedWranglerDirectory, queryD1, queryD1IfTableExists, sql } from "./actions-d1.js";
 import { compileGitHubActionsTask } from "./actions-target.js";
 import { DEFAULT_WORKFLOW_REF } from "./project.js";
 import { runCommand, workerOrigin, wrangler } from "./commands.js";
 import { listDatabases, selectedAccountId, workerExists } from "./provision.js";
-import { ensurePrivateDirectory, writePrivateJson, writePrivateText } from "./state.js";
 
 const workspaceName = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/);
 const repositorySlug = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
-const TEARDOWN_INTENT_TTL_MS = 24 * 60 * 60_000;
 
-const intentSchema = z.strictObject({
-  schemaVersion: z.literal("gardener.actions-deploy-intent/v1"),
-  workspace: workspaceName,
-  accountId: z.string().min(1),
-  resources: z.strictObject({
-    database: z.string().min(1),
-    runtimeWorker: z.string().min(1),
-  }),
-  createdAt: z.string().datetime(),
-});
+/**
+ * An installation, derived from the Cloudflare account rather than stored on
+ * the operator's machine: its resources are named `gardener-<workspace>`, and
+ * the facts only a deploy knows live in the workspace's own D1.
+ */
+export interface ActionsInstallation {
+  workspace: string;
+  cloudflare: {
+    accountId: string;
+    database: { name: string; id: string };
+    runtimeWorker: string;
+    runtimeOrigin: string;
+  };
+  cliVersion: string | null;
+  deploymentHash: string | null;
+  deployedAt: string | null;
+}
 
-const teardownIntentSchema = z.strictObject({
-  schemaVersion: z.literal("gardener.actions-teardown-intent/v2"),
-  workspace: workspaceName,
-  accountId: z.string().min(1),
-  manifestHash: sha256,
-  resources: z.strictObject({
-    database: z.strictObject({ name: z.string().min(1), id: z.string().uuid() }),
-    runtimeWorker: z.string().min(1),
-    runnerAccessBypassAppId: z.string().nullable(),
-  }),
-  createdAt: z.string().datetime(),
-});
-
-const deploymentRecordSchema = z.strictObject({
-  sourceHash: sha256,
-  deployedAt: z.string().datetime(),
-});
-
-const manifestSchema = z.strictObject({
-  schemaVersion: z.literal("gardener.actions-installation/v2"),
-  workspace: workspaceName,
-  cloudflare: z.strictObject({
-    accountId: z.string().min(1),
-    database: z.strictObject({ name: z.string().min(1), id: z.string().uuid() }),
-    runtimeWorker: z.string().min(1),
-    runtimeOrigin: z.string().url(),
-    runnerAccessBypassAppId: z.string().nullable(),
-    runtimeConfig: z.string().min(1),
-  }),
-  deployment: deploymentRecordSchema.optional(),
-  deploymentHistory: z.array(deploymentRecordSchema).max(20).optional(),
-  deploymentHashVersion: z.literal("actions-v2").optional(),
-  runtimeGeneration: z.literal("actions-only").optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-export type ActionsInstallationManifest = z.infer<typeof manifestSchema>;
+interface InstallationFacts {
+  runtime_origin?: string;
+  cli_version?: string;
+  deployment_hash?: string;
+  deployed_at?: string;
+}
 
 export interface ActionsResourceNames {
   database: string;
@@ -76,13 +51,6 @@ export function actionsResourceNames(workspace: string): ActionsResourceNames {
     database: `gardener-${name}`,
     runtimeWorker: `gardener-${name}`,
   };
-}
-
-export function actionsInstallationDirectory(workspace: string): string {
-  const root = process.env.GARDENER_CONFIG_HOME
-    ? resolve(process.env.GARDENER_CONFIG_HOME)
-    : join(homedir(), ".config", "gardener");
-  return join(root, workspaceName.parse(workspace), "actions");
 }
 
 export function renderRuntimeConfig(input: {
@@ -123,156 +91,180 @@ export function renderRuntimeConfig(input: {
   }, null, 2)}\n`;
 }
 
+/** Reads the installation from Cloudflare. Throws if the workspace does not exist. */
+export async function resolveInstallation(workspace: string): Promise<ActionsInstallation> {
+  const names = actionsResourceNames(workspace);
+  const cloudflareCwd = isolatedWranglerDirectory();
+  const accountId = selectedAccountId(cloudflareCwd);
+  const database = listDatabases(cloudflareCwd).find((candidate) => candidate.name === names.database);
+  if (!database) {
+    throw new Error(`No Gardener installation named ${workspace} exists on Cloudflare account ${accountId}; run gardener deploy --workspace ${workspace}`);
+  }
+  const facts = readInstallationFacts(names.database);
+  if (!facts?.runtime_origin) {
+    throw new Error(`Gardener ${workspace} was deployed by an older CLI, or its last deploy was interrupted; run gardener upgrade or gardener deploy --workspace ${workspace} with this one`);
+  }
+  return installation(workspace, accountId, names, database.uuid, facts.runtime_origin, facts);
+}
+
+function installation(
+  workspace: string,
+  accountId: string,
+  names: ActionsResourceNames,
+  databaseId: string,
+  runtimeOrigin: string,
+  facts: InstallationFacts,
+): ActionsInstallation {
+  return {
+    workspace,
+    cloudflare: {
+      accountId,
+      database: { name: names.database, id: databaseId },
+      runtimeWorker: names.runtimeWorker,
+      runtimeOrigin,
+    },
+    cliVersion: facts.cli_version ?? null,
+    deploymentHash: facts.deployment_hash ?? null,
+    deployedAt: facts.deployed_at ?? null,
+  };
+}
+
+/**
+ * Refuses to migrate a database of this name unless it is empty or already a
+ * Gardener database, so a workspace-name collision cannot write into another
+ * application's data.
+ */
+function assertAdoptableDatabase(workspace: string, database: string): void {
+  const tables = queryD1(database, "SELECT name FROM sqlite_master WHERE type='table';")
+    .map((row) => row.name)
+    .filter((name): name is string => typeof name === "string"
+      && !name.startsWith("_cf_") && !name.startsWith("sqlite_") && name !== "d1_migrations");
+  if (tables.length > 0 && !tables.includes("actions_repository_enrollments")) {
+    throw new Error(`D1 database ${database} exists but is not a Gardener installation; choose another --workspace than ${workspace}`);
+  }
+}
+
+/** Null when the database predates the facts table. */
+function readInstallationFacts(database: string): InstallationFacts | null {
+  const rows = queryD1IfTableExists(database, "SELECT key, value FROM actions_installation;");
+  if (rows === null) return null;
+  const facts: InstallationFacts = {};
+  for (const row of rows) {
+    if (typeof row.key === "string" && typeof row.value === "string") {
+      (facts as Record<string, string>)[row.key] = row.value;
+    }
+  }
+  return facts;
+}
+
+/** This CLI's own version, from the package.json beside `dist/` or `src/`. */
+export async function cliVersion(): Promise<string> {
+  const value = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version?: unknown };
+  if (typeof value.version !== "string") throw new Error("Gardener CLI package.json has no version");
+  return value.version;
+}
+
+/** Compares `x.y.z` versions numerically, ignoring any prerelease suffix. */
+export function compareVersions(left: string, right: string): number {
+  const parts = (version: string) => version.split("-")[0]!.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const [a, b] = [parts(left), parts(right)];
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0);
+    if (difference !== 0) return Math.sign(difference);
+  }
+  return 0;
+}
+
+/**
+ * Creates or updates the runtime for a workspace. Existing `gardener-<workspace>`
+ * resources on the account are adopted, so any operator with account access can
+ * run it. It refuses to replace a runtime deployed by a newer CLI.
+ */
 export async function deployActions(input: {
   workspace: string;
   sourceRoot: string;
-  expectedDeploymentHash?: string;
-}): Promise<ActionsInstallationManifest> {
+}): Promise<ActionsInstallation> {
   const workspace = workspaceName.parse(input.workspace);
   const sourceRoot = resolve(input.sourceRoot);
   const names = actionsResourceNames(workspace);
-  const directory = actionsInstallationDirectory(workspace);
-  const manifestPath = join(directory, "installation.json");
-  const intentPath = join(directory, "deploy-intent.json");
-  await ensurePrivateDirectory(directory);
-  const prior = await readActionsManifest(workspace);
-  const intent = await readDeployIntent(intentPath);
-  const accountId = selectedAccountId(sourceRoot);
-  if (prior && prior.cloudflare.accountId !== accountId) {
-    throw new Error("Current Wrangler account does not match the existing Actions installation");
-  }
-  if (intent && (
-    intent.accountId !== accountId
-    || JSON.stringify(intent.resources) !== JSON.stringify(names)
-  )) {
-    throw new Error("Existing deployment intent does not match the requested Actions installation");
-  }
-  let databases = listDatabases(sourceRoot);
-  if (!prior && !intent && (
-    databases.some((database) => database.name === names.database)
-    || workerExists(sourceRoot, names.runtimeWorker)
-  )) {
-    throw new Error("Cloudflare resources already use this workspace name; choose another workspace or restore its installation manifest");
-  }
-  if (!prior && !intent) {
-    await writePrivateJson(intentPath, intentSchema.parse({
-      schemaVersion: "gardener.actions-deploy-intent/v1",
-      workspace,
-      accountId,
-      resources: names,
-      createdAt: new Date().toISOString(),
-    }));
-  }
+  const cloudflareCwd = isolatedWranglerDirectory();
+  const accountId = selectedAccountId(cloudflareCwd);
+  const version = await cliVersion();
 
-  if (!databases.some((database) => database.name === names.database)) {
-    wrangler(sourceRoot, ".", ["d1", "create", names.database], undefined, { quiet: true });
-    databases = listDatabases(sourceRoot);
-  }
-  const database = databases.find((candidate) => candidate.name === names.database);
-  if (!database) throw new Error("Gardener D1 creation could not be verified");
-  if (prior && prior.cloudflare.database.id !== database.uuid) {
-    throw new Error("Existing installation manifest does not match the Cloudflare D1 database");
+  let database = listDatabases(cloudflareCwd).find((candidate) => candidate.name === names.database);
+  const workerPresent = workerExists(cloudflareCwd, names.runtimeWorker);
+  if (database) {
+    const facts = readInstallationFacts(names.database);
+    if (!facts) assertAdoptableDatabase(workspace, names.database);
+    const deployed = facts?.cli_version;
+    if (deployed && compareVersions(version, deployed) < 0) {
+      throw new Error(`Gardener ${workspace} runs ${deployed}, newer than this CLI (${version}); use @scuffi/gardener@${deployed} or later`);
+    }
+  } else {
+    // Gardener creates the database before the Worker and deletes neither, so
+    // a lone Worker of this name belongs to something else.
+    if (workerPresent) {
+      throw new Error(`A Worker named ${names.runtimeWorker} exists without a ${names.database} database; choose another --workspace`);
+    }
+    wrangler(cloudflareCwd, ".", ["d1", "create", names.database], undefined, { quiet: true });
+    database = listDatabases(cloudflareCwd).find((candidate) => candidate.name === names.database);
+    if (!database) throw new Error("Gardener D1 creation could not be verified");
   }
 
   if (!(await isPackagedDistribution(sourceRoot))) {
     runCommand("pnpm", ["--filter", "@gardener/app", "build"], { cwd: sourceRoot, quiet: true });
   }
-  const sourceHash = await actionsDeploymentHash(sourceRoot);
-  if (input.expectedDeploymentHash && sourceHash !== sha256.parse(input.expectedDeploymentHash)) {
-    throw new Error("Trusted rollback source does not match the confirmed historical deployment digest");
+  const deploymentHash = await actionsDeploymentHash(sourceRoot);
+  const configDirectory = await mkdtemp(join(tmpdir(), "gardener-runtime-"));
+  let runtimeOrigin: string;
+  try {
+    const runtimeConfig = join(configDirectory, "wrangler.json");
+    await writeFile(runtimeConfig, renderRuntimeConfig({
+      names,
+      databaseId: database.uuid,
+      sourceRoot,
+      workspace,
+      migrationMode: workerPresent ? "steady" : "fresh",
+    }), { mode: 0o600 });
+    wrangler(sourceRoot, "apps/gardener", [
+      "d1", "migrations", "apply", names.database, "--remote", "--config", runtimeConfig,
+    ], undefined, { quiet: true });
+    const runtimeDeploy = wrangler(sourceRoot, "apps/gardener", [
+      "deploy", "--config", runtimeConfig,
+    ], undefined, { quiet: true });
+    runtimeOrigin = workerOrigin(runtimeDeploy, names.runtimeWorker);
+  } finally {
+    await rm(configDirectory, { recursive: true, force: true });
   }
-  const runtimeConfig = join(directory, "runtime.wrangler.json");
-  await writePrivateText(runtimeConfig, renderRuntimeConfig({
-    names,
-    databaseId: database.uuid,
-    sourceRoot,
-    workspace,
-    migrationMode: prior === null ? "fresh" : "steady",
-  }));
-  wrangler(sourceRoot, "apps/gardener", [
-    "d1", "migrations", "apply", names.database, "--remote", "--config", runtimeConfig,
-  ], undefined, { quiet: true });
-  const runtimeDeploy = wrangler(sourceRoot, "apps/gardener", [
-    "deploy", "--config", runtimeConfig,
-  ], undefined, { quiet: true });
-  const runtimeOrigin = workerOrigin(runtimeDeploy, names.runtimeWorker);
-  const now = new Date().toISOString();
-  const deploymentHistory = prior?.deploymentHashVersion !== "actions-v2"
-    ? []
-    : prior.deployment && prior.deployment.sourceHash !== sourceHash
-      ? [prior.deployment, ...(prior.deploymentHistory ?? [])]
-        .filter((record, index, records) => record.sourceHash !== sourceHash
-          && records.findIndex((candidate) => candidate.sourceHash === record.sourceHash) === index)
-        .slice(0, 20)
-      : prior.deploymentHistory ?? [];
-  let manifest = manifestSchema.parse({
-    schemaVersion: "gardener.actions-installation/v2",
-    workspace,
-    cloudflare: {
-      accountId,
-      database: { name: names.database, id: database.uuid },
-      runtimeWorker: names.runtimeWorker,
-      runtimeOrigin,
-      runnerAccessBypassAppId: prior?.cloudflare.runnerAccessBypassAppId ?? null,
-      runtimeConfig,
-    },
-    deployment: { sourceHash, deployedAt: now },
-    deploymentHistory,
-    deploymentHashVersion: "actions-v2",
-    runtimeGeneration: "actions-only",
-    createdAt: prior?.createdAt ?? now,
-    updatedAt: now,
-  });
-  await writePrivateJson(manifestPath, manifest);
-  await unlink(intentPath).catch(() => undefined);
 
-  const accessAppId = await ensurePublicRuntime({
-    accountId,
-    workspace,
-    runtimeOrigin,
-    existingAppId: manifest.cloudflare.runnerAccessBypassAppId,
-  });
-  if (accessAppId !== manifest.cloudflare.runnerAccessBypassAppId) {
-    manifest = manifestSchema.parse({
-      ...manifest,
-      cloudflare: { ...manifest.cloudflare, runnerAccessBypassAppId: accessAppId },
-      updatedAt: new Date().toISOString(),
-    });
-    await writePrivateJson(manifestPath, manifest);
-  }
+  await ensurePublicRuntime({ accountId, workspace, runtimeOrigin, existingAppId: null });
   await requireHealthyRuntime(runtimeOrigin);
-  return manifest;
+
+  // Recorded last, so a deploy only counts once its runtime is healthy.
+  const facts: Required<InstallationFacts> = {
+    runtime_origin: runtimeOrigin,
+    cli_version: version,
+    deployment_hash: deploymentHash,
+    deployed_at: new Date().toISOString(),
+  };
+  executeD1(names.database, `INSERT INTO actions_installation(key,value) VALUES ${
+    Object.entries(facts).map(([key, value]) => `(${sql(key)},${sql(value)})`).join(",")
+  } ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP;`);
+  return installation(workspace, accountId, names, database.uuid, runtimeOrigin, facts);
 }
 
 export async function upgradeActions(input: {
   workspace: string;
   sourceRoot: string;
 }): Promise<{ previousHash: string | null; deploymentHash: string; changed: boolean }> {
-  const prior = await requiredActionsManifest(input.workspace);
-  const previousHash = prior.deployment?.sourceHash ?? null;
-  const manifest = await deployActions(input);
-  const deploymentHash = manifest.deployment!.sourceHash;
-  return { previousHash, deploymentHash, changed: previousHash !== deploymentHash };
-}
-
-export async function rollbackActions(input: {
-  workspace: string;
-  sourceRoot: string;
-  confirm: string;
-}): Promise<{ previousHash: string; deploymentHash: string; rolledBack: true }> {
-  const prior = await requiredActionsManifest(input.workspace);
-  const previousHash = prior.deployment?.sourceHash;
-  if (!previousHash) throw new Error("The installation predates deployment history and cannot be rolled back automatically");
-  const confirmedHash = sha256.parse(input.confirm);
-  if (!(prior.deploymentHistory ?? []).some((record) => record.sourceHash === confirmedHash)) {
-    throw new Error("Confirmed rollback digest is not present in this installation's deployment history");
+  const names = actionsResourceNames(input.workspace);
+  if (!listDatabases(isolatedWranglerDirectory()).some((candidate) => candidate.name === names.database)) {
+    throw new Error(`No Gardener installation named ${input.workspace} exists; run gardener deploy --workspace ${input.workspace}`);
   }
-  const manifest = await deployActions({
-    workspace: input.workspace,
-    sourceRoot: input.sourceRoot,
-    expectedDeploymentHash: confirmedHash,
-  });
-  return { previousHash, deploymentHash: manifest.deployment!.sourceHash, rolledBack: true };
+  const previousHash = readInstallationFacts(names.database)?.deployment_hash ?? null;
+  const deployed = await deployActions(input);
+  const deploymentHash = deployed.deploymentHash!;
+  return { previousHash, deploymentHash, changed: previousHash !== deploymentHash };
 }
 
 export function actionsRepositoryTaskEnrollmentSql(input: {
@@ -297,7 +289,8 @@ export async function connectActions(input: {
   sourceRoot: string;
 }): Promise<{ repositoryId: string; bundles: string[]; runtimeOrigin: string }> {
   const repository = repositorySlug.parse(input.repository);
-  const manifest = await requiredActionsManifest(input.workspace);
+  const installation = await resolveInstallation(input.workspace);
+  const runtimeOrigin = installation.cloudflare.runtimeOrigin;
   const lock = await readProjectLock(input.repositoryRoot);
   const metadata = JSON.parse(runCommand("gh", [
     "api", `repos/${repository}`,
@@ -312,7 +305,7 @@ export async function connectActions(input: {
   const enrollmentSql = actionsEnrollmentSql({
     ...metadata,
     workflowRef: lock.release.workflowRef,
-    audience: manifest.cloudflare.runtimeOrigin,
+    audience: runtimeOrigin,
   });
   const statements = [enrollmentSql];
   const bundles: string[] = [];
@@ -341,16 +334,17 @@ export async function connectActions(input: {
   statements.push(bundles.length > 0
     ? `UPDATE actions_repository_tasks SET enabled=0,updated_at=CURRENT_TIMESTAMP WHERE repository_id=${sql(metadata.repositoryId)} AND bundle_hash NOT IN (${bundles.map(sql).join(",")});`
     : `UPDATE actions_repository_tasks SET enabled=0,updated_at=CURRENT_TIMESTAMP WHERE repository_id=${sql(metadata.repositoryId)};`);
-  wrangler(resolve(input.sourceRoot), "apps/gardener", [
-    "d1", "execute", manifest.cloudflare.database.name,
-    "--remote", "--config", manifest.cloudflare.runtimeConfig,
-    "--command", statements.join("\n"),
-  ], undefined, { quiet: true });
-  runCommand("gh", [
-    "variable", "set", "GARDENER_RUNTIME_URL", "--repo", repository,
-    "--body", manifest.cloudflare.runtimeOrigin,
-  ], { cwd: input.repositoryRoot, quiet: true });
-  return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin: manifest.cloudflare.runtimeOrigin };
+  executeD1(installation.cloudflare.database.name, statements.join("\n"));
+  // Setting a variable needs repository admin, so leave a correct one alone.
+  const current = runCommand("gh", ["variable", "get", "GARDENER_RUNTIME_URL", "--repo", repository], {
+    cwd: input.repositoryRoot, quiet: true, allowFailure: true,
+  });
+  if (current.status !== 0 || current.stdout.trim() !== runtimeOrigin) {
+    runCommand("gh", [
+      "variable", "set", "GARDENER_RUNTIME_URL", "--repo", repository, "--body", runtimeOrigin,
+    ], { cwd: input.repositoryRoot, quiet: true });
+  }
+  return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin };
 }
 
 export async function doctorActions(workspace: string, sourceRoot: string): Promise<{
@@ -367,37 +361,31 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   staleBridgeRepositories: number;
   pullRequestPermissionWarnings: PullRequestPermissionWarning[];
 }> {
-  const manifest = await requiredActionsManifest(workspace);
-  if (selectedAccountId(resolve(sourceRoot)) !== manifest.cloudflare.accountId) {
-    throw new Error("Current Wrangler account does not match the Actions installation");
-  }
-  const database = listDatabases(resolve(sourceRoot))
-    .find((candidate) => candidate.name === manifest.cloudflare.database.name);
-  if (!database || database.uuid !== manifest.cloudflare.database.id) {
-    throw new Error("Gardener D1 does not match the installation manifest");
-  }
-  if (!workerExists(resolve(sourceRoot), manifest.cloudflare.runtimeWorker)) {
-    throw new Error("Gardener Worker does not match the installation manifest");
+  const installation = await resolveInstallation(workspace);
+  const database = installation.cloudflare.database.name;
+  if (!workerExists(isolatedWranglerDirectory(), installation.cloudflare.runtimeWorker)) {
+    throw new Error(`Gardener Worker ${installation.cloudflare.runtimeWorker} does not exist; run gardener deploy --workspace ${workspace}`);
   }
   const requiredTables = [
     "actions_control_audit",
+    "actions_installation",
     "actions_repository_enrollments",
     "actions_repository_tasks",
     "actions_task_audit",
     "actions_task_bundles",
     "actions_task_runs",
   ];
-  const schemaRows = queryDoctorD1(resolve(sourceRoot), manifest,
+  const schemaRows = queryD1(database,
     `SELECT name FROM sqlite_master WHERE type='table' AND name IN (${requiredTables.map(sql).join(",")}) ORDER BY name;`);
   const presentTables = new Set(schemaRows.map((row) => String(row.name)));
   const missingTables = requiredTables.filter((name) => !presentTables.has(name));
   if (missingTables.length > 0) {
     throw new Error(`Gardener D1 schema is incomplete (${missingTables.join(", ")}); run gardener deploy --workspace ${workspace} to apply migrations`);
   }
-  const counts = queryDoctorD1(resolve(sourceRoot), manifest,
+  const counts = queryD1(database,
     `SELECT (SELECT COUNT(*) FROM actions_repository_enrollments) AS repositories,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1) AS enabled_repositories,(SELECT COUNT(*) FROM actions_repository_tasks WHERE enabled=1) AS enabled_tasks,(SELECT COUNT(*) FROM actions_repository_enrollments WHERE enabled=1 AND plan_job_workflow_ref<>${sql(DEFAULT_WORKFLOW_REF)}) AS stale_bridge_repositories;`)[0];
   if (!counts) throw new Error("Gardener D1 did not return operational counts");
-  const pullRequestTasks = queryDoctorD1(resolve(sourceRoot), manifest,
+  const pullRequestTasks = queryD1(database,
     `SELECT e.repository_id AS repository_id, e.owner_login || '/' || e.repository_name AS full_name, group_concat(DISTINCT effect.value) AS kinds FROM actions_repository_enrollments e JOIN actions_repository_tasks t ON t.repository_id=e.repository_id AND t.enabled=1 JOIN actions_task_bundles b ON b.bundle_hash=t.bundle_hash JOIN json_each(CASE WHEN json_valid(b.bundle_json) THEN b.bundle_json ELSE '{}' END, '$.effects') effect WHERE e.enabled=1 AND effect.value IN (${PULL_REQUEST_PERMISSION_KINDS.map(sql).join(",")}) GROUP BY e.repository_id ORDER BY full_name;`);
   const pullRequestPermissionWarnings = pullRequestPermissionWarningsFor(pullRequestTasks.map((row) => ({
     repositoryId: String(row.repository_id),
@@ -412,17 +400,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
     if (result.status !== 0) throw new Error("gh api failed");
     return JSON.parse(result.stdout) as unknown;
   });
-  if (manifest.cloudflare.runnerAccessBypassAppId) {
-    const record = objectResult(await cloudflareApi(
-      manifest.cloudflare.accountId,
-      `/access/apps/${encodeURIComponent(manifest.cloudflare.runnerAccessBypassAppId)}`,
-    ));
-    if (record.domain !== new URL(manifest.cloudflare.runtimeOrigin).hostname
-      || record.name !== `Gardener ${workspace} runtime`) {
-      throw new Error("Runtime Access bypass does not match the installation manifest");
-    }
-  }
-  const response = await fetch(`${manifest.cloudflare.runtimeOrigin}/health`);
+  const response = await fetch(`${installation.cloudflare.runtimeOrigin}/health`);
   const health = await response.json().catch(() => null) as { ok?: unknown } | null;
   if (!response.ok || health?.ok !== true) {
     throw new Error("Gardener runtime is unhealthy");
@@ -434,7 +412,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
     database: true,
     access: true,
     schema: true,
-    deploymentHash: manifest.deployment?.sourceHash ?? null,
+    deploymentHash: installation.deploymentHash,
     repositories: Number(counts.repositories),
     enabledRepositories: Number(counts.enabled_repositories),
     enabledTasks: Number(counts.enabled_tasks),
@@ -491,95 +469,6 @@ export function pullRequestPermissionWarningsFor(
   return warnings;
 }
 
-export async function destroyActions(input: {
-  workspace: string;
-  sourceRoot: string;
-  execute: boolean;
-  confirm?: string;
-}): Promise<{
-  destroyed: boolean;
-  intentDigest: string;
-  resources: { database: string; runtimeWorker: string };
-}> {
-  const manifest = await requiredActionsManifest(input.workspace);
-  const sourceRoot = resolve(input.sourceRoot);
-  const resources = {
-    database: manifest.cloudflare.database.name,
-    runtimeWorker: manifest.cloudflare.runtimeWorker,
-  };
-  const directory = actionsInstallationDirectory(input.workspace);
-  const intentPath = join(directory, "teardown-intent.json");
-  const manifestHash = await canonicalSha256(manifest);
-  const teardownResources = {
-    database: manifest.cloudflare.database,
-    runtimeWorker: manifest.cloudflare.runtimeWorker,
-    runnerAccessBypassAppId: manifest.cloudflare.runnerAccessBypassAppId,
-  };
-  let intent = await readTeardownIntent(intentPath);
-
-  if (!input.execute) {
-    if (!intent || intent.manifestHash !== manifestHash || teardownIntentExpired(intent.createdAt)) {
-      intent = teardownIntentSchema.parse({
-        schemaVersion: "gardener.actions-teardown-intent/v2",
-        workspace: input.workspace,
-        accountId: manifest.cloudflare.accountId,
-        manifestHash,
-        resources: teardownResources,
-        createdAt: new Date().toISOString(),
-      });
-      await writePrivateJson(intentPath, intent);
-    }
-    return { destroyed: false, intentDigest: await canonicalSha256(intent), resources };
-  }
-
-  if (!intent) throw new Error("No teardown intent exists; run gardener down without --execute first");
-  if (teardownIntentExpired(intent.createdAt)) {
-    throw new Error("Teardown intent expired; run gardener down without --execute to create a new intent");
-  }
-  const intentDigest = await canonicalSha256(intent);
-  if (input.confirm !== intentDigest) {
-    throw new Error(`Destructive teardown requires --confirm ${intentDigest}`);
-  }
-  if (intent.workspace !== input.workspace || intent.accountId !== manifest.cloudflare.accountId
-    || intent.manifestHash !== manifestHash
-    || canonicalJson(intent.resources) !== canonicalJson(teardownResources)) {
-    throw new Error("Teardown intent no longer matches the installation manifest");
-  }
-  if (selectedAccountId(sourceRoot) !== manifest.cloudflare.accountId) {
-    throw new Error("Current Wrangler account does not match the Actions installation");
-  }
-  const database = listDatabases(sourceRoot)
-    .find((candidate) => candidate.name === manifest.cloudflare.database.name);
-  if (database && database.uuid !== manifest.cloudflare.database.id) {
-    throw new Error("Refusing teardown because the D1 identity does not match the installation manifest");
-  }
-  if (manifest.cloudflare.runnerAccessBypassAppId) {
-    await cloudflareApi(
-      manifest.cloudflare.accountId,
-      `/access/apps/${encodeURIComponent(manifest.cloudflare.runnerAccessBypassAppId)}`,
-      { method: "DELETE" },
-      true,
-    );
-  }
-  deleteWorker(sourceRoot, manifest.cloudflare.runtimeWorker);
-  if (database) {
-    wrangler(sourceRoot, "apps/gardener", [
-      "d1", "delete", manifest.cloudflare.database.name, "--skip-confirmation",
-    ], undefined, { quiet: true });
-  }
-  await writePrivateJson(join(directory, "teardown.json"), {
-    schemaVersion: "gardener.actions-teardown/v1",
-    workspace: input.workspace,
-    intentDigest,
-    destroyedAt: new Date().toISOString(),
-    cloudflare: manifest.cloudflare,
-  });
-  await unlink(join(directory, "installation.json")).catch(() => undefined);
-  await unlink(intentPath).catch(() => undefined);
-  await unlink(join(directory, "deploy-intent.json")).catch(() => undefined);
-  return { destroyed: true, intentDigest, resources };
-}
-
 export async function actionsDeploymentHash(sourceRootInput: string): Promise<string> {
   const sourceRoot = resolve(sourceRootInput);
   const migrationRoot = join(sourceRoot, "apps/gardener/migrations");
@@ -591,49 +480,6 @@ export async function actionsDeploymentHash(sourceRootInput: string): Promise<st
       sql: await readFile(join(migrationRoot, name), "utf8"),
     }))),
   });
-}
-
-export async function readActionsManifest(workspace: string): Promise<ActionsInstallationManifest | null> {
-  try {
-    return manifestSchema.parse(JSON.parse(await readFile(
-      join(actionsInstallationDirectory(workspace), "installation.json"),
-      "utf8",
-    )));
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
-async function readDeployIntent(path: string): Promise<z.infer<typeof intentSchema> | null> {
-  try {
-    return intentSchema.parse(JSON.parse(await readFile(path, "utf8")));
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
-function teardownIntentExpired(createdAt: string, now = Date.now()): boolean {
-  return now - Date.parse(createdAt) > TEARDOWN_INTENT_TTL_MS;
-}
-
-async function readTeardownIntent(path: string): Promise<z.infer<typeof teardownIntentSchema> | null> {
-  try {
-    const value = JSON.parse(await readFile(path, "utf8")) as { schemaVersion?: unknown };
-    return value.schemaVersion === "gardener.actions-teardown-intent/v2"
-      ? teardownIntentSchema.parse(value)
-      : null;
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
-async function requiredActionsManifest(workspace: string): Promise<ActionsInstallationManifest> {
-  const manifest = await readActionsManifest(workspace);
-  if (!manifest) throw new Error(`No Actions installation exists for workspace ${workspace}`);
-  return manifest;
 }
 
 const lockSchema = z.strictObject({
@@ -801,37 +647,4 @@ async function isPackagedDistribution(sourceRoot: string): Promise<boolean> {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return false;
     throw error;
   }
-}
-
-function queryDoctorD1(
-  sourceRoot: string,
-  manifest: ActionsInstallationManifest,
-  command: string,
-): Array<Record<string, unknown>> {
-  const result = wrangler(sourceRoot, "apps/gardener", [
-    "d1", "execute", manifest.cloudflare.database.name,
-    "--remote", "--json", "--command", command,
-  ], undefined, { quiet: true });
-  const value = JSON.parse(result.stdout) as unknown;
-  if (!Array.isArray(value)) throw new Error("Wrangler returned invalid D1 doctor output");
-  return value.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") return [];
-    const rows = (entry as { results?: unknown }).results;
-    return Array.isArray(rows)
-      ? rows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
-      : [];
-  });
-}
-
-function deleteWorker(sourceRoot: string, worker: string): void {
-  const result = wrangler(sourceRoot, ".", [
-    "delete", worker, "--force",
-  ], undefined, { quiet: true, allowFailure: true });
-  if (result.status !== 0 && !/not found|does not exist|10090/i.test(`${result.stdout}\n${result.stderr}`)) {
-    throw new Error(`Failed to delete Gardener Worker ${worker}`);
-  }
-}
-
-function sql(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
 }

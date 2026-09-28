@@ -146,8 +146,9 @@ task saw. No other operation can force-push, and none can delete a branch.
 
 ## Operator secrets
 
-`.gardener/` and the generated workflows contain no secrets. The CLI keeps installation state under
-`~/.config/gardener/<workspace>/`, with directory mode `0700` and file mode `0600`.
+`.gardener/` and the generated workflows contain no secrets. The CLI keeps no local installation
+state: it reads the installation from the Cloudflare account, and `deploy` records the runtime URL,
+CLI version and deployment digest (none of them secret) in the workspace's D1.
 
 A `CLOUDFLARE_API_TOKEN`, when provided for Cloudflare Access, is used in memory only. It is never
 written to disk, D1, the Worker, GitHub, or command arguments.

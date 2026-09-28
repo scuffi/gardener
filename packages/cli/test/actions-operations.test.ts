@@ -1,19 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { rmSync } from "node:fs";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  readActionsManifest: vi.fn(async () => ({
-    schemaVersion: "gardener.actions-installation/v1",
+  resolveInstallation: vi.fn(async () => ({
     workspace: "demo-team",
     cloudflare: {
       accountId: "account-1",
       database: { name: "gardener-demo-team", id: "11111111-1111-4111-8111-111111111111" },
       runtimeWorker: "gardener-demo-team",
       runtimeOrigin: "https://runner.example.workers.dev",
-      runnerAccessBypassAppId: null,
-      runtimeConfig: "/private/runtime.json",
     },
-    createdAt: "2026-09-21T00:00:00.000Z",
-    updatedAt: "2026-09-21T00:00:00.000Z",
+    cliVersion: "0.1.2",
+    deploymentHash: null,
+    deployedAt: null,
   })),
   readProjectLock: vi.fn(async () => ({
     tasks: {
@@ -24,11 +23,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/actions-installation", () => ({
-  readActionsManifest: mocks.readActionsManifest,
+  resolveInstallation: mocks.resolveInstallation,
   readProjectLock: mocks.readProjectLock,
 }));
 vi.mock("../src/commands", () => ({ wrangler: mocks.wrangler }));
 
+import { isolatedWranglerDirectory } from "../src/actions-d1";
 import {
   listActionsRepositories,
   setRepositoryEnabled,
@@ -44,6 +44,7 @@ function command(args: string[]): string {
 }
 
 describe("Actions operational controls", () => {
+  afterAll(() => rmSync(isolatedWranglerDirectory(), { recursive: true, force: true }));
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.wrangler.mockImplementation((_root: string, _cwd: string, args: string[]) => {
