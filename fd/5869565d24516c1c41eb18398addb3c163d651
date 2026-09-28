@@ -1,0 +1,40 @@
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_fa7867303d7d6b 39993,40105-40106,40268
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_36f9557af828cf 66,855-901,2357-2358
+SECURITY.md
+  s_de0b486c128948::t_b8a114d99f4417 129-131
+  s_de0b486c128948::t_fd9b3baeb57f81 132-134
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_b1f39584b903bf 570-582,1667-1687
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_f96b0ea1608263 60
+docs/task-authoring.md
+  s_de0b486c128948::t_a7378c763fed9b 214,264-270,322
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_beca403b981faa 8,138-139,367
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_657bda10cd90fb 40001,40113-40114,40276,45829,46300-46331,47445-47446
+apps/gardener/test/task-effect-plan.test.ts
+  s_de0b486c128948::t_34faf0cb0e9fc0 313
+packages/contracts/test/task-v1.test.ts
+  s_de0b486c128948::t_231f2fab3639c2 129
+packages/provider-github/src/permissions.ts
+  s_de0b486c128948::t_f6300339e2002b 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fd5869565d24516c1c41eb18398addb3c163d651",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
