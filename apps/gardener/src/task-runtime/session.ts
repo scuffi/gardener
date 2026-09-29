@@ -74,6 +74,7 @@ import { instrumentD1 } from "./d1-diagnostics";
 import { taskToolInputKeys } from "./tool-input-schemas";
 import { listFilesPath, repositoryPath } from "./repository-paths";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
+import { trustedTaskWorkflowRefs } from "./workflow-refs";
 
 interface Enrollment {
   repository_id: string;
@@ -194,8 +195,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
       "FROM actions_repository_enrollments WHERE repository_id=? AND owner_id=? AND enabled=1",
     ).bind(hello.repositoryId, hello.ownerId).first<Enrollment>();
     if (!enrollment) throw new Error("Repository is not enrolled for Actions task execution");
-    const jobWorkflowRef = hello.phase === "plan" ? enrollment.plan_job_workflow_ref : enrollment.effects_job_workflow_ref;
-    if (!jobWorkflowRef) throw new Error(`Repository has no enrolled ${hello.phase} workflow`);
+    const enrolledWorkflowRef = hello.phase === "plan" ? enrollment.plan_job_workflow_ref : enrollment.effects_job_workflow_ref;
+    if (!enrolledWorkflowRef) throw new Error(`Repository has no enrolled ${hello.phase} workflow`);
     const actor = await verifyActionsOidc(oidcToken, hello, {
       audience: enrollment.oidc_audience,
       repositoryId: enrollment.repository_id,
@@ -203,7 +204,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ownerLogin: enrollment.owner_login,
       repositoryName: enrollment.repository_name,
       visibility: enrollment.visibility,
-      jobWorkflowRef,
+      jobWorkflowRefs: trustedTaskWorkflowRefs(enrolledWorkflowRef, this.env.GARDENER_RELEASE_WORKFLOW_REF),
     });
     await this.consumeOidcToken(actor.jti, actor.expiresAt);
     const existingSessionId = await this.ctx.storage.get<string>("session-id");
@@ -739,7 +740,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
       bundle,
       bundleHash,
       sourcePath,
-      policySnapshotHash: await canonicalSha256({ enrollment: identity.enrollment.repository_id, workflow: identity.enrollment.plan_job_workflow_ref }),
+      // The run's own signed workflow, not the enrollment's: a sync can move the
+      // enrollment mid-run, and this must not change under an admitted run.
+      policySnapshotHash: await canonicalSha256({ enrollment: identity.enrollment.repository_id, workflow: identity.hello.jobWorkflowRef }),
       event: {
         ...eventPayload(runnerEvent),
         schemaVersion: "gardener.normalized-event/v1" as const,

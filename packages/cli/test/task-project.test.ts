@@ -8,6 +8,7 @@ import {
   buildProject,
   DEFAULT_WORKFLOW_REF,
   initializeProject,
+  pinCliScripts,
   planProject,
   staleProjectFiles,
   SYNC_WORKFLOW,
@@ -567,6 +568,44 @@ describe("local Gardener project", () => {
     await writeFile(join(collisionRoot, ".gardener/tasks/example/TASK.md"), TASK);
     await expect(buildProject({ repositoryRoot: collisionRoot }))
       .rejects.toThrow(/Refusing to overwrite non-Gardener workflow/);
+  });
+});
+
+describe("pinned CLI scripts", () => {
+  it("moves only package.json scripts that pin this CLI, keeping the file's formatting", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-scripts-"));
+    const original = `{
+    "name": "demo",
+    "description": "Uses @scuffi/gardener@0.1.3 generate",
+    "scripts": {
+        "gardener:generate": "npx --yes @scuffi/gardener@0.1.3 generate",
+        "gardener:latest": "npx @scuffi/gardener@latest generate",
+        "other": "npx @scuffi/gardener-extra@0.1.3 run",
+        "pre": "npx @scuffi/gardener@0.1.3-rc.1 doctor && echo done"
+    }
+}
+`;
+    await writeFile(join(root, "package.json"), original);
+    expect(await pinCliScripts({ repositoryRoot: root, version: "0.1.5" })).toEqual(["gardener:generate", "pre"]);
+    expect(await readFile(join(root, "package.json"), "utf8")).toBe(original
+      .replace('"npx --yes @scuffi/gardener@0.1.3 generate"', '"npx --yes @scuffi/gardener@0.1.5 generate"')
+      .replace('"npx @scuffi/gardener@0.1.3-rc.1 doctor && echo done"', '"npx @scuffi/gardener@0.1.5 doctor && echo done"'));
+    // Already current: nothing changes.
+    expect(await pinCliScripts({ repositoryRoot: root, version: "0.1.5" })).toEqual([]);
+  });
+
+  it("reports every script that shared a rewritten value", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-scripts-shared-"));
+    await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { a: "npx @scuffi/gardener@0.1.3 generate", b: "npx @scuffi/gardener@0.1.3 generate" } }));
+    expect(await pinCliScripts({ repositoryRoot: root, version: "0.1.5" })).toEqual(["a", "b"]);
+  });
+
+  it("does nothing without a package.json or scripts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-scripts-none-"));
+    expect(await pinCliScripts({ repositoryRoot: root, version: "0.1.5" })).toEqual([]);
+    await writeFile(join(root, "package.json"), '{"name":"x"}\n');
+    expect(await pinCliScripts({ repositoryRoot: root, version: "0.1.5" })).toEqual([]);
+    expect(await readFile(join(root, "package.json"), "utf8")).toBe('{"name":"x"}\n');
   });
 });
 

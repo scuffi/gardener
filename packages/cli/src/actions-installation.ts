@@ -286,7 +286,7 @@ export async function connectActions(input: {
   repository: string;
   repositoryRoot: string;
   sourceRoot: string;
-}): Promise<{ repositoryId: string; bundles: string[]; runtimeOrigin: string }> {
+}): Promise<{ repositoryId: string; bundles: string[]; runtimeOrigin: string; syncStarted: boolean }> {
   const repository = repositorySlug.parse(input.repository);
   const installation = await resolveInstallation(input.workspace);
   const runtimeOrigin = installation.cloudflare.runtimeOrigin;
@@ -349,7 +349,14 @@ export async function connectActions(input: {
       "variable", "set", "GARDENER_RUNTIME_URL", "--repo", repository, "--body", runtimeOrigin,
     ], { cwd: input.repositoryRoot, quiet: true });
   }
-  return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin };
+  // Run the sync once from the default branch. If the Gardener files merged
+  // before this connect, their first sync failed; this one replaces it, and
+  // makes the default branch's tasks the live ones if this checkout differs.
+  // Before they merge there is no sync workflow yet, which is fine.
+  const sync = runCommand("gh", ["workflow", "run", "gardener-sync.yml", "--repo", repository], {
+    cwd: input.repositoryRoot, quiet: true, allowFailure: true,
+  });
+  return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin, syncStarted: sync.status === 0 };
 }
 
 export async function doctorActions(workspace: string, sourceRoot: string): Promise<{

@@ -49,7 +49,7 @@ its own:
 | `init [--demos]` | Creates `.gardener/`, optionally with the two demo tasks | None |
 | `generate` | Compiles tasks, writes the lock file and one workflow per task | None |
 | `deploy` | Creates or adopts the D1 database, applies migrations, deploys the Worker, records installation facts, checks `/health` | Cloudflare |
-| `connect` | Enrolls the repository and its bundle hashes, sets `GARDENER_RUNTIME_URL` | D1, GitHub variable |
+| `connect` | Enrolls the repository and its bundle hashes, sets `GARDENER_RUNTIME_URL`, and starts the sync workflow on the default branch if it is there yet. Needed once per repository | D1, GitHub variable, one workflow run |
 | `doctor` | Verifies the installation. Warns about enrollments whose workflow pin differs from this CLI, and repositories whose tasks open or approve pull requests without the setting below | None |
 
 `init` and `generate` never overwrite existing task files or workflows that Gardener did not generate.
@@ -106,7 +106,10 @@ runtime, so it is safe on pull requests from forks. It only runs on pull request
 those files, so don't make it a required status check: other pull requests would wait for it
 forever. A pull request can edit its own checks anyway, so the sync after merge remains the
 enforcement. To resync by hand, run the **Gardener · Sync tasks** workflow from the
-Actions tab, or run `connect` from an up-to-date checkout of the default branch.
+Actions tab, or run `connect` from an up-to-date checkout of the default branch. `connect` also
+starts a sync from the default branch, which replaces the bundles it enrolled from your checkout.
+If that run goes red, the default branch's generated files are older than your checkout's: merge
+the regenerated files.
 
 Anyone who can push to the default branch decides what Gardener may do there. Protect it with
 required reviews or a CODEOWNERS entry for `.gardener/**` if that matters for the repository.
@@ -159,11 +162,14 @@ pnpm gardener -- upgrade --workspace my-gardener \
 1. redeploys the Worker from the current source;
 2. moves the repository to this CLI's workflow pin;
 3. rebuilds the workflows;
-4. runs `doctor`.
+4. moves `package.json` scripts that run a pinned `@scuffi/gardener` (such as a
+   `gardener:generate` script) to this release;
+5. runs `doctor`.
 
 Run it once per repository, then commit and push the regenerated files. The repository keeps
 running on its previous release until they reach the default branch, where the sync moves it to
-the new one.
+the new one. Runs from the new workflows are accepted in between, because the Worker also trusts
+its own release, so nothing is refused while the sync catches up.
 
 Some releases change the bundle format, which changes every bundle hash. After such a release's
 Worker is deployed, runs for a repository fail with `Stored task bundle predates this Gardener

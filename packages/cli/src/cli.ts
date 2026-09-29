@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  cliVersion,
   connectActions,
   deployActions,
   doctorActions,
@@ -14,7 +15,7 @@ import {
 } from "./actions-operations.js";
 import { qualifyActions } from "./actions-qualify.js";
 import { parse } from "./args.js";
-import { buildProject, initializeProject, requireProject, upgradeProjectRelease } from "./project.js";
+import { buildProject, initializeProject, pinCliScripts, requireProject, upgradeProjectRelease } from "./project.js";
 import { defaultSourceRoot } from "./distribution.js";
 import { terminal } from "./terminal.js";
 
@@ -24,10 +25,14 @@ Commands:
   init                         Create a local .gardener project
   generate                     Compile TASK.md files and generate caller workflows
   deploy                       Deploy the Gardener runtime to Cloudflare
-  upgrade                      Upgrade runtime and one repository bridge pin
+  connect                      Connect a repository to the runtime (once per repository)
+  upgrade                      Redeploy the runtime and move a repository's files to this release
   yolo                         Init, generate, deploy, connect, and verify
   doctor                       Verify an existing installation
   debug                        Run both demo workflows and verify exact receipts
+  repositories                 List connected repositories
+  repository disable|enable    Stop or resume every task in a repository
+  tasks                        List enrolled tasks
   runs                         List recent runs
   runs view                    Show one run and its audit records
 
@@ -36,17 +41,19 @@ Run \`gardener <command> --help\` for command options.
 
 /**
  * Renamed commands fail with a pointer to the new name rather than working
- * silently, so scripts are fixed once. Commands left out of HELP (connect,
- * repository, repositories, tasks) still work.
+ * silently, so scripts are fixed once.
  */
 const RENAMED: Record<string, string> = { build: "generate", up: "yolo", qualify: "debug" };
 
-const OPERATIONS_HELP = `gardener <repositories|tasks|runs|runs view|repository enable|repository disable>
+const OPERATIONS_HELP = `gardener <repositories|tasks|runs|runs view|repository disable|repository enable>
+
+repository disable stops every task in a repository straight away, whatever is on its default
+branch; repository enable resumes them.
 
 Options:
   --workspace <name>           Existing Gardener installation
   --repository <owner/name>    Optional repository filter or required control target
-  --run <id>                   Run identity for run show
+  --run <id>                   Run identity for runs view
   --limit <1-100>              Maximum runs to list
   --repository-root <path>     Customer repository (defaults to current directory)
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
@@ -95,8 +102,9 @@ Options:
 
 const CONNECT_HELP = `gardener connect
 
-Enroll a repository, upload its compiled bundles, and set its non-secret runtime URL variable.
-Bundles not in this checkout are disabled, so run it from the default branch.
+Connect a repository once: enroll it, upload its compiled bundles, set its non-secret runtime
+URL variable, and start the sync workflow on its default branch if it is there yet. Bundles not in
+this checkout are disabled until that sync, so run it from the default branch.
 
 Options:
   --workspace <name>           Existing Gardener installation
@@ -200,12 +208,13 @@ async function main(argv: string[]): Promise<void> {
       const project = await upgradeProjectRelease({ repositoryRoot });
       const build = await buildProject({ repositoryRoot });
       printBuildWarnings(build);
+      const scripts = await pinCliScripts({ repositoryRoot, version: await cliVersion() });
       // Not connected here: the enrollment moves to the new release when the
       // regenerated files reach the default branch, so runs keep working until then.
       const doctor = await doctorActions(workspace, sourceRoot);
       warnDoctorFindings(doctor);
-      console.log(JSON.stringify({ runtime, project, build, doctor }, null, 2));
-      console.error("Commit and push .gardener/ and .github/workflows/. When they reach the default branch, the Gardener sync workflow enrols them.");
+      console.log(JSON.stringify({ runtime, project, build, scripts, doctor }, null, 2));
+      console.error(`Commit and push .gardener/ and .github/workflows/${scripts.length > 0 ? " and package.json" : ""}. When they reach the default branch, the Gardener sync workflow enrols them.`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown repository error";
       throw new Error(
@@ -216,12 +225,16 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   if (command === "connect") {
-    console.log(JSON.stringify(await connectActions({
+    const connected = await connectActions({
       workspace: requiredStringFlag(flags, "workspace"),
       repository: requiredStringFlag(flags, "repository"),
       repositoryRoot,
       sourceRoot,
-    }), null, 2));
+    });
+    console.log(JSON.stringify(connected, null, 2));
+    console.error(connected.syncStarted
+      ? "Started the Gardener sync workflow on the default branch; it enrols the tasks there."
+      : "Connected. Commit and push .gardener/ and .github/workflows/: when they reach the default branch, the sync workflow enrols them.");
     return;
   }
   if (command === "doctor") {

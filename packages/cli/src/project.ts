@@ -210,6 +210,46 @@ export async function upgradeProjectRelease(input: { repositoryRoot: string }): 
 }
 
 /**
+ * Moves `package.json` scripts that run a pinned Gardener CLI (such as
+ * `"gardener:generate": "npx --yes @scuffi/gardener@0.1.4 generate"`) to this
+ * release, so contributors generate with the same compiler as the pinned
+ * workflows. Only script values are matched; each is replaced as text, which
+ * keeps the file's formatting but also rewrites an identical string elsewhere
+ * in the file. Returns the names of the scripts it changed.
+ */
+export async function pinCliScripts(input: {
+  repositoryRoot: string;
+  version: string;
+  packageName?: string;
+}): Promise<string[]> {
+  const packagePath = join(resolve(input.repositoryRoot), "package.json");
+  let source: string;
+  try {
+    source = await readFile(packagePath, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  }
+  const scripts = (JSON.parse(source) as { scripts?: unknown }).scripts;
+  if (!scripts || typeof scripts !== "object") return [];
+  const name = (input.packageName ?? "@scuffi/gardener").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  const pinned = new RegExp(`${name}@\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?![0-9A-Za-z.-])`, "g");
+  const changed: string[] = [];
+  let next = source;
+  for (const [script, value] of Object.entries(scripts)) {
+    if (typeof value !== "string") continue;
+    const updated = value.replace(pinned, `${input.packageName ?? "@scuffi/gardener"}@${input.version}`);
+    if (updated === value) continue;
+    const before = JSON.stringify(value);
+    if (next.includes(before)) next = next.replaceAll(before, JSON.stringify(updated));
+    // A script sharing its value with an earlier one was rewritten with it.
+    if (!next.includes(before)) changed.push(script);
+  }
+  if (next !== source) await atomicWrite(packagePath, next);
+  return changed;
+}
+
+/**
  * Everything `generate` writes, computed without writing: the lock, one
  * workflow per task and the sync workflow, as paths relative to the
  * repository root. The sync bridge compares it with the committed files.

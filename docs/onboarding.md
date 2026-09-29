@@ -122,11 +122,11 @@ cd gardener && git fetch --tags && git checkout v0.1.4 && pnpm install
 
 pnpm gardener -- upgrade --workspace internal --repository-root "$REPO" --source-root "$PWD"
 
-cd "$REPO" && git add .gardener .github/workflows && git commit -m "Upgrade Gardener to v0.1.4" && git push
+cd "$REPO" && git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.4" && git push
 ```
 
-`upgrade` redeploys the shared Worker and moves the repository's workflows to the release's pinned
-commit. Deploy first: a sync from a newer release is accepted only once the Worker runs that
+`upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned
+commit, and moves any `package.json` script that runs a pinned `@scuffi/gardener` to the release. Deploy first: a sync from a newer release is accepted only once the Worker runs that
 release. The repository keeps running on its previous release until the commit reaches the default
 branch, where the sync moves it over. Keep every repository on the same tag. The CLI keeps no local
 state, so any operator logged in to the Cloudflare account can run it. It refuses to replace a

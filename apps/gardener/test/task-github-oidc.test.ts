@@ -36,7 +36,7 @@ beforeAll(async () => {
     ownerLogin: "scuffi",
     repositoryName: "smoke",
     visibility: "public",
-    jobWorkflowRef: workflow,
+    jobWorkflowRefs: [workflow],
     key: createLocalJWKSet({ keys: [{ ...jwk, kid: "test", alg: "RS256", use: "sig" }] }),
     now,
   };
@@ -65,8 +65,19 @@ describe("product Actions OIDC enrollment", () => {
   it("rejects an enrollment that does not pin the reusable workflow to a full SHA", async () => {
     await expect(verifyActionsOidc(await token(), { ...hello, jobWorkflowRef: "scuffi/smoke/.github/workflows/reusable.yml@main" }, {
       ...policy,
-      jobWorkflowRef: "scuffi/smoke/.github/workflows/reusable.yml@main",
+      jobWorkflowRefs: [workflow, "scuffi/smoke/.github/workflows/reusable.yml@main"],
     })).rejects.toThrow(/full commit SHA/);
+    await expect(verifyActionsOidc(await token(), hello, { ...policy, jobWorkflowRefs: [] })).rejects.toThrow(/full commit SHA/);
+  });
+
+  it("accepts any trusted workflow, and only those", async () => {
+    const newer = `scuffi/gardener/.github/workflows/gardener-task.yml@${"9".repeat(40)}`;
+    const trusted = { ...policy, jobWorkflowRefs: [workflow, newer] };
+    await expect(verifyActionsOidc(await token({ job_workflow_ref: newer }), { ...hello, jobWorkflowRef: newer }, trusted))
+      .resolves.toMatchObject({ actorLogin: "scuffi" });
+    const other = `scuffi/gardener/.github/workflows/gardener-task.yml@${"8".repeat(40)}`;
+    await expect(verifyActionsOidc(await token({ job_workflow_ref: other }), { ...hello, jobWorkflowRef: other }, trusted))
+      .rejects.toThrow(/trusted reusable workflow/);
   });
 
   it("rejects environment-bound identities for both planning and automatic effects", async () => {

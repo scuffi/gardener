@@ -16,7 +16,8 @@ export interface ActionsEnrollmentPolicy {
   ownerLogin: string;
   repositoryName: string;
   visibility: "public" | "private" | "internal";
-  jobWorkflowRef: string;
+  /** The trusted reusable workflows; the run's must be one of them. */
+  jobWorkflowRefs: readonly string[];
   key?: JWTVerifyGetKey;
   now?: Date;
 }
@@ -44,13 +45,13 @@ export async function verifyActionsOidc(
   const actorId = requiredClaim(payload, "actor_id");
   const actorLogin = requiredClaim(payload, "actor");
   if (!Number.isSafeInteger(payload.exp)) throw new Error("OIDC token has no valid expiry");
-  if (!/@[a-f0-9]{40}$/.test(policy.jobWorkflowRef)) {
+  if (policy.jobWorkflowRefs.length === 0 || policy.jobWorkflowRefs.some((ref) => !/@[a-f0-9]{40}$/.test(ref))) {
     throw new Error("Enrolled reusable workflow must be pinned to a full commit SHA");
   }
   if (hello.repositoryId !== policy.repositoryId || hello.ownerId !== policy.ownerId) {
     throw new Error("Runner hello does not match enrolled repository identity");
   }
-  if (hello.jobWorkflowRef !== policy.jobWorkflowRef) {
+  if (!policy.jobWorkflowRefs.includes(hello.jobWorkflowRef)) {
     throw new Error("Runner hello does not match the trusted reusable workflow");
   }
   const expected: Record<string, string> = {

@@ -93,8 +93,12 @@ describe("Gardener CLI", () => {
     expect(root.stdout).toContain("yolo                         Init, generate, deploy, connect, and verify");
     expect(root.stdout).toContain("debug                        Run both demo workflows");
     expect(root.stdout).toContain("runs view                    Show one run");
-    // Still available, but not advertised.
-    for (const hidden of ["connect ", "rollback", "repositories", "down "]) expect(root.stdout).not.toContain(hidden);
+    expect(root.stdout).toContain("connect                      Connect a repository");
+    expect(root.stdout).toContain("repository disable|enable    Stop or resume every task");
+    expect(root.stdout).toContain("repositories                 List connected repositories");
+    expect(root.stdout).toContain("tasks                        List enrolled tasks");
+    // Removed commands.
+    for (const removed of ["rollback", "down "]) expect(root.stdout).not.toContain(removed);
 
     for (const [old, renamed] of [["build", "generate"], ["up", "yolo"], ["qualify", "debug"]]) {
       const legacy = spawnSync(process.execPath, ["dist/cli.js", "--", old!, "--help"], { cwd: process.cwd(), encoding: "utf8" });
