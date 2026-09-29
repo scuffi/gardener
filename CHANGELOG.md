@@ -3,6 +3,25 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.3 (2026-09-29)
+
+- Tasks go live when they reach the default branch. `generate` adds a `gardener-sync.yml`
+  workflow that sends the compiled tasks to the runtime on every push to the default branch that
+  touches Gardener's files: new tasks start running, and deleted or drafted tasks stop. `connect`
+  is only needed once per repository. The runtime accepts a sync only from Gardener's pinned sync
+  workflow, on the default branch, at the repository's release or the one the Worker runs
+  (migration `0003_actions_repository_syncs`).
+- If the committed files are stale (someone edited a `TASK.md` without running `generate`), the
+  sync fails and the previous tasks keep running.
+- Removed `task enable` and `task disable`. To stop a task, delete it or set `draft: true`. To
+  stop everything, `gardener repository disable`.
+- `upgrade` no longer enrols the repository. Commit and push the regenerated files; the sync
+  enrols them.
+- A comment author with write or admin access to the repository now counts as a maintainer, even
+  if their organisation membership is private. Read-only members still need public membership.
+- Existing repositories: run `upgrade` with this release, then commit and push the regenerated
+  files.
+
 ## v0.1.2 (2026-09-28)
 
 - The CLI keeps no local state. It finds an installation by its `gardener-<workspace>` name on the
