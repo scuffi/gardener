@@ -144,6 +144,7 @@ D1 is the only store. It holds six tables:
 | `actions_task_runs` | One row per run, attempt, and phase: status, request, model outcome, effect receipt |
 | `actions_task_audit` | Append-only run events (update and delete are blocked by triggers) |
 | `actions_control_audit` | Record of repository and task enable/disable changes, written by triggers |
+| `actions_repository_syncs` | One immutable row per accepted sync from the default branch, which also orders syncs |
 
 The schema is a single migration, `apps/gardener/migrations/0001_actions_baseline.sql`.
 

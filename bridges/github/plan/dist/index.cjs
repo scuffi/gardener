@@ -41782,6 +41782,22 @@ var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
   })
 ]);
 
+// ../contracts/src/sync.ts
+var pinnedWorkflowRefPattern = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/\.github\/workflows\/[A-Za-z0-9_.\/-]+\.ya?ml@([0-9a-f]{40})$/;
+var syncRequestV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.sync-request/v1"),
+  /** The repository's default branch, from the event GitHub wrote for the run. */
+  defaultBranch: external_exports.string().min(1).max(255),
+  /** The lock's `release.workflowRef`: the task workflow the tasks were generated for. */
+  workflowRef: external_exports.string().regex(pinnedWorkflowRefPattern),
+  tasks: external_exports.array(external_exports.strictObject({
+    taskId: external_exports.string().min(1).max(160),
+    /** The TASK.md path relative to `.gardener/`, as in the lock. */
+    source: external_exports.string().max(1024).regex(/^tasks\/(?!\.\.?\/)[A-Za-z0-9_.-]+\/TASK\.md$/),
+    bundle: external_exports.unknown()
+  })).max(100)
+});
+
 // ../protocol/src/schema.ts
 var identifier2 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
 var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);

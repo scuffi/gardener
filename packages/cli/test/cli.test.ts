@@ -126,7 +126,8 @@ describe("Gardener CLI", () => {
       "dist/cli.js", "--", "upgrade", "--workspace", "demo-team",
     ], { cwd: process.cwd(), encoding: "utf8" });
     expect(incompleteUpgrade.status).toBe(1);
-    expect(incompleteUpgrade.stderr).toContain("--repository is required");
+    // Checked before anything remote runs.
+    expect(incompleteUpgrade.stderr).toContain("Not a Gardener project");
   });
 
   it("uses packaged runtime assets when the CLI distribution contains them", async () => {

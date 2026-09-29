@@ -4,6 +4,8 @@ dist/
 !bridges/github/plan/dist/index.cjs
 !bridges/github/apply/dist/
 !bridges/github/apply/dist/index.cjs
+!bridges/github/sync/dist/
+!bridges/github/sync/dist/index.cjs
 .wrangler/
 .dev.vars
 .env

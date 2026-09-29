@@ -44,6 +44,7 @@ import {
   resolveInstallation,
   upgradeActions,
 } from "../src/actions-installation";
+import { DEFAULT_WORKFLOW_REF } from "../src/project";
 
 const originalToken = process.env.CLOUDFLARE_API_TOKEN;
 afterEach(() => {
@@ -132,19 +133,7 @@ describe("Actions-native installation topology", () => {
     expect(compareVersions("0.2.0", "1.0.0")).toBe(-1);
   });
 
-  it("preserves a task kill-switch while enrolling only the current bundle", () => {
-    const sql = actionsRepositoryTaskEnrollmentSql({
-      repositoryId: "1379585475",
-      taskId: "bug-intake",
-      bundleHash: "a".repeat(64),
-      sourcePath: ".gardener/tasks/bug-intake/TASK.md",
-    });
-    expect(sql).toContain("SELECT MAX(o.enabled)");
-    expect(sql).toContain(`bundle_hash,task_id,source_path,enabled) SELECT '1379585475','${"a".repeat(64)}','bug-intake'`);
-    expect(sql).not.toContain("enabled=1");
-  });
-
-  it("re-enables a reverted bundle only when its task is not disabled", async () => {
+  it("enables exactly the checkout's bundles, so reverts and restored tasks come back", async () => {
     const { DatabaseSync } = await import("node:sqlite");
     const { readFileSync, readdirSync } = await import("node:fs");
     const db = new DatabaseSync(":memory:");
@@ -167,18 +156,12 @@ describe("Actions-native installation topology", () => {
       connect("a");
       connect("b");
       expect(rows()).toBe("a:0 b:1");
-      // Reconnecting an unchanged checkout keeps the task enabled.
       connect("b");
       expect(rows()).toBe("a:0 b:1");
       connect("a");
       expect(rows()).toBe("a:1 b:0");
-      // task disable sets every row to 0; connecting does not undo it.
+      // A task deleted (every row stopped) and later restored comes back.
       db.exec("UPDATE actions_repository_tasks SET enabled=0");
-      connect("b");
-      connect("b");
-      expect(rows()).toBe("a:0 b:0");
-      // task enable enables only the lock's bundle, and connecting keeps it.
-      db.exec(`UPDATE actions_repository_tasks SET enabled=1 WHERE bundle_hash='${"b".repeat(64)}'`);
       connect("b");
       expect(rows()).toBe("a:0 b:1");
     } finally { db.close(); }
@@ -245,8 +228,8 @@ describe("Actions-native installation topology", () => {
       database_name: names.database,
       database_id: "11111111-1111-4111-8111-111111111111",
     })]);
-    // Each bundle names its model, so the runtime carries no model setting.
-    expect(runtime).not.toHaveProperty("vars");
+    // Each bundle names its model, so the runtime's only setting is its release.
+    expect(runtime.vars).toEqual({ GARDENER_RELEASE_WORKFLOW_REF: DEFAULT_WORKFLOW_REF });
     expect(runtime).not.toHaveProperty("assets");
     expect(runtime).not.toHaveProperty("triggers");
     expect(runtime.d1_databases[0].migrations_dir).toBe(join(sourceRoot, "apps/gardener/migrations"));

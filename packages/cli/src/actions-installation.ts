@@ -73,6 +73,9 @@ export function renderRuntimeConfig(input: {
       migrations_dir: join(input.sourceRoot, "apps/gardener/migrations"),
     }],
     ai: { binding: "AI" },
+    // The release this Worker belongs to: a sync from its workflow is accepted
+    // even before a repository's enrollment has moved to it.
+    vars: { GARDENER_RELEASE_WORKFLOW_REF: DEFAULT_WORKFLOW_REF },
     durable_objects: { bindings: [
       { name: "RUNNER_SESSIONS", class_name: "TaskRunnerSession" },
       { name: "FLUE_GARDENER_TASK_HARNESS_AGENT", class_name: "FlueGardenerTaskHarnessAgent" },
@@ -273,13 +276,9 @@ export function actionsRepositoryTaskEnrollmentSql(input: {
   bundleHash: string;
   sourcePath: string;
 }): string {
-  const repositoryId = sql(input.repositoryId);
-  const taskId = sql(input.taskId);
-  // Connecting never disables the bundle being kept. A bundle disabled only for
-  // being stale, such as a reverted task, comes back when another bundle of the
-  // task is enabled; after `task disable` every row is 0, so it stays disabled.
-  const inherited = (except: string) => `(SELECT MAX(o.enabled) FROM actions_repository_tasks o WHERE o.repository_id=${repositoryId} AND o.task_id=${taskId}${except})`;
-  return `INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled) SELECT ${repositoryId},${sql(input.bundleHash)},${taskId},${sql(input.sourcePath)},COALESCE(${inherited("")},1) WHERE true ON CONFLICT(repository_id,bundle_hash) DO UPDATE SET task_id=excluded.task_id,source_path=excluded.source_path,enabled=MAX(actions_repository_tasks.enabled,COALESCE(${inherited(" AND o.bundle_hash<>excluded.bundle_hash")},0)),updated_at=CURRENT_TIMESTAMP;`;
+  // The checkout's bundles are the live ones, as a sync from the default
+  // branch would make them; connectActions then disables every other bundle.
+  return `INSERT INTO actions_repository_tasks(repository_id,bundle_hash,task_id,source_path,enabled) VALUES (${sql(input.repositoryId)},${sql(input.bundleHash)},${sql(input.taskId)},${sql(input.sourcePath)},1) ON CONFLICT(repository_id,bundle_hash) DO UPDATE SET task_id=excluded.task_id,source_path=excluded.source_path,enabled=1,updated_at=CURRENT_TIMESTAMP;`;
 }
 
 export async function connectActions(input: {
@@ -302,6 +301,12 @@ export async function connectActions(input: {
     repositoryName: string;
     visibility: "public" | "private" | "internal";
   };
+  // The lock comes from the repository. Pinning another repository's
+  // workflows would make them the ones the runtime trusts, syncs included.
+  const releaseRepository = (ref: string) => ref.split("/.github/workflows/")[0];
+  if (releaseRepository(lock.release.workflowRef) !== releaseRepository(DEFAULT_WORKFLOW_REF)) {
+    throw new Error(`The lock pins ${lock.release.workflowRef}, which is not a ${releaseRepository(DEFAULT_WORKFLOW_REF)} release; run gardener upgrade`);
+  }
   const enrollmentSql = actionsEnrollmentSql({
     ...metadata,
     workflowRef: lock.release.workflowRef,
@@ -370,6 +375,7 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
     "actions_control_audit",
     "actions_installation",
     "actions_repository_enrollments",
+    "actions_repository_syncs",
     "actions_repository_tasks",
     "actions_task_audit",
     "actions_task_bundles",

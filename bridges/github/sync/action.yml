@@ -1,0 +1,15 @@
+name: Gardener GitHub sync bridge
+description: >-
+  Compiles a repository's committed Gardener tasks and enrols exactly those with
+  the customer-deployed Gardener runtime, authenticated by GitHub OIDC.
+author: Gardener
+inputs:
+  runtime-url:
+    description: HTTPS origin of the customer-deployed Gardener runtime.
+    required: true
+runs:
+  using: node24
+  main: dist/index.cjs
+branding:
+  icon: refresh-cw
+  color: green

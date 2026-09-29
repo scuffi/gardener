@@ -141,8 +141,22 @@ task saw. No other operation can force-push, and none can delete a branch.
   normal network access, so it can exfiltrate anything in the checkout. A hostile process can also
   tamper with the plan job's step outputs. It cannot change what is applied: the Worker
   independently re-derives the plan and its digest before apply, and any mismatch fails closed.
-- **Task kill switch.** `gardener task disable` stops new plans. It does not revoke a plan issued
-  before the switch. `gardener repository disable` blocks both phases.
+- **The default branch decides what runs.** On each push that touches Gardener's files, the
+  generated sync workflow enrolls exactly the committed tasks. The runtime accepts a sync only from
+  Gardener's pinned sync workflow, verified by the GitHub OIDC `job_workflow_ref` claim, running on
+  the default branch (`ref`) of a connected, enabled repository. So pull requests, other branches
+  and forks can't change enrolled tasks. But anyone who can push to the default branch can grant a
+  task any effect. Protect the branch (required reviews, or CODEOWNERS for `.gardener/**`) where
+  that matters. An unprotected branch is supported. The runtime trusts whichever branch GitHub
+  reports as the default at sync time, so a repository admin who renames the default branch to
+  an unprotected one can sync from it. Protecting the branch also means limiting who administers
+  the repository.
+- **Sync workflows come from Gardener's own repository.** The runtime accepts a sync only from
+  the repository that ships the release it was deployed from (its `GARDENER_RELEASE_WORKFLOW_REF`),
+  at the repository's enrolled commit or that release's commit. `connect` refuses a lock pinned to
+  any other repository.
+- **Kill switch.** `gardener repository disable` blocks planning, apply and syncs for the
+  repository. To stop one task, remove it from the default branch.
 
 ## Operator secrets
 

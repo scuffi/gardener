@@ -73,8 +73,8 @@ These are deliberately left out of the starters:
 - **Code changes (`repository.exec`).** It runs a model-controlled shell in the checkout, with
   network access that Gardener does not yet isolate. `generate` warns about it.
 
-To change a task, edit its `TASK.md` and rerun the `yolo` command above, which recompiles and
-re-enrolls it, then commit and push. Limits can go up to `runtime-seconds: 480` and
+To change a task, edit its `TASK.md`, run `generate`, then commit and push. The generated
+**Gardener · Sync tasks** workflow enrolls the change when it reaches the default branch. Limits can go up to `runtime-seconds: 480` and
 `input-tokens: 128000`. See [task-authoring.md](task-authoring.md) for the format.
 
 ## Writing your own task (anyone)
@@ -87,9 +87,11 @@ mkdir -p .gardener/tasks/my-task   # write .gardener/tasks/my-task/TASK.md
 npx @scuffi/gardener@0.1.2 generate
 ```
 
-`generate` validates every task, then writes the lock file and one workflow per task. Commit both
-and open a pull request. After it merges, ask the operator to enroll it (they rerun `yolo`). Until
-then, that task's runs are refused. Use the same CLI version as the repository's pinned release.
+`generate` validates every task, then writes the lock file and one workflow per task. Commit them
+and open a pull request. When it merges, the **Gardener · Sync tasks** workflow enrolls the task,
+with no operator step. Use the same CLI version as the repository's pinned release: if your
+generated files don't match what that release produces, the sync run fails and asks you to
+regenerate, and the previous tasks keep running.
 
 If your npm config sets `min-release-age` (a supply-chain delay), npm refuses versions published
 in the last few days. Add `--min-release-age=0` to the `npx` command to use a new release.
@@ -100,9 +102,9 @@ All of these take `--workspace internal --source-root "$PWD"`:
 
 | Need | Command |
 | --- | --- |
-| Pause one task now | `pnpm gardener -- task disable --repository my-org/my-repo --task triage` |
+| Stop one task | Delete it, or set `draft: true`, on the default branch |
 | Pause a whole repository | `pnpm gardener -- repository disable --repository my-org/my-repo` |
-| Resume | the same with `enable`; `task enable` also needs `--repository-root "$REPO"` |
+| Resume | `pnpm gardener -- repository enable --repository my-org/my-repo` |
 | Recent runs | `pnpm gardener -- runs --repository my-org/my-repo` |
 | One run in detail | `pnpm gardener -- runs view --run <run-id>` |
 | Check the installation | `pnpm gardener -- doctor --repository my-org/my-repo --repository-root "$REPO"` |
@@ -117,14 +119,15 @@ When a new tag is released, upgrade every connected repository to it:
 ```bash
 cd gardener && git fetch --tags && git checkout v0.1.2 && pnpm install
 
-pnpm gardener -- upgrade --workspace internal --repository my-org/my-repo \
-  --repository-root "$REPO" --source-root "$PWD"
+pnpm gardener -- upgrade --workspace internal --repository-root "$REPO" --source-root "$PWD"
 
 cd "$REPO" && git add .gardener .github/workflows && git commit -m "Upgrade Gardener to v0.1.2" && git push
 ```
 
-`upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned
-commit, and re-enrolls its tasks. Keep every repository on the same tag. The CLI keeps no local
+`upgrade` redeploys the shared Worker and moves the repository's workflows to the release's pinned
+commit. Deploy first: a sync from a newer release is accepted only once the Worker runs that
+release. The repository keeps running on its previous release until the commit reaches the default
+branch, where the sync moves it over. Keep every repository on the same tag. The CLI keeps no local
 state, so any operator logged in to the Cloudflare account can run it. It refuses to replace a
 runtime that a newer release deployed.
 
@@ -135,7 +138,8 @@ runtime that a newer release deployed.
 2. Bump `version` in `packages/cli/package.json`, add a matching section to `CHANGELOG.md`, and
    commit both.
 3. `git tag v0.1.N && git push origin v0.1.N`. The Release workflow checks that the tag matches the
-   package version, then stages `@scuffi/gardener@0.1.N` on npm.
+   package version and that every pinned workflow and bridge exists (`pnpm check:release-pins`),
+   then stages `@scuffi/gardener@0.1.N` on npm.
 4. Approve the staged release with 2FA: `npm stage list @scuffi/gardener`, then
    `npm stage approve <stage-id>` (or approve it on npmjs.com). Nothing is installable until then.
    Tell users to upgrade.

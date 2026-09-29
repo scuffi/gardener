@@ -3,7 +3,7 @@ import { runnerEffectReceiptV1Schema } from "@gardener/protocol";
 import { z } from "zod";
 import { isolatedWranglerDirectory } from "./actions-d1.js";
 import { readProjectLock, resolveInstallation, type ActionsInstallation } from "./actions-installation.js";
-import { setTaskEnabled } from "./actions-operations.js";
+import { setRepositoryEnabled } from "./actions-operations.js";
 import { runCommand, wrangler } from "./commands.js";
 
 const repositorySlug = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
@@ -184,19 +184,17 @@ async function qualifyFailureDrills(input: {
   const label = trigger.labelsAll[0];
   const workflow = basename(task.workflow);
 
-  const taskControl = {
+  const repositoryControl = {
     workspace: input.workspace,
     repository: input.repository,
-    taskId,
-    repositoryRoot: input.repositoryRoot,
     sourceRoot: input.sourceRoot,
   };
-  const remediation = `Run: gardener task enable --workspace ${input.workspace} --repository ${input.repository} --task ${taskId} --repository-root ${input.repositoryRoot} --source-root ${input.sourceRoot}`;
-  await setTaskEnabled({ ...taskControl, enabled: false });
+  const remediation = `Run: gardener repository enable --workspace ${input.workspace} --repository ${input.repository} --source-root ${input.sourceRoot}`;
+  await setRepositoryEnabled({ ...repositoryControl, enabled: false });
   let restoring: Promise<unknown> | undefined;
-  const restore = () => restoring ??= setTaskEnabled({ ...taskControl, enabled: true });
+  const restore = () => restoring ??= setRepositoryEnabled({ ...repositoryControl, enabled: true });
   const emergencyRestore = (exitCode: number) => {
-    console.error(`Qualification interrupted while task ${taskId} is disabled. ${remediation}`);
+    console.error(`Qualification interrupted while repository ${input.repository} is disabled. ${remediation}`);
     void restore().then(
       () => process.exit(exitCode),
       () => process.exit(exitCode),
@@ -221,7 +219,7 @@ async function qualifyFailureDrills(input: {
     const rows = await queryRuns(input.sourceRoot, input.manifest,
       `SELECT status,effect_receipt_json FROM actions_task_runs WHERE github_run_id=${sql(run.databaseId)};`);
     if (rows.some((row) => row.status === "completed" || row.effect_receipt_json !== null)) {
-      throw new Error("Disabled task produced a completed run or effect receipt");
+      throw new Error("Disabled repository produced a completed run or effect receipt");
     }
     negative = { taskId, issueNumber: issue.issueNumber, runId: run.databaseId, rejected: true };
   } catch (error) {
@@ -233,7 +231,7 @@ async function qualifyFailureDrills(input: {
     try {
       await restore();
     } catch (restoreError) {
-      throw new Error(`Failed to restore task ${taskId} after the negative drill. ${remediation}`, {
+      throw new Error(`Failed to re-enable repository ${input.repository} after the negative drill. ${remediation}`, {
         cause: negativeError ?? restoreError,
       });
     }

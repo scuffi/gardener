@@ -1,0 +1,29 @@
+name: Sync Gardener tasks
+
+# Called by a repository's generated gardener-sync.yml on pushes that touch its
+# Gardener files. The runtime accepts the result only from this workflow at a
+# pinned commit, on the repository's default branch.
+on:
+  workflow_call:
+    inputs:
+      runtime-url:
+        required: true
+        type: string
+
+jobs:
+  sync:
+    name: Sync tasks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Enrol the committed tasks
+        uses: scuffi/gardener/bridges/github/sync@450bd5bb99375cc1d2b9193c6595165aaf126353
+        with:
+          runtime-url: ${{ inputs.runtime-url }}

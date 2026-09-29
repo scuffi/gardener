@@ -32,7 +32,6 @@ import { isolatedWranglerDirectory } from "../src/actions-d1";
 import {
   listActionsRepositories,
   setRepositoryEnabled,
-  setTaskEnabled,
 } from "../src/actions-operations";
 
 function d1(rows: Array<Record<string, unknown>>) {
@@ -56,41 +55,6 @@ describe("Actions operational controls", () => {
       if (/SELECT repository_id,owner_id/.test(sql)) return d1([{ repository_id: "1379585475", enabled: 1 }]);
       return { status: 0, stdout: "", stderr: "" };
     });
-  });
-
-  it("enables only the current locked task bundle", async () => {
-    await expect(setTaskEnabled({
-      workspace: "demo-team",
-      repository: "scuffi/demo",
-      taskId: "bug-intake",
-      repositoryRoot: "/customer/repository",
-      sourceRoot: "/trusted/gardener",
-      enabled: true,
-    })).resolves.toMatchObject({ bundleHash: "a".repeat(64), enabled: true });
-
-    const mutation = mocks.wrangler.mock.calls
-      .map((call) => command(call[2]))
-      .find((sql) => sql.startsWith("UPDATE actions_repository_tasks"))!;
-    expect(mutation).toContain(`bundle_hash='${"a".repeat(64)}'`);
-    expect(mutation).not.toContain("bundle_hash IS NULL");
-    expect(mutation).not.toContain("actions_control_audit");
-  });
-
-  it("disables every bundle version for a task", async () => {
-    await expect(setTaskEnabled({
-      workspace: "demo-team",
-      repository: "scuffi/demo",
-      taskId: "bug-intake",
-      repositoryRoot: "/customer/repository",
-      sourceRoot: "/trusted/gardener",
-      enabled: false,
-    })).resolves.toMatchObject({ bundleHash: null, enabled: false });
-
-    const mutation = mocks.wrangler.mock.calls
-      .map((call) => command(call[2]))
-      .find((sql) => sql.startsWith("UPDATE actions_repository_tasks"))!;
-    expect(mutation).toContain("task_id='bug-intake'");
-    expect(mutation).not.toContain(`bundle_hash='${"a".repeat(64)}'`);
   });
 
   it("lists repositories and updates repository kill switches", async () => {

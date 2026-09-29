@@ -84,18 +84,27 @@ reachable without Access.
 
 ## Changing tasks
 
-Edit `.gardener/tasks/<task>/TASK.md`, then:
+Edit `.gardener/tasks/<task>/TASK.md`, then run `gardener generate` and commit the updated lock
+file and workflows. Nothing else is needed. When the change reaches the default branch, the
+generated `gardener-sync.yml` workflow compiles the tasks with the pinned release's compiler and
+enrolls exactly those:
 
-```bash
-pnpm gardener -- generate --repository-root /path/to/my-repo
-pnpm gardener -- connect --workspace my-gardener --repository my-org/my-repo \
-  --repository-root /path/to/my-repo --source-root "$PWD"
-```
+- new and edited tasks go live, and deleted tasks stop;
+- `draft: true` tasks run only by hand;
+- reverting a task brings its earlier version back.
 
-Commit the updated lock file and workflows. `connect` enables the checkout's bundle hashes and
-retires every other hash for that repository, so run it from the default branch. If you revert a
-task, connecting brings its earlier hash back. A task you disabled with `task disable` stays
-disabled.
+The sync is refused unless it is Gardener's pinned sync workflow, at the repository's enrolled
+release or the release the Worker was deployed from, running on the default branch of a connected
+repository. A sync from the Worker's release moves the repository to that release. `deploy`
+refuses to replace a runtime from a newer CLI, so this never moves a repository backwards.
+
+If the committed lock or workflows don't match the tasks (someone edited a `TASK.md` without
+rerunning `generate`), the sync run fails, and the previously enrolled tasks keep running. Rerun
+`generate` and commit. To resync by hand, run the **Gardener · Sync tasks** workflow from the
+Actions tab, or run `connect` from an up-to-date checkout of the default branch.
+
+Anyone who can push to the default branch decides what Gardener may do there. Protect it with
+required reviews or a CODEOWNERS entry for `.gardener/**` if that matters for the repository.
 
 ## Inspecting runs
 
@@ -108,20 +117,15 @@ pnpm gardener -- runs view --run <run-id> --workspace my-gardener --source-root 
 
 `runs view` prints the run, its effect receipt, and its audit records.
 
-## Kill switches
+## Kill switch
 
 ```bash
 pnpm gardener -- repository disable --workspace my-gardener --repository my-org/my-repo --source-root "$PWD"
-pnpm gardener -- task disable --task <task-id> --workspace my-gardener --repository my-org/my-repo --source-root "$PWD"
 ```
 
-| Switch | Blocks |
-| --- | --- |
-| `repository disable` | Planning and apply for every task in the repository |
-| `task disable` | New plans for one task. A plan issued before the switch can still be applied. |
-
-Both take effect immediately and are recorded in `actions_control_audit`. Use `enable` to reverse
-them.
+`repository disable` blocks planning, apply and syncs for every task in the repository. It takes
+effect immediately and is recorded in `actions_control_audit`. Use `repository enable` to reverse
+it. To stop a single task, delete it or set `draft: true` on the default branch.
 
 ## Qualification
 
@@ -133,15 +137,15 @@ pnpm gardener -- debug --workspace my-gardener --repository my-org/my-repo \
 ```
 
 `debug` opens one issue per demo task and waits for both workflows. It then checks for exactly
-one Gardener comment and one matching receipt in D1. Add `--drills` to also check that disabled
-repositories and tasks are refused and that cancellation settles correctly.
+one Gardener comment and one matching receipt in D1. Add `--drills` to also check that a disabled
+repository is refused and that cancellation settles correctly.
 
 ## Upgrade
 
 Existing repositories keep their workflow pin until you move them:
 
 ```bash
-pnpm gardener -- upgrade --workspace my-gardener --repository my-org/my-repo \
+pnpm gardener -- upgrade --workspace my-gardener \
   --repository-root /path/to/my-repo --source-root "$PWD"
 ```
 
@@ -150,10 +154,11 @@ pnpm gardener -- upgrade --workspace my-gardener --repository my-org/my-repo \
 1. redeploys the Worker from the current source;
 2. moves the repository to this CLI's workflow pin;
 3. rebuilds the workflows;
-4. re-enrolls the repository;
-5. runs `doctor`.
+4. runs `doctor`.
 
-Run it once per repository, then commit the regenerated workflows.
+Run it once per repository, then commit and push the regenerated files. The repository keeps
+running on its previous release until they reach the default branch, where the sync moves it to
+the new one.
 
 Some releases change the bundle format, which changes every bundle hash. After such a release's
 Worker is deployed, runs for a repository fail with `Stored task bundle predates this Gardener

@@ -18,35 +18,6 @@ export async function setRepositoryEnabled(input: {
   return { repositoryId, enabled: input.enabled };
 }
 
-export async function setTaskEnabled(input: {
-  workspace: string;
-  repository: string;
-  taskId: string;
-  repositoryRoot: string;
-  sourceRoot: string;
-  enabled: boolean;
-}): Promise<{ repositoryId: string; taskId: string; bundleHash: string | null; enabled: boolean }> {
-  const installation = await resolveInstallation(input.workspace);
-  const repositoryId = enrolledRepositoryId(input.sourceRoot, installation, input.repository);
-  const enabled = input.enabled ? 1 : 0;
-  const task = input.enabled ? (await readProjectLock(input.repositoryRoot)).tasks[input.taskId] : undefined;
-  if (input.enabled && !task) throw new Error(`Task is not present in the current project lock: ${input.taskId}`);
-  const bundleHash = task?.bundleHash ?? null;
-  const predicate = bundleHash
-    ? `repository_id=${sql(repositoryId)} AND task_id=${sql(input.taskId)} AND bundle_hash=${sql(bundleHash)}`
-    : `repository_id=${sql(repositoryId)} AND task_id=${sql(input.taskId)}`;
-  executeD1(installation.cloudflare.database.name,
-    `UPDATE actions_repository_tasks SET enabled=${enabled},updated_at=CURRENT_TIMESTAMP WHERE ${predicate};`);
-  const rows = queryD1(installation.cloudflare.database.name,
-    bundleHash
-      ? `SELECT enabled FROM actions_repository_tasks WHERE ${predicate};`
-      : `SELECT COUNT(*) AS task_count,COALESCE(SUM(enabled),0) AS enabled_count FROM actions_repository_tasks WHERE ${predicate};`);
-  if (bundleHash ? Number(rows[0]?.enabled) !== enabled : Number(rows[0]?.task_count) < 1 || Number(rows[0]?.enabled_count) !== 0) {
-    throw new Error("Task enrollment was not found or did not update");
-  }
-  return { repositoryId, taskId: input.taskId, bundleHash, enabled: input.enabled };
-}
-
 export async function listActionsRepositories(input: {
   workspace: string;
   sourceRoot: string;

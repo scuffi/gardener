@@ -10,12 +10,11 @@ import {
   listActionsRuns,
   listActionsTasks,
   setRepositoryEnabled,
-  setTaskEnabled,
   showActionsRun,
 } from "./actions-operations.js";
 import { qualifyActions } from "./actions-qualify.js";
 import { parse } from "./args.js";
-import { buildProject, initializeProject, upgradeProjectRelease } from "./project.js";
+import { buildProject, initializeProject, requireProject, upgradeProjectRelease } from "./project.js";
 import { defaultSourceRoot } from "./distribution.js";
 import { terminal } from "./terminal.js";
 
@@ -38,16 +37,15 @@ Run \`gardener <command> --help\` for command options.
 /**
  * Renamed commands fail with a pointer to the new name rather than working
  * silently, so scripts are fixed once. Commands left out of HELP (connect,
- * task, repository, repositories, tasks) still work.
+ * repository, repositories, tasks) still work.
  */
 const RENAMED: Record<string, string> = { build: "generate", up: "yolo", qualify: "debug" };
 
-const OPERATIONS_HELP = `gardener <repositories|tasks|runs|runs view|task enable|task disable|repository enable|repository disable>
+const OPERATIONS_HELP = `gardener <repositories|tasks|runs|runs view|repository enable|repository disable>
 
 Options:
   --workspace <name>           Existing Gardener installation
   --repository <owner/name>    Optional repository filter or required control target
-  --task <id>                  Task identity for task enable/disable
   --run <id>                   Run identity for run show
   --limit <1-100>              Maximum runs to list
   --repository-root <path>     Customer repository (defaults to current directory)
@@ -84,12 +82,13 @@ Options:
 
 const UPGRADE_HELP = `gardener upgrade
 
-Upgrade an existing runtime and one repository's pinned GitHub bridge release, rebuild its
-workflows, re-enroll it, and verify the installation. Existing projects never upgrade implicitly through the yolo command.
+Upgrade an existing runtime, move one repository's files to this release's pinned workflows,
+regenerate them, and verify the installation. Commit and push the result: the sync workflow enrols
+it when it reaches the default branch. Existing projects never upgrade implicitly through the yolo
+command.
 
 Options:
   --workspace <name>           Existing Gardener installation
-  --repository <owner/name>    Connected GitHub repository to upgrade
   --repository-root <path>     Customer repository (defaults to current directory)
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
 `;
@@ -143,7 +142,10 @@ async function main(argv: string[]): Promise<void> {
   const renamed = RENAMED[command];
   if (renamed) throw new Error(`gardener ${command} was renamed to gardener ${renamed}`);
   if (command === "run") throw new Error("gardener run show was renamed to gardener runs view");
-  const operationCommand = command === "task" || command === "repository" || command === "repositories" || command === "tasks" || command === "runs";
+  if (command === "task") {
+    throw new Error("gardener task enable|disable was removed: the tasks on the default branch are the live ones. To stop a task, delete it or set draft: true; to stop everything, use gardener repository disable");
+  }
+  const operationCommand = command === "repository" || command === "repositories" || command === "tasks" || command === "runs";
   if (operationCommand && (rest.includes("help") || rest.includes("--help"))) {
     console.log(OPERATIONS_HELP);
     return;
@@ -191,16 +193,19 @@ async function main(argv: string[]): Promise<void> {
   }
   if (command === "upgrade") {
     const workspace = requiredStringFlag(flags, "workspace");
-    const repository = requiredStringFlag(flags, "repository");
+    // Before anything remote, so a wrong directory changes nothing.
+    await requireProject(repositoryRoot);
     const runtime = await upgradeActions({ workspace, sourceRoot });
     try {
       const project = await upgradeProjectRelease({ repositoryRoot });
       const build = await buildProject({ repositoryRoot });
       printBuildWarnings(build);
-      const connection = await connectActions({ workspace, repository, repositoryRoot, sourceRoot });
+      // Not connected here: the enrollment moves to the new release when the
+      // regenerated files reach the default branch, so runs keep working until then.
       const doctor = await doctorActions(workspace, sourceRoot);
       warnDoctorFindings(doctor);
-      console.log(JSON.stringify({ runtime, project, build, connection, doctor }, null, 2));
+      console.log(JSON.stringify({ runtime, project, build, doctor }, null, 2));
+      console.error("Commit and push .gardener/ and .github/workflows/. When they reach the default branch, the Gardener sync workflow enrols them.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown repository error";
       throw new Error(
@@ -259,7 +264,7 @@ async function main(argv: string[]): Promise<void> {
 
 async function operate(command: string, args: string[]): Promise<void> {
   const [subcommand, ...rest] = args;
-  const actionCommand = command === "task" || command === "repository";
+  const actionCommand = command === "repository";
   const runShow = command === "runs" && subcommand === "view";
   const parsed = parse(actionCommand || runShow ? rest : args);
   const repositoryRoot = stringFlag(parsed.flags, "repository-root") ?? process.cwd();
@@ -267,19 +272,6 @@ async function operate(command: string, args: string[]): Promise<void> {
   const workspace = requiredStringFlag(parsed.flags, "workspace");
   const repository = stringFlag(parsed.flags, "repository");
 
-  if (command === "task") {
-    if (subcommand !== "enable" && subcommand !== "disable") throw new Error("Usage: gardener task <enable|disable> --task <id>");
-    if (!repository) throw new Error("--repository is required");
-    console.log(JSON.stringify(await setTaskEnabled({
-      workspace,
-      repository,
-      taskId: requiredStringFlag(parsed.flags, "task"),
-      repositoryRoot,
-      sourceRoot,
-      enabled: subcommand === "enable",
-    }), null, 2));
-    return;
-  }
   if (command === "repository") {
     if (subcommand !== "enable" && subcommand !== "disable") throw new Error("Usage: gardener repository <enable|disable>");
     if (!repository) throw new Error("--repository is required");
