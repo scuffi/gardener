@@ -3,6 +3,22 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.5 (2026-09-29)
+
+- Runs are no longer refused between an upgrade merging and its sync landing: the runtime also
+  accepts task workflows from the release it was deployed from.
+- Each run records its tool calls. `runs view` lists every call with its status and a short
+  target (a file path or API route, never command text), and `task.settled` totals the calls and
+  proposals. A failed run's Actions error now ends with those totals, for example
+  `(16 tool calls: 9 repository.read_file, 7 provider.api.read; no effects proposed)`.
+- `upgrade` moves `package.json` scripts that run a pinned `@scuffi/gardener`, such as
+  `gardener:generate`, to the new release.
+- `connect` starts the sync workflow on the default branch when it is there, so a repository
+  merged before connecting gets a green sync.
+- `--help` lists `connect`, `repositories`, `repository disable|enable` and `tasks`.
+- Existing repositories: run `upgrade` with this release, then commit and push `package.json` if
+  it changed. The workflows are unchanged.
+
 ## v0.1.4 (2026-09-29)
 
 - Pull requests that touch Gardener's files get a **Check tasks** check. It fails when the
