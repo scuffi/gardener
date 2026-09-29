@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { taskEffectPlanV1Schema } from "@gardener/contracts";
 import { type RunnerEventV1 } from "@gardener/protocol";
+import { authorPermissionLogin, fetchAuthorPermission, withAuthorPermission } from "./author-permission";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
 import { createPlanningExecutor, planningCaptureBase } from "./executor";
@@ -119,7 +120,18 @@ async function githubEvent(): Promise<RunnerEventV1 | undefined> {
   const resolved = target === null
     ? undefined
     : await fetchDispatchTarget({ target, repository: requiredEnvironment("GITHUB_REPOSITORY"), token: providerReadToken });
-  return normalizeGitHubEvent(eventName, raw, resolved);
+  const event = normalizeGitHubEvent(eventName, raw, resolved);
+  // GitHub reports a private org member as a non-member, so `authors:
+  // maintainers` also accepts write access, looked up here before any task
+  // command runs. Without it the run falls back to the association alone.
+  const login = authorPermissionLogin(event);
+  if (login === null) return event;
+  const permission = await fetchAuthorPermission({
+    repository: requiredEnvironment("GITHUB_REPOSITORY"),
+    login,
+    token: providerReadToken,
+  });
+  return permission === null ? event : withAuthorPermission(event, permission);
 }
 
 async function getIdTokenWithoutEnvironmentLeak(audience: string): Promise<string> {

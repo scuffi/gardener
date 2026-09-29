@@ -53,6 +53,30 @@ describe("trigger filters", () => {
     expect(triggerFiltersExclude(created("hi", "NONE"), onCreated([], "any"))).toBe(false);
   });
 
+  it("admits a non-member with write access the bridge looked up, and nothing less", () => {
+    const withPermission = (association: string, authorPermission?: string) =>
+      event("github.issue_comment.created", {
+        issue,
+        comment: { ...comment("hi", association), ...(authorPermission === undefined ? {} : { authorPermission }) },
+      });
+    const triggers = onCreated([], "maintainers");
+    for (const permission of ["admin", "write"]) {
+      expect(triggerFiltersExclude(withPermission("CONTRIBUTOR", permission), triggers)).toBe(false);
+      expect(triggerFiltersExclude(withPermission("NONE", permission), triggers)).toBe(false);
+    }
+    // Everyone has read on a public repository, so read admits no one.
+    for (const permission of ["read", "none", undefined]) {
+      expect(triggerFiltersExclude(withPermission("CONTRIBUTOR", permission), triggers)).toBe(true);
+    }
+    // Only the trigger's own subject counts: the issue author's access does not
+    // admit a non-member's comment.
+    const issueByWriter = event("github.issue_comment.created", {
+      issue: { ...issue, authorAssociation: "NONE", authorPermission: "write" },
+      comment: comment("hi", "NONE"),
+    });
+    expect(triggerFiltersExclude(issueByWriter, triggers)).toBe(true);
+  });
+
   it("tells a missing association (an old bridge) apart from a non-maintainer", () => {
     const triggers = onCreated([], "maintainers");
     expect(triggerAssociationMissing(created("hi"), triggers)).toBe(true);

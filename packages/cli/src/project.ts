@@ -8,7 +8,6 @@ import {
   githubHandleV1Schema,
   isAuthoredTriggerKind,
   isEditedTriggerKind,
-  maintainerAssociations,
   type AuthoredTriggerKindV1,
 } from "@gardener/contracts";
 import {
@@ -370,7 +369,7 @@ function renderTriggerCondition(binding: GitHubActionsTriggerBindingV1, task: Bu
     }
   }
   if (trigger !== undefined && "authors" in trigger && isAuthoredTriggerKind(trigger.kind)) {
-    clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions, trigger.authors));
+    clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions));
   }
   return clauses.length === 1 ? clauses[0]! : `(${clauses.join(" && ")})`;
 }
@@ -384,21 +383,21 @@ const SUBJECT_EXPRESSIONS: Record<(typeof authoredTriggerSubject)[AuthoredTrigge
 };
 
 /**
- * Prefilters for `mentions` and `authors`. They skip the job for events that
- * certainly don't match, so they must never exclude one that does: the Worker
- * makes the exact decision (word boundaries, and whether an edit added the
- * mention), and a run that passes here but not there completes as a skip.
+ * Prefilters for `mentions`. They skip the job for events that certainly don't
+ * match, so they must never exclude one that does: the Worker makes the exact
+ * decision (word boundaries, and whether an edit added the mention), and a run
+ * that passes here but not there completes as a skip.
+ *
+ * `authors: maintainers` has no prefilter. GitHub reports a private org member
+ * as a non-member, so only the bridge's permission lookup can tell, and an
+ * `author_association` check here would skip them before it runs.
  */
 function authoredTriggerClauses(
   kind: AuthoredTriggerKindV1,
   mentions: readonly string[],
-  authors: "maintainers" | "any",
 ): string[] {
   const subject = SUBJECT_EXPRESSIONS[authoredTriggerSubject[kind]];
   const clauses: string[] = [];
-  if (authors === "maintainers") {
-    clauses.push(`contains(fromJSON('${JSON.stringify(maintainerAssociations)}'), ${subject}.author_association)`);
-  }
   if (mentions.length > 0) {
     // contains() is case-insensitive, like GitHub mentions. Handles are
     // letters, digits and hyphens, so they need no quoting.

@@ -366,7 +366,7 @@ describe("local Gardener project", () => {
       .rejects.toThrow(/mentions is not supported/);
   });
 
-  it("prefilters mentions, authors and edits in the workflow condition", async () => {
+  it("prefilters mentions and edits, but not authors, in the workflow condition", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-project-mentions-"));
     await initializeProject({ repositoryRoot: root, demos: false });
     const projectPath = join(root, ".gardener/gardener.json");
@@ -379,12 +379,15 @@ describe("local Gardener project", () => {
     ));
     const built = await buildProject({ repositoryRoot: root });
     const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
-    const maintainers = `contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)`;
+    // Mention triggers default to authors: maintainers, which the Worker
+    // decides after the bridge looks up the author's permission, so a private
+    // org member is not skipped here.
+    expect(workflow).not.toContain("author_association");
     expect(workflow).toContain(
-      `(github.event_name == 'issue_comment' && github.event.action == 'created' && ${maintainers} && contains(github.event.comment.body, '@garden-bot'))`,
+      "(github.event_name == 'issue_comment' && github.event.action == 'created' && contains(github.event.comment.body, '@garden-bot'))",
     );
     expect(workflow).toContain(
-      `(github.event_name == 'issue_comment' && github.event.action == 'edited' && ${maintainers} && `
+      "(github.event_name == 'issue_comment' && github.event.action == 'edited' && "
       + "(contains(github.event.comment.body, '@garden-bot') || contains(github.event.comment.body, '@octocat')) && github.event.changes.body)",
     );
     // issue.opened keeps authors: any and no mention, so it adds no clauses.

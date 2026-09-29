@@ -40466,6 +40466,8 @@ var authorAssociationV1Schema = external_exports.enum([
   "MANNEQUIN",
   "NONE"
 ]);
+var maintainerAssociations = ["OWNER", "MEMBER", "COLLABORATOR"];
+var authorPermissionV1Schema = external_exports.enum(["admin", "write", "read", "none"]);
 var taskMentionFilterV1Schema = external_exports.array(githubHandleV1Schema).max(20).default([]).refine(
   (handles) => new Set(handles).size === handles.length,
   "mentions must not repeat a handle"
@@ -40813,6 +40815,21 @@ var eventActionByTriggerKind = {
   "github.discussion_comment.created": "created",
   "github.discussion_comment.edited": "edited"
 };
+var authoredTriggerSubject = {
+  "github.issue.opened": "issue",
+  "github.issue.edited": "issue",
+  "github.issue_comment.created": "comment",
+  "github.issue_comment.edited": "comment",
+  "github.pull_request.opened": "pullRequest",
+  "github.pull_request.edited": "pullRequest",
+  "github.pull_request_review.submitted": "review",
+  "github.pull_request_review_comment.created": "comment",
+  "github.pull_request_review_comment.edited": "comment",
+  "github.discussion.created": "discussion",
+  "github.discussion.edited": "discussion",
+  "github.discussion_comment.created": "comment",
+  "github.discussion_comment.edited": "comment"
+};
 var normalizedWorkflowV1Schema = external_exports.strictObject({
   runId: githubNumericId,
   runAttempt: external_exports.number().int().positive().max(1e3),
@@ -40847,7 +40864,8 @@ var normalizedIssueV1Schema = external_exports.strictObject({
   updatedAt: external_exports.iso.datetime().optional(),
   labels: boundedLabels,
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedPullRequestRepositoryV1Schema = external_exports.strictObject({
   id: githubNumericId,
@@ -40861,6 +40879,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
@@ -40886,14 +40905,16 @@ var normalizedCommentV1Schema = external_exports.strictObject({
   body: boundedBody,
   updatedAt: external_exports.iso.datetime().optional(),
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedReviewV1Schema = external_exports.strictObject({
   id: githubNumericId,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: boundedBody,
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedDiscussionV1Schema = external_exports.strictObject({
   id: githubNumericId,
@@ -40904,6 +40925,7 @@ var normalizedDiscussionV1Schema = external_exports.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]).optional(),
@@ -40915,7 +40937,8 @@ var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
   body: boundedBody,
   updatedAt: external_exports.iso.datetime().optional(),
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedPushV1Schema = external_exports.strictObject({
   ref: external_exports.string().min(1).max(1024),
@@ -41759,6 +41782,491 @@ var taskOutcomeV1Schema = external_exports.discriminatedUnion("status", [
   })
 ]);
 
+// ../protocol/src/schema.ts
+var identifier2 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var sha12 = external_exports.string().regex(/^[a-f0-9]{40}$/);
+var githubNumericId2 = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
+var EFFECT_TRANSPORT_MAX_BYTES2 = 4 * 1024 * 1024;
+function canonicalJsonByteLength2(value) {
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === void 0) return null;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return null;
+  }
+}
+var runnerEventNameV1Schema = external_exports.enum([
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "push",
+  "workflow_dispatch",
+  "schedule",
+  "discussion",
+  "discussion_comment"
+]);
+var runnerHelloV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
+  protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
+  phase: external_exports.enum(["plan", "effects"]),
+  repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
+  runId: identifier2,
+  runAttempt: external_exports.number().int().positive().max(1e3),
+  workflowRef: external_exports.string().min(1).max(1024),
+  jobWorkflowRef: external_exports.string().min(1).max(1024),
+  eventName: runnerEventNameV1Schema,
+  ref: external_exports.string().min(1).max(1024),
+  runnerEnvironment: external_exports.literal("github-hosted"),
+  commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
+  agentHash: sha2562
+});
+var runnerActionBaseFields = {
+  schemaVersion: external_exports.literal("gardener.runner.action/v1"),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  operationId: identifier2,
+  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3)
+};
+var githubReadRequestV1Schema = external_exports.discriminatedUnion("transport", [
+  external_exports.strictObject({
+    transport: external_exports.literal("rest"),
+    method: external_exports.enum(["GET", "HEAD"]),
+    path: external_exports.string().min(1).max(2048)
+  }),
+  external_exports.strictObject({
+    transport: external_exports.literal("graphql"),
+    query: external_exports.string().min(1).max(32 * 1024),
+    /**
+     * Bounded by count and serialized size. Actions are canonicalized into
+     * Durable Object storage, so an unbounded variables map would let a model
+     * grow durable state without limit.
+     */
+    variables: external_exports.record(external_exports.string().min(1).max(128), external_exports.unknown()).refine((value) => Object.keys(value).length <= 64, "too many GraphQL variables").refine((value) => {
+      const serialized = JSON.stringify(value);
+      return serialized !== void 0 && new TextEncoder().encode(serialized).byteLength <= 32 * 1024;
+    }, "GraphQL variables exceed the size limit").optional(),
+    operationName: external_exports.string().regex(/^[_A-Za-z][_0-9A-Za-z]{0,127}$/).optional()
+  })
+]);
+var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("shell.exec"),
+    command: external_exports.string().min(1).max(64 * 1024),
+    cwd: external_exports.string().min(1).max(4096),
+    maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
+  }),
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("github.read"),
+    request: githubReadRequestV1Schema,
+    maxOutputBytes: external_exports.number().int().positive().max(1024 * 1024)
+  }),
+  /**
+   * Trusted working-tree capture.
+   *
+   * Only the runtime issues this, and only once it holds a durable proposal
+   * that materializes repository changes. There is deliberately no field a
+   * model could fill: no paths, no directory, no content, no filters. The
+   * whole tree is captured, judged by Git against a baseline the runner took
+   * before the first task command ran, so what lands in a commit is what the
+   * runner observed rather than what the model claimed.
+   *
+   * `baseSha` is the commit the runtime bound the run to. The runner refuses
+   * the action unless its own pre-execution baseline was taken against the
+   * same commit, so neither side can drift alone.
+   */
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("repository.capture"),
+    baseSha: sha12,
+    maxOutputBytes: external_exports.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES2)
+  })
+]);
+var runnerCaptureRefV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
+  captureId: identifier2,
+  baseSha: sha12,
+  manifestSha256: sha2562,
+  changesSha256: sha2562,
+  fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+});
+var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
+    /** The working tree matched the checked-out commit; there is nothing to commit. */
+    status: external_exports.literal("unchanged")
+  }),
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
+    status: external_exports.literal("captured"),
+    ref: runnerCaptureRefV1Schema,
+    manifestJson: external_exports.string().min(2).max(EFFECT_TRANSPORT_MAX_BYTES2)
+  })
+]);
+var runnerActionResultV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  operationId: identifier2,
+  status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
+  exitCode: external_exports.number().int().min(0).max(255).nullable(),
+  stdout: external_exports.string().max(4 * 1024 * 1024),
+  stderr: external_exports.string().max(4 * 1024 * 1024),
+  outputTruncated: external_exports.boolean()
+}).superRefine((result, context) => {
+  const processExited = result.status === "completed" || result.status === "failed";
+  if (processExited !== (result.exitCode !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["exitCode"],
+      message: processExited ? "Completed and failed commands require an exit code" : "Cancelled and timed-out commands cannot have an exit code"
+    });
+  }
+});
+var eventActor = external_exports.strictObject({
+  id: githubNumericId2,
+  login: external_exports.string().min(1).max(100)
+});
+var eventLabels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100);
+var eventBody = external_exports.string().max(65536).nullable();
+var eventNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
+var eventChangedLabel = external_exports.string().trim().min(1).max(100);
+var eventAuthorAssociation = external_exports.enum([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+  "CONTRIBUTOR",
+  "FIRST_TIME_CONTRIBUTOR",
+  "FIRST_TIMER",
+  "MANNEQUIN",
+  "NONE"
+]).optional();
+var eventAuthorPermission = external_exports.enum(["admin", "write", "read", "none"]).optional();
+var eventEdited = { previousBody: external_exports.string().max(65536).optional() };
+var eventIssue = external_exports.strictObject({
+  id: githubNumericId2,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  // Older immutable bridge pins omit these fields. Current bridge code emits
+  // them, but the runtime accepts the old shape so deploys do not strand runs.
+  state: external_exports.enum(["open", "closed"]).optional(),
+  updatedAt: external_exports.iso.datetime().optional(),
+  labels: eventLabels,
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
+});
+var eventPullRequestRepository = external_exports.strictObject({
+  id: githubNumericId2,
+  fullName: external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201)
+});
+var eventPullRequest = external_exports.strictObject({
+  id: githubNumericId2,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
+  draft: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]),
+  merged: external_exports.boolean(),
+  updatedAt: external_exports.iso.datetime().optional(),
+  base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
+  head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
+});
+var eventComment = external_exports.strictObject({
+  id: githubNumericId2,
+  body: eventBody,
+  updatedAt: external_exports.iso.datetime().optional(),
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
+});
+var eventReview = external_exports.strictObject({
+  id: githubNumericId2,
+  state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
+  body: eventBody,
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
+});
+var eventDiscussion = external_exports.strictObject({
+  id: githubNumericId2,
+  nodeId: eventNodeId,
+  number: external_exports.number().int().positive(),
+  title: external_exports.string().max(1024),
+  body: eventBody,
+  labels: eventLabels,
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
+  category: external_exports.string().min(1).max(100),
+  answered: external_exports.boolean(),
+  state: external_exports.enum(["open", "closed"]).optional(),
+  updatedAt: external_exports.iso.datetime().optional()
+});
+var eventDiscussionComment = external_exports.strictObject({
+  id: githubNumericId2,
+  nodeId: eventNodeId,
+  body: eventBody,
+  updatedAt: external_exports.iso.datetime().optional(),
+  author: eventActor,
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
+});
+var eventPush = external_exports.strictObject({
+  ref: external_exports.string().min(1).max(1024),
+  before: sha12,
+  after: sha12,
+  forced: external_exports.boolean(),
+  commits: external_exports.array(external_exports.strictObject({
+    sha: sha12,
+    message: external_exports.string().max(4096),
+    author: external_exports.strictObject({ name: external_exports.string().max(200), email: external_exports.string().max(320) })
+  })).max(20),
+  /** Count present in `commits`; never claimed to be the push total. */
+  includedCommits: external_exports.number().int().min(0).max(20),
+  commitsTruncated: external_exports.boolean()
+});
+var eventRepository = external_exports.strictObject({ defaultBranch: external_exports.string().trim().min(1).max(255) });
+function runnerEventMember(kind, shape) {
+  return external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.event/v1"),
+    kind: external_exports.literal(kind),
+    repository: eventRepository,
+    ...shape
+  });
+}
+var issuePayload2 = { issue: eventIssue };
+var pullRequestPayload2 = { pullRequest: eventPullRequest };
+var discussionPayload2 = { discussion: eventDiscussion };
+var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
+  runnerEventMember("github.issue.opened", issuePayload2),
+  runnerEventMember("github.issue.edited", { ...issuePayload2, ...eventEdited }),
+  runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
+  runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
+  runnerEventMember("github.issue.reopened", issuePayload2),
+  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
+  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited }),
+  runnerEventMember("github.pull_request.opened", pullRequestPayload2),
+  runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
+  runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
+  runnerEventMember("github.pull_request.ready_for_review", pullRequestPayload2),
+  runnerEventMember("github.pull_request.converted_to_draft", pullRequestPayload2),
+  runnerEventMember("github.pull_request.edited", { ...pullRequestPayload2, ...eventEdited }),
+  runnerEventMember("github.pull_request.labeled", { ...pullRequestPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.pull_request.unlabeled", { ...pullRequestPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload2, review: eventReview }),
+  runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload2, comment: eventComment }),
+  runnerEventMember("github.pull_request_review_comment.edited", { ...pullRequestPayload2, comment: eventComment, ...eventEdited }),
+  runnerEventMember("github.push", { push: eventPush }),
+  runnerEventMember("github.workflow_dispatch", {
+    prompt: external_exports.string().trim().min(1).max(2e4).optional(),
+    // The issue or pull request a manual run targets, read by the runner from
+    // the repository when the run starts.
+    issue: eventIssue.optional(),
+    pullRequest: eventPullRequest.optional()
+  }).refine((event) => event.issue === void 0 || event.pullRequest === void 0, {
+    message: "a manual run may target an issue or a pull request, not both"
+  }),
+  runnerEventMember("github.schedule", { cron: external_exports.string().trim().min(1).max(100) }),
+  runnerEventMember("github.discussion.created", discussionPayload2),
+  runnerEventMember("github.discussion.edited", { ...discussionPayload2, ...eventEdited }),
+  runnerEventMember("github.discussion.answered", discussionPayload2),
+  runnerEventMember("github.discussion.unanswered", discussionPayload2),
+  runnerEventMember("github.discussion.labeled", { ...discussionPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
+  runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment }),
+  runnerEventMember("github.discussion_comment.edited", { ...discussionPayload2, comment: eventDiscussionComment, ...eventEdited })
+]);
+var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
+var githubUrl = external_exports.url().refine(
+  (value) => new URL(value).origin === "https://github.com",
+  "Expected an HTTPS github.com URL"
+);
+var runnerOperationReceiptV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("v2"),
+  operationId: identifier2,
+  operationHash: sha2562,
+  kind: external_exports.string().min(1).max(100).regex(/^[a-z][a-z_]*(?:\.[a-z][a-z_]*)+$/),
+  status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
+  attempt: external_exports.number().int().positive(),
+  attemptedAt: external_exports.iso.datetime(),
+  completedAt: external_exports.iso.datetime(),
+  providerRequestId: external_exports.string().min(1).max(255).optional(),
+  resourceUrl: githubUrl.optional(),
+  error: external_exports.strictObject({
+    code: external_exports.string().min(1).max(100),
+    message: external_exports.string().min(1).max(2e3),
+    retryable: external_exports.boolean()
+  }).optional()
+}).superRefine((receipt, context) => {
+  if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) {
+    context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
+  }
+  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) {
+    context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
+  }
+  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) {
+    context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
+  }
+});
+var runnerScalarOutputV1Schema = external_exports.union([
+  external_exports.string().max(65536),
+  external_exports.number().safe(),
+  external_exports.boolean(),
+  external_exports.null()
+]);
+var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
+  stepName,
+  receipt: runnerOperationReceiptV1Schema,
+  /** Scalar provider outputs needed to resolve references after a retry. */
+  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({}),
+  /**
+   * `updated_at` of the step's issue, pull request, or discussion read back
+   * after it succeeded. A later step on the same resource accepts it as the
+   * plan's own write, including after a resume.
+   */
+  resourceVersion: external_exports.strictObject({
+    resource: external_exports.string().regex(/^(?:issue|pull|discussion):[1-9][0-9]{0,15}$/),
+    updatedAt: external_exports.iso.datetime({ offset: true })
+  }).optional()
+});
+var runnerEffectReceiptV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
+  planRunId: identifier2,
+  bundleHash: sha2562,
+  artifactSha256: sha2562,
+  /** Digest of the changes artifact, when the plan materialized repository changes. */
+  changesSha256: sha2562.optional(),
+  /**
+   * Number of operations the plan this receipt answers contained. Without it a
+   * receipt cannot be shown to be complete: `operations.length` alone says
+   * nothing about how many steps were supposed to run, so a truncated apply
+   * would read as a successful one.
+   */
+  plannedOperations: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  status: external_exports.enum(["running", "applied", "stopped"]),
+  /** The step that halted the plan, or null when every step in the plan ran. */
+  stoppedAtStep: stepName.nullable(),
+  /**
+   * Recorded steps, in plan order. No count ceiling here either — the bound is
+   * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
+   */
+  operations: external_exports.array(runnerPlanStepReceiptV1Schema).min(1)
+}).superRefine((receipt, context) => {
+  const bytes = canonicalJsonByteLength2(receipt);
+  if (bytes === null) {
+    context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });
+  } else if (bytes > EFFECT_TRANSPORT_MAX_BYTES2) {
+    context.addIssue({
+      code: "custom",
+      message: `receipt serializes to ${bytes} bytes but the transport carries at most ${EFFECT_TRANSPORT_MAX_BYTES2}`
+    });
+  }
+  if (receipt.operations.length > receipt.plannedOperations) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: `receipt records ${receipt.operations.length} steps but the plan contained ${receipt.plannedOperations}`
+    });
+  }
+  const stepNames = receipt.operations.map((entry) => entry.stepName);
+  if (new Set(stepNames).size !== stepNames.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "step names must be unique within a receipt" });
+  }
+  const operationIds = receipt.operations.map((entry) => entry.receipt.operationId);
+  if (new Set(operationIds).size !== operationIds.length) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a receipt" });
+  }
+  const halted = receipt.operations.filter((entry) => entry.receipt.status === "failed" || entry.receipt.status === "conflicted");
+  if (receipt.status === "running" || receipt.status === "applied") {
+    if (halted.length > 0) {
+      context.addIssue({ code: "custom", path: ["status"], message: `${receipt.status} plans cannot contain a failed or conflicted step` });
+    }
+    if (receipt.stoppedAtStep !== null) {
+      context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: `${receipt.status} plans did not stop at a step` });
+    }
+    if (receipt.status === "applied" && receipt.operations.length !== receipt.plannedOperations) {
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: `an applied plan must record all ${receipt.plannedOperations} planned steps, not ${receipt.operations.length}`
+      });
+    }
+    if (receipt.status === "running" && receipt.operations.length >= receipt.plannedOperations) {
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "a running receipt must be an incomplete successful prefix"
+      });
+    }
+    return;
+  }
+  const last = receipt.operations.at(-1);
+  if (last === void 0 || halted.length !== 1 || halted[0] !== last) {
+    context.addIssue({
+      code: "custom",
+      path: ["operations"],
+      message: "a stopped plan halts at exactly one failed or conflicted step, which must be the last recorded step"
+    });
+    return;
+  }
+  if (receipt.stoppedAtStep !== last.stepName) {
+    context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: "stoppedAtStep must name the halting step" });
+  }
+});
+function base64EncodedLength(bytes) {
+  return 4 * Math.ceil(bytes / 3);
+}
+function base64DecodedLength(encoded) {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return encoded.length / 4 * 3 - padding;
+}
+var runnerEffectArtifactV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
+  sha256: sha2562,
+  bytesBase64: external_exports.string().min(1).max(base64EncodedLength(EFFECT_TRANSPORT_MAX_BYTES2)).regex(/^[A-Za-z0-9+/]*={0,2}$/).refine(
+    (value) => value.length % 4 === 0,
+    "Expected a padded base64 string"
+  ).refine(
+    (value) => base64DecodedLength(value) <= EFFECT_TRANSPORT_MAX_BYTES2,
+    `Expected at most ${EFFECT_TRANSPORT_MAX_BYTES2} decoded bytes`
+  ),
+  /**
+   * Digest of the repository-changes artifact this plan materializes, when it
+   * materializes one. Bound here so apply can refuse a plan/changes mismatch
+   * before it writes anything.
+   */
+  changesSha256: sha2562.optional()
+});
+var runnerTerminalV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
+  status: external_exports.enum(["completed", "failed", "cancelled"]),
+  summary: external_exports.string().min(1).max(16 * 1024),
+  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  effectArtifact: runnerEffectArtifactV1Schema.optional()
+});
+var resumeCursorV1Schema = external_exports.strictObject({
+  schemaVersion: external_exports.literal("gardener.runner.cursor/v1"),
+  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+});
+
+// ../protocol/src/session-id.ts
+function runnerSessionId(hello) {
+  return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
+}
+
 // src/github-read.ts
 var GITHUB_API_ORIGIN = "https://api.github.com";
 var USER_AGENT = "gardener-read-v1";
@@ -42198,12 +42706,67 @@ async function readBoundedBody(response, maxBytes) {
   return { text: bounded.toString("utf8"), truncated };
 }
 
-// src/dispatch-target.ts
+// src/author-permission.ts
 var REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-var MAX_RESPONSE_BYTES = 1024 * 1024;
-var TIMEOUT_MS = 15e3;
-async function fetchDispatchTarget(input2) {
+var LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+var MAX_RESPONSE_BYTES = 64 * 1024;
+var TIMEOUT_MS = 5e3;
+function subjectOf(event) {
+  const key = authoredTriggerSubject[event.kind];
+  if (key === void 0) return null;
+  const subject = event[key];
+  return subject !== null && typeof subject === "object" ? { key, subject } : null;
+}
+function authorPermissionLogin(event) {
+  const found = subjectOf(event);
+  if (found === null) return null;
+  const association2 = found.subject.authorAssociation;
+  if (association2 !== void 0 && maintainerAssociations.includes(association2)) return null;
+  const login = found.subject.author?.login;
+  return typeof login === "string" && LOGIN.test(login) ? login : null;
+}
+function withAuthorPermission(event, permission) {
+  const found = subjectOf(event);
+  if (found === null) return event;
+  const parsed = runnerEventV1Schema.safeParse({ ...event, [found.key]: { ...found.subject, authorPermission: permission } });
+  return parsed.success ? parsed.data : event;
+}
+async function fetchAuthorPermission(input2) {
+  if (!input2.token || !LOGIN.test(input2.login)) return null;
   if (!REPOSITORY.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) {
+    return null;
+  }
+  try {
+    const response = await (input2.fetch ?? fetch)(
+      `https://api.github.com/repos/${input2.repository.split("/").map(encodeURIComponent).join("/")}/collaborators/${encodeURIComponent(input2.login)}/permission`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${input2.token}`,
+          "user-agent": "gardener-runner",
+          "x-github-api-version": "2022-11-28"
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS)
+      }
+    );
+    if (!response.ok) return null;
+    const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+    if (body2.truncated) return null;
+    const value = JSON.parse(body2.text);
+    const parsed = authorPermissionV1Schema.safeParse(value.permission);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// src/dispatch-target.ts
+var REPOSITORY2 = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+var MAX_RESPONSE_BYTES2 = 1024 * 1024;
+var TIMEOUT_MS2 = 15e3;
+async function fetchDispatchTarget(input2) {
+  if (!REPOSITORY2.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) {
     throw new Error("GITHUB_REPOSITORY is not an owner/name slug");
   }
   if (!input2.token) throw new Error("A GitHub token is required to read the manual run's target");
@@ -42219,493 +42782,15 @@ async function fetchDispatchTarget(input2) {
         "x-github-api-version": "2022-11-28"
       },
       redirect: "error",
-      signal: input2.signal ? AbortSignal.any([input2.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS)
+      signal: input2.signal ? AbortSignal.any([input2.signal, AbortSignal.timeout(TIMEOUT_MS2)]) : AbortSignal.timeout(TIMEOUT_MS2)
     }
   );
   if (response.status === 404) throw new Error(`${noun} #${input2.target.number} was not found in ${input2.repository}`);
   if (!response.ok) throw new Error(`Reading ${noun} #${input2.target.number} failed (${response.status})`);
-  const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+  const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES2);
   if (body2.truncated) throw new Error(`${noun} #${input2.target.number} response is too large`);
   const value = JSON.parse(body2.text);
   return input2.target.kind === "issue" ? { issue: value } : { pull_request: value };
-}
-
-// ../protocol/src/schema.ts
-var identifier2 = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
-var sha2562 = external_exports.string().regex(/^[a-f0-9]{64}$/);
-var sha12 = external_exports.string().regex(/^[a-f0-9]{40}$/);
-var githubNumericId2 = external_exports.string().regex(/^[1-9][0-9]{0,19}$/);
-var EFFECT_TRANSPORT_MAX_BYTES2 = 4 * 1024 * 1024;
-function canonicalJsonByteLength2(value) {
-  try {
-    const encoded = JSON.stringify(value);
-    if (encoded === void 0) return null;
-    return new TextEncoder().encode(encoded).length;
-  } catch {
-    return null;
-  }
-}
-var runnerEventNameV1Schema = external_exports.enum([
-  "issues",
-  "issue_comment",
-  "pull_request",
-  "pull_request_review",
-  "pull_request_review_comment",
-  "push",
-  "workflow_dispatch",
-  "schedule",
-  "discussion",
-  "discussion_comment"
-]);
-var runnerHelloV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.hello/v1"),
-  protocolVersion: external_exports.literal("gardener.runner.rpc/v1"),
-  phase: external_exports.enum(["plan", "effects"]),
-  repositoryId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  ownerId: external_exports.string().regex(/^[1-9][0-9]{0,19}$/),
-  runId: identifier2,
-  runAttempt: external_exports.number().int().positive().max(1e3),
-  workflowRef: external_exports.string().min(1).max(1024),
-  jobWorkflowRef: external_exports.string().min(1).max(1024),
-  eventName: runnerEventNameV1Schema,
-  ref: external_exports.string().min(1).max(1024),
-  runnerEnvironment: external_exports.literal("github-hosted"),
-  commitSha: external_exports.string().regex(/^[a-f0-9]{40}$/),
-  agentHash: sha2562
-});
-var runnerActionBaseFields = {
-  schemaVersion: external_exports.literal("gardener.runner.action/v1"),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier2,
-  timeoutMs: external_exports.number().int().positive().max(10 * 60 * 1e3)
-};
-var githubReadRequestV1Schema = external_exports.discriminatedUnion("transport", [
-  external_exports.strictObject({
-    transport: external_exports.literal("rest"),
-    method: external_exports.enum(["GET", "HEAD"]),
-    path: external_exports.string().min(1).max(2048)
-  }),
-  external_exports.strictObject({
-    transport: external_exports.literal("graphql"),
-    query: external_exports.string().min(1).max(32 * 1024),
-    /**
-     * Bounded by count and serialized size. Actions are canonicalized into
-     * Durable Object storage, so an unbounded variables map would let a model
-     * grow durable state without limit.
-     */
-    variables: external_exports.record(external_exports.string().min(1).max(128), external_exports.unknown()).refine((value) => Object.keys(value).length <= 64, "too many GraphQL variables").refine((value) => {
-      const serialized = JSON.stringify(value);
-      return serialized !== void 0 && new TextEncoder().encode(serialized).byteLength <= 32 * 1024;
-    }, "GraphQL variables exceed the size limit").optional(),
-    operationName: external_exports.string().regex(/^[_A-Za-z][_0-9A-Za-z]{0,127}$/).optional()
-  })
-]);
-var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
-  external_exports.strictObject({
-    ...runnerActionBaseFields,
-    kind: external_exports.literal("shell.exec"),
-    command: external_exports.string().min(1).max(64 * 1024),
-    cwd: external_exports.string().min(1).max(4096),
-    maxOutputBytes: external_exports.number().int().positive().max(4 * 1024 * 1024)
-  }),
-  external_exports.strictObject({
-    ...runnerActionBaseFields,
-    kind: external_exports.literal("github.read"),
-    request: githubReadRequestV1Schema,
-    maxOutputBytes: external_exports.number().int().positive().max(1024 * 1024)
-  }),
-  /**
-   * Trusted working-tree capture.
-   *
-   * Only the runtime issues this, and only once it holds a durable proposal
-   * that materializes repository changes. There is deliberately no field a
-   * model could fill: no paths, no directory, no content, no filters. The
-   * whole tree is captured, judged by Git against a baseline the runner took
-   * before the first task command ran, so what lands in a commit is what the
-   * runner observed rather than what the model claimed.
-   *
-   * `baseSha` is the commit the runtime bound the run to. The runner refuses
-   * the action unless its own pre-execution baseline was taken against the
-   * same commit, so neither side can drift alone.
-   */
-  external_exports.strictObject({
-    ...runnerActionBaseFields,
-    kind: external_exports.literal("repository.capture"),
-    baseSha: sha12,
-    maxOutputBytes: external_exports.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES2)
-  })
-]);
-var runnerCaptureRefV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.task-capture-ref/v1"),
-  captureId: identifier2,
-  baseSha: sha12,
-  manifestSha256: sha2562,
-  changesSha256: sha2562,
-  fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-});
-var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", [
-  external_exports.strictObject({
-    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
-    /** The working tree matched the checked-out commit; there is nothing to commit. */
-    status: external_exports.literal("unchanged")
-  }),
-  external_exports.strictObject({
-    schemaVersion: external_exports.literal("gardener.runner.capture-result/v1"),
-    status: external_exports.literal("captured"),
-    ref: runnerCaptureRefV1Schema,
-    manifestJson: external_exports.string().min(2).max(EFFECT_TRANSPORT_MAX_BYTES2)
-  })
-]);
-var runnerActionResultV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.action-result/v1"),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  operationId: identifier2,
-  status: external_exports.enum(["completed", "failed", "cancelled", "timed_out"]),
-  exitCode: external_exports.number().int().min(0).max(255).nullable(),
-  stdout: external_exports.string().max(4 * 1024 * 1024),
-  stderr: external_exports.string().max(4 * 1024 * 1024),
-  outputTruncated: external_exports.boolean()
-}).superRefine((result, context) => {
-  const processExited = result.status === "completed" || result.status === "failed";
-  if (processExited !== (result.exitCode !== null)) {
-    context.addIssue({
-      code: "custom",
-      path: ["exitCode"],
-      message: processExited ? "Completed and failed commands require an exit code" : "Cancelled and timed-out commands cannot have an exit code"
-    });
-  }
-});
-var eventActor = external_exports.strictObject({
-  id: githubNumericId2,
-  login: external_exports.string().min(1).max(100)
-});
-var eventLabels = external_exports.array(external_exports.string().trim().min(1).max(100)).max(100);
-var eventBody = external_exports.string().max(65536).nullable();
-var eventNodeId = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9_=-]+$/);
-var eventChangedLabel = external_exports.string().trim().min(1).max(100);
-var eventAuthorAssociation = external_exports.enum([
-  "OWNER",
-  "MEMBER",
-  "COLLABORATOR",
-  "CONTRIBUTOR",
-  "FIRST_TIME_CONTRIBUTOR",
-  "FIRST_TIMER",
-  "MANNEQUIN",
-  "NONE"
-]).optional();
-var eventEdited = { previousBody: external_exports.string().max(65536).optional() };
-var eventIssue = external_exports.strictObject({
-  id: githubNumericId2,
-  number: external_exports.number().int().positive(),
-  title: external_exports.string().max(1024),
-  body: eventBody,
-  // Older immutable bridge pins omit these fields. Current bridge code emits
-  // them, but the runtime accepts the old shape so deploys do not strand runs.
-  state: external_exports.enum(["open", "closed"]).optional(),
-  updatedAt: external_exports.iso.datetime().optional(),
-  labels: eventLabels,
-  author: eventActor,
-  authorAssociation: eventAuthorAssociation
-});
-var eventPullRequestRepository = external_exports.strictObject({
-  id: githubNumericId2,
-  fullName: external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201)
-});
-var eventPullRequest = external_exports.strictObject({
-  id: githubNumericId2,
-  number: external_exports.number().int().positive(),
-  title: external_exports.string().max(1024),
-  body: eventBody,
-  labels: eventLabels,
-  author: eventActor,
-  authorAssociation: eventAuthorAssociation,
-  draft: external_exports.boolean(),
-  state: external_exports.enum(["open", "closed"]),
-  merged: external_exports.boolean(),
-  updatedAt: external_exports.iso.datetime().optional(),
-  base: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository }),
-  head: external_exports.strictObject({ ref: external_exports.string().min(1).max(255), sha: sha12, repo: eventPullRequestRepository.nullable() })
-});
-var eventComment = external_exports.strictObject({
-  id: githubNumericId2,
-  body: eventBody,
-  updatedAt: external_exports.iso.datetime().optional(),
-  author: eventActor,
-  authorAssociation: eventAuthorAssociation
-});
-var eventReview = external_exports.strictObject({
-  id: githubNumericId2,
-  state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
-  body: eventBody,
-  author: eventActor,
-  authorAssociation: eventAuthorAssociation
-});
-var eventDiscussion = external_exports.strictObject({
-  id: githubNumericId2,
-  nodeId: eventNodeId,
-  number: external_exports.number().int().positive(),
-  title: external_exports.string().max(1024),
-  body: eventBody,
-  labels: eventLabels,
-  author: eventActor,
-  authorAssociation: eventAuthorAssociation,
-  category: external_exports.string().min(1).max(100),
-  answered: external_exports.boolean(),
-  state: external_exports.enum(["open", "closed"]).optional(),
-  updatedAt: external_exports.iso.datetime().optional()
-});
-var eventDiscussionComment = external_exports.strictObject({
-  id: githubNumericId2,
-  nodeId: eventNodeId,
-  body: eventBody,
-  updatedAt: external_exports.iso.datetime().optional(),
-  author: eventActor,
-  authorAssociation: eventAuthorAssociation
-});
-var eventPush = external_exports.strictObject({
-  ref: external_exports.string().min(1).max(1024),
-  before: sha12,
-  after: sha12,
-  forced: external_exports.boolean(),
-  commits: external_exports.array(external_exports.strictObject({
-    sha: sha12,
-    message: external_exports.string().max(4096),
-    author: external_exports.strictObject({ name: external_exports.string().max(200), email: external_exports.string().max(320) })
-  })).max(20),
-  /** Count present in `commits`; never claimed to be the push total. */
-  includedCommits: external_exports.number().int().min(0).max(20),
-  commitsTruncated: external_exports.boolean()
-});
-var eventRepository = external_exports.strictObject({ defaultBranch: external_exports.string().trim().min(1).max(255) });
-function runnerEventMember(kind, shape) {
-  return external_exports.strictObject({
-    schemaVersion: external_exports.literal("gardener.runner.event/v1"),
-    kind: external_exports.literal(kind),
-    repository: eventRepository,
-    ...shape
-  });
-}
-var issuePayload2 = { issue: eventIssue };
-var pullRequestPayload2 = { pullRequest: eventPullRequest };
-var discussionPayload2 = { discussion: eventDiscussion };
-var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
-  runnerEventMember("github.issue.opened", issuePayload2),
-  runnerEventMember("github.issue.edited", { ...issuePayload2, ...eventEdited }),
-  runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
-  runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
-  runnerEventMember("github.issue.reopened", issuePayload2),
-  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
-  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited }),
-  runnerEventMember("github.pull_request.opened", pullRequestPayload2),
-  runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
-  runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
-  runnerEventMember("github.pull_request.ready_for_review", pullRequestPayload2),
-  runnerEventMember("github.pull_request.converted_to_draft", pullRequestPayload2),
-  runnerEventMember("github.pull_request.edited", { ...pullRequestPayload2, ...eventEdited }),
-  runnerEventMember("github.pull_request.labeled", { ...pullRequestPayload2, label: eventChangedLabel }),
-  runnerEventMember("github.pull_request.unlabeled", { ...pullRequestPayload2, label: eventChangedLabel }),
-  runnerEventMember("github.pull_request_review.submitted", { ...pullRequestPayload2, review: eventReview }),
-  runnerEventMember("github.pull_request_review_comment.created", { ...pullRequestPayload2, comment: eventComment }),
-  runnerEventMember("github.pull_request_review_comment.edited", { ...pullRequestPayload2, comment: eventComment, ...eventEdited }),
-  runnerEventMember("github.push", { push: eventPush }),
-  runnerEventMember("github.workflow_dispatch", {
-    prompt: external_exports.string().trim().min(1).max(2e4).optional(),
-    // The issue or pull request a manual run targets, read by the runner from
-    // the repository when the run starts.
-    issue: eventIssue.optional(),
-    pullRequest: eventPullRequest.optional()
-  }).refine((event) => event.issue === void 0 || event.pullRequest === void 0, {
-    message: "a manual run may target an issue or a pull request, not both"
-  }),
-  runnerEventMember("github.schedule", { cron: external_exports.string().trim().min(1).max(100) }),
-  runnerEventMember("github.discussion.created", discussionPayload2),
-  runnerEventMember("github.discussion.edited", { ...discussionPayload2, ...eventEdited }),
-  runnerEventMember("github.discussion.answered", discussionPayload2),
-  runnerEventMember("github.discussion.unanswered", discussionPayload2),
-  runnerEventMember("github.discussion.labeled", { ...discussionPayload2, label: eventChangedLabel }),
-  runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
-  runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment }),
-  runnerEventMember("github.discussion_comment.edited", { ...discussionPayload2, comment: eventDiscussionComment, ...eventEdited })
-]);
-var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
-var githubUrl = external_exports.url().refine(
-  (value) => new URL(value).origin === "https://github.com",
-  "Expected an HTTPS github.com URL"
-);
-var runnerOperationReceiptV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("v2"),
-  operationId: identifier2,
-  operationHash: sha2562,
-  kind: external_exports.string().min(1).max(100).regex(/^[a-z][a-z_]*(?:\.[a-z][a-z_]*)+$/),
-  status: external_exports.enum(["succeeded", "failed", "skipped", "conflicted"]),
-  attempt: external_exports.number().int().positive(),
-  attemptedAt: external_exports.iso.datetime(),
-  completedAt: external_exports.iso.datetime(),
-  providerRequestId: external_exports.string().min(1).max(255).optional(),
-  resourceUrl: githubUrl.optional(),
-  error: external_exports.strictObject({
-    code: external_exports.string().min(1).max(100),
-    message: external_exports.string().min(1).max(2e3),
-    retryable: external_exports.boolean()
-  }).optional()
-}).superRefine((receipt, context) => {
-  if (Date.parse(receipt.completedAt) < Date.parse(receipt.attemptedAt)) {
-    context.addIssue({ code: "custom", path: ["completedAt"], message: "operation cannot complete before it was attempted" });
-  }
-  if ((receipt.status === "failed" || receipt.status === "conflicted") && !receipt.error) {
-    context.addIssue({ code: "custom", path: ["error"], message: "failed and conflicted receipts require an error" });
-  }
-  if ((receipt.status === "succeeded" || receipt.status === "skipped") && receipt.error) {
-    context.addIssue({ code: "custom", path: ["error"], message: "successful receipts cannot contain an error" });
-  }
-});
-var runnerScalarOutputV1Schema = external_exports.union([
-  external_exports.string().max(65536),
-  external_exports.number().safe(),
-  external_exports.boolean(),
-  external_exports.null()
-]);
-var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
-  stepName,
-  receipt: runnerOperationReceiptV1Schema,
-  /** Scalar provider outputs needed to resolve references after a retry. */
-  outputs: external_exports.record(external_exports.string().min(1).max(100), runnerScalarOutputV1Schema).default({}),
-  /**
-   * `updated_at` of the step's issue, pull request, or discussion read back
-   * after it succeeded. A later step on the same resource accepts it as the
-   * plan's own write, including after a resume.
-   */
-  resourceVersion: external_exports.strictObject({
-    resource: external_exports.string().regex(/^(?:issue|pull|discussion):[1-9][0-9]{0,15}$/),
-    updatedAt: external_exports.iso.datetime({ offset: true })
-  }).optional()
-});
-var runnerEffectReceiptV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
-  planRunId: identifier2,
-  bundleHash: sha2562,
-  artifactSha256: sha2562,
-  /** Digest of the changes artifact, when the plan materialized repository changes. */
-  changesSha256: sha2562.optional(),
-  /**
-   * Number of operations the plan this receipt answers contained. Without it a
-   * receipt cannot be shown to be complete: `operations.length` alone says
-   * nothing about how many steps were supposed to run, so a truncated apply
-   * would read as a successful one.
-   */
-  plannedOperations: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  status: external_exports.enum(["running", "applied", "stopped"]),
-  /** The step that halted the plan, or null when every step in the plan ran. */
-  stoppedAtStep: stepName.nullable(),
-  /**
-   * Recorded steps, in plan order. No count ceiling here either — the bound is
-   * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
-   */
-  operations: external_exports.array(runnerPlanStepReceiptV1Schema).min(1)
-}).superRefine((receipt, context) => {
-  const bytes = canonicalJsonByteLength2(receipt);
-  if (bytes === null) {
-    context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });
-  } else if (bytes > EFFECT_TRANSPORT_MAX_BYTES2) {
-    context.addIssue({
-      code: "custom",
-      message: `receipt serializes to ${bytes} bytes but the transport carries at most ${EFFECT_TRANSPORT_MAX_BYTES2}`
-    });
-  }
-  if (receipt.operations.length > receipt.plannedOperations) {
-    context.addIssue({
-      code: "custom",
-      path: ["operations"],
-      message: `receipt records ${receipt.operations.length} steps but the plan contained ${receipt.plannedOperations}`
-    });
-  }
-  const stepNames = receipt.operations.map((entry) => entry.stepName);
-  if (new Set(stepNames).size !== stepNames.length) {
-    context.addIssue({ code: "custom", path: ["operations"], message: "step names must be unique within a receipt" });
-  }
-  const operationIds = receipt.operations.map((entry) => entry.receipt.operationId);
-  if (new Set(operationIds).size !== operationIds.length) {
-    context.addIssue({ code: "custom", path: ["operations"], message: "operation IDs must be unique within a receipt" });
-  }
-  const halted = receipt.operations.filter((entry) => entry.receipt.status === "failed" || entry.receipt.status === "conflicted");
-  if (receipt.status === "running" || receipt.status === "applied") {
-    if (halted.length > 0) {
-      context.addIssue({ code: "custom", path: ["status"], message: `${receipt.status} plans cannot contain a failed or conflicted step` });
-    }
-    if (receipt.stoppedAtStep !== null) {
-      context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: `${receipt.status} plans did not stop at a step` });
-    }
-    if (receipt.status === "applied" && receipt.operations.length !== receipt.plannedOperations) {
-      context.addIssue({
-        code: "custom",
-        path: ["operations"],
-        message: `an applied plan must record all ${receipt.plannedOperations} planned steps, not ${receipt.operations.length}`
-      });
-    }
-    if (receipt.status === "running" && receipt.operations.length >= receipt.plannedOperations) {
-      context.addIssue({
-        code: "custom",
-        path: ["operations"],
-        message: "a running receipt must be an incomplete successful prefix"
-      });
-    }
-    return;
-  }
-  const last = receipt.operations.at(-1);
-  if (last === void 0 || halted.length !== 1 || halted[0] !== last) {
-    context.addIssue({
-      code: "custom",
-      path: ["operations"],
-      message: "a stopped plan halts at exactly one failed or conflicted step, which must be the last recorded step"
-    });
-    return;
-  }
-  if (receipt.stoppedAtStep !== last.stepName) {
-    context.addIssue({ code: "custom", path: ["stoppedAtStep"], message: "stoppedAtStep must name the halting step" });
-  }
-});
-function base64EncodedLength(bytes) {
-  return 4 * Math.ceil(bytes / 3);
-}
-function base64DecodedLength(encoded) {
-  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
-  return encoded.length / 4 * 3 - padding;
-}
-var runnerEffectArtifactV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.effect-artifact/v1"),
-  sha256: sha2562,
-  bytesBase64: external_exports.string().min(1).max(base64EncodedLength(EFFECT_TRANSPORT_MAX_BYTES2)).regex(/^[A-Za-z0-9+/]*={0,2}$/).refine(
-    (value) => value.length % 4 === 0,
-    "Expected a padded base64 string"
-  ).refine(
-    (value) => base64DecodedLength(value) <= EFFECT_TRANSPORT_MAX_BYTES2,
-    `Expected at most ${EFFECT_TRANSPORT_MAX_BYTES2} decoded bytes`
-  ),
-  /**
-   * Digest of the repository-changes artifact this plan materializes, when it
-   * materializes one. Bound here so apply can refuse a plan/changes mismatch
-   * before it writes anything.
-   */
-  changesSha256: sha2562.optional()
-});
-var runnerTerminalV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.terminal/v1"),
-  status: external_exports.enum(["completed", "failed", "cancelled"]),
-  summary: external_exports.string().min(1).max(16 * 1024),
-  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  effectArtifact: runnerEffectArtifactV1Schema.optional()
-});
-var resumeCursorV1Schema = external_exports.strictObject({
-  schemaVersion: external_exports.literal("gardener.runner.cursor/v1"),
-  lastServerSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  lastCompletedSequence: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-});
-
-// ../protocol/src/session-id.ts
-function runnerSessionId(hello) {
-  return `repo-${hello.repositoryId}-run-${hello.runId}-attempt-${hello.runAttempt}-${hello.phase}`;
 }
 
 // src/event.ts
@@ -47463,7 +47548,15 @@ async function githubEvent() {
   const raw = JSON.parse(await (0, import_promises4.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
   const target = dispatchTargetRequest(eventName, raw);
   const resolved = target === null ? void 0 : await fetchDispatchTarget({ target, repository: requiredEnvironment2("GITHUB_REPOSITORY"), token: providerReadToken });
-  return normalizeGitHubEvent(eventName, raw, resolved);
+  const event = normalizeGitHubEvent(eventName, raw, resolved);
+  const login = authorPermissionLogin(event);
+  if (login === null) return event;
+  const permission = await fetchAuthorPermission({
+    repository: requiredEnvironment2("GITHUB_REPOSITORY"),
+    login,
+    token: providerReadToken
+  });
+  return permission === null ? event : withAuthorPermission(event, permission);
 }
 async function getIdTokenWithoutEnvironmentLeak(audience) {
   if (!oidcRequestUrl || !oidcRequestToken) throw new Error("GitHub Actions OIDC is unavailable; grant id-token: write");

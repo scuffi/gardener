@@ -226,6 +226,8 @@ const eventAuthorAssociation = z.enum([
   "MANNEQUIN",
   "NONE",
 ]).optional();
+/** The author's repository permission; restated from `@gardener/contracts`. Absent when not looked up. */
+const eventAuthorPermission = z.enum(["admin", "write", "read", "none"]).optional();
 /** On an edited event, the body before the edit; present only when the edit changed it. */
 const eventEdited = { previousBody: z.string().max(65_536).optional() };
 
@@ -241,6 +243,7 @@ const eventIssue = z.strictObject({
   labels: eventLabels,
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
 });
 
 const eventPullRequestRepository = z.strictObject({
@@ -256,6 +259,7 @@ const eventPullRequest = z.strictObject({
   labels: eventLabels,
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
@@ -270,6 +274,7 @@ const eventComment = z.strictObject({
   updatedAt: z.iso.datetime().optional(),
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
 });
 
 const eventReview = z.strictObject({
@@ -278,6 +283,7 @@ const eventReview = z.strictObject({
   body: eventBody,
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
 });
 
 const eventDiscussion = z.strictObject({
@@ -289,6 +295,7 @@ const eventDiscussion = z.strictObject({
   labels: eventLabels,
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
   category: z.string().min(1).max(100),
   answered: z.boolean(),
   state: z.enum(["open", "closed"]).optional(),
@@ -302,6 +309,7 @@ const eventDiscussionComment = z.strictObject({
   updatedAt: z.iso.datetime().optional(),
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
 });
 
 const eventPush = z.strictObject({

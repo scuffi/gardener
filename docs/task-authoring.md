@@ -95,7 +95,8 @@ handle, set as `handle` in `.gardener/gardener.json`:
 `gardener generate` fails if a task mentions `self` and no handle is set. There is no default handle.
 
 `authors` is `maintainers` or `any`. `maintainers` admits text written by the repository owner, an
-organization member, or a collaborator, using GitHub's `author_association`. It is the default for
+organization member, or a collaborator (GitHub's `author_association`), or by anyone with write or
+admin access to the repository. It is the default for
 comment triggers, `pull_request_review.submitted`, and any trigger with `mentions`, because on a
 public repository anyone can write that text. Other triggers default to `any`. Set it explicitly to
 change that. Setting `authors: any` together with `mentions` on a public repository lets anyone who
@@ -111,8 +112,12 @@ triggers:
 ```
 
 GitHub reports an organization member whose membership is private as `CONTRIBUTOR` or `NONE`, not
-`MEMBER`, so `maintainers` ignores them. Make the membership public, or add the person to the
-repository as a collaborator.
+`MEMBER`. The planning job therefore also looks up the author's repository permission, so a private
+member with write or admin access still counts. A private member with only read access does not:
+on a public repository everyone has read access, so it can't tell them apart from anyone else. They
+need to make their membership public, or be given write access. `maintainers` has no prefilter in
+the generated workflow, so a non-maintainer's text starts a short job that ends as a skip, without
+a model call.
 
 On an `.edited` trigger with `mentions`, the task runs only when the edit added a mention; an edit
 that leaves the body alone, or keeps a mention that was already there, does not run it. Without

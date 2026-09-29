@@ -59,6 +59,18 @@ export type AuthorAssociationV1 = z.infer<typeof authorAssociationV1Schema>;
 /** Associations `authors: maintainers` admits. */
 export const maintainerAssociations = ["OWNER", "MEMBER", "COLLABORATOR"] as const satisfies readonly AuthorAssociationV1[];
 
+/**
+ * The author's repository permission, from GitHub's legacy `permission` field,
+ * which reports `maintain` as `write` and `triage` as `read`. It is looked up
+ * because GitHub reports a private org member as CONTRIBUTOR or NONE. On a
+ * public repository everyone reads as `read`, so only `write` and above count.
+ */
+export const authorPermissionV1Schema = z.enum(["admin", "write", "read", "none"]);
+export type AuthorPermissionV1 = z.infer<typeof authorPermissionV1Schema>;
+
+/** Permissions `authors: maintainers` admits whatever the association. */
+export const maintainerPermissions = ["admin", "write"] as const satisfies readonly AuthorPermissionV1[];
+
 const taskMentionFilterV1Schema = z.array(githubHandleV1Schema).max(20).default([]).refine(
   (handles) => new Set(handles).size === handles.length,
   "mentions must not repeat a handle",
@@ -626,6 +638,7 @@ const normalizedIssueV1Schema = z.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
 });
 
 /**
@@ -646,6 +659,7 @@ const normalizedPullRequestV1Schema = z.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
   draft: z.boolean(),
   state: z.enum(["open", "closed"]),
   merged: z.boolean(),
@@ -673,6 +687,7 @@ const normalizedCommentV1Schema = z.strictObject({
   updatedAt: z.iso.datetime().optional(),
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
 });
 
 const normalizedReviewV1Schema = z.strictObject({
@@ -681,6 +696,7 @@ const normalizedReviewV1Schema = z.strictObject({
   body: boundedBody,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
 });
 
 const normalizedDiscussionV1Schema = z.strictObject({
@@ -692,6 +708,7 @@ const normalizedDiscussionV1Schema = z.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
   category: z.string().min(1).max(100),
   answered: z.boolean(),
   state: z.enum(["open", "closed"]).optional(),
@@ -705,6 +722,7 @@ const normalizedDiscussionCommentV1Schema = z.strictObject({
   updatedAt: z.iso.datetime().optional(),
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
 });
 
 const normalizedPushV1Schema = z.strictObject({

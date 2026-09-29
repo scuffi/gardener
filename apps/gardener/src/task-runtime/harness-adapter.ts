@@ -10,6 +10,7 @@ import {
   isEditedTriggerKind,
   taskCheckoutSha,
   maintainerAssociations,
+  maintainerPermissions,
   eventHeadIsSameRepository,
   normalizedPullRequest,
   operationOutputCatalog,
@@ -298,10 +299,7 @@ function authoredFiltersPass(trigger: TaskTrigger, event: NormalizedEventV1): bo
   if (!("authors" in trigger) || !isAuthoredTriggerKind(trigger.kind)) return true;
   const subject = eventSubject(event, authoredTriggerSubject[trigger.kind]);
   if (subject === undefined) return false;
-  if (trigger.authors === "maintainers") {
-    const association = subject.authorAssociation;
-    if (association === undefined || !(maintainerAssociations as readonly string[]).includes(association)) return false;
-  }
+  if (trigger.authors === "maintainers" && !isMaintainer(subject)) return false;
   if (trigger.mentions.length === 0) return true;
   const body = subject.body ?? "";
   if (!isEditedTriggerKind(trigger.kind)) return trigger.mentions.some((handle) => mentions(body, handle));
@@ -312,12 +310,25 @@ function authoredFiltersPass(trigger: TaskTrigger, event: NormalizedEventV1): bo
   return trigger.mentions.some((handle) => mentions(body, handle) && !mentions(previous, handle));
 }
 
+type EventSubject = { body: string | null; authorAssociation?: string | undefined; authorPermission?: string | undefined };
+
+/**
+ * A maintainer by association, or by write access the bridge looked up.
+ * GitHub reports a private org member as a non-member, and on a public
+ * repository everyone has read, so only write and above add anyone.
+ */
+function isMaintainer(subject: EventSubject): boolean {
+  const { authorAssociation: association, authorPermission: permission } = subject;
+  return (association !== undefined && (maintainerAssociations as readonly string[]).includes(association))
+    || (permission !== undefined && (maintainerPermissions as readonly string[]).includes(permission));
+}
+
 function eventSubject(
   event: NormalizedEventV1,
   key: (typeof authoredTriggerSubject)[keyof typeof authoredTriggerSubject],
-): { body: string | null; authorAssociation?: string | undefined } | undefined {
+): EventSubject | undefined {
   const value = (event as Record<string, unknown>)[key];
-  return value !== null && typeof value === "object" ? value as { body: string | null; authorAssociation?: string } : undefined;
+  return value !== null && typeof value === "object" ? value as EventSubject : undefined;
 }
 
 /**

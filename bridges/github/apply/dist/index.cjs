@@ -40474,6 +40474,7 @@ var authorAssociationV1Schema = external_exports.enum([
   "MANNEQUIN",
   "NONE"
 ]);
+var authorPermissionV1Schema = external_exports.enum(["admin", "write", "read", "none"]);
 var taskMentionFilterV1Schema = external_exports.array(githubHandleV1Schema).max(20).default([]).refine(
   (handles) => new Set(handles).size === handles.length,
   "mentions must not repeat a handle"
@@ -40855,7 +40856,8 @@ var normalizedIssueV1Schema = external_exports.strictObject({
   updatedAt: external_exports.iso.datetime().optional(),
   labels: boundedLabels,
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedPullRequestRepositoryV1Schema = external_exports.strictObject({
   id: githubNumericId,
@@ -40869,6 +40871,7 @@ var normalizedPullRequestV1Schema = external_exports.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
@@ -40894,14 +40897,16 @@ var normalizedCommentV1Schema = external_exports.strictObject({
   body: boundedBody,
   updatedAt: external_exports.iso.datetime().optional(),
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedReviewV1Schema = external_exports.strictObject({
   id: githubNumericId,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: boundedBody,
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedDiscussionV1Schema = external_exports.strictObject({
   id: githubNumericId,
@@ -40912,6 +40917,7 @@ var normalizedDiscussionV1Schema = external_exports.strictObject({
   labels: boundedLabels,
   author: normalizedActorV1Schema,
   authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional(),
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]).optional(),
@@ -40923,7 +40929,8 @@ var normalizedDiscussionCommentV1Schema = external_exports.strictObject({
   body: boundedBody,
   updatedAt: external_exports.iso.datetime().optional(),
   author: normalizedActorV1Schema,
-  authorAssociation: authorAssociationV1Schema.optional()
+  authorAssociation: authorAssociationV1Schema.optional(),
+  authorPermission: authorPermissionV1Schema.optional()
 });
 var normalizedPushV1Schema = external_exports.strictObject({
   ref: external_exports.string().min(1).max(1024),
@@ -41967,6 +41974,7 @@ var eventAuthorAssociation = external_exports.enum([
   "MANNEQUIN",
   "NONE"
 ]).optional();
+var eventAuthorPermission = external_exports.enum(["admin", "write", "read", "none"]).optional();
 var eventEdited = { previousBody: external_exports.string().max(65536).optional() };
 var eventIssue = external_exports.strictObject({
   id: githubNumericId2,
@@ -41979,7 +41987,8 @@ var eventIssue = external_exports.strictObject({
   updatedAt: external_exports.iso.datetime().optional(),
   labels: eventLabels,
   author: eventActor,
-  authorAssociation: eventAuthorAssociation
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
 });
 var eventPullRequestRepository = external_exports.strictObject({
   id: githubNumericId2,
@@ -41993,6 +42002,7 @@ var eventPullRequest = external_exports.strictObject({
   labels: eventLabels,
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
   draft: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]),
   merged: external_exports.boolean(),
@@ -42005,14 +42015,16 @@ var eventComment = external_exports.strictObject({
   body: eventBody,
   updatedAt: external_exports.iso.datetime().optional(),
   author: eventActor,
-  authorAssociation: eventAuthorAssociation
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
 });
 var eventReview = external_exports.strictObject({
   id: githubNumericId2,
   state: external_exports.enum(["approved", "changes_requested", "commented", "dismissed", "pending"]),
   body: eventBody,
   author: eventActor,
-  authorAssociation: eventAuthorAssociation
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
 });
 var eventDiscussion = external_exports.strictObject({
   id: githubNumericId2,
@@ -42023,6 +42035,7 @@ var eventDiscussion = external_exports.strictObject({
   labels: eventLabels,
   author: eventActor,
   authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission,
   category: external_exports.string().min(1).max(100),
   answered: external_exports.boolean(),
   state: external_exports.enum(["open", "closed"]).optional(),
@@ -42034,7 +42047,8 @@ var eventDiscussionComment = external_exports.strictObject({
   body: eventBody,
   updatedAt: external_exports.iso.datetime().optional(),
   author: eventActor,
-  authorAssociation: eventAuthorAssociation
+  authorAssociation: eventAuthorAssociation,
+  authorPermission: eventAuthorPermission
 });
 var eventPush = external_exports.strictObject({
   ref: external_exports.string().min(1).max(1024),
