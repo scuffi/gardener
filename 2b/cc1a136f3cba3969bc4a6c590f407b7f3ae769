@@ -1,0 +1,23 @@
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_4d43bd1c12a5f1 78,117-120,153-156,158,228,232,256-294,343,885,887,950,994-995,1333-1334,1338,1342
+apps/gardener/test/task-run-trail.test.ts
+  s_de0b486c128948::t_bc11ecc142c875 1-31
+docs/onboarding.md
+  s_de0b486c128948::t_73a19a158ab528 113-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2bcc1a136f3cba3969bc4a6c590f407b7f3ae769",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
