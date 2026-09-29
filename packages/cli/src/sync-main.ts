@@ -9,6 +9,8 @@ import { planProject, staleProjectFiles } from "./project.js";
  * sends the tasks to the runtime, which then runs exactly these.
  */
 const TIMEOUT_MS = 30_000;
+/** Delays before each retry. Runners occasionally fail to connect at all. */
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
 
 async function main(): Promise<void> {
   const runtimeUrl = runtimeOrigin(process.env["INPUT_RUNTIME-URL"]?.trim() ?? "");
@@ -38,16 +40,22 @@ async function main(): Promise<void> {
     tasks: plan.tasks.map(({ taskId, source, bundle }) => ({ taskId, source, bundle })),
   };
   const token = await oidcToken(runtimeUrl);
-  const response = await fetch(`${runtimeUrl}/v1/sync`, {
+  const body = JSON.stringify(request);
+  const { response, attempt } = await withRetries("Sending the tasks to Gardener", () => fetch(`${runtimeUrl}/v1/sync`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "user-agent": "gardener-sync" },
-    body: JSON.stringify(request),
+    body,
     redirect: "error",
     signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  }));
   const result = await response.json().catch(() => null) as
     | { ok?: boolean; error?: unknown; tasks?: Array<{ taskId: string; bundleHash: string }> }
     | null;
+  // An earlier attempt reached the runtime, and only its reply was lost.
+  if (attempt > 1 && response.status === 409 && typeof result?.error === "string" && /already synced/.test(result.error)) {
+    console.log("Gardener had already applied this sync; its earlier reply was lost.");
+    return;
+  }
   if (!response.ok || result?.ok !== true) {
     fail(`Gardener refused the sync (${response.status}): ${typeof result?.error === "string" ? result.error : "no detail"}`);
     return;
@@ -91,15 +99,50 @@ async function oidcToken(audience: string): Promise<string> {
   const url = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
   const bearer = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   if (!url || !bearer) throw new Error("GitHub Actions OIDC is unavailable; the sync job needs id-token: write");
-  const response = await fetch(`${url}&audience=${encodeURIComponent(audience)}`, {
+  const { response } = await withRetries("Requesting a GitHub OIDC token", () => fetch(`${url}&audience=${encodeURIComponent(audience)}`, {
     headers: { authorization: `Bearer ${bearer}`, accept: "application/json" },
     signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  }));
   if (!response.ok) throw new Error(`Requesting a GitHub OIDC token failed (${response.status})`);
   const value = (await response.json() as { value?: unknown }).value;
   if (typeof value !== "string" || value.length === 0) throw new Error("GitHub returned no OIDC token");
   console.log(`::add-mask::${value}`);
   return value;
+}
+
+/**
+ * Retries a request that failed to connect, timed out, or got a 5xx or 429,
+ * logging the underlying cause each time. Other responses are returned as is.
+ */
+export async function withRetries(
+  label: string,
+  request: () => Promise<Response>,
+  delays: readonly number[] = RETRY_DELAYS_MS,
+): Promise<{ response: Response; attempt: number }> {
+  for (let attempt = 1; ; attempt += 1) {
+    let failure: string;
+    try {
+      const response = await request();
+      if (response.status < 500 && response.status !== 429) return { response, attempt };
+      if (attempt > delays.length) return { response, attempt };
+      failure = `HTTP ${response.status}`;
+    } catch (error) {
+      failure = describeError(error);
+      if (attempt > delays.length) throw new Error(`${label} failed: ${failure}`, { cause: error });
+    }
+    console.log(`${label} failed (attempt ${attempt}): ${failure}; retrying`);
+    await new Promise((resolve) => setTimeout(resolve, delays[attempt - 1]));
+  }
+}
+
+/** A fetch error with its cause, which Node otherwise hides behind "fetch failed". */
+export function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = error.cause as { code?: unknown; message?: unknown } | undefined;
+  const detail = cause && typeof cause === "object"
+    ? [cause.code, cause.message].filter((part) => typeof part === "string" && part.length > 0).join(": ")
+    : "";
+  return detail ? `${error.message} (${detail})` : error.message;
 }
 
 function required(name: string): string {
@@ -113,4 +156,8 @@ function fail(message: string): void {
   process.exitCode = 1;
 }
 
-main().catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));
+// Runs when the CommonJS bundle is the entry point, as the action runs it.
+// Imported from the ESM tests, `require` doesn't exist and nothing runs.
+if (typeof require !== "undefined" && require.main === module) {
+  main().catch((error: unknown) => fail(describeError(error)));
+}

@@ -14,7 +14,8 @@ jobs:
   sync:
     name: Sync tasks
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Each request retries for up to about two minutes.
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write

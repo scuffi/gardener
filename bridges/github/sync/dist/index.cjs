@@ -32,6 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // ../../node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = __commonJS({
@@ -7364,6 +7365,12 @@ var require_dist = __commonJS({
 });
 
 // src/sync-main.ts
+var sync_main_exports = {};
+__export(sync_main_exports, {
+  describeError: () => describeError,
+  withRetries: () => withRetries
+});
+module.exports = __toCommonJS(sync_main_exports);
 var import_promises2 = require("node:fs/promises");
 
 // src/project.ts
@@ -29601,6 +29608,7 @@ function workflowSlug(taskId) {
 
 // src/sync-main.ts
 var TIMEOUT_MS = 3e4;
+var RETRY_DELAYS_MS = [1e3, 2e3, 4e3];
 async function main() {
   const runtimeUrl = runtimeOrigin(process.env["INPUT_RUNTIME-URL"]?.trim() ?? "");
   const root = required2("GITHUB_WORKSPACE");
@@ -29625,14 +29633,19 @@ async function main() {
     tasks: plan.tasks.map(({ taskId, source, bundle }) => ({ taskId, source, bundle }))
   };
   const token = await oidcToken(runtimeUrl);
-  const response = await fetch(`${runtimeUrl}/v1/sync`, {
+  const body2 = JSON.stringify(request);
+  const { response, attempt } = await withRetries("Sending the tasks to Gardener", () => fetch(`${runtimeUrl}/v1/sync`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "user-agent": "gardener-sync" },
-    body: JSON.stringify(request),
+    body: body2,
     redirect: "error",
     signal: AbortSignal.timeout(TIMEOUT_MS)
-  });
+  }));
   const result = await response.json().catch(() => null);
+  if (attempt > 1 && response.status === 409 && typeof result?.error === "string" && /already synced/.test(result.error)) {
+    console.log("Gardener had already applied this sync; its earlier reply was lost.");
+    return;
+  }
   if (!response.ok || result?.ok !== true) {
     fail(`Gardener refused the sync (${response.status}): ${typeof result?.error === "string" ? result.error : "no detail"}`);
     return;
@@ -29673,15 +29686,37 @@ async function oidcToken(audience) {
   const url2 = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
   const bearer = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   if (!url2 || !bearer) throw new Error("GitHub Actions OIDC is unavailable; the sync job needs id-token: write");
-  const response = await fetch(`${url2}&audience=${encodeURIComponent(audience)}`, {
+  const { response } = await withRetries("Requesting a GitHub OIDC token", () => fetch(`${url2}&audience=${encodeURIComponent(audience)}`, {
     headers: { authorization: `Bearer ${bearer}`, accept: "application/json" },
     signal: AbortSignal.timeout(TIMEOUT_MS)
-  });
+  }));
   if (!response.ok) throw new Error(`Requesting a GitHub OIDC token failed (${response.status})`);
   const value = (await response.json()).value;
   if (typeof value !== "string" || value.length === 0) throw new Error("GitHub returned no OIDC token");
   console.log(`::add-mask::${value}`);
   return value;
+}
+async function withRetries(label, request, delays = RETRY_DELAYS_MS) {
+  for (let attempt = 1; ; attempt += 1) {
+    let failure2;
+    try {
+      const response = await request();
+      if (response.status < 500 && response.status !== 429) return { response, attempt };
+      if (attempt > delays.length) return { response, attempt };
+      failure2 = `HTTP ${response.status}`;
+    } catch (error62) {
+      failure2 = describeError(error62);
+      if (attempt > delays.length) throw new Error(`${label} failed: ${failure2}`, { cause: error62 });
+    }
+    console.log(`${label} failed (attempt ${attempt}): ${failure2}; retrying`);
+    await new Promise((resolve2) => setTimeout(resolve2, delays[attempt - 1]));
+  }
+}
+function describeError(error62) {
+  if (!(error62 instanceof Error)) return String(error62);
+  const cause = error62.cause;
+  const detail = cause && typeof cause === "object" ? [cause.code, cause.message].filter((part) => typeof part === "string" && part.length > 0).join(": ") : "";
+  return detail ? `${error62.message} (${detail})` : error62.message;
 }
 function required2(name2) {
   const value = process.env[name2];
@@ -29692,4 +29727,11 @@ function fail(message) {
   console.log(`::error::${message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`);
   process.exitCode = 1;
 }
-main().catch((error62) => fail(error62 instanceof Error ? error62.message : String(error62)));
+if (typeof require !== "undefined" && require.main === module) {
+  main().catch((error62) => fail(describeError(error62)));
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  describeError,
+  withRetries
+});
