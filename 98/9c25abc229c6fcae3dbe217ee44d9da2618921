@@ -1,0 +1,39 @@
+.github/workflows/gardener-check.yml
+  s_de0b486c128948::t_217b50efcdddf2 1-25
+.github/workflows/gardener-sync.yml
+  s_de0b486c128948::t_80298c06f5ade6 30
+bridges/github/README.md
+  s_de0b486c128948::t_3e012dc3b8f3a0 3,5,12-20
+bridges/github/sync/action.yml
+  s_de0b486c128948::t_f4155253ba293a 4-5,8-9,11-13
+bridges/github/sync/dist/index.cjs
+  s_de0b486c128948::t_8a5a27d7e23de5 28892-28895,29571-29572,29575-29576,29586-29589,29595-29603,29605-29608,29631-29635,29638-29645,29649,29653-29658
+docs/onboarding.md
+  s_de0b486c128948::t_76d8ac053a34d3 93-95
+docs/operations.md
+  s_de0b486c128948::t_535af9ff0235a2 103-108
+packages/cli/src/sync-main.ts
+  s_de0b486c128948::t_99d307bd0c8ccc 9-10,17-22,26-37,43-45,49-54
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_4c91d290a6a5de 582-588,590-596
+packages/contracts/src/sync.ts
+  s_de0b486c128948::t_e912aa7cb2c31d 33-38
+scripts/check-release-pins.mjs
+  s_de0b486c128948::t_10355fdb76ca65 2-7,9-12,14,16-23,34,36-38,46-104,106-130,133,135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "989c25abc229c6fcae3dbe217ee44d9da2618921",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
