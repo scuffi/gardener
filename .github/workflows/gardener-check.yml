@@ -1,0 +1,25 @@
+name: Check Gardener tasks
+
+# Called by a repository's generated gardener-sync.yml on pull requests that
+# touch its Gardener files. It only checks that the committed generated files
+# match the tasks, so it needs no token and never calls the runtime. The sync
+# after merge enforces the same check; this one reports it before merge.
+on:
+  workflow_call:
+
+jobs:
+  check:
+    name: Check tasks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check the generated files
+        uses: scuffi/gardener/bridges/github/sync@0e53148fcda69d113abc94e421dfc27b8b7f8f72
+        with:
+          mode: check

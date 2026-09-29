@@ -579,10 +579,21 @@ describe("sync workflow and staleness", () => {
     const parsed = parseYaml(workflow) as Record<string, any>;
     expect(parsed.jobs.sync.uses).toBe(DEFAULT_WORKFLOW_REF.replace("/gardener-task.yml@", "/gardener-sync.yml@"));
     expect(parsed.jobs.sync.permissions).toEqual({ contents: "read", "id-token": "write" });
-    expect(parsed.jobs.sync.if).toBe("github.ref == format('refs/heads/{0}', github.event.repository.default_branch)");
-    expect(parsed.on.push.paths).toEqual([".gardener/**", ".github/workflows/gardener-*.yml"]);
-    expect(parsed.concurrency).toEqual({ group: "gardener-sync", "cancel-in-progress": false });
+    expect(parsed.jobs.sync.if).toBe(
+      "github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+    );
+    expect(parsed.jobs.sync.concurrency).toEqual({ group: "gardener-sync", "cancel-in-progress": false });
+    const paths = [".gardener/**", ".github/workflows/gardener-*.yml"];
+    expect(parsed.on.push.paths).toEqual(paths);
+    expect(parsed.on.pull_request.paths).toEqual(paths);
     expect(parsed.permissions).toEqual({});
+    // Pull requests get a read-only check: no OIDC token, no runtime URL.
+    expect(parsed.jobs.check).toEqual({
+      if: "github.event_name == 'pull_request'",
+      concurrency: { group: "gardener-check-${{ github.ref }}", "cancel-in-progress": true },
+      permissions: { contents: "read" },
+      uses: DEFAULT_WORKFLOW_REF.replace("/gardener-task.yml@", "/gardener-check.yml@"),
+    });
   });
 
   it("reports exactly the committed files generate would change", async () => {

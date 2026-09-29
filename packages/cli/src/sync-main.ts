@@ -6,26 +6,52 @@ import { planProject, staleProjectFiles } from "./project.js";
  * The pinned sync bridge (`bridges/github/sync`). After a push to the default
  * branch it compiles the committed tasks with this release's compiler, refuses
  * to continue if the committed Gardener files differ from that output, and
- * sends the tasks to the runtime, which then runs exactly these.
+ * sends the tasks to the runtime, which then runs exactly these. In check mode,
+ * for pull requests, it stops after the comparison: no token, no runtime call.
  */
 const TIMEOUT_MS = 30_000;
 /** Delays before each retry. Runners occasionally fail to connect at all. */
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
 
 async function main(): Promise<void> {
-  const runtimeUrl = runtimeOrigin(process.env["INPUT_RUNTIME-URL"]?.trim() ?? "");
+  // No default: an omitted mode fails, rather than silently syncing or not.
+  const mode = process.env.INPUT_MODE?.trim();
+  if (mode !== "sync" && mode !== "check") {
+    fail(`Expected mode sync or check, got ${JSON.stringify(mode || null)}`);
+    return;
+  }
   const root = required("GITHUB_WORKSPACE");
   const plan = await planProject({ repositoryRoot: root });
+
+  // The runtime only trusts its own release's workflows, so a lock pinned to
+  // another repository could never sync. Say so on the pull request.
+  const bridgeRepository = required("GITHUB_ACTION_REPOSITORY");
+  const pinnedRepository = plan.workflowRef.split("/.github/workflows/")[0] ?? "";
+  if (pinnedRepository.toLowerCase() !== bridgeRepository.toLowerCase()) {
+    fail(
+      `.gardener/gardener.json pins ${plan.workflowRef}, which is not a ${bridgeRepository} release. `
+      + "Gardener only runs its own releases; restore the pinned release and run `gardener generate`.",
+    );
+    return;
+  }
 
   const stale = await staleProjectFiles(plan);
   if (stale.length > 0) {
     fail(
       `The committed Gardener files don't match the tasks: ${stale.join(", ")}. `
       + "Run `gardener generate` with this repository's Gardener release and commit the result. "
-      + "Until then the previously enrolled tasks keep running.",
+      + (mode === "check"
+        ? "Merged as is, the sync would refuse it and the previous tasks would keep running."
+        : "Until then the previously enrolled tasks keep running."),
     );
     return;
   }
+  if (mode === "check") {
+    console.log(`The Gardener files are up to date: ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}.`);
+    for (const task of plan.tasks) console.log(`  ${task.taskId}`);
+    return;
+  }
+  const runtimeUrl = runtimeOrigin(process.env["INPUT_RUNTIME-URL"]?.trim() ?? "");
 
   const event = JSON.parse(await readFile(required("GITHUB_EVENT_PATH"), "utf8")) as { repository?: { default_branch?: unknown } };
   const defaultBranch = event.repository?.default_branch;

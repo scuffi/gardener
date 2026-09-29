@@ -90,8 +90,9 @@ npx @scuffi/gardener@0.1.3 generate
 `generate` validates every task, then writes the lock file and one workflow per task. Commit them
 and open a pull request. When it merges, the **Gardener · Sync tasks** workflow enrolls the task,
 with no operator step. Use the same CLI version as the repository's pinned release: if your
-generated files don't match what that release produces, the sync run fails and asks you to
-regenerate, and the previous tasks keep running.
+generated files don't match what that release produces, the pull request's **Check tasks** check
+fails and asks you to regenerate. Merged anyway, the sync fails the same way, and the previous
+tasks keep running.
 
 If your npm config sets `min-release-age` (a supply-chain delay), npm refuses versions published
 in the last few days. Add `--min-release-age=0` to the `npx` command to use a new release.

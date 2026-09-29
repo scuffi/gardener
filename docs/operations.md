@@ -100,7 +100,12 @@ refuses to replace a runtime from a newer CLI, so this never moves a repository 
 
 If the committed lock or workflows don't match the tasks (someone edited a `TASK.md` without
 rerunning `generate`), the sync run fails, and the previously enrolled tasks keep running. Rerun
-`generate` and commit. To resync by hand, run the **Gardener · Sync tasks** workflow from the
+`generate` and commit. Pull requests that touch Gardener's files get a **Check tasks** check that
+reports the same problem before merge. It runs read-only, with no token and no call to the
+runtime, so it is safe on pull requests from forks. It only runs on pull requests that touch
+those files, so don't make it a required status check: other pull requests would wait for it
+forever. A pull request can edit its own checks anyway, so the sync after merge remains the
+enforcement. To resync by hand, run the **Gardener · Sync tasks** workflow from the
 Actions tab, or run `connect` from an up-to-date checkout of the default branch.
 
 Anyone who can push to the default branch decides what Gardener may do there. Protect it with

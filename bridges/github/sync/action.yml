@@ -1,12 +1,16 @@
 name: Gardener GitHub sync bridge
 description: >-
   Compiles a repository's committed Gardener tasks and enrols exactly those with
-  the customer-deployed Gardener runtime, authenticated by GitHub OIDC.
+  the customer-deployed Gardener runtime, authenticated by GitHub OIDC. In check
+  mode it only verifies that the committed generated files are up to date.
 author: Gardener
 inputs:
-  runtime-url:
-    description: HTTPS origin of the customer-deployed Gardener runtime.
+  mode:
+    description: "`check` only verifies the generated files, with no token or runtime call; `sync` also enrols the tasks."
     required: true
+  runtime-url:
+    description: HTTPS origin of the customer-deployed Gardener runtime. Required to sync.
+    required: false
 runs:
   using: node24
   main: dist/index.cjs

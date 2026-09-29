@@ -28889,6 +28889,10 @@ function syncWorkflowRefFor(taskWorkflowRef) {
   const match = pinnedWorkflowRefPattern.exec(taskWorkflowRef);
   return match ? `${match[1]}/.github/workflows/gardener-sync.yml@${match[2]}` : null;
 }
+function checkWorkflowRefFor(taskWorkflowRef) {
+  const match = pinnedWorkflowRefPattern.exec(taskWorkflowRef);
+  return match ? `${match[1]}/.github/workflows/gardener-check.yml@${match[2]}` : null;
+}
 
 // ../provider-github/src/permissions.ts
 var GITHUB_PERMISSION_KEYS = [
@@ -29564,10 +29568,12 @@ ${checksOutPullRequestHead(task.bundle) ? "      checkout-ref: ${{ github.event.
 }
 function renderSyncWorkflow(workflowRef) {
   const syncRef = syncWorkflowRefFor(workflowRef);
-  if (syncRef === null) throw new Error(`Cannot derive the sync workflow from ${workflowRef}`);
+  const checkRef = checkWorkflowRefFor(workflowRef);
+  if (syncRef === null || checkRef === null) throw new Error(`Cannot derive the sync workflow from ${workflowRef}`);
   return `${GENERATED_MARKER}
 #
-# Enrols the committed Gardener tasks when they change on the default branch.
+# Enrols the committed Gardener tasks when they change on the default branch,
+# and checks pull requests that change them.
 # Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: "Gardener \xB7 Sync tasks"
@@ -29577,17 +29583,29 @@ on:
     paths:
       - ".gardener/**"
       - ".github/workflows/gardener-*.yml"
+  pull_request:
+    paths:
+      - ".gardener/**"
+      - ".github/workflows/gardener-*.yml"
   workflow_dispatch:
-
-concurrency:
-  group: gardener-sync
-  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    concurrency:
+      group: gardener-check-\${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    uses: ${checkRef}
+
   sync:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    concurrency:
+      group: gardener-sync
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -29610,16 +29628,34 @@ function workflowSlug(taskId) {
 var TIMEOUT_MS = 3e4;
 var RETRY_DELAYS_MS = [1e3, 2e3, 4e3];
 async function main() {
-  const runtimeUrl = runtimeOrigin(process.env["INPUT_RUNTIME-URL"]?.trim() ?? "");
+  const mode = process.env.INPUT_MODE?.trim();
+  if (mode !== "sync" && mode !== "check") {
+    fail(`Expected mode sync or check, got ${JSON.stringify(mode || null)}`);
+    return;
+  }
   const root = required2("GITHUB_WORKSPACE");
   const plan = await planProject({ repositoryRoot: root });
-  const stale = await staleProjectFiles(plan);
-  if (stale.length > 0) {
+  const bridgeRepository = required2("GITHUB_ACTION_REPOSITORY");
+  const pinnedRepository = plan.workflowRef.split("/.github/workflows/")[0] ?? "";
+  if (pinnedRepository.toLowerCase() !== bridgeRepository.toLowerCase()) {
     fail(
-      `The committed Gardener files don't match the tasks: ${stale.join(", ")}. Run \`gardener generate\` with this repository's Gardener release and commit the result. Until then the previously enrolled tasks keep running.`
+      `.gardener/gardener.json pins ${plan.workflowRef}, which is not a ${bridgeRepository} release. Gardener only runs its own releases; restore the pinned release and run \`gardener generate\`.`
     );
     return;
   }
+  const stale = await staleProjectFiles(plan);
+  if (stale.length > 0) {
+    fail(
+      `The committed Gardener files don't match the tasks: ${stale.join(", ")}. Run \`gardener generate\` with this repository's Gardener release and commit the result. ` + (mode === "check" ? "Merged as is, the sync would refuse it and the previous tasks would keep running." : "Until then the previously enrolled tasks keep running.")
+    );
+    return;
+  }
+  if (mode === "check") {
+    console.log(`The Gardener files are up to date: ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}.`);
+    for (const task of plan.tasks) console.log(`  ${task.taskId}`);
+    return;
+  }
+  const runtimeUrl = runtimeOrigin(process.env["INPUT_RUNTIME-URL"]?.trim() ?? "");
   const event = JSON.parse(await (0, import_promises2.readFile)(required2("GITHUB_EVENT_PATH"), "utf8"));
   const defaultBranch = event.repository?.default_branch;
   if (typeof defaultBranch !== "string" || defaultBranch.length === 0) {

@@ -30,6 +30,12 @@ export function syncWorkflowRefFor(taskWorkflowRef: string): string | null {
   return match ? `${match[1]}/.github/workflows/gardener-sync.yml@${match[2]}` : null;
 }
 
+/** The pull request check that ships beside a pinned task workflow, at the same commit. */
+export function checkWorkflowRefFor(taskWorkflowRef: string): string | null {
+  const match = pinnedWorkflowRefPattern.exec(taskWorkflowRef);
+  return match ? `${match[1]}/.github/workflows/gardener-check.yml@${match[2]}` : null;
+}
+
 /** The task workflow that ships beside a pinned sync workflow, at the same commit. */
 export function taskWorkflowRefFor(syncWorkflowRef: string): string | null {
   const match = pinnedWorkflowRefPattern.exec(syncWorkflowRef);

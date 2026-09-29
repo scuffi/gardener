@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import {
   authoredTriggerSubject,
+  checkWorkflowRefFor,
   checksOutPullRequestHead,
   syncWorkflowRefFor,
   dispatchTargetKinds,
@@ -529,16 +530,20 @@ ${checksOutPullRequestHead(task.bundle)
 }
 
 /**
- * The caller for the pinned sync workflow. It runs on pushes that touch
- * Gardener's files; the runtime accepts it only from the default branch, and
- * the `if:` just saves a job on other branches.
+ * The caller for the pinned sync and check workflows. Pushes that touch
+ * Gardener's files sync them; the runtime accepts a sync only from the default
+ * branch, and the `if:` just saves a job on other branches. Pull requests that
+ * touch them get a read-only check that the generated files are up to date, so
+ * a forgotten `generate` shows up before merge rather than as a failed sync.
  */
 function renderSyncWorkflow(workflowRef: string): string {
   const syncRef = syncWorkflowRefFor(workflowRef);
-  if (syncRef === null) throw new Error(`Cannot derive the sync workflow from ${workflowRef}`);
+  const checkRef = checkWorkflowRefFor(workflowRef);
+  if (syncRef === null || checkRef === null) throw new Error(`Cannot derive the sync workflow from ${workflowRef}`);
   return `${GENERATED_MARKER}
 #
-# Enrols the committed Gardener tasks when they change on the default branch.
+# Enrols the committed Gardener tasks when they change on the default branch,
+# and checks pull requests that change them.
 # Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: "Gardener · Sync tasks"
@@ -548,17 +553,29 @@ on:
     paths:
       - ".gardener/**"
       - ".github/workflows/gardener-*.yml"
+  pull_request:
+    paths:
+      - ".gardener/**"
+      - ".github/workflows/gardener-*.yml"
   workflow_dispatch:
-
-concurrency:
-  group: gardener-sync
-  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    concurrency:
+      group: gardener-check-\${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    uses: ${checkRef}
+
   sync:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    concurrency:
+      group: gardener-sync
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
