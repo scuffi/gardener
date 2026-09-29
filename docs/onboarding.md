@@ -110,8 +110,12 @@ All of these take `--workspace internal --source-root "$PWD"`:
 | One run in detail | `pnpm gardener -- runs view --run <run-id>` |
 | Check the installation | `pnpm gardener -- doctor --repository my-org/my-repo --repository-root "$REPO"` |
 
-`runs view` includes the audit trail. `proposal.refused` and `tool.failed` rows show what the model
-was refused. A run that ends in `budget-exceeded` needs higher limits or narrower instructions.
+`runs view` includes the audit trail. `tool.called` rows show each tool call the model made, with
+its status and a short target (a file path or provider route, never command text), in order.
+`proposal.refused` and `tool.failed` rows show what it was refused (a failed call has both a
+`tool.called` and a `tool.failed` row), and `task.settled` totals the calls and proposals. A failed run's error in the Actions tab ends with the same totals, such as
+`(16 tool calls: 9 repository.read_file, 7 provider.api.read; no effects proposed)`, without the
+targets. A run that ends in `budget-exceeded` needs higher limits or narrower instructions.
 
 ## Upgrading
 

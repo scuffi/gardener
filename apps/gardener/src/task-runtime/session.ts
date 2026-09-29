@@ -75,6 +75,7 @@ import { taskToolInputKeys } from "./tool-input-schemas";
 import { listFilesPath, repositoryPath } from "./repository-paths";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 import { trustedTaskWorkflowRefs } from "./workflow-refs";
+import { countToolCall, toolTarget, trailDigest, type ToolCallCounts } from "./run-trail";
 
 interface Enrollment {
   repository_id: string;
@@ -113,6 +114,10 @@ const OIDC_PREFIX = "oidc:";
  * fails closed. Capture admission supplies it; planning never invents one.
  */
 const CAPTURE_KEY = "effect-capture";
+/** Per-tool counts of the model's tool calls, for the run trail. */
+const TOOL_CALL_COUNTS_KEY = "run-trail-tool-calls";
+/** The trail as it stood at the first settle, so every later read agrees. */
+const SETTLED_TRAIL_KEY = "run-trail-settled";
 const CAPTURE_PENDING_KEY = "effect-capture-pending";
 /** Incremented only after a terminal, non-captured attempt is released. */
 const CAPTURE_GENERATION_KEY = "effect-capture-generation";
@@ -145,11 +150,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   /**
-   * Best-effort trace of a refusal the model saw, so a run that runs out of
-   * turns can be explained from D1. Inputs are never recorded; values are
-   * truncated.
+   * Best-effort trace of what the model did and was refused, so a run that
+   * runs out of turns can be explained from D1. Values are truncated. Tool
+   * calls record a short target (a path or provider route, never command
+   * text), which only operators see.
    */
-  #recordRefusal(runId: string, event: "proposal.refused" | "tool.failed", detail: Record<string, string>): void {
+  #recordAudit(runId: string, event: "proposal.refused" | "tool.failed" | "tool.called", detail: Record<string, string>): void {
     const bounded = Object.fromEntries(Object.entries(detail).map(([key, value]) => [key, value.slice(0, 300)]));
     this.ctx.waitUntil((async () => {
       try {
@@ -219,11 +225,11 @@ export class TaskRunnerSession extends DurableObject<Env> {
     try {
       const result = await this.invokeHarnessToolChecked(invocation);
       if (result.status !== "completed") {
-        this.#recordRefusal(invocation.runId, "tool.failed", { tool: invocation.toolName, status: result.status });
+        this.#recordAudit(invocation.runId, "tool.failed", { tool: invocation.toolName, status: result.status });
       }
       return result;
     } catch (error) {
-      this.#recordRefusal(invocation.runId, "tool.failed", { tool: invocation.toolName, reason: errorText(error) });
+      this.#recordAudit(invocation.runId, "tool.failed", { tool: invocation.toolName, reason: errorText(error) });
       throw error;
     }
   }
@@ -247,7 +253,45 @@ export class TaskRunnerSession extends DurableObject<Env> {
     await this.reserveRunnerToolBudget(invocation.runId, operationId);
     await this.settleUnresolvedBeforeNewAction(invocation.runId);
     const sequence = await this.nextSequence();
-    return this.invoke(toolAction(sequence, operationId, invocation));
+    const action = toolAction(sequence, operationId, invocation);
+    // assertToolDeclared already refused unknown names; never let a model-supplied
+    // name reach the public trail digest even if that ordering changes.
+    const tool: string = TASK_TOOL_BY_HARNESS_NAME[invocation.toolName as keyof typeof TASK_TOOL_BY_HARNESS_NAME] ?? "unknown";
+    await this.ctx.storage.transaction(async (transaction) => {
+      await transaction.put(TOOL_CALL_COUNTS_KEY, countToolCall(await transaction.get<ToolCallCounts>(TOOL_CALL_COUNTS_KEY), tool));
+    });
+    // An audit-only value: the call threw instead of returning a result.
+    let status = "threw";
+    try {
+      const result = await this.invoke(action);
+      status = result.status;
+      return result;
+    } finally {
+      this.#recordAudit(invocation.runId, "tool.called", { tool, target: toolTarget(invocation.toolName, invocation.input), status });
+    }
+  }
+
+  /**
+   * The run trail, frozen at the first settle. A tool call already past
+   * `assertRunActive` can still count after the run settles, so reading live
+   * counts on a reconnect could change a failed run's error line; the audit
+   * row, the first terminal and every replay all read this one snapshot.
+   */
+  async #trail(): Promise<{ toolCalls: ToolCallCounts; proposals: number }> {
+    const settled = await this.ctx.storage.get<{ toolCalls: ToolCallCounts; proposals: number }>(SETTLED_TRAIL_KEY);
+    if (settled) return settled;
+    const trail = {
+      toolCalls: await this.ctx.storage.get<ToolCallCounts>(TOOL_CALL_COUNTS_KEY) ?? {},
+      proposals: await this.ctx.storage.get<number>(PROPOSAL_COUNT_KEY) ?? 0,
+    };
+    await this.ctx.storage.put(SETTLED_TRAIL_KEY, trail);
+    return trail;
+  }
+
+  /** The one-line trail a failed run's Actions error carries. */
+  async #trailDigest(): Promise<string> {
+    const trail = await this.#trail();
+    return trailDigest(trail.toolCalls, trail.proposals);
   }
 
   /**
@@ -296,7 +340,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       return await this.recordProposalChecked(input);
     } catch (error) {
       const proposal = (typeof input.proposal === "object" && input.proposal !== null ? input.proposal : {}) as Record<string, unknown>;
-      this.#recordRefusal(input.runId, "proposal.refused", {
+      this.#recordAudit(input.runId, "proposal.refused", {
         kind: typeof proposal.kind === "string" ? proposal.kind : "",
         step: typeof proposal.stepName === "string" ? proposal.stepName : "",
         reason: errorText(error),
@@ -838,9 +882,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
         this.#db().prepare(
           "INSERT INTO actions_task_audit (run_id,event,detail_json) " +
           "SELECT ?,'task.settled',? WHERE NOT EXISTS (SELECT 1 FROM actions_task_audit WHERE run_id=? AND event='task.settled')",
-        ).bind(identity.sessionId, JSON.stringify({ status: "failed", code: "runtime.deadline_exceeded", bundleHash }), identity.sessionId),
+        ).bind(identity.sessionId, JSON.stringify({ status: "failed", code: "runtime.deadline_exceeded", bundleHash, trail: await this.#trail() }), identity.sessionId),
       ]);
-      return terminalFromOutcome(failed, await this.completedSequence(), request);
+      return terminalFromOutcome(failed, await this.completedSequence(), request, undefined, await this.#trailDigest());
     }
     if (waitGeneration !== this.#waitGeneration) throw new SupersededReadError();
     // An older call may have reached its read while this one awaited.
@@ -903,6 +947,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ).bind(runId, JSON.stringify({
         status: settled.outcome.status,
         bundleHash,
+        trail: await this.#trail(),
         ...auditDetail,
         // A failed run records why, so the audit trail explains it without Worker logs.
         // Every audit message is a fixed sentence: a rejected plan's detail can quote
@@ -946,7 +991,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
   ): Promise<{ outcome: TaskOutcomeV1; terminal: RunnerTerminalV1 }> {
     const sequence = await this.completedSequence();
     if (outcome.status !== "completed") {
-      return { outcome, terminal: await terminalFromOutcome(outcome, sequence, request) };
+      const trail = outcome.status === "failed" ? await this.#trailDigest() : undefined;
+      return { outcome, terminal: await terminalFromOutcome(outcome, sequence, request, undefined, trail) };
     }
     const capture = await this.admittedCapture();
     const settled = await settledTaskOutcome({ request, outcome, capture });
@@ -1284,13 +1330,16 @@ async function terminalFromOutcome(
   sequence: number,
   request: TaskRunRequestV1,
   capture?: TaskEffectPlanCaptureV1,
+  /** A failed run's trail digest, appended so the Actions error explains it. */
+  trail?: string,
 ): Promise<RunnerTerminalV1> {
   const outcome = taskOutcomeV1Schema.parse(value);
   if (outcome.status !== "completed") {
+    const message = outcome.status === "cancelled" ? outcome.reason : outcome.error.message;
     return {
       schemaVersion: "gardener.runner.terminal/v1",
       status: outcome.status === "cancelled" ? "cancelled" : "failed",
-      summary: boundedSummary(outcome.status === "cancelled" ? outcome.reason : outcome.error.message),
+      summary: boundedSummary(trail && outcome.status === "failed" ? `${message} (${trail})` : message),
       lastServerSequence: sequence,
       lastCompletedSequence: sequence,
     };
