@@ -3,6 +3,18 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.4 (2026-09-29)
+
+- Pull requests that touch Gardener's files get a **Check tasks** check. It fails when the
+  committed lock or workflows don't match the tasks (a `TASK.md` edited without `generate`), or
+  when `.gardener/gardener.json` pins another repository's release, before merge rather than as a
+  failed sync afterwards. It runs read-only, with no token and no call to the runtime, so it is
+  safe on pull requests from forks. `generate` adds it to `gardener-sync.yml`.
+- The Release workflow now checks that every input the generated workflows pass is declared by
+  the pinned reusable workflows and bridge actions.
+- Existing repositories: run `upgrade` with this release, then commit and push the regenerated
+  files.
+
 ## v0.1.3 (2026-09-29)
 
 - Tasks go live when they reach the default branch. `generate` adds a `gardener-sync.yml`
