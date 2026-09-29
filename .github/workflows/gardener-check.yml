@@ -20,6 +20,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Check the generated files
-        uses: scuffi/gardener/bridges/github/sync@0e53148fcda69d113abc94e421dfc27b8b7f8f72
+        uses: scuffi/gardener/bridges/github/sync@989c25abc229c6fcae3dbe217ee44d9da2618921
         with:
           mode: check
