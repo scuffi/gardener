@@ -1,0 +1,81 @@
+.github/workflows/gardener-sync.yml
+  s_de0b486c128948::t_b1970aaaa09f02 1-29
+.github/workflows/release.yml
+  s_de0b486c128948::t_4dc8504e349961 25-28,55-57
+.gitignore
+  s_de0b486c128948::t_9a14780e070278 7-8
+README.md
+  s_de0b486c128948::t_f20fa074f6da7f 157
+SECURITY.md
+  s_de0b486c128948::t_a98005987a219a 144-159
+apps/gardener/migrations/0003_actions_repository_syncs.sql
+  s_de0b486c128948::t_eebfefe5f5266e 1-40
+apps/gardener/src/env.ts
+  s_de0b486c128948::t_6a9a3f477e5ce3 8-13
+apps/gardener/src/task-runtime/actions-app.ts
+  s_de0b486c128948::t_0e0cdb090adcad 3,12
+apps/gardener/src/task-runtime/sync.ts
+  s_de0b486c128948::t_a8443f39e77c06 1-227
+apps/gardener/test/task-sync.test.ts
+  s_de0b486c128948::t_2b2c453ce982e7 1-220
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_b1366c7167a1ea 41813-41828
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_11cdbef931ee29 41784-41799
+bridges/github/sync/action.yml
+  s_de0b486c128948::t_193e3e7e704473 1-15
+bridges/github/sync/dist/index.cjs
+  s_de0b486c128948::t_e4d6d955104fe6 1-29695
+docs/architecture.md
+  s_de0b486c128948::t_d9a59b5ab8840b 147
+docs/onboarding.md
+  s_de0b486c128948::t_e3820b01ff4dc5 76-77,90-94,105,107,122,127-130,141-142
+docs/operations.md
+  s_de0b486c128948::t_40e61c2d5e79d4 87-90,92-99,101-107,120,126-128,140-141,148,157,159-161
+package.json
+  s_de0b486c128948::t_9e449f9e1d2695 15
+packages/cli/package.json
+  s_de0b486c128948::t_a881cb4c8634b8 30
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_31af333e1e7b98 76-78,279-281,304-309,378
+packages/cli/src/actions-qualify.ts
+  s_de0b486c128948::t_9a7644e019b489 6,187,192-193,195,197,222,234
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_4d151484e8366e 17,40,44,85-88,145-148,196-197,203-204,207-208,267
+packages/cli/src/project.ts
+  s_de0b486c128948::t_2c268fd84a1875 7,25-27,172-179,211-224,230-235,241,253,282-284,294-300,303,306,308-357,531-570
+packages/cli/src/sync-main.ts
+  s_de0b486c128948::t_495a5b4ec52a10 1-116
+packages/cli/test/actions-installation.test.ts
+  s_de0b486c128948::t_4ad9cffd87c26b 47,136,163,231-232
+packages/cli/test/cli.test.ts
+  s_de0b486c128948::t_2e6efa555fe43b 129-130
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_59cabd539ffdf6 11-13,572-638
+packages/contracts/src/index.ts
+  s_de0b486c128948::t_166986e7986392 6
+packages/contracts/src/sync.ts
+  s_de0b486c128948::t_75af6107863d3f 1-37
+scripts/check-bridge-dist.mjs
+  s_de0b486c128948::t_6b9cafcee7f80b 7,15
+scripts/check-cli-package.mjs
+  s_de0b486c128948::t_2a5173699b27a7 16
+scripts/check-release-pins.mjs
+  s_de0b486c128948::t_8620a989ff7ed2 1-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d7c1769e50d65b6d2eb1d0e4e15482dbfccfb355",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
