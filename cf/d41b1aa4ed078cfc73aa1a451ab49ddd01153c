@@ -1,0 +1,39 @@
+apps/gardener/src/task-runtime/github-oidc.ts
+  s_de0b486c128948::t_dff6565edb7b7f 19-20,48,54
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_3120a73cb7b0ef 77,198-199,207,743-745
+apps/gardener/src/task-runtime/workflow-refs.ts
+  s_de0b486c128948::t_d434aff69cca76 1-27
+apps/gardener/test/task-github-oidc.test.ts
+  s_de0b486c128948::t_62646bec735a18 39,68,70-80
+apps/gardener/test/task-workflow-refs.test.ts
+  s_de0b486c128948::t_44e5248d2be25f 1-27
+docs/onboarding.md
+  s_de0b486c128948::t_803ff54c97172a 125,128-129
+docs/operations.md
+  s_de0b486c128948::t_6b9bd5126979a7 52,109-112,165-167,171-172
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_96e52629487aaa 289,352-359
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_ebd7b13a773447 3,18,28-29,33-35,44,48-51,56,105-107,211,216-217,228,233-237
+packages/cli/src/project.ts
+  s_de0b486c128948::t_0370e9dc317a57 212-251
+packages/cli/test/cli.test.ts
+  s_de0b486c128948::t_eba05ce008c938 96-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cfd41b1aa4ed078cfc73aa1a451ab49ddd01153c",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
