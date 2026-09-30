@@ -3,6 +3,20 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.6 (2026-09-30)
+
+- Non-Workers-AI models (`anthropic/…`, `openai/…` and other providers) can go through any AI
+  Gateway, including one in another account: `deploy --ai-gateway <account-id>/<gateway-id>
+  --ai-gateway-project <name>`, with the token from `GARDENER_AI_GATEWAY_TOKEN`. The token is
+  stored only as the runtime Worker's secret. `@cf/…` models stay on the runtime's own account.
+  Later `deploy` and `upgrade` runs keep the gateway; `--ai-gateway off` removes it. See
+  [AI Gateway](docs/operations.md#ai-gateway).
+- A run that cannot reach the gateway, or whose gateway is missing its token, fails with a clear
+  message.
+- Existing installations: run `deploy` or `upgrade` with this release; the new D1 migration is
+  applied automatically. Nothing changes until a gateway is configured. The workflows are
+  unchanged.
+
 ## v0.1.5 (2026-09-29)
 
 - Runs are no longer refused between an upgrade merging and its sync landing: the runtime also
