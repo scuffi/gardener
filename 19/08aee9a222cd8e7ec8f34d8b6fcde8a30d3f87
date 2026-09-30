@@ -1,0 +1,43 @@
+apps/gardener/src/harness/flue/bounded-cloudflare-provider.ts
+  s_de0b486c128948::t_18b7b332e8d472 11-17,23,54-55,62,64,66,73-74,78,83,176-184
+apps/gardener/src/harness/flue/gateway-binding.ts
+  s_de0b486c128948::t_ec2fb89e01f680 60,66,71-142
+apps/gardener/src/harness/validation.ts
+  s_de0b486c128948::t_d5d55c7e751f10 1,176-182
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_de0b486c128948::t_8e18fdd31e52de 4,355
+apps/gardener/test/flue-bounded-provider.test.ts
+  s_de0b486c128948::t_c4e06a34aecfc1 8,17,25,48-51,74-90
+apps/gardener/test/gateway-binding.test.ts
+  s_de0b486c128948::t_2a2dd301242818 3,13,94,96-98,100-101,105-106,108-164
+docs/onboarding.md
+  s_de0b486c128948::t_aa64403759b991 77-79
+docs/task-authoring.md
+  s_de0b486c128948::t_4c8be1a8a24ff2 417-418,459-461,463-473
+packages/cli/src/actions-target.ts
+  s_de0b486c128948::t_d877a02bfa3442 101-110,174-177,179-183,185-186,188-189
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_517d976cd17e59 18,141-145
+packages/cli/test/actions-target.test.ts
+  s_de0b486c128948::t_632552fef23ca5 3,257-264,282-286
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_efa839e810366c 420-422,550-578
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_5f2864e0230d42 310-317,319-323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1908aee9a222cd8e7ec8f34d8b6fcde8a30d3f87",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
