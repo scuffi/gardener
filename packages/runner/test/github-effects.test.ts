@@ -1795,6 +1795,85 @@ describe("reconcile-before-precondition ordering", () => {
     expect(receipt.status).toBe("conflicted");
     expect(receipt.error?.code).toBe("pull_request_not_open");
   });
+
+  describe("labels on a new pull request", () => {
+    const labelled = () => operationSchema.parse({ ...scenarioFor("pull_request.open_draft").operation, labels: ["allow-pr"] });
+    const refs = [
+      get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: HEAD } }),
+      get(`${REPO}/git/ref/heads/main`, { object: { sha: BASE } }),
+    ];
+    const created = {
+      number: 12,
+      node_id: "PR_new",
+      head: { sha: HEAD },
+      base: { ref: "main", sha: BASE },
+      labels: [],
+      html_url: "https://github.com/acme/widgets/pull/12",
+    };
+
+    it("checks the label exists, opens the pull request, then labels it", async () => {
+      const { receipt, calls } = await run(labelled(), [
+        get(`${REPO}/pulls`, []),
+        ...refs,
+        get(`${REPO}/labels/allow-pr`, { name: "allow-pr" }),
+        send("POST", `${REPO}/pulls`, created),
+        send("POST", `${REPO}/issues/12/labels`, [{ name: "allow-pr" }]),
+      ]);
+      expect(receipt.status).toBe("succeeded");
+      const paths = calls.map((call) => `${call.method} ${call.path}`);
+      expect(paths.indexOf(`GET ${REPO}/labels/allow-pr`)).toBeLessThan(paths.indexOf(`POST ${REPO}/pulls`));
+      expect(calls.at(-1)).toEqual({ method: "POST", path: `${REPO}/issues/12/labels`, body: { labels: ["allow-pr"] } });
+      // GitHub's create endpoint has no labels field.
+      expect(calls.find((call) => call.path === `${REPO}/pulls` && call.method === "POST")?.body).not.toHaveProperty("labels");
+    });
+
+    it("refuses an undefined label before opening anything", async () => {
+      const { receipt, calls } = await run(labelled(), [
+        get(`${REPO}/pulls`, []),
+        ...refs,
+        get(`${REPO}/labels/allow-pr`, { message: "Not Found" }, 404),
+      ]);
+      expect(receipt.status).toBe("conflicted");
+      expect(receipt.error?.code).toBe("label_not_defined");
+      expect(calls.some((call) => call.method === "POST")).toBe(false);
+    });
+
+    it("adds only the missing labels when a resumed run finds its pull request", async () => {
+      const existing = {
+        ...created,
+        user: BOT,
+        state: "open",
+        draft: true,
+        title: "Gardener changes",
+        body: marked("op-draft-pr", "Automated changes"),
+        base: { ref: "main" },
+      };
+      const resumed = await run(labelled(), [
+        get(`${REPO}/pulls`, [existing]),
+        get(`${REPO}/labels/allow-pr`, { name: "allow-pr" }),
+        send("POST", `${REPO}/issues/12/labels`, [{ name: "allow-pr" }]),
+      ]);
+      expect(resumed.receipt.status).toBe("succeeded");
+      expect(resumed.calls.filter((call) => call.method === "POST")).toEqual([
+        { method: "POST", path: `${REPO}/issues/12/labels`, body: { labels: ["allow-pr"] } },
+      ]);
+      const done = await run(labelled(), [get(`${REPO}/pulls`, [{ ...existing, labels: [{ name: "Allow-PR" }] }])]);
+      expect(done.receipt.status).toBe("skipped");
+      expect(done.calls.some((call) => call.method === "POST")).toBe(false);
+    });
+
+    it("fails when GitHub drops a label", async () => {
+      const { receipt } = await run(labelled(), [
+        get(`${REPO}/pulls`, []),
+        ...refs,
+        get(`${REPO}/labels/allow-pr`, { name: "allow-pr" }),
+        send("POST", `${REPO}/pulls`, created),
+        send("POST", `${REPO}/issues/12/labels`, []),
+      ]);
+      expect(receipt.status).toBe("conflicted");
+      expect(receipt.error?.code).toBe("pull_request_label_dropped");
+    });
+  });
 });
 
 describe("path segment safety", () => {

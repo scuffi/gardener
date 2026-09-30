@@ -1551,6 +1551,8 @@ async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDr
     if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== draft) {
       throw conflict("pull_request_mismatch", "Existing Gardener pull request does not match the planned operation");
     }
+    // A resumed run may have opened it and stopped before labelling it.
+    await labelOpenedPull(scope, operation, existing);
     return draftPullOutputs(operation, existing);
   }
   const head = await loadRef(scope, `heads/${encodeRefPath(operation.head)}`);
@@ -1560,6 +1562,8 @@ async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDr
   if (head !== operation.expectedHeadSha) throw conflict("head_branch_changed", "Precondition failed: head branch changed");
   if (base !== operation.expectedBaseSha) throw conflict("base_branch_changed", "Precondition failed: base branch changed");
   await confirmDefaultBranch(scope);
+  // Checked first, so an unknown label usually stops the step before anything is created.
+  for (const label of operation.labels ?? []) await assertLabelDefined(scope, label);
   const { data } = await scope.api.rest(`${scope.repoPath}/pulls`, "Pull request creation", {
     method: "POST",
     body: JSON.stringify({
@@ -1587,7 +1591,33 @@ async function executePullOpenDraft(scope: ExecutionScope, operation: PullOpenDr
     }
     throw conflict("pull_request_revision_race", "Pull request revision changed during creation; the new pull request was closed");
   }
+  await labelOpenedPull(scope, operation, data);
   return draftPullOutputs(operation, data);
+}
+
+/**
+ * Adds an open step's labels to the pull request it opened. GitHub has no
+ * labels field on pull request creation, so they follow in a second request;
+ * labels already present are left alone, so a resumed step adds only the rest.
+ */
+async function labelOpenedPull(scope: ExecutionScope, operation: PullOpenDraft, pull: JsonRecord): Promise<void> {
+  const wanted = operation.labels ?? [];
+  const present = new Set(labelNames(pull).map((label) => label.toLowerCase()));
+  const missing = wanted.filter((label) => !present.has(label.toLowerCase()));
+  if (missing.length === 0) return;
+  if (!positiveInteger(pull.number)) throw failure("github_response_invalid", "GitHub pull request response omitted its number");
+  const number = pull.number;
+  for (const label of missing) await assertLabelDefined(scope, label);
+  const { data } = await scope.api.rest(`${scope.repoPath}/issues/${number}/labels`, "Pull request label add", {
+    method: "POST",
+    body: JSON.stringify({ labels: missing }),
+  });
+  const applied = new Set((Array.isArray(data) ? data : [])
+    .flatMap((label) => (record(label) && typeof label.name === "string" ? [label.name.toLowerCase()] : [])));
+  const dropped = missing.find((label) => !applied.has(label.toLowerCase()));
+  if (dropped !== undefined) {
+    throw conflict("pull_request_label_dropped", `GitHub opened pull request #${number} without label ${dropped}`);
+  }
 }
 
 type PullMerge = Extract<Operation, { kind: "pull_request.merge" }>;

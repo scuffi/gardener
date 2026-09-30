@@ -21,6 +21,7 @@ import {
   type TaskOutcomeV1,
   type TaskRunRequestV1,
   type TaskToolV1,
+  impliedEffectKinds,
 } from "@gardener/contracts";
 import { canonicalSha256 } from "@gardener/core";
 import {
@@ -182,6 +183,8 @@ function assertOutcomeBinding(request: TaskRunRequestV1, outcome: TaskOutcomeV1)
   const stepNames = new Set<string>();
   for (const effect of outcome.proposedEffects) {
     if (!declared.has(effect.kind)) throw new Error(`Task proposed undeclared effect ${effect.kind}`);
+    const implied = impliedEffectKinds(effect.kind, effect.payload, effect.references).find((kind) => !declared.has(kind));
+    if (implied !== undefined) throw new Error(`Task proposed ${effect.kind} with labels, which needs the undeclared effect ${implied}`);
     if (stepNames.has(effect.stepName)) throw new Error(`Task reused step name ${effect.stepName}`);
     stepNames.add(effect.stepName);
   }
@@ -430,6 +433,10 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
   }
   if (effects.includes("issue.create")) {
     notes.push("issue.create: set labels and assigneeIds only when the task instructions call for them.");
+  }
+  if ((effects.includes("pull_request.open") || effects.includes("pull_request.open_draft"))
+    && effects.includes("pull_request.label.add")) {
+    notes.push("pull_request.open and pull_request.open_draft take optional labels, applied right after the pull request opens; set them only when the task instructions call for them.");
   }
   if (effects.some((kind) => kind === "issue.create" || kind.endsWith(".label.add"))) {
     notes.push("Labels must already exist in the repository; Gardener never creates a label.");

@@ -40133,7 +40133,9 @@ var operationOptions = [
     expectedHeadSha: shaSchema,
     expectedBaseSha: shaSchema,
     title: external_exports.string().trim().min(1).max(256),
-    body: external_exports.string().max(65536)
+    body: external_exports.string().max(65536),
+    // Applied right after opening; needs `pull_request.label.add` authority (see `impliedEffectKinds`).
+    labels: external_exports.array(labelName).min(1).max(10).optional()
   }).strict(),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open_draft"),
@@ -40143,7 +40145,8 @@ var operationOptions = [
     expectedBaseSha: shaSchema,
     title: external_exports.string().trim().min(1).max(256),
     body: external_exports.string().max(65536),
-    draft: external_exports.literal(true)
+    draft: external_exports.literal(true),
+    labels: external_exports.array(labelName).min(1).max(10).optional()
   }).strict(),
   pullBase.extend({
     kind: external_exports.literal("pull_request.merge"),
@@ -40218,8 +40221,10 @@ ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
   }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
-  if (operation.kind === "issue.create") {
+  if (operation.kind === "issue.create" || operation.kind === "pull_request.open" || operation.kind === "pull_request.open_draft") {
     if (operation.labels && new Set(operation.labels.map((label) => label.toLowerCase())).size !== operation.labels.length) context.addIssue({ code: "custom", path: ["labels"], message: "labels must be unique" });
+  }
+  if (operation.kind === "issue.create") {
     if (operation.assigneeIds && new Set(operation.assigneeIds).size !== operation.assigneeIds.length) context.addIssue({ code: "custom", path: ["assigneeIds"], message: "assignee IDs must be unique" });
   }
   if (operation.kind === "pull_request.merge") {
@@ -46875,6 +46880,7 @@ async function executePullOpenDraft(scope, operation) {
     if (!headMatches || !baseMatches || existing.title !== operation.title || existing.draft !== draft) {
       throw conflict("pull_request_mismatch", "Existing Gardener pull request does not match the planned operation");
     }
+    await labelOpenedPull(scope, operation, existing);
     return draftPullOutputs(operation, existing);
   }
   const head = await loadRef(scope, `heads/${encodeRefPath(operation.head)}`);
@@ -46884,6 +46890,7 @@ async function executePullOpenDraft(scope, operation) {
   if (head !== operation.expectedHeadSha) throw conflict("head_branch_changed", "Precondition failed: head branch changed");
   if (base !== operation.expectedBaseSha) throw conflict("base_branch_changed", "Precondition failed: base branch changed");
   await confirmDefaultBranch(scope);
+  for (const label of operation.labels ?? []) await assertLabelDefined(scope, label);
   const { data } = await scope.api.rest(`${scope.repoPath}/pulls`, "Pull request creation", {
     method: "POST",
     body: JSON.stringify({
@@ -46911,7 +46918,26 @@ async function executePullOpenDraft(scope, operation) {
     }
     throw conflict("pull_request_revision_race", "Pull request revision changed during creation; the new pull request was closed");
   }
+  await labelOpenedPull(scope, operation, data);
   return draftPullOutputs(operation, data);
+}
+async function labelOpenedPull(scope, operation, pull) {
+  const wanted = operation.labels ?? [];
+  const present = new Set(labelNames2(pull).map((label) => label.toLowerCase()));
+  const missing = wanted.filter((label) => !present.has(label.toLowerCase()));
+  if (missing.length === 0) return;
+  if (!positiveInteger(pull.number)) throw failure2("github_response_invalid", "GitHub pull request response omitted its number");
+  const number4 = pull.number;
+  for (const label of missing) await assertLabelDefined(scope, label);
+  const { data } = await scope.api.rest(`${scope.repoPath}/issues/${number4}/labels`, "Pull request label add", {
+    method: "POST",
+    body: JSON.stringify({ labels: missing })
+  });
+  const applied = new Set((Array.isArray(data) ? data : []).flatMap((label) => record2(label) && typeof label.name === "string" ? [label.name.toLowerCase()] : []));
+  const dropped = missing.find((label) => !applied.has(label.toLowerCase()));
+  if (dropped !== void 0) {
+    throw conflict("pull_request_label_dropped", `GitHub opened pull request #${number4} without label ${dropped}`);
+  }
 }
 function successfulChecks(checks, statuses) {
   const names = /* @__PURE__ */ new Set();

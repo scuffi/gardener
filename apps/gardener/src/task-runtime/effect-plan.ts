@@ -16,6 +16,7 @@ import {
   type TaskEffectProposalV1,
   type TaskOutcomeV1,
   type TaskRunRequestV1,
+  impliedEffectKinds,
 } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import {
@@ -342,6 +343,10 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     const proposal = taskEffectProposalV1Schema.parse(candidate);
     if (!declared.has(proposal.kind)) {
       throw new Error(`Task proposed the undeclared effect ${proposal.kind}`);
+    }
+    const implied = impliedEffectKinds(proposal.kind, proposal.payload, proposal.references).find((kind) => !declared.has(kind));
+    if (implied !== undefined) {
+      throw new Error(`Task proposed ${proposal.kind} with labels, which needs the undeclared effect ${implied}`);
     }
     // Capture-owned pointers are unconditional: a `commit.create` always
     // needs a capture, and the proposal contract has already refused any

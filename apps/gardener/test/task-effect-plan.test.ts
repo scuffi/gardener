@@ -170,6 +170,40 @@ describe("branch authority", () => {
       .toBeUndefined();
   });
 
+  it("needs label authority for labels on a pull request it opens", async () => {
+    const open = taskEffectProposalV1Schema.parse({
+      stepName: "open-pr",
+      kind: "pull_request.open",
+      payload: {
+        head: "gardener/fix-1", base: "main", expectedHeadSha: COMMIT, expectedBaseSha: COMMIT,
+        title: "Fix", body: "Fixes it.", labels: ["allow-pr"],
+      },
+      references: {},
+      rationale: "Open the fix.",
+    });
+    const withoutLabels = await runRequest({ effects: ["pull_request.open"] });
+    expect(proposalAuthorityRefusal(withoutLabels, open, []))
+      .toBe("Labels on pull_request.open need the pull_request.label.add effect, which the task did not declare");
+    await expect(buildTaskEffectPlan({ request: withoutLabels, outcome: outcome(withoutLabels, [open]) }))
+      .rejects.toThrow(/with labels, which needs the undeclared effect pull_request.label.add/);
+    const { labels: _labels, ...unlabelledPayload } = open.payload as Record<string, unknown>;
+    const unlabelled = taskEffectProposalV1Schema.parse({ ...open, payload: unlabelledPayload });
+    expect(proposalAuthorityRefusal(withoutLabels, unlabelled, [])).toBeUndefined();
+    // Labels filled by a reference need the same authority.
+    const branchStep = taskEffectProposalV1Schema.parse({ ...branch, stepName: "branch" });
+    const referenced = taskEffectProposalV1Schema.parse({
+      ...unlabelled,
+      references: { "/labels/0": { step: "branch", output: "branch" } },
+    });
+    const branching = await runRequest({ effects: ["branch.create", "pull_request.open"] });
+    expect(proposalAuthorityRefusal(branching, referenced, [branchStep]))
+      .toBe("Labels on pull_request.open need the pull_request.label.add effect, which the task did not declare");
+    await expect(buildTaskEffectPlan({ request: branching, outcome: outcome(branching, [branchStep, referenced]) }))
+      .rejects.toThrow(/with labels, which needs the undeclared effect pull_request.label.add/);
+    const labelling = await runRequest({ effects: ["pull_request.open", "pull_request.label.add"] });
+    expect(proposalAuthorityRefusal(labelling, open, [])).toBeUndefined();
+  });
+
   it("refuses a proposal as it arrives, so the model can change course", async () => {
     const request = await runRequest({ effectOptions: { "branch.create": { branches: ["**"] } } });
     const parse = (value: unknown) => taskEffectProposalV1Schema.parse(value);

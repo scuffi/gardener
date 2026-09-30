@@ -27212,7 +27212,9 @@ var operationOptions = [
     expectedHeadSha: shaSchema,
     expectedBaseSha: shaSchema,
     title: external_exports.string().trim().min(1).max(256),
-    body: external_exports.string().max(65536)
+    body: external_exports.string().max(65536),
+    // Applied right after opening; needs `pull_request.label.add` authority (see `impliedEffectKinds`).
+    labels: external_exports.array(labelName).min(1).max(10).optional()
   }).strict(),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open_draft"),
@@ -27222,7 +27224,8 @@ var operationOptions = [
     expectedBaseSha: shaSchema,
     title: external_exports.string().trim().min(1).max(256),
     body: external_exports.string().max(65536),
-    draft: external_exports.literal(true)
+    draft: external_exports.literal(true),
+    labels: external_exports.array(labelName).min(1).max(10).optional()
   }).strict(),
   pullBase.extend({
     kind: external_exports.literal("pull_request.merge"),
@@ -27297,8 +27300,10 @@ ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
   }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
-  if (operation.kind === "issue.create") {
+  if (operation.kind === "issue.create" || operation.kind === "pull_request.open" || operation.kind === "pull_request.open_draft") {
     if (operation.labels && new Set(operation.labels.map((label) => label.toLowerCase())).size !== operation.labels.length) context.addIssue({ code: "custom", path: ["labels"], message: "labels must be unique" });
+  }
+  if (operation.kind === "issue.create") {
     if (operation.assigneeIds && new Set(operation.assigneeIds).size !== operation.assigneeIds.length) context.addIssue({ code: "custom", path: ["assigneeIds"], message: "assignee IDs must be unique" });
   }
   if (operation.kind === "pull_request.merge") {

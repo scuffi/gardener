@@ -151,10 +151,13 @@ const operationOptions = [
   operationBase.extend({
     kind: z.literal("pull_request.open"), head: branchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
     title: z.string().trim().min(1).max(256), body: z.string().max(65_536),
+    // Applied right after opening; needs `pull_request.label.add` authority (see `impliedEffectKinds`).
+    labels: z.array(labelName).min(1).max(10).optional(),
   }).strict(),
   operationBase.extend({
     kind: z.literal("pull_request.open_draft"), head: branchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
     title: z.string().trim().min(1).max(256), body: z.string().max(65_536), draft: z.literal(true),
+    labels: z.array(labelName).min(1).max(10).optional(),
   }).strict(),
   pullBase.extend({
     kind: z.literal("pull_request.merge"), expectedState: z.literal("open"), expectedDraft: z.literal(false), method: z.enum(["merge", "squash", "rebase"]),
@@ -224,9 +227,11 @@ export const operationSchema = z.discriminatedUnion("kind", operationOptions).su
   }
   if (strings.some((value) => reservedMarker.test(value))) context.addIssue({ code: "custom", message: "operation contains a reserved idempotency marker" });
   if ((operation.kind === "pull_request.reviewer.request" || operation.kind === "pull_request.reviewer.remove") && new Set(operation.reviewerIds).size !== operation.reviewerIds.length) context.addIssue({ code: "custom", path: ["reviewerIds"], message: "reviewer IDs must be unique" });
-  if (operation.kind === "issue.create") {
+  if (operation.kind === "issue.create" || operation.kind === "pull_request.open" || operation.kind === "pull_request.open_draft") {
     // GitHub label names are case-insensitive.
     if (operation.labels && new Set(operation.labels.map((label) => label.toLowerCase())).size !== operation.labels.length) context.addIssue({ code: "custom", path: ["labels"], message: "labels must be unique" });
+  }
+  if (operation.kind === "issue.create") {
     if (operation.assigneeIds && new Set(operation.assigneeIds).size !== operation.assigneeIds.length) context.addIssue({ code: "custom", path: ["assigneeIds"], message: "assignee IDs must be unique" });
   }
   if (operation.kind === "pull_request.merge") {
@@ -235,6 +240,25 @@ export const operationSchema = z.discriminatedUnion("kind", operationOptions).su
   }
 });
 export type Operation = z.infer<typeof operationSchema>;
+
+/**
+ * Effect kinds a proposal needs declared besides its own. Labelling the pull
+ * request an open step creates is label authority, so it needs
+ * `pull_request.label.add` too, whether the labels are written in the payload
+ * or filled by a reference: apply cannot re-check effect kinds, so this check
+ * must see both.
+ */
+export function impliedEffectKinds(
+  kind: string,
+  payload: unknown,
+  references: Readonly<Record<string, unknown>> = {},
+): OperationKind[] {
+  if (kind !== "pull_request.open" && kind !== "pull_request.open_draft") return [];
+  const inPayload = payload !== null && typeof payload === "object" && (payload as { labels?: unknown }).labels !== undefined;
+  // `labels` needs no JSON Pointer escaping, so its head segment is exact.
+  const referenced = Object.keys(references).some((pointer) => pointer === "/labels" || pointer.startsWith("/labels/"));
+  return inPayload || referenced ? ["pull_request.label.add"] : [];
+}
 
 /**
  * Compact JSON Schema for the model-authored payload of one exact operation.

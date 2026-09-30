@@ -266,6 +266,12 @@ must already exist, and the step refuses if the pull request changed after plann
 `pull_request.open_draft`. Opening it ready can notify code owners and start required reviews
 straight away, so prefer `open_draft` unless the task should hand over finished work.
 
+Both can take up to ten `labels`, which apply adds right after the pull request opens, for example
+a label another workflow looks for. A task that sets them must also declare
+`pull_request.label.add`. As with `issue.create`, every label must already exist: apply checks
+that before opening anything, and a label GitHub drops fails the step. A resumed run adds only the
+labels still missing.
+
 `pull_request.update_branch` brings a pull request up to date with its base, as GitHub's "Update
 branch" button does. `method: rebase` rebases the head onto the base and force-updates the branch;
 `method: merge` merges the base in. GitHub does the work, and only if the head is still the one the

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  impliedEffectKinds,
   operationKindValues,
   operationOutputCatalog,
   operationOutputNames,
@@ -463,6 +464,40 @@ describe("probeOperationShape", () => {
         ...payloadFor(kind),
       }).kind).toBe(kind);
     }
+  });
+});
+
+describe("labels on a new pull request", () => {
+  const parse = (kind: "pull_request.open" | "pull_request.open_draft", labels: unknown) => operationSchema.safeParse({
+    schemaVersion: "v2",
+    id: "op:1",
+    repository: { provider: "github", id: "1", owner: "scuffi", name: "gardener", defaultBranch: "main" },
+    kind,
+    ...payloadFor(kind),
+    labels,
+  });
+
+  it("accepts up to ten distinct existing-label names on either open kind", () => {
+    for (const kind of ["pull_request.open", "pull_request.open_draft"] as const) {
+      expect(parse(kind, ["allow-pr"]).success).toBe(true);
+      expect(parse(kind, Array.from({ length: 10 }, (_, index) => `l${index}`)).success).toBe(true);
+      expect(parse(kind, Array.from({ length: 11 }, (_, index) => `l${index}`)).success).toBe(false);
+      expect(parse(kind, []).success).toBe(false);
+      // GitHub label names are case-insensitive.
+      expect(parse(kind, ["allow-pr", "Allow-PR"]).success).toBe(false);
+    }
+  });
+
+  it("needs label authority only when labels are set", () => {
+    expect(impliedEffectKinds("pull_request.open", { labels: ["allow-pr"] })).toEqual(["pull_request.label.add"]);
+    expect(impliedEffectKinds("pull_request.open_draft", { labels: ["allow-pr"] })).toEqual(["pull_request.label.add"]);
+    expect(impliedEffectKinds("pull_request.open", { title: "x" })).toEqual([]);
+    expect(impliedEffectKinds("issue.create", { labels: ["bug"] })).toEqual([]);
+    expect(impliedEffectKinds("pull_request.open", null)).toEqual([]);
+    // A reference can fill labels the payload leaves out.
+    expect(impliedEffectKinds("pull_request.open", {}, { "/labels/0": { step: "b", output: "branch" } })).toEqual(["pull_request.label.add"]);
+    expect(impliedEffectKinds("pull_request.open_draft", {}, { "/labels": { step: "b", output: "branch" } })).toEqual(["pull_request.label.add"]);
+    expect(impliedEffectKinds("pull_request.open", {}, { "/body": { placeholders: {} }, "/labelsx": {} })).toEqual([]);
   });
 });
 

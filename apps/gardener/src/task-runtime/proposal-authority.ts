@@ -4,6 +4,7 @@ import {
   branchWriteFields,
   branchWriteRefusal,
   commitBaseRefusal,
+  impliedEffectKinds,
   isBranchWriteKind,
   taskCheckoutSha,
   type TaskEffectProposalV1,
@@ -24,6 +25,11 @@ export function proposalAuthorityRefusal(
 ): string | undefined {
   if (!(request.bundle.effects as readonly string[]).includes(proposal.kind)) {
     return `Task did not declare the ${proposal.kind} effect`;
+  }
+  const implied = impliedEffectKinds(proposal.kind, proposal.payload, proposal.references)
+    .find((kind) => !(request.bundle.effects as readonly string[]).includes(kind));
+  if (implied !== undefined) {
+    return `Labels on ${proposal.kind} need the ${implied} effect, which the task did not declare`;
   }
   if (isBranchWriteKind(proposal.kind)) {
     const field = branchWriteFields[proposal.kind];
