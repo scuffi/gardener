@@ -1,0 +1,49 @@
+apps/gardener/test/gateway-binding.test.ts
+  s_de0b486c128948::t_2a2dd301242818 3,13,94,96-98,100-101,105-106,108-164
+apps/gardener/src/harness/validation.ts
+  s_de0b486c128948::t_d5d55c7e751f10 1,176-182
+apps/gardener/src/harness/flue/bounded-cloudflare-provider.ts
+  s_de0b486c128948::t_18b7b332e8d472 11-17,23,54-55,62,64,66,73-74,78,83,176-184
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_de0b486c128948::t_8e18fdd31e52de 4,355
+apps/gardener/src/harness/flue/gateway-binding.ts
+  s_de0b486c128948::t_ec2fb89e01f680 60,66,71-142
+apps/gardener/test/flue-bounded-provider.test.ts
+  s_de0b486c128948::t_c4e06a34aecfc1 8,17,25,48-51,74-90
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_517d976cd17e59 18,141-145
+packages/cli/test/actions-target.test.ts
+  s_de0b486c128948::t_632552fef23ca5 3,257-264,282-286
+packages/cli/src/actions-target.ts
+  s_de0b486c128948::t_d877a02bfa3442 101-110,174-177,179-183,185-186,188-189
+docs/task-authoring.md
+  s_de0b486c128948::t_4c8be1a8a24ff2 417-418,459-461,463-473
+docs/onboarding.md
+  s_de0b486c128948::t_aa64403759b991 77-79
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_5f2864e0230d42 310-317,319-323
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_314f8b1ff84ecc 40647,40649-40653
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_dafb80d8c46a1a 40640,40642-40646
+bridges/github/sync/dist/index.cjs
+  s_de0b486c128948::t_8a6349ac3df619 27733,27735-27739,29036-29040,29078-29079,29081-29084,29086-29087,29089-29090,29226-29230,29413,29420-29421,29427,29552-29563,29593-29594
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_8a952a65b0ec8a 547-578
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f12d3b63b93784fa4f8651c7cfc04bcdffa17c6d",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
