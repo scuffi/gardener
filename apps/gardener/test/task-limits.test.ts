@@ -40,7 +40,7 @@ describe("Actions task hard limits", () => {
     const explained = classifyTaskFailure(gateway402);
     expect(explained).toEqual({
       code: "provider-error",
-      message: "AI Gateway refused the request for insufficient balance (HTTP 402). Add a provider key or credit to the account's default AI Gateway",
+      message: "AI Gateway refused the request for insufficient balance (HTTP 402). Add a provider key or credit to the installation's AI Gateway",
     });
     expect(explained!.message).not.toContain("BYOK");
 
@@ -63,6 +63,11 @@ describe("Actions task hard limits", () => {
     expect(hook("task_has_multiple_terminal_outcomes")?.message).toBe("The model called finish_task more than once");
     expect(hook("task_tool_budget_exceeded")?.message).toBe("Task tool-call limit was exceeded");
     expect(hook("task_model_token_budget_exceeded")?.message).toBe("Task model-output limit was exceeded");
+
+    expect(classifyTaskFailure(new Error("gardener_ai_gateway_unreachable: the AI Gateway could not be reached", { cause: new TypeError("fetch failed") })))
+      .toEqual({ code: "provider-error", message: "The installation's AI Gateway could not be reached" });
+    expect(classifyTaskFailure(flueFailure("Gardener's AI Gateway is partially configured; redeploy with the gateway account, gateway ID and token"))?.message)
+      .toMatch(/missing its token or ID; redeploy with GARDENER_AI_GATEWAY_TOKEN set/);
 
     expect(classifyTaskFailure(flueFailure("A canonical conversation record violates the conversation stream contract."))).toBeNull();
     expect(classifyTaskFailure(undefined)).toBeNull();

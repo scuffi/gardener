@@ -166,7 +166,9 @@ source.
 ## Runtime dependencies
 
 The model runtime is Flue `2.0.3`, with `@earendil-works/pi-ai` `0.83.0`. Every model call goes
-through the Workers AI binding to the account's AI Gateway named `default`. Each bundle names its
+through AI Gateway: by default through the Workers AI binding to the account's gateway named
+`default`, or, for non-Workers-AI models when the operator configures one, over HTTPS to any gateway
+(`harness/flue/gateway-binding.ts`). Each bundle names its
 model; `gardener generate` writes `@cf/zai-org/glm-5.3` when a task names none. Dependencies
 are pinned exactly. `pnpm versions:check` reports drift from the latest npm releases, and any
 intentionally held version is listed in `scripts/check-versions.mjs`.

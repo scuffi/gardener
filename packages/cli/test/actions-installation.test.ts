@@ -11,12 +11,14 @@ const cloudflare = vi.hoisted(() => ({
   facts: null as Array<{ key: string; value: string }> | null,
   tables: [] as string[],
   workerExists: true,
+  secrets: [] as string[],
   wrangler: vi.fn(),
 }));
 vi.mock("../src/provision", () => ({
   listDatabases: () => cloudflare.databases,
   selectedAccountId: () => "account-1",
   workerExists: () => cloudflare.workerExists,
+  workerSecretNames: () => cloudflare.secrets,
 }));
 vi.mock("../src/actions-d1", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/actions-d1")>()),
@@ -39,7 +41,9 @@ import {
   compareVersions,
   deployActions,
   ensurePublicRuntime,
+  parseAiGateway,
   pullRequestPermissionWarningsFor,
+  type AiGateway,
   renderRuntimeConfig,
   resolveInstallation,
   upgradeActions,
@@ -54,6 +58,7 @@ afterEach(() => {
   cloudflare.facts = null;
   cloudflare.tables = [];
   cloudflare.workerExists = true;
+  cloudflare.secrets = [];
   if (originalToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
   else process.env.CLOUDFLARE_API_TOKEN = originalToken;
 });
@@ -124,6 +129,65 @@ describe("Actions-native installation topology", () => {
     await expect(deployActions({ workspace: "demo-team", sourceRoot: "." }))
       .rejects.toThrow(/exists without a gardener-demo-team database/);
     expect(cloudflare.wrangler).not.toHaveBeenCalled();
+  });
+
+  it("needs the gateway token before touching Cloudflare", async () => {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = [{ key: "cli_version", value: "0.0.1" }, { key: "runtime_origin", value: "https://x.workers.dev" }];
+    const aiGateway = { accountId: "acct", gatewayId: "gw", project: "p" };
+    await expect(deployActions({ workspace: "demo-team", sourceRoot: ".", aiGateway }))
+      .rejects.toThrow(/needs its token: set GARDENER_AI_GATEWAY_TOKEN/);
+    // A kept gateway also needs a token, in the environment or already on the Worker.
+    cloudflare.facts.push({ key: "ai_gateway", value: "acct/gw" });
+    await expect(deployActions({ workspace: "demo-team", sourceRoot: "." }))
+      .rejects.toThrow(/needs its token/);
+    expect(cloudflare.wrangler).not.toHaveBeenCalled();
+  });
+
+  it("ignores an exported token when the installation has no gateway", async () => {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = [{ key: "cli_version", value: "0.0.1" }, { key: "ai_gateway", value: "acct/gw" }];
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    // The deploy stops later against the stubs; the gateway checks come first.
+    const outcome = await deployActions({ workspace: "demo-team", sourceRoot: ".", aiGateway: "off", aiGatewayToken: "t" })
+      .catch((error: unknown) => error);
+    expect(String(outcome)).not.toMatch(/AI Gateway|GARDENER_AI_GATEWAY_TOKEN/);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/GARDENER_AI_GATEWAY_TOKEN is set, but demo-team has no AI Gateway/));
+    for (const [, , args, input] of cloudflare.wrangler.mock.calls) {
+      expect(args).not.toContain("--secrets-file");
+      expect(input).toBeUndefined();
+    }
+    warn.mockRestore();
+  });
+
+  it("parses --ai-gateway", () => {
+    expect(parseAiGateway("acct-1/project-gateway", "agents-team-gardener"))
+      .toEqual({ accountId: "acct-1", gatewayId: "project-gateway", project: "agents-team-gardener" });
+    expect(parseAiGateway("acct/gw", undefined)).toEqual({ accountId: "acct", gatewayId: "gw", project: null });
+    expect(parseAiGateway("off", undefined)).toBe("off");
+    expect(() => parseAiGateway("off", "p")).toThrow(/needs a gateway/);
+    for (const bad of ["acct", "acct/", "/gw", "a/b/c", "a b/gw", "acct/gw?x"]) {
+      expect(() => parseAiGateway(bad, undefined)).toThrow(/must be <account-id>\/<gateway-id>/);
+    }
+    expect(() => parseAiGateway("acct/gw", "has space")).toThrow(/--ai-gateway-project must be/);
+  });
+
+  it("renders the gateway as vars, never the token", () => {
+    const render = (aiGateway: AiGateway | null) => JSON.parse(renderRuntimeConfig({
+      names: actionsResourceNames("demo-team"),
+      databaseId: "11111111-1111-4111-8111-111111111111",
+      sourceRoot: "/trusted/gardener",
+      workspace: "demo-team",
+      aiGateway,
+    })).vars;
+    expect(render({ accountId: "acct", gatewayId: "gw", project: "agents-team-gardener" })).toEqual({
+      GARDENER_RELEASE_WORKFLOW_REF: DEFAULT_WORKFLOW_REF,
+      GARDENER_AI_GATEWAY_ACCOUNT_ID: "acct",
+      GARDENER_AI_GATEWAY_ID: "gw",
+      GARDENER_AI_GATEWAY_PROJECT: "agents-team-gardener",
+    });
+    expect(render({ accountId: "acct", gatewayId: "gw", project: null })).not.toHaveProperty("GARDENER_AI_GATEWAY_PROJECT");
+    expect(render(null)).toEqual({ GARDENER_RELEASE_WORKFLOW_REF: DEFAULT_WORKFLOW_REF });
   });
 
   it("compares release versions numerically", () => {

@@ -87,3 +87,17 @@ export function workerExists(repositoryRoot: string, worker: string): boolean {
   if (/not found|does not exist|10090/i.test(output)) return false;
   throw new Error(`Unable to determine whether Worker ${worker} exists`);
 }
+
+/** The names of a deployed Worker's secrets; their values are never readable. */
+export function workerSecretNames(repositoryRoot: string, worker: string): string[] {
+  const result = wrangler(repositoryRoot, ".", [
+    "secret", "list", "--name", worker, "--format", "json",
+  ], undefined, { quiet: true });
+  try {
+    const secrets = JSON.parse(result.stdout) as unknown;
+    if (!Array.isArray(secrets)) throw new Error("not a list");
+    return secrets.flatMap((secret) => typeof secret?.name === "string" ? [secret.name as string] : []);
+  } catch {
+    throw new Error(`Wrangler returned invalid secret data for Worker ${worker}`);
+  }
+}

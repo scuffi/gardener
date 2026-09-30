@@ -9,7 +9,7 @@ import { executeD1, isolatedWranglerDirectory, queryD1, queryD1IfTableExists, sq
 import { compileGitHubActionsTask } from "./actions-target.js";
 import { DEFAULT_WORKFLOW_REF } from "./project.js";
 import { runCommand, workerOrigin, wrangler } from "./commands.js";
-import { listDatabases, selectedAccountId, workerExists } from "./provision.js";
+import { listDatabases, selectedAccountId, workerExists, workerSecretNames } from "./provision.js";
 
 const workspaceName = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/);
 const repositorySlug = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
@@ -31,13 +31,55 @@ export interface ActionsInstallation {
   cliVersion: string | null;
   deploymentHash: string | null;
   deployedAt: string | null;
+  aiGateway: AiGateway | null;
 }
+
+/**
+ * An external AI Gateway the runtime sends non-Workers-AI models to. Its token
+ * is a Worker secret, set from GARDENER_AI_GATEWAY_TOKEN and never stored here.
+ */
+export interface AiGateway {
+  accountId: string;
+  gatewayId: string;
+  project: string | null;
+}
+
+/** The token's Worker secret and the environment variable `deploy` reads it from. */
+export const AI_GATEWAY_TOKEN = "GARDENER_AI_GATEWAY_TOKEN";
 
 interface InstallationFacts {
   runtime_origin?: string;
   cli_version?: string;
   deployment_hash?: string;
   deployed_at?: string;
+  /** `<account>/<gateway>`, or empty when none is configured. */
+  ai_gateway?: string;
+  ai_gateway_project?: string;
+}
+
+const GATEWAY_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/** Parses `--ai-gateway <account>/<gateway>`; "off" removes it. */
+export function parseAiGateway(value: string, project: string | undefined): AiGateway | "off" {
+  if (value === "off") {
+    if (project !== undefined) throw new Error("--ai-gateway-project needs a gateway, not --ai-gateway off");
+    return "off";
+  }
+  const [accountId, gatewayId, ...rest] = value.split("/");
+  if (!accountId || !gatewayId || rest.length > 0 || !GATEWAY_IDENTIFIER.test(accountId) || !GATEWAY_IDENTIFIER.test(gatewayId)) {
+    throw new Error("--ai-gateway must be <account-id>/<gateway-id>, or off");
+  }
+  if (project !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(project)) {
+    throw new Error("--ai-gateway-project must be letters, digits, '.', '_' or '-', at most 64 characters");
+  }
+  return { accountId, gatewayId, project: project ?? null };
+}
+
+function gatewayFromFacts(facts: InstallationFacts | null): AiGateway | null {
+  if (!facts?.ai_gateway) return null;
+  const [accountId, gatewayId] = facts.ai_gateway.split("/");
+  if (!accountId || !gatewayId) return null;
+  return { accountId, gatewayId, project: facts.ai_gateway_project || null };
 }
 
 export interface ActionsResourceNames {
@@ -59,7 +101,9 @@ export function renderRuntimeConfig(input: {
   sourceRoot: string;
   workspace: string;
   migrationMode?: "fresh" | "steady";
+  aiGateway?: AiGateway | null;
 }): string {
+  const gateway = input.aiGateway;
   return `${JSON.stringify({
     name: input.names.runtimeWorker,
     main: join(input.sourceRoot, "apps/gardener/dist/gardener_runtime/index.js"),
@@ -75,7 +119,14 @@ export function renderRuntimeConfig(input: {
     ai: { binding: "AI" },
     // The release this Worker belongs to: a sync from its workflow is accepted
     // even before a repository's enrollment has moved to it.
-    vars: { GARDENER_RELEASE_WORKFLOW_REF: DEFAULT_WORKFLOW_REF },
+    vars: {
+      GARDENER_RELEASE_WORKFLOW_REF: DEFAULT_WORKFLOW_REF,
+      ...(gateway ? {
+        GARDENER_AI_GATEWAY_ACCOUNT_ID: gateway.accountId,
+        GARDENER_AI_GATEWAY_ID: gateway.gatewayId,
+        ...(gateway.project ? { GARDENER_AI_GATEWAY_PROJECT: gateway.project } : {}),
+      } : {}),
+    },
     durable_objects: { bindings: [
       { name: "RUNNER_SESSIONS", class_name: "TaskRunnerSession" },
       { name: "FLUE_GARDENER_TASK_HARNESS_AGENT", class_name: "FlueGardenerTaskHarnessAgent" },
@@ -129,6 +180,7 @@ function installation(
     cliVersion: facts.cli_version ?? null,
     deploymentHash: facts.deployment_hash ?? null,
     deployedAt: facts.deployed_at ?? null,
+    aiGateway: gatewayFromFacts(facts),
   };
 }
 
@@ -186,6 +238,10 @@ export function compareVersions(left: string, right: string): number {
 export async function deployActions(input: {
   workspace: string;
   sourceRoot: string;
+  /** Omitted keeps the installation's current gateway. */
+  aiGateway?: AiGateway | "off";
+  /** The gateway token to set as a Worker secret; omitted keeps the current one. */
+  aiGatewayToken?: string;
 }): Promise<ActionsInstallation> {
   const workspace = workspaceName.parse(input.workspace);
   const sourceRoot = resolve(input.sourceRoot);
@@ -196,9 +252,11 @@ export async function deployActions(input: {
 
   let database = listDatabases(cloudflareCwd).find((candidate) => candidate.name === names.database);
   const workerPresent = workerExists(cloudflareCwd, names.runtimeWorker);
+  let previousGateway: AiGateway | null = null;
   if (database) {
     const facts = readInstallationFacts(names.database);
     if (!facts) assertAdoptableDatabase(workspace, names.database);
+    previousGateway = gatewayFromFacts(facts);
     const deployed = facts?.cli_version;
     if (deployed && compareVersions(version, deployed) < 0) {
       throw new Error(`Gardener ${workspace} runs ${deployed}, newer than this CLI (${version}); use @scuffi/gardener@${deployed} or later`);
@@ -214,6 +272,21 @@ export async function deployActions(input: {
     if (!database) throw new Error("Gardener D1 creation could not be verified");
   }
 
+  const aiGateway = input.aiGateway === undefined ? previousGateway
+    : input.aiGateway === "off" ? null
+    : input.aiGateway;
+  const aiGatewayToken = input.aiGatewayToken?.trim() || undefined;
+  if (aiGateway && !aiGatewayToken
+    && !(workerPresent && workerSecretNames(cloudflareCwd, names.runtimeWorker).includes(AI_GATEWAY_TOKEN))) {
+    throw new Error(`The AI Gateway needs its token: set ${AI_GATEWAY_TOKEN} in the environment and rerun`);
+  }
+  // An exported token must not break deploys of installations without a
+  // gateway, nor --ai-gateway off; it is simply not uploaded.
+  if (!aiGateway && aiGatewayToken) {
+    console.error(`${AI_GATEWAY_TOKEN} is set, but ${workspace} has no AI Gateway; ignoring it`);
+  }
+  const uploadedToken = aiGateway ? aiGatewayToken : undefined;
+
   if (!(await isPackagedDistribution(sourceRoot))) {
     runCommand("pnpm", ["--filter", "@gardener/app", "build"], { cwd: sourceRoot, quiet: true });
   }
@@ -228,14 +301,24 @@ export async function deployActions(input: {
       sourceRoot,
       workspace,
       migrationMode: workerPresent ? "steady" : "fresh",
+      aiGateway,
     }), { mode: 0o600 });
     wrangler(sourceRoot, "apps/gardener", [
       "d1", "migrations", "apply", names.database, "--remote", "--config", runtimeConfig,
     ], undefined, { quiet: true });
+    // The token is uploaded with the new version, so the vars and the token
+    // change together. It is piped, never written to disk or an argument.
     const runtimeDeploy = wrangler(sourceRoot, "apps/gardener", [
       "deploy", "--config", runtimeConfig,
-    ], undefined, { quiet: true });
+      ...(uploadedToken ? ["--secrets-file", "/dev/stdin"] : []),
+    ], uploadedToken ? JSON.stringify({ [AI_GATEWAY_TOKEN]: uploadedToken }) : undefined, { quiet: true });
     runtimeOrigin = workerOrigin(runtimeDeploy, names.runtimeWorker);
+    // Without the gateway vars the runtime ignores a leftover token; remove it anyway.
+    if (!aiGateway && previousGateway) {
+      wrangler(cloudflareCwd, ".", [
+        "secret", "delete", AI_GATEWAY_TOKEN, "--name", names.runtimeWorker,
+      ], "y\n", { quiet: true, allowFailure: true });
+    }
   } finally {
     await rm(configDirectory, { recursive: true, force: true });
   }
@@ -249,6 +332,8 @@ export async function deployActions(input: {
     cli_version: version,
     deployment_hash: deploymentHash,
     deployed_at: new Date().toISOString(),
+    ai_gateway: aiGateway ? `${aiGateway.accountId}/${aiGateway.gatewayId}` : "",
+    ai_gateway_project: aiGateway?.project ?? "",
   };
   executeD1(names.database, `INSERT INTO actions_installation(key,value) VALUES ${
     Object.entries(facts).map(([key, value]) => `(${sql(key)},${sql(value)})`).join(",")
@@ -259,6 +344,8 @@ export async function deployActions(input: {
 export async function upgradeActions(input: {
   workspace: string;
   sourceRoot: string;
+  /** Rotates the installation's AI Gateway token; omitted keeps it. */
+  aiGatewayToken?: string;
 }): Promise<{ previousHash: string | null; deploymentHash: string; changed: boolean }> {
   const names = actionsResourceNames(input.workspace);
   if (!listDatabases(isolatedWranglerDirectory()).some((candidate) => candidate.name === names.database)) {

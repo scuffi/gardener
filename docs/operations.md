@@ -25,10 +25,12 @@ take these three flags:
   and rerunning the failed job after enabling it resumes from that step. `doctor`, which `yolo` and
   `upgrade` also run, warns when the setting is off. Leave the default workflow
   permissions at read-only: each generated workflow requests exactly the permissions its task needs.
-- If any task sets a non-Cloudflare `model:` (for example `openai/…` or `anthropic/…`), add that
-  provider's key, or turn on Unified Billing, on the Cloudflare account's AI Gateway named
-  `default` (**AI → AI Gateway**). Gardener stores no provider keys. Without them, runs of that
-  task fail at the first model call. `@cf/…` models need nothing extra.
+- If any task sets a non-Cloudflare `model:` (for example `openai/…` or `anthropic/…`), the gateway
+  its requests go through needs that provider's key or Unified Billing. By default that is the
+  Cloudflare account's AI Gateway named `default` (**AI → AI Gateway**); to use another gateway,
+  including one in a different account, see [AI Gateway](#ai-gateway). Gardener stores no provider
+  keys. Without them, runs of that task fail at the first model call. `@cf/…` models need nothing
+  extra.
 
 ## Install
 
@@ -81,6 +83,28 @@ used in memory and never stored.
 Alternatively, exclude the runtime hostname from the Access policy yourself, for example with a
 bypass application for that hostname only, and rerun `deploy`. It continues once `/health` is
 reachable without Access.
+
+### AI Gateway
+
+Every model call goes through AI Gateway. Without further setup, that is the `default` gateway of
+the account the runtime is deployed to, reached through the Workers AI binding. To send
+non-Workers-AI models (`anthropic/…`, `openai/…` and other providers) to a gateway of your choice,
+including one in another account, pass it to `deploy` with a token that may use it:
+
+```bash
+export GARDENER_AI_GATEWAY_TOKEN=...
+pnpm gardener -- deploy --workspace my-gardener --source-root "$PWD" \
+  --ai-gateway <account-id>/<gateway-id> --ai-gateway-project my-project
+```
+
+- The token is sent as `cf-aig-authorization` and stored only as the runtime Worker's
+  `GARDENER_AI_GATEWAY_TOKEN` secret. It never reaches a runner.
+- `--ai-gateway-project` is optional and sent on every request as
+  `cf-aig-metadata: {"project": "…"}`, for gateways that attribute usage by project.
+- `@cf/…` models keep running on the runtime's own account.
+- Later `deploy` and `upgrade` runs keep the gateway. Set `GARDENER_AI_GATEWAY_TOKEN` again to
+  rotate the token, or pass `--ai-gateway off` to go back to the account's own gateway. An exported
+  token is ignored when deploying an installation without a gateway.
 
 ## Changing tasks
 

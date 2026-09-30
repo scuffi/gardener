@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import {
+  AI_GATEWAY_TOKEN,
   cliVersion,
   connectActions,
   deployActions,
   doctorActions,
+  parseAiGateway,
   upgradeActions,
 } from "./actions-installation.js";
 import {
@@ -85,6 +87,10 @@ resources on the account are adopted; a runtime from a newer CLI is never replac
 Options:
   --workspace <name>           Stable installation name
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
+  --ai-gateway <account>/<id>  Send non-Workers-AI models to this AI Gateway, which may be in
+                               another account; its token comes from GARDENER_AI_GATEWAY_TOKEN.
+                               "off" removes it. Omitted keeps the current gateway
+  --ai-gateway-project <name>  Project sent as cf-aig-metadata on every gateway request
 `;
 
 const UPGRADE_HELP = `gardener upgrade
@@ -192,9 +198,14 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   if (command === "deploy") {
+    const gateway = stringFlag(flags, "ai-gateway");
+    const project = stringFlag(flags, "ai-gateway-project");
+    if (project !== undefined && gateway === undefined) throw new Error("--ai-gateway-project needs --ai-gateway");
     const installation = await deployActions({
       workspace: requiredStringFlag(flags, "workspace"),
       sourceRoot,
+      ...(gateway === undefined ? {} : { aiGateway: parseAiGateway(gateway, project) }),
+      ...gatewayToken(),
     });
     console.log(JSON.stringify(installation, null, 2));
     return;
@@ -203,7 +214,7 @@ async function main(argv: string[]): Promise<void> {
     const workspace = requiredStringFlag(flags, "workspace");
     // Before anything remote, so a wrong directory changes nothing.
     await requireProject(repositoryRoot);
-    const runtime = await upgradeActions({ workspace, sourceRoot });
+    const runtime = await upgradeActions({ workspace, sourceRoot, ...gatewayToken() });
     try {
       const project = await upgradeProjectRelease({ repositoryRoot });
       const build = await buildProject({ repositoryRoot });
@@ -259,7 +270,7 @@ async function main(argv: string[]): Promise<void> {
     const repository = requiredStringFlag(flags, "repository");
     printInit(await initializeProject({ repositoryRoot, demos: flags.get("demos") === true }));
     printBuild(await buildProject({ repositoryRoot }));
-    await deployActions({ workspace, sourceRoot });
+    await deployActions({ workspace, sourceRoot, ...gatewayToken() });
     console.log(JSON.stringify(await connectActions({
       workspace,
       repository,
@@ -368,6 +379,12 @@ function printBuild(result: {
  */
 function printBuildWarnings(result: { warnings: string[] }): void {
   for (const warning of result.warnings) terminal.warn(warning);
+}
+
+/** The AI Gateway token from the environment, for commands that deploy the runtime. */
+function gatewayToken(): { aiGatewayToken?: string } {
+  const token = process.env[AI_GATEWAY_TOKEN];
+  return token ? { aiGatewayToken: token } : {};
 }
 
 function requiredStringFlag(flags: Map<string, string | true>, name: string): string {

@@ -359,8 +359,8 @@ passes cannot exceed a field's limit once the real values are in.
 
 ## Model
 
-`model:` picks the model every run of the task uses. It accepts any model AI Gateway serves
-through the Workers AI binding:
+`model:` picks the model every run of the task uses. It accepts any model the installation's AI
+Gateway serves:
 
 ```yaml
 model: "@cf/zai-org/glm-5.3"
@@ -388,7 +388,11 @@ sending that to the provider is acceptable.
 
 `gardener generate` warns about any prefix other than `@cf/`, `openai/` and `anthropic/`. Every task depends on tool calls, so a model that
 cannot make them fails the run. Non-Cloudflare models also need provider keys or Unified Billing
-on the account's `default` AI Gateway. See [Operations](operations.md#prerequisites).
+on the gateway the installation uses: the account's `default` AI Gateway, or the one its operator
+configured. See [Operations](operations.md#ai-gateway).
+
+Model IDs are the provider's own, after the prefix: for example `anthropic/claude-sonnet-5-5`, not
+`anthropic/claude-sonnet-5.5`. An unknown ID fails the run with HTTP 404.
 
 ## Limits
 

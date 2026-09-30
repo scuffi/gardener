@@ -56,6 +56,15 @@ export function classifyTaskFailure(cause: unknown): { code: "budget-exceeded" |
   if (detail.includes("task_has_multiple_terminal_outcomes")) {
     return { code: "invalid-outcome", message: "The model called finish_task more than once" };
   }
+  if (detail.includes("gardener_ai_gateway_unreachable")) {
+    return { code: "provider-error", message: "The installation's AI Gateway could not be reached" };
+  }
+  if (detail.includes("AI Gateway is partially configured")) {
+    return {
+      code: "provider-error",
+      message: "The installation's AI Gateway is missing its token or ID; redeploy with GARDENER_AI_GATEWAY_TOKEN set",
+    };
+  }
   if (detail.includes("task_tool_budget_exceeded")) {
     return { code: "budget-exceeded", message: "Task tool-call limit was exceeded" };
   }
@@ -77,10 +86,10 @@ function providerHttpStatus(detail: string): number | null {
 
 function providerFailureMessage(status: number): string {
   if (status === 401 || status === 403) {
-    return `The model provider rejected the request (HTTP ${status}). Check the provider keys on the account's default AI Gateway`;
+    return `The model provider rejected the request (HTTP ${status}). Check the provider keys on the installation's AI Gateway`;
   }
   if (status === 402) {
-    return "AI Gateway refused the request for insufficient balance (HTTP 402). Add a provider key or credit to the account's default AI Gateway";
+    return "AI Gateway refused the request for insufficient balance (HTTP 402). Add a provider key or credit to the installation's AI Gateway";
   }
   if (status === 404) return "The model provider did not find the model (HTTP 404). Check the task's model setting";
   if (status === 408 || status === 504) return `The model provider timed out (HTTP ${status})`;

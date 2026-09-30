@@ -167,6 +167,12 @@ CLI version and deployment digest (none of them secret) in the workspace's D1.
 A `CLOUDFLARE_API_TOKEN`, when provided for Cloudflare Access, is used in memory only. It is never
 written to disk, D1, the Worker, GitHub, or command arguments.
 
+A `GARDENER_AI_GATEWAY_TOKEN`, when provided for an [external AI Gateway](docs/operations.md#ai-gateway),
+is piped to `wrangler deploy` and stored only as the runtime Worker's secret. It is never written to
+disk, D1, GitHub, or command arguments, and never reaches a runner. Anyone who can edit the
+runtime Worker can use it. The gateway sees every request, including repository content the model
+reads.
+
 If you suspect compromise, disable the repository with `gardener repository disable`. Preserve the
 D1 database. The database blocks updates and deletes on the run audit table, `actions_task_audit`, so
 its rows serve as evidence.

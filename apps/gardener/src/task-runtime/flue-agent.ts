@@ -26,6 +26,7 @@ import type { Env } from "../env";
 import type { HarnessRequest, JsonValue } from "../harness/types";
 import { assertHarnessRequest, expectedHarnessBinding } from "../harness/validation";
 import { boundedCloudflareModel, installBoundedCloudflareProvider } from "../harness/flue/bounded-cloudflare-provider";
+import { taskModelBinding } from "../harness/flue/gateway-binding";
 import { RunnerSessionToolFacade, type TaskRuntimeFacade } from "./runner-tool-facade";
 
 const TASK_TERMINAL_TOOL = "finish_task";
@@ -359,7 +360,7 @@ export const cloudflare = extend<CloudflareAgentLike, TaskFlueEnv>({
       constructor(ctx: DurableObjectState, env: TaskFlueEnv) {
         super(ctx, env);
         taskToolFacade = env.GARDENER_HARNESS_TOOLS ?? new RunnerSessionToolFacade(env.RUNNER_SESSIONS);
-        installBoundedCloudflareProvider(env.AI);
+        installBoundedCloudflareProvider(taskModelBinding(env));
       }
     };
   },

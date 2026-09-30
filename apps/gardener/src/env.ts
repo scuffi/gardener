@@ -11,4 +11,13 @@ export interface Env {
    * repository's enrollment has moved to it.
    */
   GARDENER_RELEASE_WORKFLOW_REF?: string;
+  /**
+   * An external AI Gateway for non-Workers-AI models, set by `gardener deploy`.
+   * The token is a Worker secret; the rest are plain vars. Without them every
+   * model goes through the `AI` binding.
+   */
+  GARDENER_AI_GATEWAY_ACCOUNT_ID?: string;
+  GARDENER_AI_GATEWAY_ID?: string;
+  GARDENER_AI_GATEWAY_PROJECT?: string;
+  GARDENER_AI_GATEWAY_TOKEN?: string;
 }
