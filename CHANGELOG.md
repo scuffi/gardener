@@ -3,6 +3,15 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.7 (2026-09-30)
+
+- `pull_request.open` and `pull_request.open_draft` take optional `labels`, added right after the
+  pull request opens, for example a label another workflow looks for. A task that sets them must
+  also declare `pull_request.label.add`, whether the labels are written out or filled from an
+  earlier step. Every label must already exist, and a resumed run adds only the missing ones.
+- Existing repositories: run `upgrade` with this release, then commit and push. The workflows move
+  to this release's bridge.
+
 ## v0.1.6 (2026-09-30)
 
 - Non-Workers-AI models (`anthropic/…`, `openai/…` and other providers) can go through any AI
