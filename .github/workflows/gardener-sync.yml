@@ -25,7 +25,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Enrol the committed tasks
-        uses: scuffi/gardener/bridges/github/sync@0343ad54f8adeeff982b665d0923b5846a6b343b
+        uses: scuffi/gardener/bridges/github/sync@f12d3b63b93784fa4f8651c7cfc04bcdffa17c6d
         with:
           mode: sync
           runtime-url: ${{ inputs.runtime-url }}
