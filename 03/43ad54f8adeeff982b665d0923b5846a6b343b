@@ -1,0 +1,41 @@
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_de0b486c128948::t_349cd1ead56156 19,347-350
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_503b640cd21c87 24,186-187,437-440
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_de0b486c128948::t_1a9d12db2e4219 7,29-33
+apps/gardener/test/task-effect-plan.test.ts
+  s_de0b486c128948::t_5783af33f888e7 173-206
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_516316d5364224 40136-40138,40148-40149,40224,40226-40227,46883,46893,46921,46924-46941
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_e4b0fb49b2d90c 40128-40130,40140-40141,40216,40218-40219
+bridges/github/sync/dist/index.cjs
+  s_de0b486c128948::t_edc0d1811a18f2 27215-27217,27227-27228,27303,27305-27306
+docs/task-authoring.md
+  s_de0b486c128948::t_800b200a7a16af 269-274
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_681e0652c50c8a 154-155,160,230,233-234,244-262
+packages/contracts/test/effect-plan-v1.test.ts
+  s_de0b486c128948::t_fbe7ce2eac68d8 3,470-503
+packages/runner/src/github-effects.ts
+  s_de0b486c128948::t_1ccbcf18f597cf 1554-1555,1565-1566,1594,1598-1622
+packages/runner/test/github-effects.test.ts
+  s_de0b486c128948::t_a8907fc593aae5 1798-1876
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0343ad54f8adeeff982b665d0923b5846a6b343b",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
