@@ -1,0 +1,23 @@
+packages/cli/src/actions-installation.ts
+  s_de0b486c128948::t_1b2b7dd25ad63d 338,342-348
+packages/cli/test/actions-installation.test.ts
+  s_de0b486c128948::t_d57e2adc238adf 44,164-187
+scripts/check-cli-package.mjs
+  s_de0b486c128948::t_2a9798d0d98809 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c767828fd738dd804f8440e3ccfacb6cd4e68d9f",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
