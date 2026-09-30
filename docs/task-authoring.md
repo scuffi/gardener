@@ -414,7 +414,8 @@ Model IDs are the provider's own, after the prefix: for example `anthropic/claud
 
 Reasoning models, including the default `@cf/zai-org/glm-5.3`, spend `output-tokens` while they
 think. Too small a budget cuts a response off before it calls a tool, and the run fails. The
-starter tasks use 16,000.
+starter tasks use 16,000. A task that edits and tests code needs far more room than one that
+comments: each read, edit or test run is at least one turn and one tool call.
 
 Two optional effect-plan ceilings are also available:
 
@@ -455,13 +456,21 @@ workflow or task definition that governs the next run.
 `github-actions/v1` is the only compilation target. It generates one caller workflow per task that
 invokes Gardener's reusable plan/apply workflow at a full commit SHA.
 
-| Limit | Allowed range |
+Limits are the task's to choose. The target sets only what a run needs to work at all:
+
+| Limit | Allowed |
 | --- | --- |
-| `max-turns` | 3–16 |
-| `max-tool-calls` | 3–64 |
-| `runtime-seconds` | 30–480 |
-| `input-tokens` | up to 128,000 |
-| `output-tokens` | up to 32,000 |
+| `max-turns` | at least 3 |
+| `max-tool-calls` | at least 3 |
+| `runtime-seconds` | 30–21,000 |
+| `input-tokens` | any |
+| `output-tokens` | at least 16 × `max-turns` |
+
+The plan job's timeout is `runtime-seconds` plus 10 minutes for checkout and setup, and a
+GitHub-hosted job runs for at most 6 hours, hence 21,000 seconds. Each model request asks for no more
+output than its model produces (the catalog's figure, or 32,000 for models it does not list), however
+large `output-tokens` is. Gateway requests that fail with a network error, HTTP 429 or a 5xx are
+retried twice, with backoff, before the run fails; nothing is retried once a response has started.
 
 The target derives exact permissions rather than granting a fixed superset:
 

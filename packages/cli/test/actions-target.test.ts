@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { operationKindValues, taskBundleV1Schema, triggerKindOrder, type TaskBundleV1 } from "@gardener/contracts";
-import { compileGitHubActionsTask } from "../src/actions-target";
+import { compileGitHubActionsTask, planTimeoutMinutes } from "../src/actions-target";
 
 /** Adds the manual trigger every bundle carries, in its canonical position, if missing. */
 function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"] {
@@ -254,6 +254,14 @@ describe("github-actions/v1 target adapter", () => {
     expect("allowForkExecution" in compileGitHubActionsTask(bundle())).toBe(false);
   });
 
+  it("leaves every limit's size to the task, up to the longest a hosted job runs", () => {
+    const limits = { runtimeSeconds: 21_000, maxTurns: 500, maxToolCalls: 2_000, inputTokens: 1_000_000, outputTokens: 400_000 };
+    expect(() => compileGitHubActionsTask(bundle({ limits }))).not.toThrow();
+    expect(planTimeoutMinutes(21_000)).toBe(360);
+    expect(planTimeoutMinutes(480)).toBe(18);
+    expect(planTimeoutMinutes(61)).toBe(12);
+  });
+
   it("rejects non-canonical trigger order and unsupported limits", () => {
     // The contract rejects it first, and the compiler re-checks independently
     // so a bundle reaching it from any other path cannot skip the ordering.
@@ -271,8 +279,11 @@ describe("github-actions/v1 target adapter", () => {
       ],
     })).toThrow(/canonical order/);
     expect(() => compileGitHubActionsTask(bundle({
-      limits: { ...bundle().limits, runtimeSeconds: 600 },
-    }))).toThrow(/runtime-seconds/);
+      limits: { ...bundle().limits, runtimeSeconds: 21_001 },
+    }))).toThrow(/runtime-seconds must be at most 21000 .*6 hours/);
+    expect(() => compileGitHubActionsTask(bundle({
+      limits: { ...bundle().limits, runtimeSeconds: 29 },
+    }))).toThrow(/runtime-seconds must be at least 30/);
     expect(() => compileGitHubActionsTask(bundle({
       limits: { ...bundle().limits, maxTurns: 2 },
     }))).toThrow(/max-turns/);

@@ -98,6 +98,16 @@ const TRIGGER_BINDINGS: Record<TaskTriggerKindV1, Omit<GitHubActionsTriggerBindi
 /** Write scopes the checkout-free apply job needs for one exact operation kind. */
 const effectPermissions = operationApplyPermissions;
 
+/** The longest a job on a GitHub-hosted runner may run. */
+const GITHUB_HOSTED_JOB_MAX_MINUTES = 360;
+/** Time the plan job needs besides the run: checkout, setup, connecting, and uploading the plan. */
+const PLAN_JOB_OVERHEAD_MINUTES = 10;
+
+/** The plan job's `timeout-minutes`: the task's own runtime, plus setup. */
+export function planTimeoutMinutes(runtimeSeconds: number): number {
+  return Math.ceil(runtimeSeconds / 60) + PLAN_JOB_OVERHEAD_MINUTES;
+}
+
 /**
  * A reusable called job may only request permissions its caller granted. The
  * planner exposes a bounded read-only GitHub API whose resource family is
@@ -161,17 +171,22 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
     }
   }
 
-  if (bundle.limits.runtimeSeconds < 30 || bundle.limits.runtimeSeconds > 480) {
-    throw new Error(`Task ${bundle.taskId} runtime-seconds must be between 30 and 480 for github-actions/v1`);
+  // Only what a run needs to work at all: time to connect, and room for a
+  // tool call and finish_task. Everything else is the task author's to choose.
+  if (bundle.limits.runtimeSeconds < 30) {
+    throw new Error(`Task ${bundle.taskId} runtime-seconds must be at least 30 for github-actions/v1`);
   }
-  if (bundle.limits.maxTurns < 3 || bundle.limits.maxTurns > 16) {
-    throw new Error(`Task ${bundle.taskId} max-turns must be between 3 and 16 for github-actions/v1`);
+  if (planTimeoutMinutes(bundle.limits.runtimeSeconds) > GITHUB_HOSTED_JOB_MAX_MINUTES) {
+    throw new Error(
+      `Task ${bundle.taskId} runtime-seconds must be at most ${(GITHUB_HOSTED_JOB_MAX_MINUTES - PLAN_JOB_OVERHEAD_MINUTES) * 60} for github-actions/v1: `
+        + `a GitHub-hosted job runs for at most ${GITHUB_HOSTED_JOB_MAX_MINUTES / 60} hours, including ${PLAN_JOB_OVERHEAD_MINUTES} minutes for checkout and setup`,
+    );
   }
-  if (bundle.limits.maxToolCalls < 3 || bundle.limits.maxToolCalls > 64) {
-    throw new Error(`Task ${bundle.taskId} max-tool-calls must be between 3 and 64 for github-actions/v1`);
+  if (bundle.limits.maxTurns < 3) {
+    throw new Error(`Task ${bundle.taskId} max-turns must be at least 3 for github-actions/v1`);
   }
-  if (bundle.limits.inputTokens > 128_000 || bundle.limits.outputTokens > 32_000) {
-    throw new Error(`Task ${bundle.taskId} token limits exceed github-actions/v1 model bounds`);
+  if (bundle.limits.maxToolCalls < 3) {
+    throw new Error(`Task ${bundle.taskId} max-tool-calls must be at least 3 for github-actions/v1`);
   }
   if (bundle.limits.maxEffectOperations !== undefined && bundle.effects.length === 0) {
     throw new Error(`Task ${bundle.taskId} sets max-effect-operations without declaring any effect`);

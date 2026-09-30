@@ -1,6 +1,7 @@
 "use agent";
 
 import {
+  TASK_RUNTIME_SECONDS_MAX,
   captureDeferredPointers,
   taskEffectKindValues,
   taskObservationV1Schema,
@@ -351,7 +352,7 @@ GardenerTaskFlueAgent.initialData = v.object({ request: v.unknown() });
  * A shorter value here cut off valid runs: it was once 5 minutes while tasks
  * could run for 8.
  */
-export const MAX_TASK_RUNTIME_SECONDS = 3_600;
+export const MAX_TASK_RUNTIME_SECONDS = TASK_RUNTIME_SECONDS_MAX;
 GardenerTaskFlueAgent.durability = { maxAttempts: 3, timeoutMs: (MAX_TASK_RUNTIME_SECONDS + 60) * 1_000 };
 
 export const cloudflare = extend<CloudflareAgentLike, TaskFlueEnv>({

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   baseStream: vi.fn((_model: unknown, _context: unknown, _options?: any) => "stream-result"),
   baseStreamSimple: vi.fn((_model: unknown, _context: unknown, _options?: any) => "simple-result"),
   setProvider: vi.fn(),
+  models: [] as { id: string; maxTokens: number }[],
 }));
 
 vi.mock("@flue/runtime", () => ({ setProvider: mocks.setProvider }));
@@ -13,7 +14,7 @@ vi.mock("@flue/runtime/cloudflare/workers-ai", () => ({
     id: "cloudflare",
     name: "Cloudflare Workers AI",
     auth: {},
-    getModels: () => [],
+    getModels: () => mocks.models,
     stream: mocks.baseStream,
     streamSimple: mocks.baseStreamSimple,
   })),
@@ -21,6 +22,7 @@ vi.mock("@flue/runtime/cloudflare/workers-ai", () => ({
 
 import {
   boundedCloudflareModel,
+  DEFAULT_REQUEST_OUTPUT_TOKENS,
   installBoundedCloudflareProvider,
 } from "../src/harness/flue/bounded-cloudflare-provider";
 
@@ -43,7 +45,10 @@ function encoded(input: HarnessBudget = budget): string {
 }
 
 describe("bounded native Flue Cloudflare provider", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.models = [];
+  });
 
   it("uses a new native protocol id and rejects the provider output-token floor", () => {
     expect(boundedCloudflareModel("@cf/test/model", budget))
@@ -64,6 +69,23 @@ describe("bounded native Flue Cloudflare provider", () => {
     expect(model).toMatchObject({ id: "@cf/test/model", name: "@cf/test/model" });
     expect(options.maxTokens).toBe(77);
     expect(options.onPayload).toBeUndefined();
+  });
+
+  it("asks each request for no more output than its model produces, whatever the run's budget", () => {
+    const provider = installedProvider();
+    const large = { ...budget, maxOutputTokens: 500_000 };
+    const model = (id: string) => ({ id: boundedCloudflareModel(id, large).slice("cloudflare/".length), name: "bounded", provider: "cloudflare", api: "cloudflare-ai-binding" });
+    // Not in the catalog, as for the gateway's newer models.
+    provider.stream(model("anthropic/claude-opus-5-5"), { messages: [] }, {});
+    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(DEFAULT_REQUEST_OUTPUT_TOKENS);
+    mocks.models = [{ id: "@cf/test/catalogued", maxTokens: 131_072 }, { id: "@cf/test/unknown-limit", maxTokens: 0 }];
+    provider.stream(model("@cf/test/catalogued"), { messages: [] }, {});
+    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(131_072);
+    provider.stream(model("@cf/test/unknown-limit"), { messages: [] }, {});
+    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(DEFAULT_REQUEST_OUTPUT_TOKENS);
+    // A smaller caller request or remaining budget still wins.
+    provider.stream(model("@cf/test/catalogued"), { messages: [] }, { maxTokens: 900 });
+    expect(mocks.baseStream.mock.calls.at(-1)![2].maxTokens).toBe(900);
   });
 
   it("leaves tool selection and transcript serialization to Flue", () => {

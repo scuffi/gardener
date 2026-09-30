@@ -15,6 +15,7 @@ import {
   type TaskEffectKindV1,
   type TaskTriggerKindV1,
   type TaskTriggerV1,
+  TASK_RUNTIME_SECONDS_MAX,
 } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { parse as parseYaml } from "yaml";
@@ -137,11 +138,11 @@ const authoringSchema = z.strictObject({
     deny: z.array(z.string()),
   }),
   limits: z.strictObject({
-    "runtime-seconds": z.number().int().positive().max(3_600),
-    "max-turns": z.number().int().positive().max(32),
-    "max-tool-calls": z.number().int().positive().max(256),
-    "input-tokens": z.number().int().positive().max(1_000_000),
-    "output-tokens": z.number().int().positive().max(250_000),
+    "runtime-seconds": z.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
+    "max-turns": z.number().int().positive(),
+    "max-tool-calls": z.number().int().positive(),
+    "input-tokens": z.number().int().positive(),
+    "output-tokens": z.number().int().positive(),
     "max-effect-operations": z.number().int().positive().max(1_000).optional(),
     "max-effect-bytes": z.number().int().min(1_024).max(50_000_000).optional(),
   }),

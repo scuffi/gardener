@@ -16,6 +16,7 @@ import {
   compileGitHubActionsTask,
   GITHUB_ACTIONS_TARGET,
   GITHUB_PERMISSION_KEYS,
+  planTimeoutMinutes,
   type GitHubActionsTaskPlanV1,
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
@@ -319,6 +320,7 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
       deployment: task.actionsPlan,
     }])),
   };
+  const setsPlanTimeout = definesPlanTimeout(project.release.workflowRef);
   const warnings = [
     ...(tasks.length === 0
       ? ["No .gardener/tasks/*/TASK.md files were found. Once this reaches the default branch, no Gardener task runs."]
@@ -330,12 +332,15 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
       const warning = modelWarning(task.bundle.model);
       return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
     }),
+    ...(setsPlanTimeout ? [] : tasks
+      .filter((task) => task.bundle.limits.runtimeSeconds > LEGACY_MAX_RUNTIME_SECONDS)
+      .map((task) => `Task ${task.bundle.taskId} runs for up to ${task.bundle.limits.runtimeSeconds} seconds, but this project pins an earlier Gardener release, whose plan job stops after ${LEGACY_PLAN_TIMEOUT_MINUTES} minutes. Run gardener upgrade to use this release's workflows.`)),
   ];
   return {
     root,
     workflowRef: project.release.workflowRef,
     files: [
-      ...tasks.map((task) => ({ path: task.workflow, content: renderTaskWorkflow(task, project.release.workflowRef) })),
+      ...tasks.map((task) => ({ path: task.workflow, content: renderTaskWorkflow(task, project.release.workflowRef, setsPlanTimeout) })),
       { path: SYNC_WORKFLOW, content: renderSyncWorkflow(project.release.workflowRef) },
       { path: ".gardener/gardener.lock.json", content: `${JSON.stringify(lock, null, 2)}\n` },
     ],
@@ -532,7 +537,31 @@ function renderPermissions(task: BuiltTask): string {
     .join("\n");
 }
 
-function renderTaskWorkflow(task: BuiltTask, workflowRef: string): string {
+/**
+ * The task workflows of releases before `plan-timeout-minutes` (0.1.0–0.1.7).
+ * GitHub rejects every run of a caller that passes an input its workflow does
+ * not define, so a project still pinned to one of these gets callers without
+ * it. A fixed list rather than a comparison with DEFAULT_WORKFLOW_REF: the
+ * sync and check bridges render callers too, and a bridge is built before the
+ * commit that pins it, so it never knows its own release's ref.
+ */
+const TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT = new Set([
+  "ec7eded3ffeae332f745200e270f3601d8b35aa8",
+  "aad5c2bb2560f5a2f9830f9ff4d9456dd48985a4",
+  "ce457eb2b4ec4ea85f2e6e5dd9ce794d196da711",
+  "3a0bc85d1f5cffccb50fba787b18334e4c21ba72",
+]);
+
+function definesPlanTimeout(workflowRef: string): boolean {
+  return !TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+
+/** The plan job's timeout in releases before `plan-timeout-minutes`, and its default since. */
+const LEGACY_PLAN_TIMEOUT_MINUTES = 10;
+/** The longest run those releases allowed, which fits their plan job. */
+const LEGACY_MAX_RUNTIME_SECONDS = 480;
+
+function renderTaskWorkflow(task: BuiltTask, workflowRef: string, setsPlanTimeout: boolean): string {
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -562,7 +591,7 @@ ${renderPermissions(task)}
       task-name: ${yamlString(task.bundle.name)}
       task-source: ${yamlString(`.gardener/${task.source}`)}
       task-bundle-hash: ${task.bundleHash}
-${checksOutPullRequestHead(task.bundle)
+${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundle.limits.runtimeSeconds)}\n` : ""}${checksOutPullRequestHead(task.bundle)
   // Tasks that commit beyond gardener/** build on the pull request's head, not
   // GitHub's merge preview. Empty for events without a pull request.
   ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n"

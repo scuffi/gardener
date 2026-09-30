@@ -57,20 +57,87 @@ export function gatewayModelBinding(
   config: ModelGatewayConfig,
   fallback: CloudflareAIBinding,
   fetcher: typeof fetch = fetch,
+  wait: (ms: number, signal: AbortSignal | undefined) => Promise<void> = sleep,
 ): CloudflareAIBinding {
   return {
     run(modelId, inputs, options) {
       if (modelId.startsWith("@cf/")) return fallback.run(modelId, inputs, options);
       const request = gatewayRequest(config, modelId, inputs, options);
-      return fetcher(request.url, request.init).catch((error: unknown) => {
-        // Aborts are the run's own deadline; keep them recognisable.
-        if (request.init.signal?.aborted || (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))) {
-          throw error;
-        }
-        throw new Error(`${GATEWAY_UNREACHABLE}: the AI Gateway could not be reached`, { cause: error });
-      });
+      return fetchWithRetries(request, fetcher, wait);
     },
   };
+}
+
+/** Attempts per model call: the first, and up to two retries. */
+export const GATEWAY_ATTEMPTS = 3;
+const RETRY_DELAYS_MS = [1_000, 4_000];
+/** The longest `Retry-After` honoured; a longer one ends the call instead. */
+const MAX_RETRY_AFTER_MS = 30_000;
+/** Overload and outage statuses worth another attempt: rate limits, 5xx, and Anthropic's 529. */
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
+
+/**
+ * One model call, retried on a network failure or a retryable status. Only
+ * whole responses are retried: a status arrives before any of the stream, so
+ * nothing the model produced is ever replayed or duplicated. The run's
+ * deadline signal ends the waits as well as the requests.
+ *
+ * A 500 or 504 can arrive after the provider finished the work, so a retry may
+ * be billed twice while only the response returned counts against the run's
+ * `output-tokens`: the budget bounds the run, not the exact spend.
+ */
+async function fetchWithRetries(
+  request: { url: string; init: RequestInit },
+  fetcher: typeof fetch,
+  wait: (ms: number, signal: AbortSignal | undefined) => Promise<void>,
+): Promise<Response> {
+  const signal = request.init.signal ?? undefined;
+  for (let attempt = 1; ; attempt += 1) {
+    const last = attempt >= GATEWAY_ATTEMPTS;
+    let response: Response;
+    try {
+      response = await fetcher(request.url, request.init);
+    } catch (error) {
+      // Aborts are the run's own deadline; keep them recognisable.
+      if (signal?.aborted || (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))) {
+        throw error;
+      }
+      if (last) throw new Error(`${GATEWAY_UNREACHABLE}: the AI Gateway could not be reached`, { cause: error });
+      await wait(RETRY_DELAYS_MS[attempt - 1]!, signal);
+      continue;
+    }
+    if (last || !RETRYABLE_STATUSES.has(response.status)) return response;
+    const delay = retryDelay(response.headers.get("retry-after"), RETRY_DELAYS_MS[attempt - 1]!);
+    if (delay === null) return response;
+    // A body that already failed cannot be cancelled, and need not be.
+    await response.body?.cancel().catch(() => undefined);
+    await wait(delay, signal);
+  }
+}
+
+/** The wait before the next attempt, or null when the provider asks for longer than a run should sit idle. */
+function retryDelay(retryAfter: string | null, fallbackMs: number): number | null {
+  if (!retryAfter) return fallbackMs;
+  const seconds = Number(retryAfter);
+  const ms = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retryAfter) - Date.now();
+  if (!Number.isFinite(ms)) return fallbackMs;
+  if (ms > MAX_RETRY_AFTER_MS) return null;
+  return Math.max(fallbackMs, ms);
+}
+
+function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 const installed = new WeakMap<CloudflareAIBinding, CloudflareAIBinding>();

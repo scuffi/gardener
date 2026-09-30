@@ -544,6 +544,38 @@ describe("local Gardener project", () => {
     await expect(upgradeProjectRelease({ repositoryRoot: root })).resolves.toMatchObject({ changed: false });
   });
 
+  it("passes the plan timeout only to workflows that define it, and warns when an earlier pin would cut a run short", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-timeout-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    // 0.1.7's task workflow, the last without the input.
+    project.release.workflowRef = "scuffi/gardener/.github/workflows/gardener-task.yml@3a0bc85d1f5cffccb50fba787b18334e4c21ba72";
+    await writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`);
+    for (const [id, runtime] of [["quick", 120], ["long", 900]] as const) {
+      await mkdir(join(root, `.gardener/tasks/${id}`), { recursive: true });
+      await writeFile(join(root, `.gardener/tasks/${id}/TASK.md`), TASK
+        .replace("id: example-task", `id: ${id}`)
+        .replace(/runtime-seconds: \d+/, `runtime-seconds: ${runtime}`));
+    }
+    const workflowOf = async (built: Awaited<ReturnType<typeof buildProject>>, id: string) =>
+      readFile(join(root, built.tasks.find((task) => task.taskId === id)!.workflow), "utf8");
+
+    const pinnedOld = await buildProject({ repositoryRoot: root });
+    expect(await workflowOf(pinnedOld, "long")).not.toContain("plan-timeout-minutes");
+    expect(pinnedOld.warnings.filter((warning) => warning.includes("gardener upgrade"))).toEqual([
+      expect.stringMatching(/^Task long runs for up to 900 seconds, .* stops after 10 minutes\. Run gardener upgrade/),
+    ]);
+
+    // Any other pin, such as a later release, defines it.
+    project.release.workflowRef = `scuffi/gardener/.github/workflows/gardener-task.yml@${"b".repeat(40)}`;
+    await writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`);
+    const upgraded = await buildProject({ repositoryRoot: root });
+    expect(await workflowOf(upgraded, "long")).toContain("      plan-timeout-minutes: 25\n");
+    expect(await workflowOf(upgraded, "quick")).toContain("      plan-timeout-minutes: 12\n");
+    expect(upgraded.warnings.some((warning) => warning.includes("gardener upgrade"))).toBe(false);
+  });
+
   it("explains how to recover when upgrade runs outside a Gardener project", async () => {
     const root = await mkdtemp(join(tmpdir(), "not-a-gardener-project-"));
     await expect(upgradeProjectRelease({ repositoryRoot: root }))

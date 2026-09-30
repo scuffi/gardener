@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  GATEWAY_ATTEMPTS,
   gatewayModelBinding,
   gatewayRequest,
   modelGatewayConfig,
@@ -9,6 +10,7 @@ import {
 
 const config: ModelGatewayConfig = { accountId: "acct", gatewayId: "gw", token: "secret-token", project: "agents-team-gardener" };
 const base = "https://gateway.ai.cloudflare.com/v1/acct/gw";
+const noWait = async () => {};
 
 describe("external AI Gateway binding", () => {
   it("is configured by its account and gateway vars", () => {
@@ -89,15 +91,77 @@ describe("external AI Gateway binding", () => {
     expect(fetcher).toHaveBeenCalledWith(`${base}/anthropic/v1/messages`, expect.objectContaining({ method: "POST" }));
   });
 
-  it("marks an unreachable gateway but keeps the run's own aborts", async () => {
+  it("marks an unreachable gateway after retrying, but keeps the run's own aborts", async () => {
     const fallback = { run: vi.fn() };
-    const unreachable = gatewayModelBinding(config, fallback, (async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch);
+    const failing = vi.fn(async () => { throw new TypeError("fetch failed"); });
+    const waits: number[] = [];
+    const unreachable = gatewayModelBinding(config, fallback, failing as unknown as typeof fetch, async (ms) => { waits.push(ms); });
     await expect(unreachable.run("openai/gpt-6.1-sol", {}, {})).rejects.toThrow(/gardener_ai_gateway_unreachable/);
+    expect(failing).toHaveBeenCalledTimes(GATEWAY_ATTEMPTS);
+    expect(waits).toEqual([1_000, 4_000]);
     const aborted = new AbortController();
     aborted.abort();
     const abortError = new DOMException("aborted", "AbortError");
-    const aborting = gatewayModelBinding(config, fallback, (async () => { throw abortError; }) as unknown as typeof fetch);
+    const abortingFetch = vi.fn(async () => { throw abortError; });
+    const aborting = gatewayModelBinding(config, fallback, abortingFetch as unknown as typeof fetch, noWait);
     await expect(aborting.run("openai/gpt-6.1-sol", {}, { signal: aborted.signal })).rejects.toBe(abortError);
+    expect(abortingFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries overloaded and failing providers before any response streams", async () => {
+    const fallback = { run: vi.fn() };
+    const responses = [new Response("busy", { status: 503 }), new Response("overloaded", { status: 529 }), new Response("ok")];
+    const fetcher = vi.fn(async () => responses.shift()!);
+    const waits: number[] = [];
+    const binding = gatewayModelBinding(config, fallback, fetcher as unknown as typeof fetch, async (ms) => { waits.push(ms); });
+    const response = await binding.run("anthropic/claude-opus-5-5", {}, {}) as Response;
+    expect(await response.text()).toBe("ok");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(waits).toEqual([1_000, 4_000]);
+    // Every attempt sends the same request.
+    const [first, second] = fetcher.mock.calls as unknown as [string, RequestInit][];
+    expect(second).toEqual(first);
+  });
+
+  it("returns the last failure after the final attempt, and never retries a client error", async () => {
+    const fallback = { run: vi.fn() };
+    const alwaysBusy = vi.fn(async () => new Response("busy", { status: 503 }));
+    const busy = gatewayModelBinding(config, fallback, alwaysBusy as unknown as typeof fetch, noWait);
+    expect(((await busy.run("openai/gpt-6.1-sol", {}, {})) as Response).status).toBe(503);
+    expect(alwaysBusy).toHaveBeenCalledTimes(GATEWAY_ATTEMPTS);
+    for (const status of [400, 401, 404, 413]) {
+      const rejecting = vi.fn(async () => new Response("no", { status }));
+      const binding = gatewayModelBinding(config, fallback, rejecting as unknown as typeof fetch, noWait);
+      expect(((await binding.run("openai/gpt-6.1-sol", {}, {})) as Response).status).toBe(status);
+      expect(rejecting).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("honours a short Retry-After and gives up on a long one", async () => {
+    const fallback = { run: vi.fn() };
+    const waits: number[] = [];
+    const short = [new Response("slow down", { status: 429, headers: { "retry-after": "7" } }), new Response("ok")];
+    const shortFetch = vi.fn(async () => short.shift()!);
+    await gatewayModelBinding(config, fallback, shortFetch as unknown as typeof fetch, async (ms) => { waits.push(ms); })
+      .run("openai/gpt-6.1-sol", {}, {});
+    expect(waits).toEqual([7_000]);
+    const longFetch = vi.fn(async () => new Response("later", { status: 429, headers: { "retry-after": "3600" } }));
+    const long = await gatewayModelBinding(config, fallback, longFetch as unknown as typeof fetch, noWait)
+      .run("openai/gpt-6.1-sol", {}, {}) as Response;
+    expect(long.status).toBe(429);
+    expect(longFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops waiting to retry when the run's deadline passes", async () => {
+    const fallback = { run: vi.fn() };
+    const deadline = new AbortController();
+    const fetcher = vi.fn(async () => {
+      deadline.abort(new DOMException("deadline", "TimeoutError"));
+      return new Response("busy", { status: 503 });
+    });
+    const binding = gatewayModelBinding(config, fallback, fetcher as unknown as typeof fetch);
+    await expect(binding.run("openai/gpt-6.1-sol", {}, { signal: deadline.signal })).rejects.toThrow(/deadline/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("uses the AI binding alone when no gateway is configured, and one gateway binding per AI binding", () => {

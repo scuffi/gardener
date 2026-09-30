@@ -23,12 +23,17 @@ on:
         required: false
         type: string
         default: ""
+      plan-timeout-minutes:
+        description: The plan job's timeout, derived from the task's runtime-seconds.
+        required: false
+        type: number
+        default: 10
 
 jobs:
   plan:
     name: Plan · ${{ inputs.task-name }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: ${{ inputs.plan-timeout-minutes }}
     permissions:
       checks: read
       contents: read

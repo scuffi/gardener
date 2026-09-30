@@ -74,8 +74,9 @@ These are deliberately left out of the starters:
   network access that Gardener does not yet isolate. `generate` warns about it.
 
 To change a task, edit its `TASK.md`, run `generate`, then commit and push. The generated
-**Gardener · Sync tasks** workflow enrolls the change when it reaches the default branch. Limits can go up to `runtime-seconds: 480` and
-`input-tokens: 128000`. See [task-authoring.md](task-authoring.md) for the format.
+**Gardener · Sync tasks** workflow enrolls the change when it reaches the default branch. The task sets its own limits; the only ceiling
+is `runtime-seconds: 21000`, which fits a GitHub-hosted job. See [task-authoring.md](task-authoring.md)
+for the format.
 
 ## Writing your own task (anyone)
 

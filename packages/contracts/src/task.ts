@@ -307,12 +307,20 @@ export const taskNetworkPolicyV1Schema = z.strictObject({
 });
 export type TaskNetworkPolicyV1 = z.infer<typeof taskNetworkPolicyV1Schema>;
 
+/**
+ * The longest run any task may declare: six hours, a GitHub-hosted job's own
+ * limit. A target can allow less (`github-actions/v1` keeps ten minutes of
+ * that job for setup). Gardener sets no other ceiling on a task's limits;
+ * they are the task author's to choose.
+ */
+export const TASK_RUNTIME_SECONDS_MAX = 21_600;
+
 export const taskLimitsV1Schema = z.strictObject({
-  runtimeSeconds: z.number().int().positive().max(3_600),
-  maxTurns: z.number().int().positive().max(32),
-  maxToolCalls: z.number().int().positive().max(256),
-  inputTokens: z.number().int().positive().max(1_000_000),
-  outputTokens: z.number().int().positive().max(250_000),
+  runtimeSeconds: z.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
+  maxTurns: z.number().int().positive(),
+  maxToolCalls: z.number().int().positive(),
+  inputTokens: z.number().int().positive(),
+  outputTokens: z.number().int().positive(),
   /**
    * Optional task-authored effect-plan ceilings. When omitted Gardener adds no
    * product cap and only provider and runtime ceilings apply. When present both

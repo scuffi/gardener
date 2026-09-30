@@ -1,3 +1,4 @@
+import { TASK_RUNTIME_SECONDS_MAX } from "@gardener/contracts";
 import {
   HARNESS_ADAPTER_VERSIONS,
   HARNESS_IDS,
@@ -172,11 +173,13 @@ function assertHarnessBinding(value: unknown, label: string): asserts value is H
 function assertBudget(value: unknown): asserts value is HarnessBudget {
   const budget = record(value, "budget");
   exactKeys(budget, ["maxTurns", "maxToolCalls", "maxInputTokens", "maxOutputTokens", "maxRuntimeMs", "deadlineAt"], "budget");
-  integer(budget.maxTurns, "budget.maxTurns", 1, 64);
-  integer(budget.maxToolCalls, "budget.maxToolCalls", 0, 256);
-  integer(budget.maxInputTokens, "budget.maxInputTokens", 1, 2_000_000);
-  integer(budget.maxOutputTokens, "budget.maxOutputTokens", 1, 128_000);
-  integer(budget.maxRuntimeMs, "budget.maxRuntimeMs", 1_000, 3_600_000);
+  // The task's own limits; only the runtime has a ceiling, the longest a
+  // GitHub-hosted job may run.
+  integer(budget.maxTurns, "budget.maxTurns", 1, Number.MAX_SAFE_INTEGER);
+  integer(budget.maxToolCalls, "budget.maxToolCalls", 0, Number.MAX_SAFE_INTEGER);
+  integer(budget.maxInputTokens, "budget.maxInputTokens", 1, Number.MAX_SAFE_INTEGER);
+  integer(budget.maxOutputTokens, "budget.maxOutputTokens", 1, Number.MAX_SAFE_INTEGER);
+  integer(budget.maxRuntimeMs, "budget.maxRuntimeMs", 1_000, TASK_RUNTIME_SECONDS_MAX * 1_000);
   isoDate(budget.deadlineAt, "budget.deadlineAt");
 }
 

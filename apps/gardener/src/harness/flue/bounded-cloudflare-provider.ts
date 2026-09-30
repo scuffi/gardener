@@ -8,12 +8,19 @@ import { INPUT_BYTES_PER_TOKEN } from "./input-budget";
 
 const NATIVE_BOUNDED_MODEL_PREFIX = "gardener-native-bounded-v3";
 const MINIMUM_PROVIDER_OUTPUT_TOKENS = 16;
+/**
+ * The most output one request asks for when the model catalog does not say.
+ * `output-tokens` is the whole run's budget; asking a provider for more in a
+ * single response than its model can produce is rejected outright, and every
+ * supported gateway model accepts this much.
+ */
+export const DEFAULT_REQUEST_OUTPUT_TOKENS = 32_000;
 let installedBinding: CloudflareAIBinding | undefined;
 
 type CloudflareProvider = ReturnType<typeof cloudflareBindingProvider>;
 type ProviderStreamOptions = NonNullable<Parameters<CloudflareProvider["stream"]>[2]>;
 
-interface EncodedBudget {
+export interface EncodedBudget {
   model: string;
   maxTurns: number;
   maxInputBytes: number;
@@ -44,38 +51,36 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
     const budget = decodeBoundedModel(model.id);
     enforceTurnLimit(context, budget.maxTurns);
     enforceInputByteLimit(context, budget.maxInputBytes);
-    return stream(
-      resolveActualModel(provider, model, budget.model),
-      context,
-      boundedProviderOptions(options, context, budget),
-    );
+    const actual = resolveActualModel(provider, model, budget.model);
+    return stream(actual.model, context, boundedProviderOptions(options, context, budget, actual.requestOutputTokens));
   }) as typeof provider.stream;
 
   provider.streamSimple = ((model, context, options) => {
     const budget = decodeBoundedModel(model.id);
     enforceTurnLimit(context, budget.maxTurns);
     enforceInputByteLimit(context, budget.maxInputBytes);
+    const actual = resolveActualModel(provider, model, budget.model);
     return streamSimple(
-      resolveActualModel(provider, model, budget.model),
+      actual.model,
       context,
-      boundedProviderOptions(options as ProviderStreamOptions | undefined, context, budget),
+      boundedProviderOptions(options as ProviderStreamOptions | undefined, context, budget, actual.requestOutputTokens),
     );
   }) as typeof provider.streamSimple;
 
   setProvider(provider);
 }
 
-function boundedProviderOptions(
+/** Exported for tests. */
+export function boundedProviderOptions(
   options: ProviderStreamOptions | undefined,
   context: { messages: readonly { role?: unknown; usage?: { output?: unknown } }[] },
   budget: EncodedBudget,
+  requestOutputTokens: number,
 ): ProviderStreamOptions {
   const remainingOutputTokens = outputTokensRemaining(context, budget.maxOutputTokens);
   return {
     ...options,
-    maxTokens: options?.maxTokens === undefined
-      ? remainingOutputTokens
-      : Math.min(options.maxTokens, remainingOutputTokens),
+    maxTokens: Math.min(options?.maxTokens ?? Number.POSITIVE_INFINITY, remainingOutputTokens, requestOutputTokens),
     signal: deadlineSignal(options?.signal, budget.deadlineAtMs, budget.maxRuntimeMs),
   };
 }
@@ -168,10 +173,14 @@ function resolveActualModel(
   provider: CloudflareProvider,
   encoded: Parameters<CloudflareProvider["stream"]>[0],
   modelId: string,
-): Parameters<CloudflareProvider["stream"]>[0] {
-  return provider.getModels().find((candidate) => candidate.id === modelId) ?? {
-    ...encoded,
-    id: modelId,
-    name: modelId,
+): { model: Parameters<CloudflareProvider["stream"]>[0]; requestOutputTokens: number } {
+  const known = provider.getModels().find((candidate) => candidate.id === modelId);
+  if (known) {
+    const catalogued = Number.isSafeInteger(known.maxTokens) && known.maxTokens >= MINIMUM_PROVIDER_OUTPUT_TOKENS;
+    return { model: known, requestOutputTokens: catalogued ? known.maxTokens : DEFAULT_REQUEST_OUTPUT_TOKENS };
+  }
+  return {
+    model: { ...encoded, id: modelId, name: modelId },
+    requestOutputTokens: DEFAULT_REQUEST_OUTPUT_TOKENS,
   };
 }

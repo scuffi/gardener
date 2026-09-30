@@ -40644,12 +40644,13 @@ var taskNetworkPolicyV1Schema = external_exports.strictObject({
     }
   }
 });
+var TASK_RUNTIME_SECONDS_MAX = 21600;
 var taskLimitsV1Schema = external_exports.strictObject({
-  runtimeSeconds: external_exports.number().int().positive().max(3600),
-  maxTurns: external_exports.number().int().positive().max(32),
-  maxToolCalls: external_exports.number().int().positive().max(256),
-  inputTokens: external_exports.number().int().positive().max(1e6),
-  outputTokens: external_exports.number().int().positive().max(25e4),
+  runtimeSeconds: external_exports.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
+  maxTurns: external_exports.number().int().positive(),
+  maxToolCalls: external_exports.number().int().positive(),
+  inputTokens: external_exports.number().int().positive(),
+  outputTokens: external_exports.number().int().positive(),
   /**
    * Optional task-authored effect-plan ceilings. When omitted Gardener adds no
    * product cap and only provider and runtime ceilings apply. When present both

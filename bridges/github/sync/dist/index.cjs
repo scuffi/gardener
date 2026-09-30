@@ -27730,12 +27730,13 @@ var taskNetworkPolicyV1Schema = external_exports.strictObject({
     }
   }
 });
+var TASK_RUNTIME_SECONDS_MAX = 21600;
 var taskLimitsV1Schema = external_exports.strictObject({
-  runtimeSeconds: external_exports.number().int().positive().max(3600),
-  maxTurns: external_exports.number().int().positive().max(32),
-  maxToolCalls: external_exports.number().int().positive().max(256),
-  inputTokens: external_exports.number().int().positive().max(1e6),
-  outputTokens: external_exports.number().int().positive().max(25e4),
+  runtimeSeconds: external_exports.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
+  maxTurns: external_exports.number().int().positive(),
+  maxToolCalls: external_exports.number().int().positive(),
+  inputTokens: external_exports.number().int().positive(),
+  outputTokens: external_exports.number().int().positive(),
   /**
    * Optional task-authored effect-plan ceilings. When omitted Gardener adds no
    * product cap and only provider and runtime ceilings apply. When present both
@@ -29032,6 +29033,11 @@ var TRIGGER_BINDINGS = {
   "github.discussion_comment.edited": { event: "discussion_comment", action: "edited", labelsExpression: DISCUSSION_LABELS, forkSensitive: false }
 };
 var effectPermissions = operationApplyPermissions;
+var GITHUB_HOSTED_JOB_MAX_MINUTES = 360;
+var PLAN_JOB_OVERHEAD_MINUTES = 10;
+function planTimeoutMinutes(runtimeSeconds) {
+  return Math.ceil(runtimeSeconds / 60) + PLAN_JOB_OVERHEAD_MINUTES;
+}
 var planningPermissions = orderPermissions({
   checks: "read",
   contents: "read",
@@ -29069,17 +29075,19 @@ function compileGitHubActionsTask(bundle) {
       );
     }
   }
-  if (bundle.limits.runtimeSeconds < 30 || bundle.limits.runtimeSeconds > 480) {
-    throw new Error(`Task ${bundle.taskId} runtime-seconds must be between 30 and 480 for github-actions/v1`);
+  if (bundle.limits.runtimeSeconds < 30) {
+    throw new Error(`Task ${bundle.taskId} runtime-seconds must be at least 30 for github-actions/v1`);
   }
-  if (bundle.limits.maxTurns < 3 || bundle.limits.maxTurns > 16) {
-    throw new Error(`Task ${bundle.taskId} max-turns must be between 3 and 16 for github-actions/v1`);
+  if (planTimeoutMinutes(bundle.limits.runtimeSeconds) > GITHUB_HOSTED_JOB_MAX_MINUTES) {
+    throw new Error(
+      `Task ${bundle.taskId} runtime-seconds must be at most ${(GITHUB_HOSTED_JOB_MAX_MINUTES - PLAN_JOB_OVERHEAD_MINUTES) * 60} for github-actions/v1: a GitHub-hosted job runs for at most ${GITHUB_HOSTED_JOB_MAX_MINUTES / 60} hours, including ${PLAN_JOB_OVERHEAD_MINUTES} minutes for checkout and setup`
+    );
   }
-  if (bundle.limits.maxToolCalls < 3 || bundle.limits.maxToolCalls > 64) {
-    throw new Error(`Task ${bundle.taskId} max-tool-calls must be between 3 and 64 for github-actions/v1`);
+  if (bundle.limits.maxTurns < 3) {
+    throw new Error(`Task ${bundle.taskId} max-turns must be at least 3 for github-actions/v1`);
   }
-  if (bundle.limits.inputTokens > 128e3 || bundle.limits.outputTokens > 32e3) {
-    throw new Error(`Task ${bundle.taskId} token limits exceed github-actions/v1 model bounds`);
+  if (bundle.limits.maxToolCalls < 3) {
+    throw new Error(`Task ${bundle.taskId} max-tool-calls must be at least 3 for github-actions/v1`);
   }
   if (bundle.limits.maxEffectOperations !== void 0 && bundle.effects.length === 0) {
     throw new Error(`Task ${bundle.taskId} sets max-effect-operations without declaring any effect`);
@@ -29215,11 +29223,11 @@ var authoringSchema = external_exports.strictObject({
     deny: external_exports.array(external_exports.string())
   }),
   limits: external_exports.strictObject({
-    "runtime-seconds": external_exports.number().int().positive().max(3600),
-    "max-turns": external_exports.number().int().positive().max(32),
-    "max-tool-calls": external_exports.number().int().positive().max(256),
-    "input-tokens": external_exports.number().int().positive().max(1e6),
-    "output-tokens": external_exports.number().int().positive().max(25e4),
+    "runtime-seconds": external_exports.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
+    "max-turns": external_exports.number().int().positive(),
+    "max-tool-calls": external_exports.number().int().positive(),
+    "input-tokens": external_exports.number().int().positive(),
+    "output-tokens": external_exports.number().int().positive(),
     "max-effect-operations": external_exports.number().int().positive().max(1e3).optional(),
     "max-effect-bytes": external_exports.number().int().min(1024).max(5e7).optional()
   })
@@ -29402,19 +29410,21 @@ async function planProject(input2) {
       deployment: task.actionsPlan
     }]))
   };
+  const setsPlanTimeout = definesPlanTimeout(project.release.workflowRef);
   const warnings = [
     ...tasks.length === 0 ? ["No .gardener/tasks/*/TASK.md files were found. Once this reaches the default branch, no Gardener task runs."] : [],
     ...tasks.filter((task) => task.bundle.tools.includes("repository.exec")).map((task) => `Task ${task.bundle.taskId} ${UNRESTRICTED_EGRESS_WARNING}`),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];
-    })
+    }),
+    ...setsPlanTimeout ? [] : tasks.filter((task) => task.bundle.limits.runtimeSeconds > LEGACY_MAX_RUNTIME_SECONDS).map((task) => `Task ${task.bundle.taskId} runs for up to ${task.bundle.limits.runtimeSeconds} seconds, but this project pins an earlier Gardener release, whose plan job stops after ${LEGACY_PLAN_TIMEOUT_MINUTES} minutes. Run gardener upgrade to use this release's workflows.`)
   ];
   return {
     root,
     workflowRef: project.release.workflowRef,
     files: [
-      ...tasks.map((task) => ({ path: task.workflow, content: renderTaskWorkflow(task, project.release.workflowRef) })),
+      ...tasks.map((task) => ({ path: task.workflow, content: renderTaskWorkflow(task, project.release.workflowRef, setsPlanTimeout) })),
       { path: SYNC_WORKFLOW, content: renderSyncWorkflow(project.release.workflowRef) },
       { path: ".gardener/gardener.lock.json", content: `${JSON.stringify(lock, null, 2)}
 ` }
@@ -29539,7 +29549,18 @@ function renderPermissions(task) {
   const permissions = task.actionsPlan.callerPermissions;
   return GITHUB_PERMISSION_KEYS.filter((key) => permissions[key] !== void 0).map((key) => `      ${key}: ${permissions[key]}`).join("\n");
 }
-function renderTaskWorkflow(task, workflowRef) {
+var TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT = /* @__PURE__ */ new Set([
+  "ec7eded3ffeae332f745200e270f3601d8b35aa8",
+  "aad5c2bb2560f5a2f9830f9ff4d9456dd48985a4",
+  "ce457eb2b4ec4ea85f2e6e5dd9ce794d196da711",
+  "3a0bc85d1f5cffccb50fba787b18334e4c21ba72"
+]);
+function definesPlanTimeout(workflowRef) {
+  return !TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+var LEGACY_PLAN_TIMEOUT_MINUTES = 10;
+var LEGACY_MAX_RUNTIME_SECONDS = 480;
+function renderTaskWorkflow(task, workflowRef, setsPlanTimeout) {
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -29569,7 +29590,8 @@ ${renderPermissions(task)}
       task-name: ${yamlString(task.bundle.name)}
       task-source: ${yamlString(`.gardener/${task.source}`)}
       task-bundle-hash: ${task.bundleHash}
-${checksOutPullRequestHead(task.bundle) ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n" : ""}`;
+${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundle.limits.runtimeSeconds)}
+` : ""}${checksOutPullRequestHead(task.bundle) ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n" : ""}`;
 }
 function renderSyncWorkflow(workflowRef) {
   const syncRef = syncWorkflowRefFor(workflowRef);
