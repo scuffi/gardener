@@ -41,6 +41,7 @@ import {
   compareVersions,
   deployActions,
   ensurePublicRuntime,
+  installationFactsSql,
   parseAiGateway,
   pullRequestPermissionWarningsFor,
   type AiGateway,
@@ -158,6 +159,30 @@ describe("Actions-native installation topology", () => {
       expect(input).toBeUndefined();
     }
     warn.mockRestore();
+  });
+
+  it("records every deploy fact the migrated schema allows", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const db = new DatabaseSync(":memory:");
+    const migrations = new URL("../../../apps/gardener/migrations/", import.meta.url);
+    const files = readdirSync(migrations).sort();
+    // Facts written before the gateway migration survive it.
+    for (const file of files.filter((name) => name < "0004")) db.exec(readFileSync(new URL(file, migrations), "utf8"));
+    db.exec("INSERT INTO actions_installation(key,value) VALUES ('cli_version','0.1.5');");
+    for (const file of files.filter((name) => name >= "0004")) db.exec(readFileSync(new URL(file, migrations), "utf8"));
+    const facts = {
+      runtime_origin: "https://x.workers.dev",
+      cli_version: "0.1.6",
+      deployment_hash: "a".repeat(64),
+      deployed_at: "2026-09-30T00:00:00.000Z",
+      ai_gateway: "acct/gw",
+      ai_gateway_project: "agents-team-gardener",
+    };
+    db.exec(installationFactsSql(facts));
+    db.exec(installationFactsSql({ ...facts, ai_gateway: "", ai_gateway_project: "" }));
+    const rows = db.prepare("SELECT key, value FROM actions_installation ORDER BY key").all();
+    expect(Object.fromEntries(rows.map((row) => [row.key, row.value]))).toEqual({ ...facts, ai_gateway: "", ai_gateway_project: "" });
   });
 
   it("parses --ai-gateway", () => {

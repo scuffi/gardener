@@ -335,10 +335,15 @@ export async function deployActions(input: {
     ai_gateway: aiGateway ? `${aiGateway.accountId}/${aiGateway.gatewayId}` : "",
     ai_gateway_project: aiGateway?.project ?? "",
   };
-  executeD1(names.database, `INSERT INTO actions_installation(key,value) VALUES ${
-    Object.entries(facts).map(([key, value]) => `(${sql(key)},${sql(value)})`).join(",")
-  } ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP;`);
+  executeD1(names.database, installationFactsSql(facts));
   return installation(workspace, accountId, names, database.uuid, runtimeOrigin, facts);
+}
+
+/** Exported for tests against the real migrations: records a deploy's facts. */
+export function installationFactsSql(facts: Required<InstallationFacts>): string {
+  return `INSERT INTO actions_installation(key,value) VALUES ${
+    Object.entries(facts).map(([key, value]) => `(${sql(key)},${sql(value)})`).join(",")
+  } ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP;`;
 }
 
 export async function upgradeActions(input: {
