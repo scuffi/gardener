@@ -3,6 +3,23 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.8 (2026-09-30)
+
+- Tasks set their own limits. Gardener no longer caps `max-turns`, `max-tool-calls`, `input-tokens`
+  or `output-tokens`; it keeps only the minimums a run needs. `runtime-seconds` may go up to 21,000,
+  since a GitHub-hosted job runs for at most 6 hours.
+- The plan job's timeout is now the task's `runtime-seconds` plus 10 minutes, rather than a fixed
+  10 minutes.
+- Each model request asks for no more output than its model produces (32,000 tokens for gateway
+  models the catalog does not list), however large `output-tokens` is.
+- AI Gateway model calls that fail with a network error, HTTP 429 or a 5xx are retried twice, with
+  backoff, before the run fails. A retry can be billed by the provider, so `output-tokens` bounds the
+  run rather than the exact spend.
+- Upgrading: deploy the runtime first (`gardener upgrade` does), then commit and push the upgraded
+  repository. A 0.1.7 runtime refuses tasks over the old limits. Generating with 0.1.8 in a
+  repository still pinned to an earlier release leaves the timeout out, and warns about tasks over
+  480 seconds.
+
 ## v0.1.7 (2026-09-30)
 
 - `pull_request.open` and `pull_request.open_draft` take optional `labels`, added right after the
