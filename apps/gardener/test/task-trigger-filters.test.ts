@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventNameByTriggerKind, type NormalizedEventV1, type TaskBundleV1 } from "@gardener/contracts";
+import { eventNameByTriggerKind, type NormalizedEventV1, type TaskAuthorsFilterV1, type TaskBundleV1 } from "@gardener/contracts";
 import { triggerAssociationMissing, triggerFiltersExclude } from "../src/task-runtime/harness-adapter";
 
 const actor = { id: "45369682", login: "scuffi" };
@@ -135,5 +135,75 @@ describe("trigger filters", () => {
       { kind: "github.issue_comment.created", labelsAll: [], mentions: ["gardener"], authors: "maintainers" },
     ];
     expect(triggerFiltersExclude(created("@gardener", "OWNER"), triggers)).toBe(false);
+  });
+});
+
+describe("authors lists and opened-by", () => {
+  const devin = { id: "158243242", login: "devin-ai-integration[bot]" };
+  const gardener = { id: "41898282", login: "github-actions[bot]" };
+  const pullRequest = (author: { id: string; login: string }) => ({
+    id: "185", number: 185, title: "Fix", body: null, labels: [], author, draft: false, state: "open", merged: false,
+    base: { ref: "main", sha: "a".repeat(40), repo: { id: "1", fullName: "scuffi/demo" } },
+    head: { ref: "gardener/fix", sha: "d".repeat(40), repo: { id: "1", fullName: "scuffi/demo" } },
+  });
+  const review = (reviewer: { id: string; login: string }, association: string, prAuthor = gardener) =>
+    event("github.pull_request_review.submitted", {
+      pullRequest: pullRequest(prAuthor),
+      review: { id: "9", state: "commented", body: "Found a bug.", author: reviewer, authorAssociation: association },
+    });
+  const onReview = (authors: TaskAuthorsFilterV1, openedBy?: string[]): Trigger[] =>
+    [{
+      kind: "github.pull_request_review.submitted", labelsAll: [], mentions: [], authors,
+      ...(openedBy === undefined ? {} : { openedBy }),
+    } as Trigger];
+
+  it("admits listed logins and maintainers, and nobody else", () => {
+    const triggers = onReview(["devin-ai-integration[bot]", "maintainers"]);
+    expect(triggerFiltersExclude(review(devin, "NONE"), triggers)).toBe(false);
+    expect(triggerFiltersExclude(review(actor, "OWNER"), triggers)).toBe(false);
+    expect(triggerFiltersExclude(review({ id: "5", login: "renovate[bot]" }, "NONE"), triggers)).toBe(true);
+    expect(triggerFiltersExclude(review({ id: "6", login: "outsider" }, "NONE"), triggers)).toBe(true);
+    // Without maintainers in the list, only the named logins count.
+    expect(triggerFiltersExclude(review(actor, "OWNER"), onReview(["devin-ai-integration[bot]"]))).toBe(true);
+  });
+
+  it("compares logins case-insensitively, as GitHub does", () => {
+    const shouting = { id: devin.id, login: "Devin-AI-Integration[bot]" };
+    expect(triggerFiltersExclude(review(shouting, "NONE"), onReview(["devin-ai-integration[bot]"]))).toBe(false);
+  });
+
+  it("filters on who opened the thread, separately from who wrote the review", () => {
+    const triggers = onReview(["devin-ai-integration[bot]", "maintainers"], ["github-actions[bot]"]);
+    expect(triggerFiltersExclude(review(devin, "NONE"), triggers)).toBe(false);
+    expect(triggerFiltersExclude(review(devin, "NONE", { id: "45369682", login: "scuffi" }), triggers)).toBe(true);
+    expect(triggerFiltersExclude(review(devin, "NONE", { id: "41898282", login: "GitHub-Actions[bot]" }), triggers)).toBe(false);
+  });
+
+  it("reads the opener of a pull request conversation comment from its issue", () => {
+    const onPrComment: Trigger[] = [{
+      kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers", openedBy: ["github-actions[bot]"],
+    } as Trigger];
+    const onGardenerPr = event("github.issue_comment.created", { issue: { ...issue, author: gardener }, comment: comment("hi", "OWNER") });
+    const onOtherPr = event("github.issue_comment.created", { issue, comment: comment("hi", "OWNER") });
+    expect(triggerFiltersExclude(onGardenerPr, onPrComment)).toBe(false);
+    expect(triggerFiltersExclude(onOtherPr, onPrComment)).toBe(true);
+  });
+
+  it("applies opened-by to label events, which have no authors", () => {
+    const onLabel: Trigger[] = [{ kind: "github.pull_request.labeled", labelsAll: ["ship"], openedBy: ["dependabot[bot]"] } as Trigger];
+    const labeled = (author: { id: string; login: string }) => event("github.pull_request.labeled", {
+      pullRequest: { ...pullRequest(author), labels: ["ship"] }, label: { name: "ship" },
+    });
+    expect(triggerFiltersExclude(labeled({ id: "49699333", login: "dependabot[bot]" }), onLabel)).toBe(false);
+    expect(triggerFiltersExclude(labeled(actor), onLabel)).toBe(true);
+  });
+
+  it("still reports a missing association when a list includes maintainers", () => {
+    const missing = event("github.pull_request_review.submitted", {
+      pullRequest: pullRequest(gardener),
+      review: { id: "9", state: "commented", body: "x", author: actor },
+    });
+    expect(triggerAssociationMissing(missing, onReview(["devin-ai-integration[bot]", "maintainers"]))).toBe(true);
+    expect(triggerAssociationMissing(missing, onReview(["devin-ai-integration[bot]"]))).toBe(false);
   });
 });

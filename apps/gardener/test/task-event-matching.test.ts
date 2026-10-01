@@ -125,6 +125,25 @@ describe("trigger matching", () => {
       .rejects.toThrow(/a deleted repository/);
   });
 
+  it("refuses a fork head on a review, which runs in the base repository's context", async () => {
+    const review = (headRepoId: string) => ({
+      ...pullRequestEvent(headRepoId),
+      kind: "github.pull_request_review.submitted",
+      workflow: { ...pullRequestEvent(headRepoId).workflow, eventName: "pull_request_review" },
+      review: { id: "9", state: "commented", body: "Fix this.", author: actor, authorAssociation: "OWNER" },
+    }) as NormalizedEventV1;
+    const triggers: TaskBundleV1["triggers"] = [{
+      kind: "github.pull_request_review.submitted", labelsAll: [], mentions: [], authors: "maintainers",
+    }];
+    const headCheckout = async (event: NormalizedEventV1) => {
+      const base = await request(event, { triggers });
+      const bundle = { ...base.bundle, checkout: "pull-request-head" } as TaskBundleV1;
+      return createTaskHarnessRequest({ ...base, bundle, bundleHash: await canonicalSha256(bundle) });
+    };
+    await expect(headCheckout(review("1374842705"))).resolves.toBeDefined();
+    await expect(headCheckout(review("9999"))).rejects.toThrow(/same-repository pull requests/);
+  });
+
   it("names repository.exec explicitly when a fork head is refused", async () => {
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("9999"), {
       triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }],

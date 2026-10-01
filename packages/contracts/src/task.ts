@@ -139,8 +139,52 @@ const cronExpressionV1Schema = z.string().trim().min(1).max(100).superRefine((va
   }
 });
 
+/**
+ * A GitHub login in a trigger filter. Lower case, because GitHub compares
+ * logins case-insensitively and the compiler normalises them; an app is
+ * `name[bot]`, which no user can register since logins cannot contain
+ * brackets.
+ */
+export const taskFilterLoginV1Schema = z.string().regex(
+  /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}(?:\[bot\])?$/,
+  "logins are lower-case GitHub logins, optionally ending in [bot]",
+);
+
+function sortedUnique(values: readonly string[]): boolean {
+  return values.every((value, index) => index === 0 || values[index - 1]! < value);
+}
+
+/**
+ * Who may have written the text an authored trigger names. `maintainers` and
+ * `any` are the classic values; a list admits maintainers (when it says so)
+ * and the exact logins it names. Lists are sorted and unique so equal filters
+ * hash equally, and a list of only `maintainers` is written as the scalar so
+ * existing bundles stay byte-identical.
+ */
+export const taskAuthorsFilterV1Schema = z.union([
+  z.enum(["maintainers", "any"]),
+  z.array(z.union([z.literal("maintainers"), taskFilterLoginV1Schema])).min(1).max(20)
+    .refine(sortedUnique, "authors entries must be sorted and unique")
+    .refine((entries) => !(entries.length === 1 && entries[0] === "maintainers"), "a list of only maintainers is written as maintainers")
+    // `any` would read as a login here; it only stands alone.
+    .refine((entries) => !entries.includes("any"), "any cannot be combined with other authors"),
+]);
+export type TaskAuthorsFilterV1 = z.infer<typeof taskAuthorsFilterV1Schema>;
+
+/**
+ * Who opened the issue, pull request or discussion the event belongs to.
+ * Exact logins only. Offered only where that thread is separate from the text
+ * that triggered the run; where they are the same, `authors` already says it.
+ */
+export const taskOpenedByFilterV1Schema = z.array(taskFilterLoginV1Schema).min(1).max(20)
+  .refine(sortedUnique, "opened-by entries must be sorted and unique");
+
 function labelGatedTrigger<Kind extends string>(kind: Kind) {
-  return z.strictObject({ kind: z.literal(kind), labelsAll: taskLabelFilterV1Schema });
+  return z.strictObject({
+    kind: z.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    openedBy: taskOpenedByFilterV1Schema.optional(),
+  });
 }
 
 /**
@@ -154,7 +198,22 @@ function authoredTrigger<Kind extends string>(kind: Kind) {
     kind: z.literal(kind),
     labelsAll: taskLabelFilterV1Schema,
     mentions: taskMentionFilterV1Schema,
-    authors: z.enum(["maintainers", "any"]),
+    authors: taskAuthorsFilterV1Schema,
+  });
+}
+
+/**
+ * An authored trigger on a comment or review, whose thread (the issue, pull
+ * request or discussion) someone else may have opened, so it can also filter
+ * on who opened it.
+ */
+function authoredReplyTrigger<Kind extends string>(kind: Kind) {
+  return z.strictObject({
+    kind: z.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    mentions: taskMentionFilterV1Schema,
+    authors: taskAuthorsFilterV1Schema,
+    openedBy: taskOpenedByFilterV1Schema.optional(),
   });
 }
 
@@ -168,8 +227,8 @@ export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
   labelGatedTrigger("github.issue.labeled"),
   labelGatedTrigger("github.issue.unlabeled"),
   labelGatedTrigger("github.issue.reopened"),
-  authoredTrigger("github.issue_comment.created"),
-  authoredTrigger("github.issue_comment.edited"),
+  authoredReplyTrigger("github.issue_comment.created"),
+  authoredReplyTrigger("github.issue_comment.edited"),
   authoredTrigger("github.pull_request.opened"),
   labelGatedTrigger("github.pull_request.reopened"),
   labelGatedTrigger("github.pull_request.synchronize"),
@@ -178,9 +237,9 @@ export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
   authoredTrigger("github.pull_request.edited"),
   labelGatedTrigger("github.pull_request.labeled"),
   labelGatedTrigger("github.pull_request.unlabeled"),
-  authoredTrigger("github.pull_request_review.submitted"),
-  authoredTrigger("github.pull_request_review_comment.created"),
-  authoredTrigger("github.pull_request_review_comment.edited"),
+  authoredReplyTrigger("github.pull_request_review.submitted"),
+  authoredReplyTrigger("github.pull_request_review_comment.created"),
+  authoredReplyTrigger("github.pull_request_review_comment.edited"),
   z.strictObject({
     kind: z.literal("github.push"),
     /**
@@ -201,8 +260,8 @@ export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
   labelGatedTrigger("github.discussion.unanswered"),
   labelGatedTrigger("github.discussion.labeled"),
   labelGatedTrigger("github.discussion.unlabeled"),
-  authoredTrigger("github.discussion_comment.created"),
-  authoredTrigger("github.discussion_comment.edited"),
+  authoredReplyTrigger("github.discussion_comment.created"),
+  authoredReplyTrigger("github.discussion_comment.edited"),
 ]);
 export type TaskTriggerV1 = z.infer<typeof taskTriggerV1Schema>;
 export type TaskTriggerKindV1 = TaskTriggerV1["kind"];
@@ -394,6 +453,12 @@ export const taskBundleV1Schema = z.strictObject({
   effects: z.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   /** Absent when no declared effect has options, so such bundles hash as before. */
   effectOptions: taskEffectOptionsMapV1Schema.optional(),
+  /**
+   * Check out the triggering pull request's head instead of the commit GitHub
+   * supplies (a merge preview), so commits build on the branch they push to.
+   * Opt-in, and only for tasks with a pull request trigger.
+   */
+  checkout: z.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
   /**
@@ -408,6 +473,10 @@ export const taskBundleV1Schema = z.strictObject({
    */
   draft: z.literal(true).optional(),
 }).superRefine((bundle, context) => {
+  if (bundle.checkout === "pull-request-head"
+    && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  }
   for (const key of ["tools", "effects"] as const) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
@@ -830,7 +899,8 @@ export type NormalizedPullRequestV1 = z.infer<typeof normalizedPullRequestV1Sche
  * the pull request branch it pushes to. The generated workflow and the runtime
  * both derive the checkout from this one rule.
  */
-export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptions">): boolean {
+export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptions" | "checkout">): boolean {
+  if (bundle.checkout === "pull-request-head") return true;
   const patterns = bundle.effectOptions?.["commit.create"]?.branches;
   if (patterns === undefined) return false;
   // Restating the default changes nothing, so it must not change the checkout.
@@ -844,11 +914,24 @@ export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptio
  * payload carries the pull request, because that is what the workflow can
  * check out; a manual run naming a pull request keeps the default checkout.
  */
-export function taskCheckoutSha(bundle: Pick<TaskBundleV1, "effectOptions">, event: NormalizedEventV1): string {
+export function taskCheckoutSha(bundle: Pick<TaskBundleV1, "effectOptions" | "checkout">, event: NormalizedEventV1): string {
   if (checksOutPullRequestHead(bundle) && event.kind !== "github.workflow_dispatch" && "pullRequest" in event && event.pullRequest !== undefined) {
     return event.pullRequest.head.sha;
   }
   return event.repository.commitSha;
+}
+
+/**
+ * Who opened the thread an event belongs to: the issue (for a comment on a
+ * pull request's conversation, that is the pull request), the pull request,
+ * or the discussion. Undefined for events with no thread.
+ */
+export function threadOpenerLogin(event: NormalizedEventV1): string | undefined {
+  if (event.kind === "github.workflow_dispatch" || event.kind === "github.push" || event.kind === "github.schedule") return undefined;
+  if ("issue" in event && event.issue !== undefined) return event.issue.author.login;
+  if ("pullRequest" in event && event.pullRequest !== undefined) return event.pullRequest.author.login;
+  if ("discussion" in event && event.discussion !== undefined) return event.discussion.author.login;
+  return undefined;
 }
 
 /** Narrowed accessor for the pull-request payload, when the event carries one. */

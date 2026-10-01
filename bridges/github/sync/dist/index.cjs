@@ -27610,15 +27610,40 @@ var cronExpressionV1Schema = external_exports.string().trim().min(1).max(100).su
     }
   }
 });
+var taskFilterLoginV1Schema = external_exports.string().regex(
+  /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}(?:\[bot\])?$/,
+  "logins are lower-case GitHub logins, optionally ending in [bot]"
+);
+function sortedUnique(values) {
+  return values.every((value, index) => index === 0 || values[index - 1] < value);
+}
+var taskAuthorsFilterV1Schema = external_exports.union([
+  external_exports.enum(["maintainers", "any"]),
+  external_exports.array(external_exports.union([external_exports.literal("maintainers"), taskFilterLoginV1Schema])).min(1).max(20).refine(sortedUnique, "authors entries must be sorted and unique").refine((entries) => !(entries.length === 1 && entries[0] === "maintainers"), "a list of only maintainers is written as maintainers").refine((entries) => !entries.includes("any"), "any cannot be combined with other authors")
+]);
+var taskOpenedByFilterV1Schema = external_exports.array(taskFilterLoginV1Schema).min(1).max(20).refine(sortedUnique, "opened-by entries must be sorted and unique");
 function labelGatedTrigger(kind) {
-  return external_exports.strictObject({ kind: external_exports.literal(kind), labelsAll: taskLabelFilterV1Schema });
+  return external_exports.strictObject({
+    kind: external_exports.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    openedBy: taskOpenedByFilterV1Schema.optional()
+  });
 }
 function authoredTrigger(kind) {
   return external_exports.strictObject({
     kind: external_exports.literal(kind),
     labelsAll: taskLabelFilterV1Schema,
     mentions: taskMentionFilterV1Schema,
-    authors: external_exports.enum(["maintainers", "any"])
+    authors: taskAuthorsFilterV1Schema
+  });
+}
+function authoredReplyTrigger(kind) {
+  return external_exports.strictObject({
+    kind: external_exports.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    mentions: taskMentionFilterV1Schema,
+    authors: taskAuthorsFilterV1Schema,
+    openedBy: taskOpenedByFilterV1Schema.optional()
   });
 }
 var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
@@ -27627,8 +27652,8 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   labelGatedTrigger("github.issue.labeled"),
   labelGatedTrigger("github.issue.unlabeled"),
   labelGatedTrigger("github.issue.reopened"),
-  authoredTrigger("github.issue_comment.created"),
-  authoredTrigger("github.issue_comment.edited"),
+  authoredReplyTrigger("github.issue_comment.created"),
+  authoredReplyTrigger("github.issue_comment.edited"),
   authoredTrigger("github.pull_request.opened"),
   labelGatedTrigger("github.pull_request.reopened"),
   labelGatedTrigger("github.pull_request.synchronize"),
@@ -27637,9 +27662,9 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   authoredTrigger("github.pull_request.edited"),
   labelGatedTrigger("github.pull_request.labeled"),
   labelGatedTrigger("github.pull_request.unlabeled"),
-  authoredTrigger("github.pull_request_review.submitted"),
-  authoredTrigger("github.pull_request_review_comment.created"),
-  authoredTrigger("github.pull_request_review_comment.edited"),
+  authoredReplyTrigger("github.pull_request_review.submitted"),
+  authoredReplyTrigger("github.pull_request_review_comment.created"),
+  authoredReplyTrigger("github.pull_request_review_comment.edited"),
   external_exports.strictObject({
     kind: external_exports.literal("github.push"),
     /**
@@ -27660,8 +27685,8 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   labelGatedTrigger("github.discussion.unanswered"),
   labelGatedTrigger("github.discussion.labeled"),
   labelGatedTrigger("github.discussion.unlabeled"),
-  authoredTrigger("github.discussion_comment.created"),
-  authoredTrigger("github.discussion_comment.edited")
+  authoredReplyTrigger("github.discussion_comment.created"),
+  authoredReplyTrigger("github.discussion_comment.edited")
 ]);
 var taskTriggerKindValues = [
   "github.issue.opened",
@@ -27773,6 +27798,12 @@ var taskBundleV1Schema = external_exports.strictObject({
   effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   /** Absent when no declared effect has options, so such bundles hash as before. */
   effectOptions: taskEffectOptionsMapV1Schema.optional(),
+  /**
+   * Check out the triggering pull request's head instead of the commit GitHub
+   * supplies (a merge preview), so commits build on the branch they push to.
+   * Opt-in, and only for tasks with a pull request trigger.
+   */
+  checkout: external_exports.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
   /**
@@ -27787,6 +27818,9 @@ var taskBundleV1Schema = external_exports.strictObject({
    */
   draft: external_exports.literal(true).optional()
 }).superRefine((bundle, context) => {
+  if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  }
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
@@ -28135,6 +28169,7 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   }
 });
 function checksOutPullRequestHead(bundle) {
+  if (bundle.checkout === "pull-request-head") return true;
   const patterns = bundle.effectOptions?.["commit.create"]?.branches;
   if (patterns === void 0) return false;
   return !(patterns.length === DEFAULT_WRITE_BRANCHES.length && patterns.every((pattern, index) => pattern === DEFAULT_WRITE_BRANCHES[index]));
@@ -29155,7 +29190,11 @@ var triggerAuthoringSchema = external_exports.strictObject({
   event: external_exports.enum(taskTriggerKindValues),
   "labels-all": external_exports.array(safeLabel).max(20).optional(),
   mentions: external_exports.array(external_exports.string().trim().min(1).max(40)).min(1).max(20).optional(),
-  authors: external_exports.enum(["maintainers", "any"]).optional(),
+  authors: external_exports.union([
+    external_exports.enum(["maintainers", "any"]),
+    external_exports.array(external_exports.string().trim().min(1).max(60)).min(1).max(20)
+  ]).optional(),
+  "opened-by": external_exports.array(external_exports.string().trim().min(1).max(60)).min(1).max(20).optional(),
   branches: external_exports.array(external_exports.string().trim().min(1).max(255)).min(1).max(20).optional(),
   cron: external_exports.string().trim().min(1).max(100).optional()
 }).superRefine((trigger, context) => {
@@ -29169,8 +29208,30 @@ var triggerAuthoringSchema = external_exports.strictObject({
       context.addIssue({ code: "custom", path: [key], message: `${key} is required by ${trigger.event}` });
     }
   };
+  if (Array.isArray(trigger.authors)) {
+    trigger.authors.forEach((entry, index) => {
+      if (entry.toLowerCase() === "any") {
+        context.addIssue({ code: "custom", path: ["authors", index], message: "any cannot be combined with other authors; write authors: any" });
+      } else if (entry.toLowerCase() !== "maintainers" && !taskFilterLoginV1Schema.safeParse(entry.toLowerCase()).success) {
+        context.addIssue({ code: "custom", path: ["authors", index], message: `${entry} is not maintainers or a GitHub login` });
+      }
+    });
+  }
+  trigger["opened-by"]?.forEach((entry, index) => {
+    if (!taskFilterLoginV1Schema.safeParse(entry.toLowerCase()).success) {
+      context.addIssue({ code: "custom", path: ["opened-by", index], message: `${entry} is not a GitHub login` });
+    }
+  });
+  if (trigger["opened-by"] !== void 0 && isAuthoredTriggerKind(trigger.event) && authoredTriggerSubject[trigger.event] !== "comment" && authoredTriggerSubject[trigger.event] !== "review") {
+    context.addIssue({
+      code: "custom",
+      path: ["opened-by"],
+      message: `on ${trigger.event} the opener is the author; use authors`
+    });
+  }
   if (trigger.event === PUSH_TRIGGER) {
     require2("branches");
+    reject("opened-by");
     reject("labels-all");
     reject("mentions");
     reject("authors");
@@ -29179,6 +29240,7 @@ var triggerAuthoringSchema = external_exports.strictObject({
   }
   if (trigger.event === SCHEDULE_TRIGGER) {
     require2("cron");
+    reject("opened-by");
     reject("labels-all");
     reject("mentions");
     reject("authors");
@@ -29186,6 +29248,7 @@ var triggerAuthoringSchema = external_exports.strictObject({
     return;
   }
   if (trigger.event === DISPATCH_TRIGGER) {
+    reject("opened-by");
     reject("labels-all");
     reject("mentions");
     reject("authors");
@@ -29214,6 +29277,7 @@ var authoringSchema = external_exports.strictObject({
   trigger: triggerAuthoringSchema.optional(),
   triggers: external_exports.array(triggerAuthoringSchema).min(1).max(taskTriggerKindValues.length).optional(),
   draft: external_exports.boolean().optional(),
+  checkout: external_exports.enum(["provider", "pull-request-head"]).optional(),
   model: taskModelIdSchema.optional(),
   tools: external_exports.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: external_exports.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
@@ -29267,9 +29331,19 @@ function toContractTrigger(authored, options, sourceName) {
   if (kind === SCHEDULE_TRIGGER) return { kind, cron: authored.cron };
   if (kind === DISPATCH_TRIGGER) return { kind };
   const labelsAll = authored["labels-all"] ?? [];
-  if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll };
+  const openedBy = authored["opened-by"] === void 0 ? {} : { openedBy: normalizedLogins(authored["opened-by"]) };
+  if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll, ...openedBy };
   const mentions = resolveMentions(authored.mentions ?? [], options, sourceName, kind);
-  return { kind, labelsAll, mentions, authors: authored.authors ?? defaultTriggerAuthors(kind, mentions) };
+  const authors = authored.authors === void 0 ? defaultTriggerAuthors(kind, mentions) : normalizedAuthors(authored.authors);
+  return { kind, labelsAll, mentions, authors, ...openedBy };
+}
+function normalizedLogins(entries) {
+  return [...new Set(entries.map((entry) => entry.toLowerCase()))].sort();
+}
+function normalizedAuthors(authors) {
+  if (!Array.isArray(authors)) return authors;
+  const entries = normalizedLogins(authors);
+  return entries.length === 1 && entries[0] === "maintainers" ? "maintainers" : entries;
 }
 function resolveMentions(written, options, sourceName, kind) {
   const handles = [];
@@ -29332,6 +29406,7 @@ async function compileTaskSource(source, sourceName = "TASK.md", options = {}) {
       maxEffectBytes: authoring.limits["max-effect-bytes"]
     },
     model: authoring.model ?? DEFAULT_TASK_MODEL,
+    ...authoring.checkout === "pull-request-head" ? { checkout: "pull-request-head" } : {},
     ...authoring.draft === true ? { draft: true } : {}
   });
   return {
@@ -29522,6 +29597,9 @@ function renderTriggerCondition(binding, task) {
   if (trigger !== void 0 && "authors" in trigger && isAuthoredTriggerKind(trigger.kind)) {
     clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions));
   }
+  if (trigger !== void 0 && "openedBy" in trigger && trigger.openedBy !== void 0) {
+    clauses.push(openedByClause(binding.event, trigger.openedBy));
+  }
   return clauses.length === 1 ? clauses[0] : `(${clauses.join(" && ")})`;
 }
 var SUBJECT_EXPRESSIONS = {
@@ -29540,6 +29618,21 @@ function authoredTriggerClauses(kind, mentions) {
     if (isEditedTriggerKind(kind)) clauses.push("github.event.changes.body");
   }
   return clauses;
+}
+var THREAD_EXPRESSIONS = {
+  issues: "github.event.issue",
+  issue_comment: "github.event.issue",
+  pull_request: "github.event.pull_request",
+  pull_request_review: "github.event.pull_request",
+  pull_request_review_comment: "github.event.pull_request",
+  discussion: "github.event.discussion",
+  discussion_comment: "github.event.discussion"
+};
+function openedByClause(event, logins) {
+  const thread = THREAD_EXPRESSIONS[event];
+  if (thread === void 0) throw new Error(`opened-by is not supported for ${event} events`);
+  const any2 = logins.map((login) => `${thread}.user.login == '${login}'`);
+  return any2.length === 1 ? any2[0] : `(${any2.join(" || ")})`;
 }
 function renderJobCondition(task) {
   const conditions = task.actionsPlan.triggers.map((binding) => renderTriggerCondition(binding, task));
@@ -29581,7 +29674,10 @@ jobs:
       \${{
         ${renderJobCondition(task)}
       }}
-    permissions:
+${checksOutPullRequestHead(task.bundle) ? `    concurrency:
+      group: gardener-${task.bundle.taskId}-\${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: false
+` : ""}    permissions:
 ${renderPermissions(task)}
     uses: ${workflowRef}
     with:

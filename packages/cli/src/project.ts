@@ -497,6 +497,9 @@ function renderTriggerCondition(binding: GitHubActionsTriggerBindingV1, task: Bu
   if (trigger !== undefined && "authors" in trigger && isAuthoredTriggerKind(trigger.kind)) {
     clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions));
   }
+  if (trigger !== undefined && "openedBy" in trigger && trigger.openedBy !== undefined) {
+    clauses.push(openedByClause(binding.event, trigger.openedBy));
+  }
   return clauses.length === 1 ? clauses[0]! : `(${clauses.join(" && ")})`;
 }
 
@@ -533,6 +536,30 @@ function authoredTriggerClauses(
     if (isEditedTriggerKind(kind)) clauses.push("github.event.changes.body");
   }
   return clauses;
+}
+
+/** Where each event carries the thread `opened-by` filters on. */
+const THREAD_EXPRESSIONS: Partial<Record<GitHubActionsTriggerBindingV1["event"], string>> = {
+  issues: "github.event.issue",
+  issue_comment: "github.event.issue",
+  pull_request: "github.event.pull_request",
+  pull_request_review: "github.event.pull_request",
+  pull_request_review_comment: "github.event.pull_request",
+  discussion: "github.event.discussion",
+  discussion_comment: "github.event.discussion",
+};
+
+/**
+ * Prefilter for `opened-by`. GitHub's `==` on strings is case-insensitive and
+ * the Worker compares lower-cased logins, so this never skips an event the
+ * Worker would admit. Logins are letters, digits, hyphens and `[bot]`, so
+ * they need no escaping inside single quotes.
+ */
+function openedByClause(event: GitHubActionsTriggerBindingV1["event"], logins: readonly string[]): string {
+  const thread = THREAD_EXPRESSIONS[event];
+  if (thread === undefined) throw new Error(`opened-by is not supported for ${event} events`);
+  const any = logins.map((login) => `${thread}.user.login == '${login}'`);
+  return any.length === 1 ? any[0]! : `(${any.join(" || ")})`;
 }
 
 function renderJobCondition(task: BuiltTask): string {
@@ -593,7 +620,12 @@ jobs:
       \${{
         ${renderJobCondition(task)}
       }}
-    permissions:
+${checksOutPullRequestHead(task.bundle)
+  // One round per pull request at a time: two at once would build on the same
+  // head, and the second push would be refused. Events without a pull request
+  // fall back to their own run id, so they are never serialised.
+  ? `    concurrency:\n      group: gardener-${task.bundle.taskId}-\${{ github.event.pull_request.number || github.run_id }}\n      cancel-in-progress: false\n`
+  : ""}    permissions:
 ${renderPermissions(task)}
     uses: ${workflowRef}
     with:
@@ -603,8 +635,9 @@ ${renderPermissions(task)}
       task-source: ${yamlString(`.gardener/${task.source}`)}
       task-bundle-hash: ${task.bundleHash}
 ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundle.limits.runtimeSeconds)}\n` : ""}${checksOutPullRequestHead(task.bundle)
-  // Tasks that commit beyond gardener/** build on the pull request's head, not
-  // GitHub's merge preview. Empty for events without a pull request.
+  // Tasks that check out the pull request head (checkout: pull-request-head,
+  // or commits beyond gardener/**) build on it, not GitHub's merge preview.
+  // Empty for events without a pull request.
   ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n"
   : ""}`;
 }

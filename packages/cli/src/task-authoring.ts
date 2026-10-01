@@ -1,7 +1,10 @@
 import {
   branchPatternsSchema,
   branchWriteKinds,
+  authoredTriggerSubject,
   defaultTriggerAuthors,
+  taskFilterLoginV1Schema,
+  type TaskAuthorsFilterV1,
   githubHandleV1Schema,
   isAuthoredTriggerKind,
   operationCatalog,
@@ -58,11 +61,15 @@ const triggerAuthoringSchema = z.strictObject({
   event: z.enum(taskTriggerKindValues),
   "labels-all": z.array(safeLabel).max(20).optional(),
   mentions: z.array(z.string().trim().min(1).max(40)).min(1).max(20).optional(),
-  authors: z.enum(["maintainers", "any"]).optional(),
+  authors: z.union([
+    z.enum(["maintainers", "any"]),
+    z.array(z.string().trim().min(1).max(60)).min(1).max(20),
+  ]).optional(),
+  "opened-by": z.array(z.string().trim().min(1).max(60)).min(1).max(20).optional(),
   branches: z.array(z.string().trim().min(1).max(255)).min(1).max(20).optional(),
   cron: z.string().trim().min(1).max(100).optional(),
 }).superRefine((trigger, context) => {
-  const reject = (key: "labels-all" | "mentions" | "authors" | "branches" | "cron") => {
+  const reject = (key: "labels-all" | "mentions" | "authors" | "opened-by" | "branches" | "cron") => {
     if (trigger[key] !== undefined) {
       context.addIssue({ code: "custom", path: [key], message: `${key} is not supported by ${trigger.event}` });
     }
@@ -72,8 +79,33 @@ const triggerAuthoringSchema = z.strictObject({
       context.addIssue({ code: "custom", path: [key], message: `${key} is required by ${trigger.event}` });
     }
   };
+  if (Array.isArray(trigger.authors)) {
+    trigger.authors.forEach((entry, index) => {
+      if (entry.toLowerCase() === "any") {
+        context.addIssue({ code: "custom", path: ["authors", index], message: "any cannot be combined with other authors; write authors: any" });
+      } else if (entry.toLowerCase() !== "maintainers" && !taskFilterLoginV1Schema.safeParse(entry.toLowerCase()).success) {
+        context.addIssue({ code: "custom", path: ["authors", index], message: `${entry} is not maintainers or a GitHub login` });
+      }
+    });
+  }
+  trigger["opened-by"]?.forEach((entry, index) => {
+    if (!taskFilterLoginV1Schema.safeParse(entry.toLowerCase()).success) {
+      context.addIssue({ code: "custom", path: ["opened-by", index], message: `${entry} is not a GitHub login` });
+    }
+  });
+  if (trigger["opened-by"] !== undefined && isAuthoredTriggerKind(trigger.event)
+    && authoredTriggerSubject[trigger.event] !== "comment" && authoredTriggerSubject[trigger.event] !== "review") {
+    // The text that triggers the run is the thread itself, so its author is
+    // its opener; two different lists here could never both match.
+    context.addIssue({
+      code: "custom",
+      path: ["opened-by"],
+      message: `on ${trigger.event} the opener is the author; use authors`,
+    });
+  }
   if (trigger.event === PUSH_TRIGGER) {
     require("branches");
+    reject("opened-by");
     reject("labels-all");
     reject("mentions");
     reject("authors");
@@ -82,6 +114,7 @@ const triggerAuthoringSchema = z.strictObject({
   }
   if (trigger.event === SCHEDULE_TRIGGER) {
     require("cron");
+    reject("opened-by");
     reject("labels-all");
     reject("mentions");
     reject("authors");
@@ -89,6 +122,7 @@ const triggerAuthoringSchema = z.strictObject({
     return;
   }
   if (trigger.event === DISPATCH_TRIGGER) {
+    reject("opened-by");
     reject("labels-all");
     reject("mentions");
     reject("authors");
@@ -129,6 +163,7 @@ const authoringSchema = z.strictObject({
   trigger: triggerAuthoringSchema.optional(),
   triggers: z.array(triggerAuthoringSchema).min(1).max(taskTriggerKindValues.length).optional(),
   draft: z.boolean().optional(),
+  checkout: z.enum(["provider", "pull-request-head"]).optional(),
   model: taskModelIdSchema.optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: z.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
@@ -206,9 +241,23 @@ function toContractTrigger(authored: AuthoredTrigger, options: TaskCompileOption
   if (kind === SCHEDULE_TRIGGER) return { kind, cron: authored.cron! };
   if (kind === DISPATCH_TRIGGER) return { kind };
   const labelsAll = authored["labels-all"] ?? [];
-  if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll } as TaskTriggerV1;
+  const openedBy = authored["opened-by"] === undefined ? {} : { openedBy: normalizedLogins(authored["opened-by"]) };
+  if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll, ...openedBy } as TaskTriggerV1;
   const mentions = resolveMentions(authored.mentions ?? [], options, sourceName, kind);
-  return { kind, labelsAll, mentions, authors: authored.authors ?? defaultTriggerAuthors(kind, mentions) } as TaskTriggerV1;
+  const authors = authored.authors === undefined ? defaultTriggerAuthors(kind, mentions) : normalizedAuthors(authored.authors);
+  return { kind, labelsAll, mentions, authors, ...openedBy } as TaskTriggerV1;
+}
+
+/** Lower-cased, unique and sorted, so filters that mean the same hash the same. */
+function normalizedLogins(entries: readonly string[]): string[] {
+  return [...new Set(entries.map((entry) => entry.toLowerCase()))].sort();
+}
+
+/** A list of only `maintainers` is the scalar, so existing bundles are unchanged. */
+function normalizedAuthors(authors: "maintainers" | "any" | readonly string[]): TaskAuthorsFilterV1 {
+  if (!Array.isArray(authors)) return authors as "maintainers" | "any";
+  const entries = normalizedLogins(authors);
+  return entries.length === 1 && entries[0] === "maintainers" ? "maintainers" : entries as TaskAuthorsFilterV1;
 }
 
 /**
@@ -290,6 +339,7 @@ export async function compileTaskSource(
       maxEffectBytes: authoring.limits["max-effect-bytes"],
     },
     model: authoring.model ?? DEFAULT_TASK_MODEL,
+    ...(authoring.checkout === "pull-request-head" ? { checkout: "pull-request-head" } : {}),
     ...(authoring.draft === true ? { draft: true } : {}),
   });
   return {

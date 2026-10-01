@@ -17,7 +17,9 @@ import {
   operationProposalPayloadJsonSchema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
+  threadOpenerLogin,
   type NormalizedEventV1,
+  type TaskAuthorsFilterV1,
   type TaskOutcomeV1,
   type TaskRunRequestV1,
   type TaskToolV1,
@@ -284,7 +286,8 @@ function triggerSelects(trigger: TaskTrigger, event: NormalizedEventV1): boolean
  */
 export function triggerFiltersExclude(event: NormalizedEventV1, triggers: readonly TaskTrigger[]): boolean {
   const selecting = triggers.filter((trigger) => triggerSelects(trigger, event));
-  return selecting.length > 0 && !selecting.some((trigger) => authoredFiltersPass(trigger, event));
+  return selecting.length > 0
+    && !selecting.some((trigger) => openedByPasses(trigger, event) && authoredFiltersPass(trigger, event));
 }
 
 /**
@@ -295,7 +298,7 @@ export function triggerFiltersExclude(event: NormalizedEventV1, triggers: readon
 export function triggerAssociationMissing(event: NormalizedEventV1, triggers: readonly TaskTrigger[]): boolean {
   return triggers.some((trigger) => triggerSelects(trigger, event)
     && "authors" in trigger
-    && trigger.authors === "maintainers"
+    && admitsMaintainers(trigger.authors)
     && isAuthoredTriggerKind(trigger.kind)
     && eventSubject(event, authoredTriggerSubject[trigger.kind])?.authorAssociation === undefined);
 }
@@ -310,7 +313,7 @@ function authoredFiltersPass(trigger: TaskTrigger, event: NormalizedEventV1): bo
   if (!("authors" in trigger) || !isAuthoredTriggerKind(trigger.kind)) return true;
   const subject = eventSubject(event, authoredTriggerSubject[trigger.kind]);
   if (subject === undefined) return false;
-  if (trigger.authors === "maintainers" && !isMaintainer(subject)) return false;
+  if (!authorsAdmit(trigger.authors, subject)) return false;
   if (trigger.mentions.length === 0) return true;
   const body = subject.body ?? "";
   if (!isEditedTriggerKind(trigger.kind)) return trigger.mentions.some((handle) => mentions(body, handle));
@@ -321,7 +324,37 @@ function authoredFiltersPass(trigger: TaskTrigger, event: NormalizedEventV1): bo
   return trigger.mentions.some((handle) => mentions(body, handle) && !mentions(previous, handle));
 }
 
-type EventSubject = { body: string | null; authorAssociation?: string | undefined; authorPermission?: string | undefined };
+type EventSubject = {
+  body: string | null;
+  author?: { login?: unknown } | undefined;
+  authorAssociation?: string | undefined;
+  authorPermission?: string | undefined;
+};
+
+function admitsMaintainers(authors: TaskAuthorsFilterV1): boolean {
+  return authors === "maintainers" || (Array.isArray(authors) && authors.includes("maintainers"));
+}
+
+/**
+ * `authors`: anyone, maintainers, or a list of maintainers and exact logins.
+ * Logins compare case-insensitively, as GitHub does; the compiler lower-cases
+ * the list. A login can only match its own author, and an app's `name[bot]`
+ * cannot be registered by a user.
+ */
+function authorsAdmit(authors: TaskAuthorsFilterV1, subject: EventSubject): boolean {
+  if (authors === "any") return true;
+  if (authors === "maintainers") return isMaintainer(subject);
+  const login = typeof subject.author?.login === "string" ? subject.author.login.toLowerCase() : undefined;
+  if (login !== undefined && authors.some((entry) => entry !== "maintainers" && entry === login)) return true;
+  return authors.includes("maintainers") && isMaintainer(subject);
+}
+
+/** `opened-by`: who opened the thread the event belongs to, by exact login. */
+function openedByPasses(trigger: TaskTrigger, event: NormalizedEventV1): boolean {
+  if (!("openedBy" in trigger) || trigger.openedBy === undefined) return true;
+  const opener = threadOpenerLogin(event)?.toLowerCase();
+  return opener !== undefined && trigger.openedBy.includes(opener);
+}
 
 /**
  * A maintainer by association, or by write access the bridge looked up.

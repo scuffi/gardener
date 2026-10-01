@@ -55,15 +55,15 @@ declare each trigger kind at most once.
 | Trigger kinds | Extra keys |
 | --- | --- |
 | `github.issue.opened`, `.edited` | `labels-all`, `mentions`, `authors` |
-| `github.issue.labeled`, `.unlabeled`, `.reopened` | `labels-all` |
-| `github.issue_comment.created`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.issue.labeled`, `.unlabeled`, `.reopened` | `labels-all`, `opened-by` |
+| `github.issue_comment.created`, `.edited` | `labels-all`, `mentions`, `authors`, `opened-by` |
 | `github.pull_request.opened`, `.edited` | `labels-all`, `mentions`, `authors` |
-| `github.pull_request.reopened`, `.synchronize`, `.ready_for_review`, `.converted_to_draft`, `.labeled`, `.unlabeled` | `labels-all` |
-| `github.pull_request_review.submitted` | `labels-all`, `mentions`, `authors` |
-| `github.pull_request_review_comment.created`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.pull_request.reopened`, `.synchronize`, `.ready_for_review`, `.converted_to_draft`, `.labeled`, `.unlabeled` | `labels-all`, `opened-by` |
+| `github.pull_request_review.submitted` | `labels-all`, `mentions`, `authors`, `opened-by` |
+| `github.pull_request_review_comment.created`, `.edited` | `labels-all`, `mentions`, `authors`, `opened-by` |
 | `github.discussion.created`, `.edited` | `labels-all`, `mentions`, `authors` |
-| `github.discussion.answered`, `.unanswered`, `.labeled`, `.unlabeled` | `labels-all` |
-| `github.discussion_comment.created`, `.edited` | `labels-all`, `mentions`, `authors` |
+| `github.discussion.answered`, `.unanswered`, `.labeled`, `.unlabeled` | `labels-all`, `opened-by` |
+| `github.discussion_comment.created`, `.edited` | `labels-all`, `mentions`, `authors`, `opened-by` |
 | `github.push` | `branches` (at least one branch filter, required) |
 | `github.schedule` | `cron` (five-field expression, required) |
 | `github.workflow_dispatch` | none |
@@ -94,7 +94,7 @@ handle, set as `handle` in `.gardener/gardener.json`:
 
 `gardener generate` fails if a task mentions `self` and no handle is set. There is no default handle.
 
-`authors` is `maintainers` or `any`. `maintainers` admits text written by the repository owner, an
+`authors` is `maintainers`, `any`, or a list. `maintainers` admits text written by the repository owner, an
 organization member, or a collaborator (GitHub's `author_association`), or by anyone with write or
 admin access to the repository. It is the default for
 comment triggers, `pull_request_review.submitted`, and any trigger with `mentions`, because on a
@@ -118,6 +118,30 @@ on a public repository everyone has read access, so it can't tell them apart fro
 need to make their membership public, or be given write access. `maintainers` has no prefilter in
 the generated workflow, so a non-maintainer's text starts a short job that ends as a skip, without
 a model call.
+
+A list admits the exact GitHub logins it names, and maintainers too if it includes `maintainers`.
+This is how a task admits a review bot, which `maintainers` never does: an app posts as
+`name[bot]`, a login no user can register, and only an app installed on the repository or its
+organization can post as it. Logins match case-insensitively. `any` can't be part of a list.
+Quote `[bot]` logins in a bracketed list, because YAML reads the brackets as a nested list, or write
+the list one entry per line:
+
+```yaml
+trigger:
+  event: github.pull_request_review.submitted
+  authors: [maintainers, "devin-ai-integration[bot]"]
+```
+
+### Who opened the thread
+
+`opened-by` filters on who opened the issue, pull request or discussion that the event belongs to,
+rather than who wrote the triggering text. It lists exact logins, such as
+`opened-by: ["github-actions[bot]"]` for pull requests Gardener opened (it opens them with the
+workflow's token) or `["dependabot[bot]"]`. It's available on comment and review triggers, and on
+label and state triggers, as shown in the table above. It's not available on `.opened`, `.edited` or
+`discussion.created`: there the opener *is* the author, so use `authors`. On a comment in a pull
+request's conversation, the thread is the pull request. The generated workflow prefilters it, so a
+thread someone else opened doesn't start a job.
 
 On an `.edited` trigger with `mentions`, the task runs only when the edit added a mention; an edit
 that leaves the body alone, or keeps a mention that was already there, does not run it. Without
@@ -315,17 +339,32 @@ commit that was checked out: its branch must be created from that commit, or alr
 A commit on any other parent would write the task's files over changes it never saw, so planning
 and apply both refuse it.
 
-To push to an existing pull request branch, give `commit.create` a `branches` list that matches it,
-for example `branches: ["**"]`. A task whose `commit.create` list is anything other than the
-default `gardener/**` checks out the pull request's head on pull request, review and review
-comment events, instead of the merge preview GitHub checks out by default, so its commit lands on
-top of the branch. The generated workflow passes the head to the
-reusable workflow as `checkout-ref`. Manual runs and issue comment triggers keep the default
+To push to an existing pull request branch, the task must build on that branch's head, not on the
+merge preview GitHub checks out by default. Set `checkout: pull-request-head` at the top level of
+the task. It needs a pull request trigger, and pull request, review and review comment events then
+check out the pull request's head. A task that only pushes to Gardener's own `gardener/**` pull
+requests keeps the default `branches`:
+
+```yaml
+checkout: pull-request-head
+trigger:
+  event: github.pull_request_review.submitted
+  authors: [maintainers, "devin-ai-integration[bot]"]
+  opened-by: ["github-actions[bot]"]
+effects:
+  - commit.create
+  - pull_request.comment.create
+```
+
+A task whose `commit.create` list is anything other than `gardener/**`, for example
+`branches: ["**"]`, also checks out the head without setting `checkout`. The generated workflow
+passes the head to the reusable workflow as `checkout-ref`, and runs one such task at a time per
+pull request, so two rounds never build on the same head. Manual runs and issue comment triggers keep the default
 checkout, so they cannot push to a pull request branch; Gardener refuses such a commit rather than
 build it on the wrong parent. Pull requests from forks are never planned.
 
-GitHub does not start other workflows for commits pushed with a workflow's token, so a pull
-request's checks do not re-run on Gardener's commit until someone pushes again or re-runs them.
+GitHub treats pull requests and commits made with a workflow's token specially: their checks can
+wait in "action required" for a maintainer to approve them, or not start until someone else pushes.
 The same rule stops a task triggered by `github.pull_request.synchronize` from triggering itself
 again with its own commit.
 

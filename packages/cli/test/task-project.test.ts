@@ -721,6 +721,89 @@ describe("sync workflow and staleness", () => {
   });
 });
 
+describe("authors lists, opened-by and pull request head checkout", () => {
+  const REVIEW_TASK = TASK
+    .replace("id: example-task", "id: review-fix")
+    .replace(
+      "trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example",
+      "checkout: pull-request-head\ntrigger:\n  event: github.pull_request_review.submitted\n"
+        + "  authors: [\"Devin-AI-Integration[bot]\", maintainers, \"devin-ai-integration[bot]\"]\n  opened-by:\n    - GitHub-Actions[bot]",
+    )
+    .replace("effects:\n  - issue.comment.create", "effects:\n  - commit.create\n  - pull_request.comment.create");
+  const withTrigger = (trigger: string) => TASK.replace(
+    "trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example",
+    `trigger:\n${trigger}`,
+  );
+
+  it("normalises authors lists and opened-by to sorted, unique, lower-case logins", async () => {
+    const { bundle } = await compileTaskSource(REVIEW_TASK);
+    expect(bundle.checkout).toBe("pull-request-head");
+    expect(bundle.triggers.find((trigger) => trigger.kind === "github.pull_request_review.submitted")).toMatchObject({
+      authors: ["devin-ai-integration[bot]", "maintainers"],
+      openedBy: ["github-actions[bot]"],
+    });
+  });
+
+  it("keeps existing bundles identical: a list of only maintainers is the scalar", async () => {
+    const scalar = await compileTaskSource(withTrigger("  event: github.issue_comment.created\n  authors: maintainers"));
+    const list = await compileTaskSource(withTrigger("  event: github.issue_comment.created\n  authors: [Maintainers]"));
+    expect(list.bundleHash).toBe(scalar.bundleHash);
+  });
+
+  it("refuses any inside a list and entries that are not logins", async () => {
+    await expect(compileTaskSource(withTrigger("  event: github.issue_comment.created\n  authors: [any, maintainers]")))
+      .rejects.toThrow(/any cannot be combined/);
+    await expect(compileTaskSource(withTrigger("  event: github.issue_comment.created\n  authors: [\"not a login\"]")))
+      .rejects.toThrow(/not maintainers or a GitHub login/);
+  });
+
+  it("refuses opened-by where the opener is the author, or where there is no thread", async () => {
+    for (const event of ["github.issue.opened", "github.pull_request.opened", "github.pull_request.edited", "github.discussion.created"]) {
+      await expect(compileTaskSource(withTrigger(`  event: ${event}\n  opened-by: [\"github-actions[bot]\"]`)))
+        .rejects.toThrow(/the opener is the author; use authors/);
+    }
+    await expect(compileTaskSource(withTrigger("  event: github.push\n  branches: [main]\n  opened-by: [someone]")))
+      .rejects.toThrow(/opened-by is not supported by github.push/);
+    await expect(compileTaskSource(withTrigger("  event: github.pull_request.labeled\n  labels-all: [ship]\n  opened-by: [\"Dependabot[bot]\"]")))
+      .resolves.toMatchObject({ bundle: { triggers: expect.arrayContaining([expect.objectContaining({ openedBy: ["dependabot[bot]"] })]) } });
+  });
+
+  it("refuses pull request head checkout without a pull request trigger", async () => {
+    await expect(compileTaskSource(`---\ncheckout: pull-request-head\n${TASK.slice(4)}`))
+      .rejects.toThrow(/checkout: pull-request-head needs a pull request trigger/);
+  });
+
+  it("renders the opener prefilter, the head checkout and one round per pull request", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-review-rounds-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await mkdir(join(root, ".gardener/tasks/review-fix"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/review-fix/TASK.md"), REVIEW_TASK);
+    const built = await buildProject({ repositoryRoot: root });
+    const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
+    expect(workflow).toContain(
+      "(github.event_name == 'pull_request_review' && github.event.action == 'submitted' "
+      + "&& github.event.pull_request.head.repo.full_name == github.repository "
+      + "&& github.event.pull_request.user.login == 'github-actions[bot]')",
+    );
+    // The manual trigger keeps its own clause, untouched by the pull request guards.
+    expect(workflow).toContain("|| github.event_name == 'workflow_dispatch'");
+    expect(workflow).toContain("    concurrency:\n      group: gardener-review-fix-${{ github.event.pull_request.number || github.run_id }}\n      cancel-in-progress: false\n");
+    expect(workflow).toContain("      checkout-ref: ${{ github.event.pull_request.head.sha }}\n");
+    expect(() => parseYaml(workflow)).not.toThrow();
+  });
+
+  it("adds no concurrency or head checkout to tasks that did not ask for it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-review-rounds-plain-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await mkdir(join(root, ".gardener/tasks/example"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/example/TASK.md"), TASK);
+    const built = await buildProject({ repositoryRoot: root });
+    const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
+    expect(workflow).not.toContain("concurrency:");
+    expect(workflow).not.toContain("checkout-ref");
+  });
+});
+
 describe("task-writing guide", () => {
   it("is written by init, kept out of the checked files, and restored by generate", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-guide-"));

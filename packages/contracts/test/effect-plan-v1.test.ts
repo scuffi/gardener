@@ -364,6 +364,15 @@ describe("effect proposals", () => {
     })).toThrow();
   });
 
+  it("leaves task-chosen markers alone, such as the review-round markers", () => {
+    for (const marker of ["<!-- gardener-review-round -->", "<!-- gardener-review-done -->"]) {
+      expect(() => taskEffectProposalV1Schema.parse({
+        ...proposalFor("pull_request.comment.create"),
+        payload: { ...payloadFor("pull_request.comment.create"), body: `${marker}\nFixed the stale tombstone check.` },
+      })).not.toThrow();
+    }
+  });
+
   it("bounds payload size and nesting", () => {
     expect(() => taskEffectProposalV1Schema.parse({
       ...proposalFor("issue.comment.create"),

@@ -40531,15 +40531,40 @@ var cronExpressionV1Schema = external_exports.string().trim().min(1).max(100).su
     }
   }
 });
+var taskFilterLoginV1Schema = external_exports.string().regex(
+  /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}(?:\[bot\])?$/,
+  "logins are lower-case GitHub logins, optionally ending in [bot]"
+);
+function sortedUnique(values) {
+  return values.every((value, index) => index === 0 || values[index - 1] < value);
+}
+var taskAuthorsFilterV1Schema = external_exports.union([
+  external_exports.enum(["maintainers", "any"]),
+  external_exports.array(external_exports.union([external_exports.literal("maintainers"), taskFilterLoginV1Schema])).min(1).max(20).refine(sortedUnique, "authors entries must be sorted and unique").refine((entries) => !(entries.length === 1 && entries[0] === "maintainers"), "a list of only maintainers is written as maintainers").refine((entries) => !entries.includes("any"), "any cannot be combined with other authors")
+]);
+var taskOpenedByFilterV1Schema = external_exports.array(taskFilterLoginV1Schema).min(1).max(20).refine(sortedUnique, "opened-by entries must be sorted and unique");
 function labelGatedTrigger(kind) {
-  return external_exports.strictObject({ kind: external_exports.literal(kind), labelsAll: taskLabelFilterV1Schema });
+  return external_exports.strictObject({
+    kind: external_exports.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    openedBy: taskOpenedByFilterV1Schema.optional()
+  });
 }
 function authoredTrigger(kind) {
   return external_exports.strictObject({
     kind: external_exports.literal(kind),
     labelsAll: taskLabelFilterV1Schema,
     mentions: taskMentionFilterV1Schema,
-    authors: external_exports.enum(["maintainers", "any"])
+    authors: taskAuthorsFilterV1Schema
+  });
+}
+function authoredReplyTrigger(kind) {
+  return external_exports.strictObject({
+    kind: external_exports.literal(kind),
+    labelsAll: taskLabelFilterV1Schema,
+    mentions: taskMentionFilterV1Schema,
+    authors: taskAuthorsFilterV1Schema,
+    openedBy: taskOpenedByFilterV1Schema.optional()
   });
 }
 var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
@@ -40548,8 +40573,8 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   labelGatedTrigger("github.issue.labeled"),
   labelGatedTrigger("github.issue.unlabeled"),
   labelGatedTrigger("github.issue.reopened"),
-  authoredTrigger("github.issue_comment.created"),
-  authoredTrigger("github.issue_comment.edited"),
+  authoredReplyTrigger("github.issue_comment.created"),
+  authoredReplyTrigger("github.issue_comment.edited"),
   authoredTrigger("github.pull_request.opened"),
   labelGatedTrigger("github.pull_request.reopened"),
   labelGatedTrigger("github.pull_request.synchronize"),
@@ -40558,9 +40583,9 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   authoredTrigger("github.pull_request.edited"),
   labelGatedTrigger("github.pull_request.labeled"),
   labelGatedTrigger("github.pull_request.unlabeled"),
-  authoredTrigger("github.pull_request_review.submitted"),
-  authoredTrigger("github.pull_request_review_comment.created"),
-  authoredTrigger("github.pull_request_review_comment.edited"),
+  authoredReplyTrigger("github.pull_request_review.submitted"),
+  authoredReplyTrigger("github.pull_request_review_comment.created"),
+  authoredReplyTrigger("github.pull_request_review_comment.edited"),
   external_exports.strictObject({
     kind: external_exports.literal("github.push"),
     /**
@@ -40581,8 +40606,8 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
   labelGatedTrigger("github.discussion.unanswered"),
   labelGatedTrigger("github.discussion.labeled"),
   labelGatedTrigger("github.discussion.unlabeled"),
-  authoredTrigger("github.discussion_comment.created"),
-  authoredTrigger("github.discussion_comment.edited")
+  authoredReplyTrigger("github.discussion_comment.created"),
+  authoredReplyTrigger("github.discussion_comment.edited")
 ]);
 var taskTriggerKindValues = [
   "github.issue.opened",
@@ -40687,6 +40712,12 @@ var taskBundleV1Schema = external_exports.strictObject({
   effects: external_exports.array(taskEffectKindV1Schema).max(taskEffectKindV1Schema.options.length),
   /** Absent when no declared effect has options, so such bundles hash as before. */
   effectOptions: taskEffectOptionsMapV1Schema.optional(),
+  /**
+   * Check out the triggering pull request's head instead of the commit GitHub
+   * supplies (a merge preview), so commits build on the branch they push to.
+   * Opt-in, and only for tasks with a pull request trigger.
+   */
+  checkout: external_exports.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
   limits: taskLimitsV1Schema,
   /**
@@ -40701,6 +40732,9 @@ var taskBundleV1Schema = external_exports.strictObject({
    */
   draft: external_exports.literal(true).optional()
 }).superRefine((bundle, context) => {
+  if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  }
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
       context.addIssue({ code: "custom", path: [key], message: `${key} must be unique` });
