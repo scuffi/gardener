@@ -21,9 +21,9 @@ minimumReleaseAgeExclude:
   - miniflare
   - wrangler
   - '@cloudflare/vite-plugin@1.54.4 || 1.54.6 || 1.54.7'
-  - vitest@5.0.0 || 5.0.1 || 5.0.2
-  - '@vitest/mocker@5.0.0 || 5.0.1 || 5.0.2'
-  - '@vitest/spy@5.0.0 || 5.0.1 || 5.0.2'
+  - vitest@5.0.0 || 5.0.1 || 5.0.2 || 5.0.3
+  - '@vitest/mocker@5.0.0 || 5.0.1 || 5.0.2 || 5.0.3'
+  - '@vitest/spy@5.0.0 || 5.0.1 || 5.0.2 || 5.0.3'
   - jose@6.2.11
   - zod@4.6.1 || 4.6.2 || 4.6.5
   - vite@8.3.0
