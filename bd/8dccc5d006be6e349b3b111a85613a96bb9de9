@@ -1,0 +1,51 @@
+apps/gardener/src/task-runtime/action-index.ts
+  s_de0b486c128948::t_ae0b365046d05d 1-77
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_de0b486c128948::t_a0937752578805 13,33,259-263,308,339-355,375,389,395-483
+apps/gardener/src/task-runtime/flue-harness.ts
+  s_de0b486c128948::t_f6d7478137f202 55-80,94,111-112,114,204-217
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_b43f726cbeb348 119-127
+apps/gardener/src/task-runtime/runner-tool-facade.ts
+  s_de0b486c128948::t_ec2ab21ec5a872 13-18,24,39-41,76-94
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_fe2b5d9a600298 38,70-85,125-133,163-170,203-300,356-359,474-477,519,526-529,559-562,690,773-774,781,802,812,814,817-818,823,825-826,1008-1013,1041-1045,1047,1051,1054-1056,1058-1077,1201,1203,1267,1275,1279,1283,1338-1340
+apps/gardener/src/task-runtime/task-completion.ts
+  s_de0b486c128948::t_22aca3a831b90a 1-324
+apps/gardener/test/action-index.test.ts
+  s_de0b486c128948::t_d51457dac88c44 1-69
+apps/gardener/test/memory-storage.ts
+  s_de0b486c128948::t_eba3c4a1eeb3f1 1-24
+apps/gardener/test/task-completion.test.ts
+  s_de0b486c128948::t_70b14aad371415 1-191
+apps/gardener/test/task-flue-agent.test.ts
+  s_de0b486c128948::t_3bbd4f3060014b 6,24,100-103,108-110,285,287-293,417,423,425-428,430-437,440-469,478-481,499-522
+apps/gardener/test/task-flue-harness-read.test.ts
+  s_de0b486c128948::t_51853be52f2827 112-140
+apps/gardener/test/task-session-one-way.test.ts
+  s_de0b486c128948::t_b9607c12ae34af 1-39
+bridges/github/plan/action.yml
+  s_de0b486c128948::t_67e70346bf46a7 18-20
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_194d95b2a11ebd 47397-47398,47420,47425,47433,47461-47464,47466,47474-47477
+packages/runner/src/session.ts
+  s_de0b486c128948::t_a63162e8a0b88e 24-25,28-36,60,66,74,105-111,113,121-126
+packages/runner/test/session.test.ts
+  s_de0b486c128948::t_bb6bc956b350fd 112-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bd8dccc5d006be6e349b3b111a85613a96bb9de9",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
