@@ -3,6 +3,25 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.10 (2026-10-01)
+
+- `authors` can be a list of exact GitHub logins, optionally with `maintainers`, such as
+  `[maintainers, "devin-ai-integration[bot]"]`, so a task can respond to a review bot. Logins
+  match case-insensitively. Quote `[bot]` logins inside a bracketed YAML list.
+- New `opened-by` trigger filter: exact logins of who opened the issue, pull request or discussion,
+  such as `["github-actions[bot]"]` for pull requests Gardener opened. It works on comment, review,
+  label and state triggers, and the generated workflow prefilters it.
+- New top-level `checkout: pull-request-head`, so a task can push a commit onto an existing pull
+  request's branch. Such tasks run one at a time per pull request.
+- Together these let a task answer reviews on its own pull requests in rounds: fix what the review
+  found, push one commit, reply, and stop after a set number of rounds. A review starts a run only
+  once the pull request's merge ref contains the task's workflow, so update the branch of a pull
+  request opened before the task was added.
+- `init` and `generate` write `.gardener/SKILL.md`, a guide to the task format for coding agents,
+  matching the CLI's version.
+- Upgrading: deploy the runtime first (`gardener upgrade` does), then commit and push the upgraded
+  repository. An older runtime refuses tasks that use the new fields.
+
 ## v0.1.9 (2026-10-01)
 
 - Long runs no longer fail with "Subrequest depth limit exceeded". The task agent now pushes its
