@@ -17,7 +17,7 @@ Get the CLI at a release tag:
 
 ```bash
 git clone https://github.com/scuffi/gardener && cd gardener
-git checkout v0.1.8
+git checkout v0.1.9
 pnpm install
 ```
 
@@ -85,7 +85,7 @@ Writing and checking a task needs only Node.js 24+ and the published CLI, with n
 ```bash
 cd /path/to/my-repo
 mkdir -p .gardener/tasks/my-task   # write .gardener/tasks/my-task/TASK.md
-npx @scuffi/gardener@0.1.8 generate
+npx @scuffi/gardener@0.1.9 generate
 ```
 
 `generate` validates every task, then writes the lock file and one workflow per task. Commit them
@@ -123,11 +123,11 @@ targets. A run that ends in `budget-exceeded` needs higher limits or narrower in
 When a new tag is released, upgrade every connected repository to it:
 
 ```bash
-cd gardener && git fetch --tags && git checkout v0.1.8 && pnpm install
+cd gardener && git fetch --tags && git checkout v0.1.9 && pnpm install
 
 pnpm gardener -- upgrade --workspace internal --repository-root "$REPO" --source-root "$PWD"
 
-cd "$REPO" && git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.8" && git push
+cd "$REPO" && git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.9" && git push
 ```
 
 `upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned

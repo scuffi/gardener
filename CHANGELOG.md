@@ -3,6 +3,21 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.9 (2026-10-01)
+
+- Long runs no longer fail with "Subrequest depth limit exceeded". The task agent now pushes its
+  result and settlement to the run's session. The session no longer polls the agent while serving
+  the agent's tool calls, a loop that deepened the request chain on every tool call until Cloudflare
+  refused it. If a pushed settlement is lost, the session checks on the agent itself after three
+  quiet minutes.
+- A run's tool calls no longer load every earlier result into memory, which could exhaust the
+  runtime's memory on long runs with large command output.
+- The plan step's `max-reconnects` now counts only consecutive failed reconnects. The count starts
+  again after a connection that stayed up for 30 seconds, and a run allows 50 reconnects in total.
+- Upgrading: deploy the runtime first (`gardener upgrade` does), then commit and push the upgraded
+  repository. The runtime fix applies as soon as it is deployed, even before a repository moves to
+  this release.
+
 ## v0.1.8 (2026-09-30)
 
 - Tasks set their own limits. Gardener no longer caps `max-turns`, `max-tool-calls`, `input-tokens`
