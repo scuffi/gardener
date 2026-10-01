@@ -14,7 +14,8 @@ import {
   SYNC_WORKFLOW,
   upgradeProjectRelease,
 } from "../src/project";
-import { operationKindValues } from "@gardener/contracts";
+import { operationKindValues, taskToolV1Schema, taskTriggerKindValues } from "@gardener/contracts";
+import { renderTaskGuide, TASK_GUIDE_PATH } from "../src/task-guide";
 import { compileTaskSource, DEFAULT_TASK_MODEL, effectFamilyGlobValues, expandEffectSelectors, modelWarning } from "../src/task-authoring";
 
 const TASK = `---
@@ -302,6 +303,7 @@ describe("local Gardener project", () => {
     const initialized = await initializeProject({ repositoryRoot: root, demos: true });
     expect(initialized.created).toEqual([
       ".gardener/gardener.json",
+      ".gardener/SKILL.md",
       ".gardener/tasks/bug-intake/TASK.md",
       ".gardener/tasks/docs-helper/TASK.md",
     ]);
@@ -716,5 +718,41 @@ describe("sync workflow and staleness", () => {
     await mkdir(join(root, ".gardener/tasks/sync"), { recursive: true });
     await writeFile(join(root, ".gardener/tasks/sync/TASK.md"), TASK.replace(/^id: .*$/m, "id: sync"));
     await expect(buildProject({ repositoryRoot: root })).rejects.toThrow(/would overwrite \.github\/workflows\/gardener-sync\.yml/);
+  });
+});
+
+describe("task-writing guide", () => {
+  it("is written by init, kept out of the checked files, and restored by generate", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-guide-"));
+    await initializeProject({ repositoryRoot: root, demos: true });
+    const path = join(root, TASK_GUIDE_PATH);
+    const guide = await readFile(path, "utf8");
+    const { version } = JSON.parse(await readFile(join(process.cwd(), "package.json"), "utf8")) as { version: string };
+    expect(guide).toContain(`npx @scuffi/gardener@${version} generate`);
+    expect(guide).not.toContain("{{version}}");
+
+    expect((await buildProject({ repositoryRoot: root })).guidePath).toBeUndefined();
+    await writeFile(path, "edited\n");
+    // A stale guide never fails the pull request check or the sync.
+    expect(await staleProjectFiles(await planProject({ repositoryRoot: root }))).toEqual([]);
+    expect((await buildProject({ repositoryRoot: root })).guidePath).toBe(path);
+    expect(await readFile(path, "utf8")).toBe(guide);
+  });
+
+  it("names every trigger, tool and effect, and its template compiles", async () => {
+    const guide = await renderTaskGuide();
+    const rows = guide.split("\n").filter((line) => line.startsWith("|"));
+    for (const kind of taskTriggerKindValues) {
+      const family = kind.slice(0, kind.lastIndexOf("."));
+      const action = kind.slice(kind.lastIndexOf(".") + 1);
+      expect(rows.some((row) => row.includes(`\`${family}.`)
+        && (row.includes(`\`${kind}\``) || row.includes(`\`.${action}\``))), kind).toBe(true);
+    }
+    for (const tool of taskToolV1Schema.options) expect(guide, tool).toContain(`\`${tool}\``);
+    for (const kind of operationKindValues) expect(guide, kind).toContain(`\`${kind}\``);
+
+    const template = /## Template\n\n```markdown\n([\s\S]*?)\n```\n/.exec(guide)?.[1];
+    expect(template).toBeDefined();
+    await expect(compileTaskSource(`${template}\n`, "SKILL.md")).resolves.toBeDefined();
   });
 });

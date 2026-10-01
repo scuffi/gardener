@@ -89,7 +89,9 @@ npx @scuffi/gardener@0.1.9 generate
 ```
 
 `generate` validates every task, then writes the lock file and one workflow per task. Commit them
-and open a pull request. When it merges, the **Gardener · Sync tasks** workflow enrolls the task,
+and open a pull request. If a coding agent writes the task, point it at `.gardener/SKILL.md`:
+`init` creates it and `generate` keeps it current, and it covers the task format, every trigger,
+tool and effect, and this workflow. When it merges, the **Gardener · Sync tasks** workflow enrolls the task,
 with no operator step. Use the same CLI version as the repository's pinned release: if your
 generated files don't match what that release produces, the pull request's **Check tasks** check
 fails and asks you to regenerate. Merged anyway, the sync fails the same way, and the previous

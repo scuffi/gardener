@@ -27,7 +27,7 @@
     "yaml": "2.9.1"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/cli.ts --bundle --platform=node --format=esm --external:yaml --sourcemap --outfile=dist/cli.js && esbuild src/sync-main.ts --bundle --platform=node --target=node24 --format=cjs --outfile=../../bridges/github/sync/dist/index.cjs",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/cli.ts --bundle --platform=node --format=esm --external:yaml --loader:.md=text --sourcemap --outfile=dist/cli.js && esbuild src/sync-main.ts --bundle --platform=node --target=node24 --format=cjs --loader:.md=text --outfile=../../bridges/github/sync/dist/index.cjs",
     "prepack": "node scripts/prepare-package.mjs --clean && pnpm --filter @gardener/app build && node ../../scripts/check-actions-runtime.mjs && node scripts/prepare-package.mjs && pnpm build",
     "typecheck": "tsc -p tsconfig.json",
     "test": "pnpm build && vitest run"

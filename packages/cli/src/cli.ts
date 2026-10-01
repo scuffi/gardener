@@ -73,7 +73,8 @@ Options:
 const GENERATE_HELP = `gardener generate
 
 Compiles .gardener/tasks/*/TASK.md into canonical TaskBundleV1 records, writes the
-reproducible lock file, and generates one GitHub caller workflow per task.
+reproducible lock file, and generates one GitHub caller workflow per task. Also refreshes
+.gardener/SKILL.md, the guide coding agents read before writing tasks.
 
 Options:
   --repository-root <path>     Customer repository (defaults to current directory)
@@ -364,10 +365,12 @@ function printInit(result: { created: string[]; preserved: string[] }): void {
 
 function printBuild(result: {
   lockPath: string;
+  guidePath?: string;
   tasks: Array<{ taskId: string; bundleHash: string; workflow: string }>;
   warnings: string[];
 }): void {
   console.log(`wrote ${result.lockPath}`);
+  if (result.guidePath) console.log(`wrote ${result.guidePath}`);
   for (const task of result.tasks) console.log(`${task.taskId} ${task.bundleHash} ${task.workflow}`);
   printBuildWarnings(result);
 }

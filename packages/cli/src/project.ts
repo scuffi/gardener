@@ -21,6 +21,7 @@ import {
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
 import { compileTaskSource, modelWarning, type CompiledTask } from "./task-authoring.js";
+import { renderTaskGuide, TASK_GUIDE_PATH } from "./task-guide.js";
 
 export const DEFAULT_WORKFLOW_REF =
   "scuffi/gardener/.github/workflows/gardener-task.yml@de534dff93a56527b45db8f46aedac72c8911da0";
@@ -52,6 +53,8 @@ interface BuiltTask extends CompiledTask {
 export interface ProjectBuildResult {
   lockPath: string;
   tasks: Array<{ taskId: string; bundleHash: string; workflow: string }>;
+  /** The task-writing skill, when this build created or changed it. */
+  guidePath?: string;
   /** Operator-facing warnings. Present but empty when nothing needs attention. */
   warnings: string[];
 }
@@ -153,6 +156,7 @@ export async function initializeProject(input: {
       target: GITHUB_ACTIONS_TARGET,
       release: { workflowRef: DEFAULT_WORKFLOW_REF },
     }, null, 2)}\n`],
+    [TASK_GUIDE_PATH, await renderTaskGuide()],
   ]);
   if (input.demos) {
     files.set(".gardener/tasks/bug-intake/TASK.md", BUG_INTAKE_TASK);
@@ -397,9 +401,16 @@ export async function buildProject(input: { repositoryRoot: string }): Promise<P
     }
     await atomicWrite(output, file.content);
   }
+  // Not part of the plan: a stale guide must never fail the pull request
+  // check or the sync, it is refreshed whenever anyone generates.
+  const guidePath = join(root, TASK_GUIDE_PATH);
+  const guide = await renderTaskGuide();
+  const guideChanged = await readFile(guidePath, "utf8").catch(() => null) !== guide;
+  if (guideChanged) await atomicWrite(guidePath, guide);
   return {
     warnings: plan.warnings,
     lockPath,
+    ...(guideChanged ? { guidePath } : {}),
     tasks: plan.tasks.map(({ taskId, bundleHash, workflow }) => ({ taskId, bundleHash, workflow })),
   };
 }

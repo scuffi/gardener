@@ -101,6 +101,9 @@ behaviour, or version information, post one comment asking for exactly what is m
 Save it as `.gardener/tasks/bug-intake/TASK.md` and run `pnpm gardener -- generate`, then
 `pnpm gardener -- connect`.
 
+Coding agents can read `.gardener/SKILL.md`, which `init` and `generate` write: a complete guide to
+the task format, in the CLI's own version.
+
 Tasks can respond to 26 kinds of issue, pull request, discussion, push, schedule, and manual
 events. They can use 29 kinds of GitHub operation, including:
 
