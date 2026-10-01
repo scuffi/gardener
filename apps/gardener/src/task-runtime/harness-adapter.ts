@@ -116,7 +116,15 @@ export async function createTaskHarnessRequest(input: unknown, repositoryObserva
   };
 }
 
-/** Runtime walking skeleton: canonical request -> harness -> bound task outcome. */
+/**
+ * Runtime walking skeleton: canonical request -> harness -> bound task outcome.
+ *
+ * Never use this inside the runner session. Its start-then-read waits on the
+ * agent while the agent calls back into the session for tools, which
+ * deepens the request chain on every round trip until Cloudflare refuses the
+ * next call ("Subrequest depth limit exceeded"). The session waits for the
+ * agent's pushed completion instead (task-completion.ts).
+ */
 export class TaskHarnessRuntime {
   constructor(private readonly harness: AgentHarness) {}
 

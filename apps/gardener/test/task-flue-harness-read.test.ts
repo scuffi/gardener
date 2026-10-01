@@ -109,4 +109,33 @@ describe("Flue task harness read", () => {
       message: "dispatch(sub_1) failed: Gardener native profile permits at most 12 model turns",
     });
   });
+  describe("peek", () => {
+    it("treats a timed-out look as still running and never aborts the run", async () => {
+      const control = new AbortController();
+      control.abort(new DOMException("peek", "TimeoutError"));
+      flue.read.mockRejectedValue(control.signal.reason);
+      await expect(new FlueTaskHarness().peek(submission, control.signal)).resolves.toBeNull();
+      expect(flue.abort).not.toHaveBeenCalled();
+    });
+
+    it("treats a failed look as unknown rather than a failed run", async () => {
+      flue.read.mockRejectedValue(new Error("D1_ERROR: Subrequest depth limit exceeded."));
+      await expect(new FlueTaskHarness().peek(submission, new AbortController().signal)).resolves.toBeNull();
+      expect(flue.abort).not.toHaveBeenCalled();
+    });
+
+    it("treats an unreadable settled reply as unknown, not a reconnect", async () => {
+      flue.read.mockResolvedValue({ usage: undefined });
+      await expect(new FlueTaskHarness().peek(submission, new AbortController().signal)).resolves.toBeNull();
+    });
+
+    it("returns a settlement the agent's notice missed", async () => {
+      flue.read.mockRejectedValue(new flue.AgentRunError({ outcome: "aborted", submissionId: "sub_1" }));
+      await expect(new FlueTaskHarness().peek(submission, new AbortController().signal))
+        .resolves.toMatchObject({ status: "cancelled" });
+      flue.read.mockResolvedValue({ data: { taskOutcome: [{ ok: true }] }, usage: undefined });
+      await expect(new FlueTaskHarness().peek(submission, new AbortController().signal))
+        .resolves.toMatchObject({ status: "completed" });
+    });
+  });
 });

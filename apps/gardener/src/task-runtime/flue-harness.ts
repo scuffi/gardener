@@ -52,7 +52,32 @@ export class FlueTaskHarness implements AgentHarness {
     throw new Error("Canonical task v1 permits one Flue submission per run");
   }
 
-  async read(submission: HarnessSubmission, options?: HarnessReadOptions): Promise<HarnessOutcome> {
+  /**
+   * One bounded look at the submission, for when the agent's pushed
+   * settlement may have been lost. Returns null while the run is still going
+   * or when the look itself fails, and never aborts the run. The session calls
+   * this rarely and only while no agent call is in flight, so it cannot
+   * ratchet the request depth the way a continuous read did. The caller's
+   * signal ends the look early, for example when the agent calls in.
+   */
+  async peek(submission: HarnessSubmission, signal: AbortSignal): Promise<HarnessOutcome | null> {
+    try {
+      return await this.read(submission, { signal }, { abortOnDeadline: false });
+    } catch (error) {
+      if (error instanceof PeekTimeout || error instanceof ReadInterrupted) return null;
+      // Anything else, for example a settled reply without a task outcome, is
+      // also "unknown": throwing would make the session reconnect and peek
+      // again until its reconnects ran out, instead of reaching its deadline.
+      console.error("Gardener task peek failed", describeReadFailure(error));
+      return null;
+    }
+  }
+
+  async read(
+    submission: HarnessSubmission,
+    options?: HarnessReadOptions,
+    behaviour: { abortOnDeadline: boolean } = { abortOnDeadline: true },
+  ): Promise<HarnessOutcome> {
     assertHarnessSubmission(submission, { id: "flue", adapterVersion: HARNESS_ADAPTER_VERSIONS.flue });
     const handle = init(GardenerTaskFlueAgent, { id: submission.runId });
     let reply: AgentReply;
@@ -66,6 +91,7 @@ export class FlueTaskHarness implements AgentHarness {
       // newer runTask is waiting on it, so only this observation stops.
       if (options?.signal?.aborted && options.signal.reason instanceof SupersededReadError) throw options.signal.reason;
       if (isSignalAbort(error, options?.signal)) {
+        if (!behaviour.abortOnDeadline) throw new PeekTimeout();
         await handle.abort().catch(() => undefined);
         return {
           schemaVersion: "gardener.harness.outcome/v1",
@@ -82,11 +108,10 @@ export class FlueTaskHarness implements AgentHarness {
       if (!(error instanceof AgentRunError)) {
         // The agent did not settle: waiting on it failed, for example a failed
         // long-poll. That says nothing about the task, so it must not become a
-        // failed run. Propagate so the runner reconnects and resumes the wait
-        // from a fresh request, which is how the D1 "subrequest depth" failures
-        // seen mid-run recover.
+        // failed run. Propagate so the caller can try again later; a peek
+        // treats it as "not settled yet".
         console.error("Gardener task Flue read interrupted", describeReadFailure(error));
-        throw new Error("Waiting for the task agent was interrupted; reconnect to resume", { cause: error });
+        throw new ReadInterrupted(error);
       }
       console.error("Gardener task Flue read failed", describeReadFailure(error));
       const cancelled = error instanceof AgentRunError && error.outcome === "aborted";
@@ -173,6 +198,20 @@ export class SupersededReadError extends Error {
   constructor() {
     super("A reconnect superseded this wait for the task agent");
     this.name = "SupersededReadError";
+  }
+}
+
+class PeekTimeout extends Error {
+  constructor() {
+    super("The look at the task agent timed out");
+    this.name = "PeekTimeout";
+  }
+}
+
+class ReadInterrupted extends Error {
+  constructor(cause: unknown) {
+    super("Waiting for the task agent was interrupted; reconnect to resume", { cause });
+    this.name = "ReadInterrupted";
   }
 }
 

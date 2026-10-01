@@ -3,6 +3,7 @@ import { taskEffectProposalV1Schema, taskLimitsV1Schema } from "@gardener/contra
 import type { HarnessRequest } from "../src/harness";
 
 const flue = vi.hoisted(() => ({
+  observe: vi.fn(),
   useAgentFinish: vi.fn(),
   useDataWriter: vi.fn(),
   useInitialData: vi.fn(),
@@ -20,6 +21,7 @@ import {
   GardenerTaskFlueAgent,
   installGardenerTaskToolFacade,
   MAX_TASK_RUNTIME_SECONDS,
+  taskSettlementNotice,
 } from "../src/task-runtime/flue-agent";
 
 function request(): HarnessRequest {
@@ -95,11 +97,17 @@ describe("canonical task Flue agent", () => {
     duplicate: false,
   }));
 
+  /** Stand in for the session's one-way completion channel. */
+  const recordTaskCandidate = vi.fn(async () => ({ duplicate: false }));
+  const confirmTaskResult = vi.fn(async () => ({ duplicate: false }));
+
   beforeEach(() => {
     vi.clearAllMocks();
     proposals = [];
     flue.useDataWriter.mockReturnValue(writeTaskOutcome);
-    installGardenerTaskToolFacade({ invoke, proposeEffect, listProposals, captureRepository } as never);
+    installGardenerTaskToolFacade({
+      invoke, proposeEffect, listProposals, captureRepository, recordTaskCandidate, confirmTaskResult,
+    } as never);
   });
 
   it("mounts propose_effect, finish_task, and the durable runner tools", async () => {
@@ -274,7 +282,15 @@ describe("canonical task Flue agent", () => {
         summary: "README inspected.",
         observationsJson: JSON.stringify([{ kind: "repository", summary: "README.md was read.", paths: ["README.md"] }]),
       },
+      toolCallId: "call-finish",
     })).resolves.toEqual({ output: { accepted: true, proposedEffects: 1, capturedFiles: 0 }, terminate: true });
+    // The session completes the run from this record, never by reading the agent.
+    expect(recordTaskCandidate).toHaveBeenCalledWith({
+      runId: value.runId,
+      requestId: value.requestId,
+      toolCallId: "call-finish",
+      outcome: writeTaskOutcome.mock.calls[0]![0],
+    });
 
     expect(writeTaskOutcome).toHaveBeenCalledWith({
       schemaVersion: "gardener.task-outcome/v1",
@@ -398,22 +414,59 @@ describe("canonical task Flue agent", () => {
     expect(writeTaskOutcome).not.toHaveBeenCalled();
   });
 
-  it("requires exactly one terminal and no longer demands a particular repository call", () => {
+  it("requires exactly one terminal and no longer demands a particular repository call", async () => {
     const value = request();
     flue.useInitialData.mockReturnValue({ request: value });
     GardenerTaskFlueAgent();
     const finish = flue.useAgentFinish.mock.calls.at(-1)![0];
     const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2 };
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    expect(() => finish({ response: { toolCalls: [{ tool: "finish_task", isError: false }], usage } })).not.toThrow();
-    expect(() => finish({ response: { toolCalls: [{ tool: "propose_effect", isError: false }], usage } }))
-      .toThrow(/task_completed_without_terminal_outcome/);
-    expect(() => finish({
+    await expect(finish({ response: { toolCalls: [{ tool: "finish_task", isError: false }], usage } })).resolves.toBeUndefined();
+    await expect(finish({ response: { toolCalls: [{ tool: "propose_effect", isError: false }], usage } }))
+      .rejects.toThrow(/task_completed_without_terminal_outcome/);
+    await expect(finish({
       response: { toolCalls: [{ tool: "finish_task", isError: false }, { tool: "finish_task", isError: false }], usage },
-    })).toThrow(/task_has_multiple_terminal_outcomes/);
+    })).rejects.toThrow(/task_has_multiple_terminal_outcomes/);
+    // Only the passing evaluation confirms the result to the session.
+    expect(confirmTaskResult).toHaveBeenCalledTimes(1);
+    expect(confirmTaskResult).toHaveBeenCalledWith({
+      runId: value.runId,
+      requestId: value.requestId,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, turns: 1, toolCalls: 1, model: value.model.id },
+    });
   });
 
-  it("bounds input per request, not summed across turns, and output per run", () => {
+  it("retries the confirmation and fails the run visibly if the session stays unreachable", async () => {
+    vi.useFakeTimers();
+    try {
+      const value = request();
+      flue.useInitialData.mockReturnValue({ request: value });
+      GardenerTaskFlueAgent();
+      const finish = flue.useAgentFinish.mock.calls.at(-1)![0];
+      const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2 };
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      confirmTaskResult.mockRejectedValueOnce(new Error("session overloaded"));
+      const recovered = finish({ response: { toolCalls: [{ tool: "finish_task", isError: false }], usage } });
+      await vi.runAllTimersAsync();
+      await expect(recovered).resolves.toBeUndefined();
+      expect(confirmTaskResult).toHaveBeenCalledTimes(2);
+
+      confirmTaskResult.mockClear();
+      confirmTaskResult.mockRejectedValue(new Error("session unavailable"));
+      const failed = finish({ response: { toolCalls: [{ tool: "finish_task", isError: false }], usage } });
+      const settled = expect(failed).rejects.toThrow(/session unavailable/);
+      await vi.runAllTimersAsync();
+      await settled;
+      expect(confirmTaskResult).toHaveBeenCalledTimes(3);
+    } finally {
+      confirmTaskResult.mockReset();
+      confirmTaskResult.mockResolvedValue({ duplicate: false });
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds input per request, not summed across turns, and output per run", async () => {
     const value = request();
     flue.useInitialData.mockReturnValue({ request: value });
     GardenerTaskFlueAgent();
@@ -422,10 +475,10 @@ describe("canonical task Flue agent", () => {
     const toolCalls = [{ tool: "finish_task", isError: false }];
     const { maxInputTokens, maxOutputTokens } = value.budget;
     // Every turn resends the conversation, so the run's summed input may exceed the per-request limit.
-    expect(() => finish({ response: { toolCalls, usage: { input: maxInputTokens * 3, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } }))
-      .not.toThrow();
-    expect(() => finish({ response: { toolCalls, usage: { input: 1, output: maxOutputTokens + 1, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } }))
-      .toThrow(/task_model_token_budget_exceeded/);
+    await expect(finish({ response: { toolCalls, usage: { input: maxInputTokens * 3, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } }))
+      .resolves.toBeUndefined();
+    await expect(finish({ response: { toolCalls, usage: { input: 1, output: maxOutputTokens + 1, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } } }))
+      .rejects.toThrow(/task_model_token_budget_exceeded/);
     expect(warn).toHaveBeenCalledWith("gardener task finish refused", { taskId: expect.any(String), reason: "task_model_token_budget_exceeded" });
     warn.mockRestore();
   });
@@ -442,5 +495,29 @@ describe("canonical task Flue agent", () => {
     flue.useInitialData.mockReturnValue({ request: request() });
     installGardenerTaskToolFacade(undefined);
     expect(() => GardenerTaskFlueAgent()).toThrow(/runner tool facade is unavailable/);
+  });
+
+  it("builds the session notice from a task agent's settlement event", () => {
+    // Shaped like Flue 2.0.3's decorated `submission_settled` observation.
+    const event = {
+      v: 3, eventIndex: 7, timestamp: "2026-10-01T10:25:55.000Z",
+      type: "submission_settled",
+      agentName: "gardener-task-harness",
+      instanceId: "repo-1-run-2-attempt-1-plan",
+      submissionId: "sub_1",
+      outcome: "failed",
+      error: { name: "Error", type: "operation_failed", message: "dispatch(sub_1) failed", meta: { reason: "Gardener native profile permits at most 12 model turns" } },
+    };
+    expect(taskSettlementNotice(event)).toEqual({
+      runId: "repo-1-run-2-attempt-1-plan",
+      submissionId: "sub_1",
+      outcome: "failed",
+      error: "Error\noperation_failed\ndispatch(sub_1) failed\nGardener native profile permits at most 12 model turns",
+    });
+    expect(taskSettlementNotice({ ...event, outcome: "aborted", error: undefined }))
+      .toEqual({ runId: "repo-1-run-2-attempt-1-plan", submissionId: "sub_1", outcome: "aborted" });
+    expect(taskSettlementNotice({ ...event, agentName: "another-agent" })).toBe("ignored");
+    expect(taskSettlementNotice({ ...event, type: "submission_recovery" })).toBe("ignored");
+    expect(taskSettlementNotice({ ...event, instanceId: undefined })).toBe("unaddressed");
   });
 });

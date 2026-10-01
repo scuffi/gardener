@@ -109,3 +109,51 @@ describe("planning session cancellation", () => {
     vi.useRealTimers();
   });
 });
+
+describe("planning session reconnects", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function failingSession(healthyConnectionMs: number, maxReconnects = 2) {
+    rpc.session.run.mockImplementation(() => Promise.reject(new Error("socket closed")));
+    return runPlanningSession({
+      harnessUrl: "https://gardener.example",
+      agentHash: "c".repeat(64),
+      maxReconnects,
+      healthyConnectionMs,
+      executor: {
+        cursor: () => ({ nextClientSequence: 1, lastCompletedServerSequence: 0 }),
+      } as unknown as PlanningShellExecutor,
+      getOidcToken: async () => "oidc-token",
+    });
+  }
+
+  it("counts only consecutive failures against max-reconnects", async () => {
+    vi.useFakeTimers();
+    try {
+      const running = failingSession(60_000);
+      const rejected = expect(running).rejects.toThrow("Gardener session failed after 3 consecutive connection attempts");
+      await vi.runAllTimersAsync();
+      await rejected;
+      expect(rpc.root.authenticate).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts a fresh count after a healthy connection, up to a total cap", async () => {
+    vi.useFakeTimers();
+    try {
+      // Every connection resumes and counts as healthy, so only the total cap ends the run.
+      const running = failingSession(0);
+      const rejected = expect(running).rejects.toThrow("Gardener session failed after 50 reconnects");
+      await vi.runAllTimersAsync();
+      await rejected;
+      expect(rpc.root.authenticate).toHaveBeenCalledTimes(51);
+    } finally {
+      vi.useRealTimers();
+      rpc.session.run.mockImplementation(() => new Promise(() => undefined));
+    }
+  });
+});

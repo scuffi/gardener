@@ -10,6 +10,7 @@ import {
   type TaskOutcomeV1,
 } from "@gardener/contracts";
 import {
+  observe,
   useAgentFinish,
   useDataWriter,
   useInitialData,
@@ -29,6 +30,7 @@ import { assertHarnessRequest, expectedHarnessBinding } from "../harness/validat
 import { boundedCloudflareModel, installBoundedCloudflareProvider } from "../harness/flue/bounded-cloudflare-provider";
 import { taskModelBinding } from "../harness/flue/gateway-binding";
 import { RunnerSessionToolFacade, type TaskRuntimeFacade } from "./runner-tool-facade";
+import type { TaskSettlementNoticeV1 } from "./task-completion";
 
 const TASK_TERMINAL_TOOL = "finish_task";
 const TASK_PROPOSE_TOOL = "propose_effect";
@@ -254,6 +256,11 @@ export function GardenerTaskFlueAgent(): string {
         ...(capture === undefined ? {} : { captureId: capture.captureId, capturedFiles: capture.fileCount }),
       });
       writeTaskOutcome(outcome);
+      // The session completes the run from this record once the finish hook
+      // confirms it; it never reads the agent for it (see task-completion.ts).
+      // A failure here fails the call, and the finish hook then refuses the run.
+      await withSessionRetries("record the task outcome", () =>
+        facade.recordTaskCandidate({ runId: request.runId, requestId: request.requestId, toolCallId, outcome }));
       return {
         output: { accepted: true, proposedEffects: proposedEffects.length, capturedFiles: capture?.fileCount ?? 0 },
         terminate: true,
@@ -298,7 +305,7 @@ export function GardenerTaskFlueAgent(): string {
     });
   }
 
-  useAgentFinish(({ response }) => {
+  useAgentFinish(async ({ response }) => {
     const inputTokens = response.usage.input + response.usage.cacheRead + response.usage.cacheWrite;
     const terminal = response.toolCalls.filter((call) => call.tool === TASK_TERMINAL_TOOL && !call.isError);
     console.log("gardener task finish evaluation", {
@@ -329,6 +336,23 @@ export function GardenerTaskFlueAgent(): string {
     // resent conversation again on every turn. `output-tokens` is a whole-run
     // budget, also enforced by the provider; this is the backstop.
     if (response.usage.output > request.budget.maxOutputTokens) refuse("task_model_token_budget_exceeded");
+    // Every check passed: tell the session the run completed with the outcome
+    // finish_task recorded. Flue awaits this hook, so unlike the settlement
+    // notice below it cannot be lost. If the session stays unreachable this
+    // throws, failing the submission visibly rather than leaving the session
+    // waiting for a result that never arrives.
+    await withSessionRetries("confirm the task result", () => facade.confirmTaskResult({
+      runId: request.runId,
+      requestId: request.requestId,
+      usage: {
+        inputTokens,
+        outputTokens: response.usage.output,
+        totalTokens: response.usage.totalTokens,
+        turns: 1,
+        toolCalls: response.toolCalls.length,
+        model: request.model.id,
+      },
+    }));
   });
 
   return [
@@ -348,7 +372,7 @@ GardenerTaskFlueAgent.initialData = v.object({ request: v.unknown() });
  * The longest runtime a task bundle may declare (`limits.runtimeSeconds` in
  * the contract). Flue's durability timeout is static per agent, so it is set
  * past the longest possible run; each run's own deadline is enforced by
- * Gardener (the bounded provider, the session's read signal and `runTask`).
+ * Gardener (the bounded provider and the session's deadline in `runTask`).
  * A shorter value here cut off valid runs: it was once 5 minutes while tasks
  * could run for 8.
  */
@@ -362,10 +386,100 @@ export const cloudflare = extend<CloudflareAgentLike, TaskFlueEnv>({
         super(ctx, env);
         taskToolFacade = env.GARDENER_HARNESS_TOOLS ?? new RunnerSessionToolFacade(env.RUNNER_SESSIONS);
         installBoundedCloudflareProvider(taskModelBinding(env));
+        installSettlementNotices();
       }
     };
   },
 });
+
+const SESSION_RETRY_DELAYS_MS = [500, 2_000] as const;
+
+/** A few tries at a session call, for an overloaded or restarting session. */
+async function withSessionRetries<T>(action: string, call: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await call();
+    } catch (error) {
+      const delay = SESSION_RETRY_DELAYS_MS[attempt];
+      console.warn("gardener task session call failed", {
+        action,
+        attempt: attempt + 1,
+        error: error instanceof Error ? error.message.slice(0, 300) : "non-error rejection",
+      });
+      if (delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+let settlementNoticesInstalled = false;
+
+/**
+ * Pushes every settlement of a task submission to its session, so the session
+ * learns that a run failed or was aborted without reading the agent.
+ *
+ * Flue's observers are isolate-wide and are never awaited, so this is
+ * installed once per isolate rather than per agent instance, and a notice can
+ * be lost if the isolate dies before it is sent. The session covers that with
+ * an occasional bounded look at the agent. A completed run does not depend on
+ * this notice at all: the finish hook's confirmation completes it.
+ */
+function installSettlementNotices(): void {
+  if (settlementNoticesInstalled) return;
+  settlementNoticesInstalled = true;
+  observe((event) => {
+    const notice = taskSettlementNotice(event);
+    if (notice === "ignored") return;
+    const facade = taskToolFacade;
+    if (notice === "unaddressed" || !facade) {
+      // Never silent: without this notice every failed run waits for the
+      // session's peek, and that should be visible in the logs.
+      console.warn("gardener task settlement not reported", {
+        reason: notice === "unaddressed" ? "event has no instance id" : "tool facade unavailable",
+      });
+      return;
+    }
+    // Opportunistic: Flue does not await observers, so these retries are best
+    // effort, and the session's peek is the backstop.
+    return withSessionRetries("report the task settlement", () => facade.recordTaskSettlement(notice))
+      .then(() => undefined, () => undefined);
+  });
+}
+
+/**
+ * The session notice for a Flue event: "ignored" for anything but a task
+ * agent's settlement, and "unaddressed" for a settlement without the instance
+ * id that names its run.
+ */
+export function taskSettlementNotice(event: {
+  type: string;
+  agentName?: string | undefined;
+  instanceId?: unknown;
+  submissionId?: unknown;
+  outcome?: unknown;
+  error?: unknown;
+}): TaskSettlementNoticeV1 | "ignored" | "unaddressed" {
+  if (event.type !== "submission_settled") return "ignored";
+  // Observers are isolate-wide; other Flue agents may share the isolate.
+  if (event.agentName !== undefined && event.agentName !== GardenerTaskFlueAgent.agentName) return "ignored";
+  if (typeof event.instanceId !== "string" || typeof event.submissionId !== "string") return "unaddressed";
+  if (event.outcome !== "completed" && event.outcome !== "failed" && event.outcome !== "aborted") return "ignored";
+  const serialized = event.error !== null && typeof event.error === "object"
+    ? event.error as { name?: unknown; type?: unknown; message?: unknown; details?: unknown; meta?: { reason?: unknown } }
+    : undefined;
+  const error = serialized
+    ? [serialized.name, serialized.type, serialized.message, serialized.details, serialized.meta?.reason]
+      .filter((part): part is string => typeof part === "string" && part.length > 0)
+      .join("\n")
+      .slice(0, 2_000)
+    : undefined;
+  return {
+    runId: event.instanceId,
+    submissionId: event.submissionId,
+    outcome: event.outcome,
+    ...(error ? { error } : {}),
+  };
+}
 
 function requireTaskToolFacade(): TaskRuntimeFacade {
   if (!taskToolFacade) throw new Error("Task runner tool facade is unavailable");

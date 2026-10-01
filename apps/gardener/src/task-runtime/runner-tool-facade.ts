@@ -10,12 +10,18 @@ import type {
   TaskPlanFacade,
 } from "./effect-plan";
 import type { TaskRunnerSession } from "./session";
+import type {
+  TaskCandidateInvocationV1,
+  TaskCompletionFacade,
+  TaskResultConfirmationV1,
+  TaskSettlementNoticeV1,
+} from "./task-completion";
 
 /**
  * The complete trusted seam the task agent is given: bounded repository/
  * provider tools plus the durable ordered-proposal channel.
  */
-export type TaskRuntimeFacade = HarnessToolFacade & TaskPlanFacade;
+export type TaskRuntimeFacade = HarnessToolFacade & TaskPlanFacade & TaskCompletionFacade;
 
 /**
  * Narrow view of the session stub used for the plan channel.
@@ -30,6 +36,9 @@ interface TaskSessionPlanStub {
   recordProposal(invocation: TaskEffectProposalInvocationV1): Promise<TaskEffectProposalAckV1>;
   listProposals(runId: string): Promise<unknown>;
   admitCapture(invocation: TaskCaptureAdmissionInvocationV1): Promise<TaskCaptureAdmissionAckV1>;
+  recordTaskCandidate(invocation: TaskCandidateInvocationV1): Promise<{ duplicate: boolean }>;
+  confirmTaskResult(confirmation: TaskResultConfirmationV1): Promise<{ duplicate: boolean }>;
+  recordTaskSettlement(notice: TaskSettlementNoticeV1): Promise<{ duplicate: boolean }>;
 }
 
 /** Trusted Flue-to-session adapter. The model never chooses a session id. */
@@ -62,6 +71,25 @@ export class RunnerSessionToolFacade implements TaskRuntimeFacade {
    */
   async captureRepository(invocation: TaskCaptureAdmissionInvocationV1): Promise<TaskCaptureAdmissionAckV1> {
     return this.planStub(invocation.runId).admitCapture(invocation);
+  }
+
+  /**
+   * The completion channel. The agent pushes its result and settlement to the
+   * session instead of the session reading the agent: a session that waited
+   * on the agent while serving its tool calls ratcheted the request depth on
+   * every round trip. The session checks each push against the submission it
+   * dispatched, and the outcome still goes through the full effect-plan checks.
+   */
+  async recordTaskCandidate(invocation: TaskCandidateInvocationV1): Promise<{ duplicate: boolean }> {
+    return this.planStub(invocation.runId).recordTaskCandidate(invocation);
+  }
+
+  async confirmTaskResult(confirmation: TaskResultConfirmationV1): Promise<{ duplicate: boolean }> {
+    return this.planStub(confirmation.runId).confirmTaskResult(confirmation);
+  }
+
+  async recordTaskSettlement(notice: TaskSettlementNoticeV1): Promise<{ duplicate: boolean }> {
+    return this.planStub(notice.runId).recordTaskSettlement(notice);
   }
 
   private planStub(runId: string): TaskSessionPlanStub {

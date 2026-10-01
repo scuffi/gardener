@@ -15,7 +15,9 @@ inputs:
     required: false
     default: ""
   max-reconnects:
-    description: Maximum Cap'n Web reconnection attempts after the initial connection.
+    description: >-
+      Maximum consecutive Cap'n Web reconnection attempts. The count starts again after a
+      connection that resumed and stayed up for 30 seconds; a run allows 50 reconnects in total.
     required: false
     default: "5"
   github-token:

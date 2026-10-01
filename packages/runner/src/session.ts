@@ -21,7 +21,18 @@ export interface RunPlanningSessionOptions {
   signal?: AbortSignal;
   onReconnect?(attempt: number, error: unknown): void;
   onWarning?(message: string): void;
+  /** How long a resumed connection must last before its failure no longer counts as consecutive. */
+  healthyConnectionMs?: number;
 }
+
+/** A connection that resumed and stayed up this long was healthy; its failure starts a fresh count. */
+const HEALTHY_CONNECTION_MS = 30_000;
+/**
+ * Reconnects allowed over the whole run, however healthy the connections
+ * between them, so a failure that recurs just after the healthy threshold
+ * still ends the run instead of looping until the job's timeout.
+ */
+const TOTAL_RECONNECT_CAP = 50;
 
 class RunnerApi extends RpcTarget implements RunnerCapability {
   constructor(readonly executor: PlanningShellExecutor) {
@@ -46,11 +57,13 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
   const executor = options.executor ?? new PlanningShellExecutor();
   const runner = new RunnerApi(executor);
   let attempt = 0;
+  let totalReconnects = 0;
   let lastError: unknown;
 
   while (attempt <= options.maxReconnects) {
     if (options.signal?.aborted) throw new Error("Gardener planning was cancelled");
     let root: ReturnType<typeof newWebSocketRpcSession<PublicSessionCapability>> | undefined;
+    let resumedAt: number | undefined;
     try {
       const oidcToken = await options.getOidcToken(audience);
       const hello = helloFromOidcToken(oidcToken, options.agentHash, "plan");
@@ -58,6 +71,7 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
       const session = root.authenticate(hello, oidcToken, runner);
       const cursor = executor.cursor();
       await session.resume({ schemaVersion: "gardener.runner.cursor/v1", ...cursor }, runner);
+      resumedAt = Date.now();
       if (options.signal?.aborted) throw new Error("Gardener planning was cancelled before execution");
       let cancellationTimer: ReturnType<typeof setTimeout> | undefined;
       let cancelListener: (() => void) | undefined;
@@ -88,8 +102,15 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
       }
     } catch (error) {
       lastError = error;
-      if (options.signal?.aborted || attempt >= options.maxReconnects) break;
+      // Only consecutive failures count against max-reconnects. A long run can
+      // lose its connection several times for unrelated reasons; each one
+      // that had resumed and stayed up was progress, not a failing session.
+      if (resumedAt !== undefined && Date.now() - resumedAt >= (options.healthyConnectionMs ?? HEALTHY_CONNECTION_MS)) {
+        attempt = 0;
+      }
+      if (options.signal?.aborted || attempt >= options.maxReconnects || totalReconnects >= TOTAL_RECONNECT_CAP) break;
       attempt += 1;
+      totalReconnects += 1;
       options.onReconnect?.(attempt, error);
       await delay(Math.min(5_000, 250 * 2 ** (attempt - 1)), options.signal);
     } finally {
@@ -97,7 +118,12 @@ export async function runPlanningSession(options: RunPlanningSessionOptions): Pr
     }
   }
   if (options.signal?.aborted) throw new Error("Gardener planning was cancelled", { cause: lastError });
-  throw new Error(`Gardener session failed after ${attempt + 1} connection attempts`, { cause: lastError });
+  throw new Error(
+    totalReconnects >= TOTAL_RECONNECT_CAP
+      ? `Gardener session failed after ${TOTAL_RECONNECT_CAP} reconnects`
+      : `Gardener session failed after ${attempt + 1} consecutive connection attempts`,
+    { cause: lastError },
+  );
 }
 
 function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {

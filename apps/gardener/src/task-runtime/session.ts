@@ -35,6 +35,7 @@ import {
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import type { HarnessOutcome, HarnessSubmission, HarnessToolInvocation } from "../harness";
 import type { Env } from "../env";
+import { harnessError } from "../harness/validation";
 import { transportableError } from "./transportable-error";
 import {
   admitProposal,
@@ -66,6 +67,22 @@ import {
   triggerFiltersExclude,
 } from "./harness-adapter";
 import { FlueTaskHarness, SupersededReadError } from "./flue-harness";
+import { ACTION_PREFIX, actionEntries, indexIfFirstAction, listActionSummaries } from "./action-index";
+import {
+  CompletionSignal,
+  SUBMISSION_KEY,
+  completionHarnessOutcome,
+  confirmTaskResult,
+  emptyUsage,
+  readTaskCompletion,
+  recordTaskCandidate,
+  recordTaskSettlement,
+  untilWokenOrTimeout,
+  type TaskCandidateInvocationV1,
+  type TaskResultConfirmationV1,
+  type TaskSettlementNoticeV1,
+  type TaskSubmissionRecord,
+} from "./task-completion";
 import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { proposalAuthorityRefusal } from "./proposal-authority";
@@ -105,7 +122,15 @@ interface AuthenticatedIdentity {
 
 
 
-const ACTION_PREFIX = "action:";
+/** How long the agent may be silent, with no call open, before the session looks at it. */
+const COMPLETION_PEEK_AFTER_MS = 3 * 60_000;
+const COMPLETION_PEEK_TIMEOUT_MS = 20_000;
+/**
+ * Peeks allowed per runTask. Keeping the number of session-to-agent calls
+ * bounded is what keeps the request depth bounded, even if an agent call races
+ * a peek. A reconnect starts a fresh request chain and a fresh allowance.
+ */
+const COMPLETION_PEEKS_PER_WAIT = 8;
 const OIDC_PREFIX = "oidc:";
 /**
  * Trusted repository capture admitted for this run.
@@ -135,6 +160,14 @@ export class TaskRunnerSession extends DurableObject<Env> {
   #instrumentedDb: D1Database | undefined;
   #activeRead: AbortController | undefined;
   #waitGeneration = 0;
+  /** Wakes runTask when the agent pushes a result or settlement. */
+  readonly #completion = new CompletionSignal();
+  /** Agent calls (tools, proposals, completion pushes) currently being served. */
+  #agentCallsInFlight = 0;
+  #lastAgentContactAt = Date.now();
+  #lastPeekAt = 0;
+  /** Ends an in-flight peek as soon as the agent calls in. */
+  #activePeek: AbortController | undefined;
 
   /**
    * Best-effort trace that a wait broke, so a run that exhausts its reconnects
@@ -165,6 +198,104 @@ export class TaskRunnerSession extends DurableObject<Env> {
         // The D1 instrumentation has already logged the failure.
       }
     })());
+  }
+
+  /**
+   * Serves one call from the task agent. The session never calls the agent
+   * while it is serving one: a Durable Object charges its outgoing calls to
+   * its newest incoming request, so a session call made under an agent call
+   * would deepen the chain on every round trip until Cloudflare refuses it.
+   * Tracking these lets runTask look at the agent only while none is open.
+   */
+  async #fromAgent<T>(call: () => Promise<T>): Promise<T> {
+    this.#agentCallsInFlight += 1;
+    this.#lastAgentContactAt = Date.now();
+    this.#activePeek?.abort(new Error("The task agent called in"));
+    try {
+      return await call();
+    } finally {
+      this.#agentCallsInFlight -= 1;
+      this.#lastAgentContactAt = Date.now();
+    }
+  }
+
+  /**
+   * The agent's one-way completion channel (see task-completion.ts). Each push
+   * is checked against the submission this session dispatched and persisted
+   * before runTask is woken. The outcome stays untrusted model output: runTask
+   * builds the effect plan from it through the same checks as before.
+   * Reachable only through the Durable Object binding, never from the runner.
+   */
+  async recordTaskCandidate(invocation: TaskCandidateInvocationV1): Promise<{ duplicate: boolean }> {
+    return this.#fromAgent(() => this.#pushCompletion("candidate", () => recordTaskCandidate(this.ctx.storage, invocation)));
+  }
+
+  async confirmTaskResult(confirmation: TaskResultConfirmationV1): Promise<{ duplicate: boolean }> {
+    return this.#fromAgent(() => this.#pushCompletion("result", () => confirmTaskResult(this.ctx.storage, confirmation)));
+  }
+
+  async recordTaskSettlement(notice: TaskSettlementNoticeV1): Promise<{ duplicate: boolean }> {
+    return this.#fromAgent(() => this.#pushCompletion("settlement", () => recordTaskSettlement(this.ctx.storage, notice)));
+  }
+
+  async #pushCompletion(kind: string, record: () => Promise<{ duplicate: boolean }>): Promise<{ duplicate: boolean }> {
+    try {
+      const recorded = await record();
+      this.#completion.notify();
+      console.log("Gardener task completion recorded", { kind, duplicate: recorded.duplicate });
+      return recorded;
+    } catch (error) {
+      console.warn("Gardener task completion refused", {
+        kind,
+        error: error instanceof Error ? error.message.slice(0, 300) : "non-error rejection",
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Waits for the agent's pushed result or settlement. If the agent has been
+   * silent for a while and no call of its is open, looks at it once, because
+   * the settlement notice is best-effort and a run must not sit until its
+   * deadline when the notice is lost.
+   */
+  async #awaitCompletion(harness: FlueTaskHarness, submission: HarnessSubmission, signal: AbortSignal): Promise<HarnessOutcome> {
+    let peeks = 0;
+    for (;;) {
+      signal.throwIfAborted();
+      // Armed before reading, so a push landing between the two still wakes us.
+      const wait = this.#completion.arm();
+      try {
+        const completion = await readTaskCompletion(this.ctx.storage);
+        if (completion) return completionHarnessOutcome(submission, completion);
+        const quietMs = Date.now() - Math.max(this.#lastAgentContactAt, this.#lastPeekAt);
+        if (this.#agentCallsInFlight === 0 && quietMs >= COMPLETION_PEEK_AFTER_MS && peeks < COMPLETION_PEEKS_PER_WAIT) {
+          peeks += 1;
+          this.#lastPeekAt = Date.now();
+          const peek = new AbortController();
+          this.#activePeek = peek;
+          try {
+            const peeked = await harness.peek(
+              submission,
+              AbortSignal.any([AbortSignal.timeout(COMPLETION_PEEK_TIMEOUT_MS), peek.signal, signal]),
+            );
+            if (peeked) {
+              console.warn("Gardener task settled without a pushed completion", { status: peeked.status });
+              return peeked;
+            }
+          } finally {
+            if (this.#activePeek === peek) this.#activePeek = undefined;
+          }
+          continue;
+        }
+        const nextLookMs = peeks < COMPLETION_PEEKS_PER_WAIT
+          ? Math.max(1_000, COMPLETION_PEEK_AFTER_MS - quietMs)
+          : COMPLETION_PEEK_AFTER_MS;
+        await untilWokenOrTimeout(wait.promise, nextLookMs, signal);
+      } finally {
+        wait.cancel();
+      }
+    }
   }
 
   /** Ends the observation an earlier runTask call opened, if any. */
@@ -222,6 +353,10 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   async invokeHarnessTool(invocation: HarnessToolInvocation): Promise<RunnerActionResultV1> {
+    return this.#fromAgent(() => this.#invokeHarnessTool(invocation));
+  }
+
+  async #invokeHarnessTool(invocation: HarnessToolInvocation): Promise<RunnerActionResultV1> {
     try {
       const result = await this.invokeHarnessToolChecked(invocation);
       if (result.status !== "completed") {
@@ -336,6 +471,10 @@ export class TaskRunnerSession extends DurableObject<Env> {
    * undeclared, or conflicting proposal costs the task no tool calls.
    */
   async recordProposal(input: TaskEffectProposalInvocationV1): Promise<TaskEffectProposalAckV1> {
+    return this.#fromAgent(() => this.#recordProposal(input));
+  }
+
+  async #recordProposal(input: TaskEffectProposalInvocationV1): Promise<TaskEffectProposalAckV1> {
     try {
       return await this.recordProposalChecked(input);
     } catch (error) {
@@ -377,13 +516,17 @@ export class TaskRunnerSession extends DurableObject<Env> {
         proposal,
         digest,
         maxToolCalls: request.bundle.limits.maxToolCalls,
-        recordedToolCalls: async () => (await transaction.list<StoredAction>({ prefix: ACTION_PREFIX })).size,
+        recordedToolCalls: async () => (await listActionSummaries(transaction)).length,
       });
     });
   }
 
   /** Ordered proposals recorded so far. Empty is valid and normal. */
   async listProposals(runId: string): Promise<readonly TaskEffectProposalV1[]> {
+    return this.#fromAgent(() => this.#listProposals(runId));
+  }
+
+  async #listProposals(runId: string): Promise<readonly TaskEffectProposalV1[]> {
     const sessionId = await this.ctx.storage.get<string>("session-id");
     if (!sessionId || runId !== sessionId) throw new Error("Effect proposals are not bound to this runner session");
     return readProposalLedger(this.ctx.storage);
@@ -413,6 +556,10 @@ export class TaskRunnerSession extends DurableObject<Env> {
    * a settled run change what it commits.
    */
   async admitCapture(input: TaskCaptureAdmissionInvocationV1): Promise<TaskCaptureAdmissionAckV1> {
+    return this.#fromAgent(() => this.#admitCapture(input));
+  }
+
+  async #admitCapture(input: TaskCaptureAdmissionInvocationV1): Promise<TaskCaptureAdmissionAckV1> {
     try {
       return await this.admitCaptureChecked(input);
     } catch (error) {
@@ -540,8 +687,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     await this.ctx.storage.transaction(async (transaction) => {
       const reservationKey = `${RUNNER_TOOL_RESERVATION_PREFIX}${operationId}`;
       if (await transaction.get(reservationKey)) return;
-      const recorded = await transaction.list<StoredAction>({ prefix: ACTION_PREFIX });
-      const reserved = await transaction.get<number>(RUNNER_TOOL_COUNT_KEY) ?? recorded.size;
+      const reserved = await transaction.get<number>(RUNNER_TOOL_COUNT_KEY) ?? (await listActionSummaries(transaction)).length;
       await transaction.put(reservationKey, true);
       await transaction.put(RUNNER_TOOL_COUNT_KEY, reserved + 1);
     });
@@ -624,14 +770,15 @@ export class TaskRunnerSession extends DurableObject<Env> {
       )) {
         throw new Error("The working tree capture has started; no further repository action may run");
       }
-      await transaction.put<StoredAction>(key, { canonicalAction, state: "running", action });
+      await indexIfFirstAction(transaction);
+      await transaction.put(actionEntries<StoredAction>({ canonicalAction, state: "running", action }));
       return true;
     });
     if (!admitted) return this.invoke(action);
     try {
       return await this.reconcile(runnerActionResultV1Schema.parse(await this.#runner.execute(action)));
     } catch {
-      await this.ctx.storage.put<StoredAction>(key, { canonicalAction, state: "ambiguous", action });
+      await this.ctx.storage.put(actionEntries<StoredAction>({ canonicalAction, state: "ambiguous", action }));
       // Do not surface ambiguity to the model: it could issue a fresh shell
       // call and accidentally replay work. Reconnect/resume must reconcile the
       // runner-local result, or the immutable run deadline ends the task.
@@ -652,7 +799,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       if (existing.canonicalResult !== canonicalResult) throw new Error("Operation result conflict");
       return existing.result!;
     }
-    await this.ctx.storage.put<StoredAction>(key, { ...existing, state: "completed", result, canonicalResult });
+    await this.ctx.storage.put(actionEntries<StoredAction>({ ...existing, state: "completed", result, canonicalResult }));
     for (const resolve of this.#resultWaiters.get(result.operationId) ?? []) resolve(result);
     this.#resultWaiters.delete(result.operationId);
     return result;
@@ -662,22 +809,21 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const cursor = resumeCursorV1Schema.parse(input);
     this.#runner?.[Symbol.dispose]();
     this.#runner = runner.dup();
-    let actions = await this.ctx.storage.list<StoredAction>({ prefix: ACTION_PREFIX });
-    for (const record of actions.values()) {
+    for (const record of await listActionSummaries(this.ctx.storage)) {
       if (record.state === "completed") continue;
-      const result = await runner.result(record.action.operationId);
+      const result = await runner.result(record.operationId);
       if (result) await this.reconcile(result);
     }
-    actions = await this.ctx.storage.list<StoredAction>({ prefix: ACTION_PREFIX });
-    const nextServerSequence = Math.max(0, ...[...actions.values()].map((record) => record.action.sequence)) + 1;
+    const actions = await listActionSummaries(this.ctx.storage);
+    const nextServerSequence = actions.reduce((highest, record) => Math.max(highest, record.sequence), 0) + 1;
     if (cursor.lastServerSequence >= nextServerSequence) throw new Error("Resume cursor is ahead of the server");
     return {
       schemaVersion: "gardener.runner.resume-state/v1",
       nextServerSequence,
-      unresolvedOperationIds: [...actions.values()]
+      unresolvedOperationIds: actions
         .filter((record) => record.state !== "completed")
-        .sort((left, right) => left.action.sequence - right.action.sequence)
-        .map((record) => record.action.operationId),
+        .sort((left, right) => left.sequence - right.sequence)
+        .map((record) => record.operationId),
     };
   }
 
@@ -859,6 +1005,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (existing?.harness_submission_json) {
       submission = JSON.parse(existing.harness_submission_json) as HarnessSubmission;
     } else {
+      // Written before the dispatch so a fast finish can already be checked
+      // against the request; the submission id follows once Flue accepts it.
+      await this.ctx.storage.put<TaskSubmissionRecord>(SUBMISSION_KEY, {
+        runId: request.runId,
+        requestId: harnessRequest.requestId,
+      });
       submission = await harness.start(harnessRequest);
       await this.#db().prepare(
         "UPDATE actions_task_runs SET harness_submission_json=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE id=? AND harness_submission_json IS NULL",
@@ -886,20 +1038,43 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ]);
       return terminalFromOutcome(failed, await this.completedSequence(), request, undefined, await this.#trailDigest());
     }
+    await this.ctx.storage.put<TaskSubmissionRecord>(SUBMISSION_KEY, {
+      runId: submission.runId,
+      requestId: submission.requestId,
+      submissionId: submission.submissionId,
+    });
     if (waitGeneration !== this.#waitGeneration) throw new SupersededReadError();
-    // An older call may have reached its read while this one awaited.
+    // An older call may have reached its wait while this one awaited.
     this.#supersedeActiveRead();
     const readControl = new AbortController();
     this.#activeRead = readControl;
+    const deadline = AbortSignal.timeout(Math.max(1, remainingRuntimeMs));
     let harnessOutcome: HarnessOutcome;
     try {
-      harnessOutcome = await harness.read(submission, {
-        signal: AbortSignal.any([AbortSignal.timeout(Math.max(1, remainingRuntimeMs)), readControl.signal]),
-      });
+      // The agent pushes its result here; the session does not read the agent
+      // for it. See task-completion.ts for why the calls must go one way.
+      harnessOutcome = await this.#awaitCompletion(harness, submission, AbortSignal.any([deadline, readControl.signal]));
     } catch (error) {
-      // Written in the background so a slow D1 never delays the runner's reconnect.
-      if (!(error instanceof SupersededReadError)) this.ctx.waitUntil(this.#recordInterruption(identity.sessionId));
-      throw error;
+      if (readControl.signal.aborted && readControl.signal.reason instanceof SupersededReadError) throw readControl.signal.reason;
+      if (deadline.aborted) {
+        // One abort, bounded: it cannot ratchet the request depth.
+        await harness.cancel({ runId: request.runId, reason: "Task runtime deadline expired" }).catch(() => undefined);
+        harnessOutcome = {
+          schemaVersion: "gardener.harness.outcome/v1",
+          harness: submission.harness,
+          runId: submission.runId,
+          requestId: submission.requestId,
+          submissionId: submission.submissionId,
+          status: "failed",
+          error: harnessError("budget-exceeded", "Task execution exceeded its runtime deadline", false),
+          usage: emptyUsage(),
+          events: [],
+        };
+      } else {
+        // Written in the background so a slow D1 never delays the runner's reconnect.
+        this.ctx.waitUntil(this.#recordInterruption(identity.sessionId));
+        throw error;
+      }
     } finally {
       if (this.#activeRead === readControl) this.#activeRead = undefined;
     }
@@ -1023,10 +1198,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
 
     const request = taskRunRequestV1Schema.parse(JSON.parse(row.request_json));
     await new FlueTaskHarness().cancel({ runId: request.runId, reason }).catch(() => undefined);
-    const actions = await this.ctx.storage.list<StoredAction>({ prefix: ACTION_PREFIX });
-    await Promise.all([...actions.values()]
+    await Promise.all((await listActionSummaries(this.ctx.storage))
       .filter((record) => record.state !== "completed")
-      .map((record) => this.#runner?.cancel(record.action.operationId).catch(() => undefined)));
+      .map((record) => this.#runner?.cancel(record.operationId).catch(() => undefined)));
 
     await this.settleCancellation(request, reason);
   }
@@ -1090,8 +1264,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       }
       const reservationKey = `${RUNNER_TOOL_RESERVATION_PREFIX}${operationId}`;
       if (await transaction.get(reservationKey)) return;
-      const recorded = await transaction.list<StoredAction>({ prefix: ACTION_PREFIX });
-      const reserved = await transaction.get<number>(RUNNER_TOOL_COUNT_KEY) ?? recorded.size;
+      const reserved = await transaction.get<number>(RUNNER_TOOL_COUNT_KEY) ?? (await listActionSummaries(transaction)).length;
       assertRunnerToolBudget(request.bundle.limits.maxToolCalls, reserved);
       await transaction.put(reservationKey, true);
       await transaction.put(RUNNER_TOOL_COUNT_KEY, reserved + 1);
@@ -1099,16 +1272,15 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   private async settleUnresolvedBeforeNewAction(runId: string): Promise<void> {
-    const actions = await this.ctx.storage.list<StoredAction>({ prefix: ACTION_PREFIX });
-    const unresolved = [...actions.values()].filter((record) => record.state !== "completed");
+    const unresolved = (await listActionSummaries(this.ctx.storage)).filter((record) => record.state !== "completed");
     for (const record of unresolved) {
       if (this.#runner) {
         try {
-          const result = await this.#runner.result(record.action.operationId);
+          const result = await this.#runner.result(record.operationId);
           if (result) { await this.reconcile(result); continue; }
         } catch { /* wait below */ }
       }
-      await this.waitForResult(record.action.operationId, await this.runDeadline(runId));
+      await this.waitForResult(record.operationId, await this.runDeadline(runId));
     }
   }
 
@@ -1163,8 +1335,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   private async completedSequence(): Promise<number> {
-    const actions = await this.ctx.storage.list<StoredAction>({ prefix: ACTION_PREFIX });
-    return Math.max(0, ...[...actions.values()].filter((record) => record.state === "completed").map((record) => record.action.sequence));
+    return (await listActionSummaries(this.ctx.storage))
+      .filter((record) => record.state === "completed")
+      .reduce((highest, record) => Math.max(highest, record.sequence), 0);
   }
 }
 

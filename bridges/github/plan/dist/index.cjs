@@ -47394,6 +47394,8 @@ function claim2(claims, name2) {
 }
 
 // src/session.ts
+var HEALTHY_CONNECTION_MS = 3e4;
+var TOTAL_RECONNECT_CAP = 50;
 var RunnerApi = class extends RpcTarget {
   constructor(executor) {
     super();
@@ -47415,10 +47417,12 @@ async function runPlanningSession(options) {
   const executor = options.executor ?? new PlanningShellExecutor();
   const runner = new RunnerApi(executor);
   let attempt = 0;
+  let totalReconnects = 0;
   let lastError;
   while (attempt <= options.maxReconnects) {
     if (options.signal?.aborted) throw new Error("Gardener planning was cancelled");
     let root;
+    let resumedAt;
     try {
       const oidcToken = await options.getOidcToken(audience);
       const hello = helloFromOidcToken(oidcToken, options.agentHash, "plan");
@@ -47426,6 +47430,7 @@ async function runPlanningSession(options) {
       const session = root.authenticate(hello, oidcToken, runner);
       const cursor = executor.cursor();
       await session.resume({ schemaVersion: "gardener.runner.cursor/v1", ...cursor }, runner);
+      resumedAt = Date.now();
       if (options.signal?.aborted) throw new Error("Gardener planning was cancelled before execution");
       let cancellationTimer;
       let cancelListener;
@@ -47453,8 +47458,12 @@ async function runPlanningSession(options) {
       }
     } catch (error63) {
       lastError = error63;
-      if (options.signal?.aborted || attempt >= options.maxReconnects) break;
+      if (resumedAt !== void 0 && Date.now() - resumedAt >= (options.healthyConnectionMs ?? HEALTHY_CONNECTION_MS)) {
+        attempt = 0;
+      }
+      if (options.signal?.aborted || attempt >= options.maxReconnects || totalReconnects >= TOTAL_RECONNECT_CAP) break;
       attempt += 1;
+      totalReconnects += 1;
       options.onReconnect?.(attempt, error63);
       await delay(Math.min(5e3, 250 * 2 ** (attempt - 1)), options.signal);
     } finally {
@@ -47462,7 +47471,10 @@ async function runPlanningSession(options) {
     }
   }
   if (options.signal?.aborted) throw new Error("Gardener planning was cancelled", { cause: lastError });
-  throw new Error(`Gardener session failed after ${attempt + 1} connection attempts`, { cause: lastError });
+  throw new Error(
+    totalReconnects >= TOTAL_RECONNECT_CAP ? `Gardener session failed after ${TOTAL_RECONNECT_CAP} reconnects` : `Gardener session failed after ${attempt + 1} consecutive connection attempts`,
+    { cause: lastError }
+  );
 }
 function delay(milliseconds, signal) {
   if (signal?.aborted) return Promise.reject(new Error("Gardener planning was cancelled"));
