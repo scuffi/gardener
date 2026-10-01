@@ -1,0 +1,23 @@
+CHANGELOG.md
+  s_de0b486c128948::t_cc2f6d12e25acd 6-24
+docs/onboarding.md
+  s_de0b486c128948::t_608ca0df61b6f1 20,88,128,132
+packages/cli/package.json
+  s_de0b486c128948::t_b959b10443a4c6 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ab7ecfa902663481823d180d1d0cae0eb5adba06",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
