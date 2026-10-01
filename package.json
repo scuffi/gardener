@@ -19,9 +19,9 @@
     "gardener": "pnpm --filter @scuffi/gardener build && node packages/cli/dist/cli.js"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260924.1",
+    "@cloudflare/workers-types": "5.20260928.1",
     "typescript": "7.0.2",
     "vitest": "5.0.3",
-    "wrangler": "4.131.0"
+    "wrangler": "4.142.0"
   }
 }
