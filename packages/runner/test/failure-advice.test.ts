@@ -25,6 +25,11 @@ describe("planning failure advice", () => {
     expect(planFailureAdvice(message).what).toMatch(what);
   });
 
+  it("explains that the tool-call limit includes finish_task", () => {
+    expect(planFailureAdvice("Task tool-call limit was exceeded").what).toContain("includes the final `finish_task` call");
+    expect(planFailureAdvice("Task model-turn limit was exceeded").what).not.toContain("finish_task");
+  });
+
   it("treats a cancelled status as cancelled whatever the message", () => {
     expect(planFailureAdvice("Run was stopped", "cancelled").what).toMatch(/cancelled/);
   });

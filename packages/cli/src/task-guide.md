@@ -202,7 +202,7 @@ network:            # tasks with repository.exec
 | --- | --- | --- |
 | `runtime-seconds` | Wall-clock limit for the run. | 30–21,000 |
 | `max-turns` | Model responses. | at least 3 |
-| `max-tool-calls` | Tool calls (each file read, API call or command counts). | at least 3 |
+| `max-tool-calls` | Tool calls (each file read, API call or command counts, plus the final `finish_task`, so the task's own work gets one fewer). | at least 3 |
 | `input-tokens` | Largest single model request. The whole conversation is resent each turn. | any positive |
 | `output-tokens` | Total generated across the run, including reasoning. | at least 16 × `max-turns` |
 | `max-effect-operations` | Optional cap on proposed changes per run. | 1–1,000 |

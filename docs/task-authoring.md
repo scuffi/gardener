@@ -464,7 +464,7 @@ Model IDs are the provider's own, after the prefix: for example `anthropic/claud
 | --- | --- |
 | `runtime-seconds` | Wall-clock limit for the whole run. |
 | `max-turns` | Maximum model responses in the run. |
-| `max-tool-calls` | Maximum tool calls in the run. |
+| `max-tool-calls` | Maximum tool calls in the run, including the final `finish_task`, so the task's own work gets one fewer. |
 | `input-tokens` | Maximum context sent in any one model request, enforced before each request as a conservative byte ceiling (8 bytes per token). The conversation is resent every turn, so this bounds each request, not the run's total. |
 | `output-tokens` | Total the model may generate across the whole run, including any reasoning. |
 

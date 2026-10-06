@@ -44507,8 +44507,9 @@ function planFailureAdvice(message3, status = "failed") {
   const limit = /^Task (tool-call|model-turn|model-input|model-output|model-runtime) limit was exceeded/.exec(message3);
   if (limit) {
     const key = LIMIT_KEYS[limit[1]];
+    const reserved = key === "max-tool-calls" ? " The limit includes the final `finish_task` call, so the task's own work gets one fewer." : "";
     return {
-      what: `The task reached its own \`${key}\` limit before finishing, so nothing was changed.`,
+      what: `The task reached its own \`${key}\` limit before finishing, so nothing was changed.${reserved}`,
       todo: `Raise \`limits.${key}\` in the task's TASK.md, or narrow its instructions so the model needs less.`
     };
   }
