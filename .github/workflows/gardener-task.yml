@@ -72,7 +72,7 @@ jobs:
           if [[ "$sha" != "$EVENT_SHA" ]]; then echo "Pull request head moved since the trigger: planning on $sha"; fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - name: Check out without persisted credentials
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
