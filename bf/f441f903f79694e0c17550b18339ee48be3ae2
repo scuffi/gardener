@@ -1,0 +1,27 @@
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_d05e9a10560d6b 44510,44512
+docs/task-authoring.md
+  s_de0b486c128948::t_7a2e41283da13d 467
+packages/cli/src/task-guide.md
+  s_de0b486c128948::t_2fb00b91c71519 205
+packages/runner/src/failure-advice.ts
+  s_de0b486c128948::t_e2d8799e051da6 30-32,34
+packages/runner/test/failure-advice.test.ts
+  s_de0b486c128948::t_93c27a4bea7531 28-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bff441f903f79694e0c17550b18339ee48be3ae2",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
