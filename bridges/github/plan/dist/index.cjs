@@ -44495,6 +44495,77 @@ function canonicalValue(value) {
   return `{${Object.keys(record2).sort().map((key) => `${JSON.stringify(key)}:${canonicalValue(record2[key])}`).join(",")}}`;
 }
 
+// src/failure-advice.ts
+var LIMIT_KEYS = {
+  "tool-call": "max-tool-calls",
+  "model-turn": "max-turns",
+  "model-input": "input-tokens",
+  "model-output": "output-tokens",
+  "model-runtime": "runtime-seconds"
+};
+function planFailureAdvice(message3, status = "failed") {
+  const limit = /^Task (tool-call|model-turn|model-input|model-output|model-runtime) limit was exceeded/.exec(message3);
+  if (limit) {
+    const key = LIMIT_KEYS[limit[1]];
+    return {
+      what: `The task reached its own \`${key}\` limit before finishing, so nothing was changed.`,
+      todo: `Raise \`limits.${key}\` in the task's TASK.md, or narrow its instructions so the model needs less.`
+    };
+  }
+  if (message3.startsWith("Task execution exceeded its runtime deadline") || message3.startsWith("Task runtime deadline expired")) {
+    return {
+      what: "The task ran out of time (`runtime-seconds`) before finishing, so nothing was changed.",
+      todo: "Raise `limits.runtime-seconds` in the task's TASK.md, or narrow its instructions."
+    };
+  }
+  if (message3.startsWith("The model stopped without calling finish_task")) {
+    return {
+      what: "The model stopped without reporting a result, so nothing was changed.",
+      todo: "This is often a model running out of output: raise `limits.output-tokens`. If it keeps happening, make the task's instructions end with a clear final step."
+    };
+  }
+  if (message3.startsWith("The model called finish_task more than once")) {
+    return { what: "The model reported more than one result, so Gardener refused the run.", todo: "Re-run the workflow; if it repeats, tighten the task's instructions about finishing." };
+  }
+  const provider = /\(HTTP (\d{3})\)/.exec(message3);
+  if (/^(The model provider|AI Gateway)/.test(message3) && provider) {
+    const status2 = Number(provider[1]);
+    if (status2 >= 500 || status2 === 408 || status2 === 429) {
+      return { what: "The model provider had a temporary problem, so nothing was changed.", todo: "Re-run all jobs in a few minutes." };
+    }
+    return {
+      what: "The model provider refused the request, so nothing was changed.",
+      todo: "An operator should check the installation's AI Gateway provider keys, balance and the task's `model` setting."
+    };
+  }
+  if (message3.includes("AI Gateway could not be reached") || message3.includes("AI Gateway is missing")) {
+    return { what: "The runtime could not reach its AI Gateway, so nothing was changed.", todo: "An operator should check the AI Gateway configuration and redeploy the runtime." };
+  }
+  if (message3.includes("gardener upgrade --workspace")) {
+    return { what: "This repository's workflows and the Gardener runtime are on different releases.", todo: "An operator should follow the instructions in the message below." };
+  }
+  if (message3.startsWith("Repository is not enrolled")) {
+    return { what: "This repository is not connected to the Gardener runtime.", todo: "An operator should run `gardener connect`, then let the Gardener sync workflow run on the default branch." };
+  }
+  if (status === "cancelled" || message3.startsWith("GitHub Actions planning job was cancelled") || message3.startsWith("Task execution was cancelled")) {
+    return {
+      what: "The run was cancelled before it finished, so nothing was changed.",
+      todo: "Usually a newer run for the same pull request or thread replaced it, and that run carries on. Otherwise re-run the workflow."
+    };
+  }
+  if (/disconnected|closed before completion|reconnect/i.test(message3)) {
+    return { what: "The connection to the Gardener runtime dropped and could not be resumed, so nothing was changed.", todo: "Re-run all jobs. If it keeps happening, an operator should check the runtime's health." };
+  }
+  return {
+    what: "Gardener could not finish planning, so nothing was changed.",
+    todo: "Re-run all jobs. If it fails again, an operator can see the full record with the command below."
+  };
+}
+function splitFailureTrail(summary2) {
+  const match = /^([\s\S]*?) \(((?:no tool calls|\d+ tool calls?: [^()]*); (?:no effects proposed|\d+ effects? proposed))\)$/.exec(summary2.trim());
+  return match ? { message: match[1], trail: match[2] } : { message: summary2.trim() };
+}
+
 // src/job-summary.ts
 var MAX_CELL = 300;
 var MAX_SUMMARY_CHARS = 512 * 1024;
@@ -44521,18 +44592,21 @@ var PLAN_HEADINGS = {
 };
 function renderPlanJobSummary(input2) {
   const lines = [];
+  const task = taskLabel(input2.plan?.taskName ?? input2.context?.taskName);
   if (input2.skipped !== void 0) {
-    lines.push("## Gardener: \u23ED\uFE0F Planning skipped", "", "**Why:** the run stopped before planning.", "", quote(input2.skipped), "");
-    lines.push(...footer(input2.context));
+    lines.push(`## Gardener${task}: \u23ED\uFE0F Planning skipped`, "", "**What happened:** the run stopped before planning. Nothing was changed.", "", quote(input2.skipped), "");
+    lines.push(...footer(input2.context, input2.plan?.runId));
     return lines.join("\n");
   }
   const status = input2.error !== void 0 ? "failed" : input2.terminal?.status ?? "failed";
-  const task = input2.plan ? ` \xB7 ${inline(input2.plan.taskName)}` : "";
   lines.push(`## Gardener${task}: ${PLAN_HEADINGS[status]}`, "");
-  if (input2.error !== void 0) {
-    lines.push("**Why:** the plan bridge stopped with an error.", "", quote(input2.error), "");
-  } else if (input2.terminal && status !== "completed") {
-    lines.push("**Why:**", "", quote(input2.terminal.summary), "");
+  if (input2.error !== void 0 || input2.terminal && status !== "completed") {
+    const raw = input2.error ?? input2.terminal.summary;
+    const { message: message3, trail } = splitFailureTrail(raw);
+    const advice = planFailureAdvice(message3, status === "cancelled" ? "cancelled" : "failed");
+    lines.push(`**What happened:** ${advice.what}`, "", `**What to do:** ${advice.todo}`, "");
+    if (trail) lines.push(`**Before stopping:** ${cell(trail)}`, "");
+    lines.push(fenced("Error details", message3), "");
   } else if (input2.terminal) {
     if (input2.plan && input2.plan.operations.length > 0) {
       const count = input2.plan.operations.length;
@@ -44547,7 +44621,7 @@ function renderPlanJobSummary(input2) {
     }
     lines.push(details("Model's summary (written by the model)", input2.terminal.summary), "");
   }
-  lines.push(...footer(input2.context));
+  lines.push(...footer(input2.context, input2.plan?.runId));
   return lines.join("\n");
 }
 async function writeJobSummary(render) {
@@ -44560,15 +44634,24 @@ async function writeJobSummary(render) {
   }
 }
 function jobSummaryContext() {
+  const taskName = process.env["INPUT_TASK-NAME"]?.trim();
   return {
     ...process.env.GITHUB_RUN_ID ? { githubRunId: process.env.GITHUB_RUN_ID } : {},
-    ...process.env.GITHUB_RUN_ATTEMPT ? { githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT } : {}
+    ...process.env.GITHUB_RUN_ATTEMPT ? { githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT } : {},
+    ...process.env.GITHUB_REPOSITORY_ID ? { githubRepositoryId: process.env.GITHUB_REPOSITORY_ID } : {},
+    ...taskName ? { taskName } : {}
   };
 }
-function footer(context) {
+function footer(context, planRunId, derive = true) {
   if (!context?.githubRunId) return [];
   const attempt = context.githubRunAttempt ? `, attempt ${inline(context.githubRunAttempt)}` : "";
-  return [`<sub>GitHub run ${inline(context.githubRunId)}${attempt}. Operators can inspect it with \`gardener runs --repository <owner/repo>\`.</sub>`, ""];
+  const derived2 = derive && context.githubRepositoryId && context.githubRunAttempt ? `repo-${context.githubRepositoryId}-run-${context.githubRunId}-attempt-${context.githubRunAttempt}-plan` : void 0;
+  const runId = planRunId ?? derived2;
+  const inspect = runId && /^[A-Za-z0-9._-]+$/.test(runId) ? ` Operators can inspect it with \`gardener runs view --workspace <name> --run ${runId}\`.` : "";
+  return [`<sub>GitHub run ${inline(context.githubRunId)}${attempt}.${inspect}</sub>`, ""];
+}
+function taskLabel(name2) {
+  return name2 ? ` \xB7 ${cell(name2)}` : "";
 }
 function cell(value) {
   const flat = bounded(value.replace(/\s+/g, " ").trim());
@@ -44595,6 +44678,13 @@ function details(title, body2) {
   return `<details><summary>${title}</summary>
 
 ${contained}
+
+</details>`;
+}
+function fenced(title, text) {
+  return `<details><summary>${title}</summary>
+
+${quote(text)}
 
 </details>`;
 }

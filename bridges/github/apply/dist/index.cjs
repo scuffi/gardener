@@ -20106,11 +20106,11 @@ var Summary = class {
    */
   addTable(rows) {
     const tableBody = rows.map((row) => {
-      const cells = row.map((cell) => {
-        if (typeof cell === "string") {
-          return this.wrap("td", cell);
+      const cells = row.map((cell2) => {
+        if (typeof cell2 === "string") {
+          return this.wrap("td", cell2);
         }
-        const { header, data, colspan, rowspan } = cell;
+        const { header, data, colspan, rowspan } = cell2;
         const tag = header ? "th" : "td";
         const attrs = Object.assign(Object.assign({}, colspan && { colspan }), rowspan && { rowspan });
         return this.wrap(tag, data, attrs);
@@ -28086,51 +28086,51 @@ var error21 = () => {
       }
       case "too_big": {
         const sizing = getSizing(issue3.origin);
-        const subject = withDefinite(issue3.origin ?? "value");
+        const subject2 = withDefinite(issue3.origin ?? "value");
         if (issue3.origin === "string") {
-          return `${sizing?.longLabel ?? "\u05D0\u05E8\u05D5\u05DA"} \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05DB\u05D9\u05DC ${issue3.maximum.toString()} ${sizing?.unit ?? ""} ${issue3.inclusive ? "\u05D0\u05D5 \u05E4\u05D7\u05D5\u05EA" : "\u05DC\u05DB\u05DC \u05D4\u05D9\u05D5\u05EA\u05E8"}`.trim();
+          return `${sizing?.longLabel ?? "\u05D0\u05E8\u05D5\u05DA"} \u05DE\u05D3\u05D9: ${subject2} \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05DB\u05D9\u05DC ${issue3.maximum.toString()} ${sizing?.unit ?? ""} ${issue3.inclusive ? "\u05D0\u05D5 \u05E4\u05D7\u05D5\u05EA" : "\u05DC\u05DB\u05DC \u05D4\u05D9\u05D5\u05EA\u05E8"}`.trim();
         }
         if (issue3.origin === "number") {
           const comparison = issue3.inclusive ? `\u05E7\u05D8\u05DF \u05D0\u05D5 \u05E9\u05D5\u05D5\u05D4 \u05DC-${issue3.maximum}` : `\u05E7\u05D8\u05DF \u05DE-${issue3.maximum}`;
-          return `\u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${comparison}`;
+          return `\u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9: ${subject2} \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${comparison}`;
         }
         if (issue3.origin === "array" || issue3.origin === "set") {
           const verb = issue3.origin === "set" ? "\u05E6\u05E8\u05D9\u05DB\u05D4" : "\u05E6\u05E8\u05D9\u05DA";
           const comparison = issue3.inclusive ? `${issue3.maximum} ${sizing?.unit ?? ""} \u05D0\u05D5 \u05E4\u05D7\u05D5\u05EA` : `\u05E4\u05D7\u05D5\u05EA \u05DE-${issue3.maximum} ${sizing?.unit ?? ""}`;
-          return `\u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9: ${subject} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${comparison}`.trim();
+          return `\u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9: ${subject2} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${comparison}`.trim();
         }
         const adj = issue3.inclusive ? "<=" : "<";
         const be = verbFor(issue3.origin ?? "value");
         if (sizing?.unit) {
-          return `${sizing.longLabel} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue3.maximum.toString()} ${sizing.unit}`;
+          return `${sizing.longLabel} \u05DE\u05D3\u05D9: ${subject2} ${be} ${adj}${issue3.maximum.toString()} ${sizing.unit}`;
         }
-        return `${sizing?.longLabel ?? "\u05D2\u05D3\u05D5\u05DC"} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue3.maximum.toString()}`;
+        return `${sizing?.longLabel ?? "\u05D2\u05D3\u05D5\u05DC"} \u05DE\u05D3\u05D9: ${subject2} ${be} ${adj}${issue3.maximum.toString()}`;
       }
       case "too_small": {
         const sizing = getSizing(issue3.origin);
-        const subject = withDefinite(issue3.origin ?? "value");
+        const subject2 = withDefinite(issue3.origin ?? "value");
         if (issue3.origin === "string") {
-          return `${sizing?.shortLabel ?? "\u05E7\u05E6\u05E8"} \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05DB\u05D9\u05DC ${issue3.minimum.toString()} ${sizing?.unit ?? ""} ${issue3.inclusive ? "\u05D0\u05D5 \u05D9\u05D5\u05EA\u05E8" : "\u05DC\u05E4\u05D7\u05D5\u05EA"}`.trim();
+          return `${sizing?.shortLabel ?? "\u05E7\u05E6\u05E8"} \u05DE\u05D3\u05D9: ${subject2} \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05DB\u05D9\u05DC ${issue3.minimum.toString()} ${sizing?.unit ?? ""} ${issue3.inclusive ? "\u05D0\u05D5 \u05D9\u05D5\u05EA\u05E8" : "\u05DC\u05E4\u05D7\u05D5\u05EA"}`.trim();
         }
         if (issue3.origin === "number") {
           const comparison = issue3.inclusive ? `\u05D2\u05D3\u05D5\u05DC \u05D0\u05D5 \u05E9\u05D5\u05D5\u05D4 \u05DC-${issue3.minimum}` : `\u05D2\u05D3\u05D5\u05DC \u05DE-${issue3.minimum}`;
-          return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${comparison}`;
+          return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject2} \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${comparison}`;
         }
         if (issue3.origin === "array" || issue3.origin === "set") {
           const verb = issue3.origin === "set" ? "\u05E6\u05E8\u05D9\u05DB\u05D4" : "\u05E6\u05E8\u05D9\u05DA";
           if (issue3.minimum === 1 && issue3.inclusive) {
             const singularPhrase = issue3.origin === "set" ? "\u05DC\u05E4\u05D7\u05D5\u05EA \u05E4\u05E8\u05D9\u05D8 \u05D0\u05D7\u05D3" : "\u05DC\u05E4\u05D7\u05D5\u05EA \u05E4\u05E8\u05D9\u05D8 \u05D0\u05D7\u05D3";
-            return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${singularPhrase}`;
+            return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject2} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${singularPhrase}`;
           }
           const comparison = issue3.inclusive ? `${issue3.minimum} ${sizing?.unit ?? ""} \u05D0\u05D5 \u05D9\u05D5\u05EA\u05E8` : `\u05D9\u05D5\u05EA\u05E8 \u05DE-${issue3.minimum} ${sizing?.unit ?? ""}`;
-          return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${comparison}`.trim();
+          return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject2} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${comparison}`.trim();
         }
         const adj = issue3.inclusive ? ">=" : ">";
         const be = verbFor(issue3.origin ?? "value");
         if (sizing?.unit) {
-          return `${sizing.shortLabel} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue3.minimum.toString()} ${sizing.unit}`;
+          return `${sizing.shortLabel} \u05DE\u05D3\u05D9: ${subject2} ${be} ${adj}${issue3.minimum.toString()} ${sizing.unit}`;
         }
-        return `${sizing?.shortLabel ?? "\u05E7\u05D8\u05DF"} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue3.minimum.toString()}`;
+        return `${sizing?.shortLabel ?? "\u05E7\u05D8\u05DF"} \u05DE\u05D3\u05D9: ${subject2} ${be} ${adj}${issue3.minimum.toString()}`;
       }
       case "invalid_format": {
         const _issue = issue3;
@@ -44899,17 +44899,17 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject, path3) {
+  constructor(subject2, path3) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
-      subject: currentMapBuilder.capture(subject),
+      subject: currentMapBuilder.capture(subject2),
       path: path3
     };
     else this.context = {
       parent: void 0,
       captures: [],
-      subject,
+      subject: subject2,
       path: path3
     };
     currentMapBuilder = this;
@@ -44942,20 +44942,20 @@ var MapBuilder = class {
   pushCall(hook, path3, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
-    let subject = this.capture(hook.dup());
+    let subject2 = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
-      subject,
+      subject2,
       path3,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
   pushGet(hook, path3) {
-    let subject = this.capture(hook.dup());
+    let subject2 = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
-      subject,
+      subject2,
       path3
     ]);
     return new MapVariableHook(this, this.instructions.length);
@@ -47851,6 +47851,113 @@ function latest(attemptedAt, completedAt) {
   return Date.parse(completedAt) < Date.parse(attemptedAt) ? attemptedAt : completedAt;
 }
 
+// src/failure-advice.ts
+var RERUN_ALL = "To retry now, use **Re-run all jobs**: re-running only the apply job replays the same plan.";
+function applyFailureAdvice(code2) {
+  const notWritten = "Nothing was written for this step or any later step.";
+  if (INVARIANT_CODES.has(code2)) {
+    return {
+      what: `A Gardener safety check failed, which should not happen. ${notWritten}`,
+      todo: "Please report this with the run id below; re-running is unlikely to help."
+    };
+  }
+  if (code2 === "review_thread_missing") {
+    return {
+      what: `The review thread could not be found: it was deleted, or the model named a thread that doesn't exist. ${notWritten}`,
+      todo: `If the thread still exists, ${RERUN_ALL.charAt(0).toLowerCase()}${RERUN_ALL.slice(1)}`
+    };
+  }
+  if (AUTHORITY_CODES.has(code2)) {
+    return {
+      what: `The task tried to write somewhere it is not allowed to (a branch or path outside its \`effects\` options). ${notWritten}`,
+      todo: "This repeats on every run until the task's `effects` options or instructions change."
+    };
+  }
+  if (code2 === "github_unavailable" || code2 === "github_graphql_rate_limited") {
+    return { what: `GitHub was temporarily unavailable or rate-limited the request. ${notWritten}`, todo: `Wait a few minutes. ${RERUN_ALL}` };
+  }
+  if (code2 === "github_pagination_exhausted" || code2 === "github_response_invalid" || code2 === "github_tree_truncated") {
+    return {
+      what: `GitHub returned more data, or a different shape, than Gardener can safely handle. ${notWritten}`,
+      todo: "Re-run all jobs; if it repeats, please report it with the run id below."
+    };
+  }
+  if (code2 === "effect_deadline_expired") {
+    return { what: `The apply job ran out of time. ${notWritten}`, todo: RERUN_ALL };
+  }
+  if (code2.endsWith("_changed") || code2.endsWith("_race") || code2 === "pull_request_mismatch") {
+    return {
+      what: `The ${subject(code2)} changed after Gardener planned this step, usually a new push, comment or edit. ${notWritten}`,
+      todo: `The next trigger plans again from the current state. ${RERUN_ALL}`
+    };
+  }
+  if (code2.endsWith("_missing") || code2 === "account_not_found") {
+    return { what: `The ${subject(code2)} no longer exists. ${notWritten}`, todo: "Usually nothing to do: it was deleted after planning." };
+  }
+  if (code2.endsWith("_exists")) {
+    return { what: `The ${subject(code2)} already exists, often from an earlier run. ${notWritten}`, todo: "Check whether an earlier run already did this; if so, nothing more is needed." };
+  }
+  if (code2.endsWith("_locked")) {
+    return { what: `The conversation is locked. ${notWritten}`, todo: "Unlock it if Gardener should reply, then re-run all jobs." };
+  }
+  if (code2 === "label_not_defined") {
+    return { what: `The task tried to add a label the repository doesn't have. ${notWritten}`, todo: "Create the label in the repository, or change the task's instructions." };
+  }
+  if (code2 === "merge_method_disabled" || code2 === "required_checks_incomplete") {
+    return { what: `The repository's settings or required checks don't allow this merge yet. ${notWritten}`, todo: "Wait for the checks, or change the merge method the task uses." };
+  }
+  if (code2 === "comment_not_owned" || code2 === "comment_out_of_scope" || code2.endsWith("_wrong_pull")) {
+    return { what: `The task tried to act on something outside what it may change. ${notWritten}`, todo: "Check the task's instructions; Gardener refused the step rather than guess." };
+  }
+  if (code2.endsWith("_not_applied")) {
+    return { what: `GitHub accepted the request but did not apply the change. ${notWritten}`, todo: "Check the repository's settings, then re-run all jobs." };
+  }
+  if (code2.startsWith("github_")) {
+    return { what: `GitHub rejected the request. ${notWritten}`, todo: `Check the error below; a 403 usually means the workflow lacks a permission. ${RERUN_ALL}` };
+  }
+  return { what: `The plan no longer fits the repository. ${notWritten}`, todo: `The next trigger plans again. ${RERUN_ALL}` };
+}
+var INVARIANT_CODES = /* @__PURE__ */ new Set([
+  "canonical_marker_missing",
+  "capture_base_missing",
+  "capture_content_mismatch",
+  "capture_content_unreadable",
+  "effect_failed"
+]);
+var AUTHORITY_CODES = /* @__PURE__ */ new Set([
+  "branch_not_allowed",
+  "protected_commit_path",
+  "invalid_commit_path",
+  "invalid_branch_name",
+  "unsafe_path_segment",
+  "unsupported_git_object"
+]);
+function subject(code2) {
+  const head = code2.split("_")[0];
+  switch (head) {
+    case "pull":
+      return "pull request";
+    case "issue":
+      return "issue";
+    case "discussion":
+      return "discussion";
+    case "comment":
+    case "review":
+      return "comment";
+    case "branch":
+    case "head":
+    case "base":
+      return "branch";
+    case "release":
+    case "tag":
+      return "release";
+    case "check":
+      return "check run";
+    default:
+      return "target";
+  }
+}
+
 // src/job-summary.ts
 var MAX_CELL = 300;
 var MAX_SUMMARY_CHARS = 512 * 1024;
@@ -47878,14 +47985,35 @@ var STEP_STATUS = {
 };
 function renderApplyJobSummary(input2) {
   const lines = [];
-  const task = input2.plan ? ` \xB7 ${inline(input2.plan.taskName)}` : "";
+  const task = taskLabel(input2.plan?.taskName ?? input2.context?.taskName);
   const receipt = input2.receipt;
   const heading = receipt?.status === "applied" && input2.error === void 0 ? "\u2705 Plan applied" : receipt?.status === "stopped" ? "\u274C Plan stopped" : "\u274C Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
+  const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : void 0;
+  if (stopping?.receipt.error) {
+    const advice = applyFailureAdvice(stopping.receipt.error.code);
+    lines.push(
+      `**What happened:** step ${code(stopping.stepName)} (${code(stopping.receipt.kind)}) did not apply. ${advice.what}`,
+      "",
+      `**What to do:** ${advice.todo}`,
+      ""
+    );
+  } else if (input2.error !== void 0 && receipt?.status !== "stopped") {
+    lines.push(
+      "**What happened:** the apply job stopped before finishing the plan.",
+      "",
+      `**What to do:** ${receipt && receipt.operations.length > 0 ? "Check the steps below. " : "Nothing was written. "}Re-run all jobs; if it fails again, an operator can see the full record with the command below.`,
+      "",
+      fenced("Error details", input2.error),
+      ""
+    );
+  }
   if (receipt) {
     const done = receipt.operations.length;
     if (receipt.status === "stopped" && receipt.stoppedAtStep) {
-      lines.push(`Stopped at ${code(receipt.stoppedAtStep)} after ${done} of ${receipt.plannedOperations} steps. Later steps were not run.`, "");
+      const before = receipt.operations.filter((step) => step.receipt.status === "succeeded" || step.receipt.status === "skipped").length;
+      const earlier = before === 0 ? "No earlier step applied" : `${before} earlier ${before === 1 ? "step" : "steps"} applied`;
+      lines.push(`Stopped at ${code(receipt.stoppedAtStep)}, step ${done} of ${receipt.plannedOperations}. ${earlier}; later steps were not run.`, "");
     } else {
       lines.push(`${done} of ${receipt.plannedOperations} steps ran.`, "");
     }
@@ -47897,13 +48025,10 @@ function renderApplyJobSummary(input2) {
     lines.push("");
     for (const step of receipt.operations) {
       if (!step.receipt.error) continue;
-      lines.push(`**\`${inline(step.stepName)}\`** \xB7 \`${inline(step.receipt.error.code)}\``, "", quote(step.receipt.error.message), "");
+      lines.push(fenced(`Error from ${inline(step.stepName)}: ${inline(step.receipt.error.code)}`, step.receipt.error.message), "");
     }
   }
-  if (input2.error !== void 0 && !(receipt?.status === "stopped")) {
-    lines.push("**Why:** the apply bridge stopped with an error before finishing.", "", quote(input2.error), "");
-  }
-  lines.push(...footer(input2.context));
+  lines.push(...footer(input2.context, input2.plan?.runId, false));
   return lines.join("\n");
 }
 async function writeJobSummary(render) {
@@ -47916,15 +48041,28 @@ async function writeJobSummary(render) {
   }
 }
 function jobSummaryContext() {
+  const taskName = process.env["INPUT_TASK-NAME"]?.trim();
   return {
     ...process.env.GITHUB_RUN_ID ? { githubRunId: process.env.GITHUB_RUN_ID } : {},
-    ...process.env.GITHUB_RUN_ATTEMPT ? { githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT } : {}
+    ...process.env.GITHUB_RUN_ATTEMPT ? { githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT } : {},
+    ...process.env.GITHUB_REPOSITORY_ID ? { githubRepositoryId: process.env.GITHUB_REPOSITORY_ID } : {},
+    ...taskName ? { taskName } : {}
   };
 }
-function footer(context) {
+function footer(context, planRunId, derive = true) {
   if (!context?.githubRunId) return [];
   const attempt = context.githubRunAttempt ? `, attempt ${inline(context.githubRunAttempt)}` : "";
-  return [`<sub>GitHub run ${inline(context.githubRunId)}${attempt}. Operators can inspect it with \`gardener runs --repository <owner/repo>\`.</sub>`, ""];
+  const derived2 = derive && context.githubRepositoryId && context.githubRunAttempt ? `repo-${context.githubRepositoryId}-run-${context.githubRunId}-attempt-${context.githubRunAttempt}-plan` : void 0;
+  const runId = planRunId ?? derived2;
+  const inspect = runId && /^[A-Za-z0-9._-]+$/.test(runId) ? ` Operators can inspect it with \`gardener runs view --workspace <name> --run ${runId}\`.` : "";
+  return [`<sub>GitHub run ${inline(context.githubRunId)}${attempt}.${inspect}</sub>`, ""];
+}
+function taskLabel(name2) {
+  return name2 ? ` \xB7 ${cell(name2)}` : "";
+}
+function cell(value) {
+  const flat = bounded(value.replace(/\s+/g, " ").trim());
+  return flat.replace(/[\\`*_[\]<>|]/g, (character) => `\\${character}`);
 }
 function code(value) {
   return `\`${bounded(inline(value)).replace(/\|/g, "\\|")}\``;
@@ -47941,6 +48079,13 @@ function quote(value) {
   return `${fence}text
 ${value.trim()}
 ${fence}`;
+}
+function fenced(title, text) {
+  return `<details><summary>${title}</summary>
+
+${quote(text)}
+
+</details>`;
 }
 
 // src/effects-main.ts

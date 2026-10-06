@@ -2,6 +2,10 @@ name: Gardener GitHub apply bridge
 description: Applies one validated Gardener effect without checking out or executing repository code.
 author: Gardener
 inputs:
+  task-name:
+    description: Task name shown in the job summary. Display only.
+    required: false
+    default: ""
   artifact-path:
     description: Path to the downloaded Gardener effect plan.
     required: true

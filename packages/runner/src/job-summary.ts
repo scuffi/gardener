@@ -12,12 +12,17 @@
 import * as core from "@actions/core";
 import type { TaskEffectPlanV1 } from "@gardener/contracts";
 import type { RunnerEffectReceiptV1, RunnerTerminalV1 } from "@gardener/protocol";
+import { applyFailureAdvice, planFailureAdvice, splitFailureTrail } from "./failure-advice";
 
 export interface JobSummaryContext {
-  /** `GITHUB_RUN_ID`, shown so operators can find the run with `gardener runs`. */
+  /** `GITHUB_RUN_ID`. */
   githubRunId?: string;
   /** `GITHUB_RUN_ATTEMPT`. */
   githubRunAttempt?: string;
+  /** `GITHUB_REPOSITORY_ID`, which with the run id names the Gardener run. */
+  githubRepositoryId?: string;
+  /** The reusable workflow's `task-name`, for summaries written without a plan. */
+  taskName?: string;
 }
 
 const MAX_CELL = 300;
@@ -69,18 +74,21 @@ export function renderPlanJobSummary(input: {
   context?: JobSummaryContext;
 }): string {
   const lines: string[] = [];
+  const task = taskLabel(input.plan?.taskName ?? input.context?.taskName);
   if (input.skipped !== undefined) {
-    lines.push("## Gardener: ⏭️ Planning skipped", "", "**Why:** the run stopped before planning.", "", quote(input.skipped), "");
-    lines.push(...footer(input.context));
+    lines.push(`## Gardener${task}: ⏭️ Planning skipped`, "", "**What happened:** the run stopped before planning. Nothing was changed.", "", quote(input.skipped), "");
+    lines.push(...footer(input.context, input.plan?.runId));
     return lines.join("\n");
   }
   const status = input.error !== undefined ? "failed" : input.terminal?.status ?? "failed";
-  const task = input.plan ? ` · ${inline(input.plan.taskName)}` : "";
   lines.push(`## Gardener${task}: ${PLAN_HEADINGS[status]}`, "");
-  if (input.error !== undefined) {
-    lines.push("**Why:** the plan bridge stopped with an error.", "", quote(input.error), "");
-  } else if (input.terminal && status !== "completed") {
-    lines.push("**Why:**", "", quote(input.terminal.summary), "");
+  if (input.error !== undefined || (input.terminal && status !== "completed")) {
+    const raw = input.error ?? input.terminal!.summary;
+    const { message, trail } = splitFailureTrail(raw);
+    const advice = planFailureAdvice(message, status === "cancelled" ? "cancelled" : "failed");
+    lines.push(`**What happened:** ${advice.what}`, "", `**What to do:** ${advice.todo}`, "");
+    if (trail) lines.push(`**Before stopping:** ${cell(trail)}`, "");
+    lines.push(fenced("Error details", message), "");
   } else if (input.terminal) {
     if (input.plan && input.plan.operations.length > 0) {
       const count = input.plan.operations.length;
@@ -95,7 +103,7 @@ export function renderPlanJobSummary(input: {
     }
     lines.push(details("Model's summary (written by the model)", input.terminal.summary), "");
   }
-  lines.push(...footer(input.context));
+  lines.push(...footer(input.context, input.plan?.runId));
   return lines.join("\n");
 }
 
@@ -108,7 +116,7 @@ export function renderApplyJobSummary(input: {
   context?: JobSummaryContext;
 }): string {
   const lines: string[] = [];
-  const task = input.plan ? ` · ${inline(input.plan.taskName)}` : "";
+  const task = taskLabel(input.plan?.taskName ?? input.context?.taskName);
   const receipt = input.receipt;
   const heading = receipt?.status === "applied" && input.error === undefined
     ? "✅ Plan applied"
@@ -116,10 +124,31 @@ export function renderApplyJobSummary(input: {
       ? "❌ Plan stopped"
       : "❌ Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
+  const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : undefined;
+  if (stopping?.receipt.error) {
+    const advice = applyFailureAdvice(stopping.receipt.error.code);
+    lines.push(
+      `**What happened:** step ${code(stopping.stepName)} (${code(stopping.receipt.kind)}) did not apply. ${advice.what}`,
+      "",
+      `**What to do:** ${advice.todo}`,
+      "",
+    );
+  } else if (input.error !== undefined && receipt?.status !== "stopped") {
+    lines.push(
+      "**What happened:** the apply job stopped before finishing the plan.",
+      "",
+      `**What to do:** ${receipt && receipt.operations.length > 0 ? "Check the steps below. " : "Nothing was written. "}Re-run all jobs; if it fails again, an operator can see the full record with the command below.`,
+      "",
+      fenced("Error details", input.error),
+      "",
+    );
+  }
   if (receipt) {
     const done = receipt.operations.length;
     if (receipt.status === "stopped" && receipt.stoppedAtStep) {
-      lines.push(`Stopped at ${code(receipt.stoppedAtStep)} after ${done} of ${receipt.plannedOperations} steps. Later steps were not run.`, "");
+      const before = receipt.operations.filter((step) => step.receipt.status === "succeeded" || step.receipt.status === "skipped").length;
+      const earlier = before === 0 ? "No earlier step applied" : `${before} earlier ${before === 1 ? "step" : "steps"} applied`;
+      lines.push(`Stopped at ${code(receipt.stoppedAtStep)}, step ${done} of ${receipt.plannedOperations}. ${earlier}; later steps were not run.`, "");
     } else {
       lines.push(`${done} of ${receipt.plannedOperations} steps ran.`, "");
     }
@@ -131,13 +160,10 @@ export function renderApplyJobSummary(input: {
     lines.push("");
     for (const step of receipt.operations) {
       if (!step.receipt.error) continue;
-      lines.push(`**\`${inline(step.stepName)}\`** · \`${inline(step.receipt.error.code)}\``, "", quote(step.receipt.error.message), "");
+      lines.push(fenced(`Error from ${inline(step.stepName)}: ${inline(step.receipt.error.code)}`, step.receipt.error.message), "");
     }
   }
-  if (input.error !== undefined && !(receipt?.status === "stopped")) {
-    lines.push("**Why:** the apply bridge stopped with an error before finishing.", "", quote(input.error), "");
-  }
-  lines.push(...footer(input.context));
+  lines.push(...footer(input.context, input.plan?.runId, false));
   return lines.join("\n");
 }
 
@@ -156,16 +182,33 @@ export async function writeJobSummary(render: () => string): Promise<void> {
 }
 
 export function jobSummaryContext(): JobSummaryContext {
+  const taskName = process.env["INPUT_TASK-NAME"]?.trim();
   return {
     ...(process.env.GITHUB_RUN_ID ? { githubRunId: process.env.GITHUB_RUN_ID } : {}),
     ...(process.env.GITHUB_RUN_ATTEMPT ? { githubRunAttempt: process.env.GITHUB_RUN_ATTEMPT } : {}),
+    ...(process.env.GITHUB_REPOSITORY_ID ? { githubRepositoryId: process.env.GITHUB_REPOSITORY_ID } : {}),
+    ...(taskName ? { taskName } : {}),
   };
 }
 
-function footer(context: JobSummaryContext | undefined): string[] {
+function footer(context: JobSummaryContext | undefined, planRunId?: string, derive = true): string[] {
   if (!context?.githubRunId) return [];
   const attempt = context.githubRunAttempt ? `, attempt ${inline(context.githubRunAttempt)}` : "";
-  return [`<sub>GitHub run ${inline(context.githubRunId)}${attempt}. Operators can inspect it with \`gardener runs --repository <owner/repo>\`.</sub>`, ""];
+  // Only the plan job derives its own run id. Re-running just the apply job
+  // starts a new attempt for the same plan, so apply relies on the plan's id.
+  const derived = derive && context.githubRepositoryId && context.githubRunAttempt
+    ? `repo-${context.githubRepositoryId}-run-${context.githubRunId}-attempt-${context.githubRunAttempt}-plan`
+    : undefined;
+  const runId = planRunId ?? derived;
+  const inspect = runId && /^[A-Za-z0-9._-]+$/.test(runId)
+    ? ` Operators can inspect it with \`gardener runs view --workspace <name> --run ${runId}\`.`
+    : "";
+  return [`<sub>GitHub run ${inline(context.githubRunId)}${attempt}.${inspect}</sub>`, ""];
+}
+
+/** The task name can come from the caller workflow, so it is escaped like any table cell. */
+function taskLabel(name: string | undefined): string {
+  return name ? ` · ${cell(name)}` : "";
 }
 
 /** A text table cell: one line, no pipes, links, HTML or code spans, bounded length. */
@@ -197,8 +240,13 @@ function quote(value: string): string {
   return `${fence}text\n${value.trim()}\n${fence}`;
 }
 
-/** Model text keeps its markdown, but cannot close the block it sits in. */
+/** A collapsed block of model text: it keeps its markdown but cannot close the block it sits in. */
 function details(title: string, body: string): string {
   const contained = body.trim().replace(/<(\s*\/?\s*details)/gi, "&lt;$1");
   return `<details><summary>${title}</summary>\n\n${contained}\n\n</details>`;
+}
+
+/** A collapsed block of failure text, fenced so none of it renders or escapes. */
+function fenced(title: string, text: string): string {
+  return `<details><summary>${title}</summary>\n\n${quote(text)}\n\n</details>`;
 }

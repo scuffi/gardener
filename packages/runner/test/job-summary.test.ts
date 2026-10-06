@@ -82,8 +82,9 @@ describe("plan job summary", () => {
   it("shows a bridge error even without a terminal result", () => {
     const markdown = renderPlanJobSummary({ error: "Gardener session closed before completion" });
     expect(markdown).toContain("❌ Planning failed");
-    expect(markdown).toContain("the plan bridge stopped with an error");
-    expect(markdown).toContain("```text\nGardener session closed before completion\n```");
+    expect(markdown).toContain("**What happened:** The connection to the Gardener runtime dropped");
+    expect(markdown).toContain("**What to do:** Re-run all jobs.");
+    expect(markdown).toContain("<details><summary>Error details</summary>\n\n```text\nGardener session closed before completion\n```");
   });
 
   it("treats a bridge error after a completed terminal as a failure", () => {
@@ -124,15 +125,17 @@ describe("apply job summary", () => {
     const markdown = renderApplyJobSummary({
       plan,
       receipt: receipt("stopped", [
-        step("fix", "commit.create", "conflicted", { error: { code: "branch_moved", message: "The branch moved since planning.", retryable: false } }),
+        step("fix", "commit.create", "conflicted", { error: { code: "branch_head_changed", message: "The branch moved since planning.", retryable: false } }),
       ], "fix"),
       error: "Effect plan stopped at fix: The branch moved since planning.",
     });
     expect(markdown).toContain("❌ Plan stopped");
-    expect(markdown).toContain("Stopped at `fix` after 1 of 2 steps. Later steps were not run.");
+    expect(markdown).toContain("Stopped at `fix`, step 1 of 2. No earlier step applied; later steps were not run.");
     expect(markdown).toContain("⚠️ conflicted");
-    expect(markdown).toContain("**`fix`** · `branch_moved`");
-    expect(markdown).toContain("```text\nThe branch moved since planning.\n```");
+    expect(markdown).toContain("**What happened:** step `fix` (`commit.create`) did not apply. The branch changed after Gardener planned this step");
+    expect(markdown).toContain("Nothing was written for this step or any later step.");
+    expect(markdown).toContain("**Re-run all jobs**: re-running only the apply job replays the same plan.");
+    expect(markdown).toContain("<details><summary>Error from fix: branch_head_changed</summary>\n\n```text\nThe branch moved since planning.\n```");
     // The step error already explains the stop; the bridge error is not repeated.
     expect(markdown).not.toContain("apply bridge stopped");
   });
@@ -173,6 +176,45 @@ describe("model text containment", () => {
     });
     expect(markdown).toContain(`${"x".repeat(299)}…`);
     expect(markdown).not.toContain("x".repeat(300));
+  });
+});
+
+describe("failure explanations", () => {
+  it("explains a task limit and shows what the model did before stopping", () => {
+    const markdown = renderPlanJobSummary({
+      terminal: { status: "failed", summary: "Task model-turn limit was exceeded (23 tool calls: 12 repository.exec, 11 repository.read_file; no effects proposed)" },
+      context: { ...context, githubRepositoryId: "1385186671", taskName: "pr-review-fix" },
+    });
+    expect(markdown).toContain("## Gardener · pr-review-fix: ❌ Planning failed");
+    expect(markdown).toContain("**What happened:** The task reached its own `max-turns` limit before finishing, so nothing was changed.");
+    expect(markdown).toContain("**What to do:** Raise `limits.max-turns` in the task's TASK.md");
+    expect(markdown).toContain("**Before stopping:** 23 tool calls: 12 repository.exec, 11 repository.read\\_file; no effects proposed");
+    expect(markdown).toContain("```text\nTask model-turn limit was exceeded\n```");
+    expect(markdown).toContain("`gardener runs view --workspace <name> --run repo-1385186671-run-37458168482-attempt-2-plan`");
+  });
+
+  it("uses the plan's run id in the apply footer", () => {
+    const markdown = renderApplyJobSummary({
+      plan: { ...plan, runId: "repo-1-run-2-attempt-1-plan" } as TaskEffectPlanV1,
+      error: "boom",
+      context: { ...context, githubRepositoryId: "1" },
+    });
+    expect(markdown).toContain("--run repo-1-run-2-attempt-1-plan`");
+  });
+
+  it("escapes a task name from the caller workflow", () => {
+    const markdown = renderPlanJobSummary({ skipped: "x", context: { taskName: "<img src=x> [a](b)" } });
+    expect(markdown).toContain("## Gardener · \\<img src=x\\> \\[a\\](b): ⏭️ Planning skipped");
+  });
+
+  it("never derives a run id in the apply job, where an apply-only re-run changes the attempt", () => {
+    const markdown = renderApplyJobSummary({ error: "boom", context: { ...context, githubRepositoryId: "1" } });
+    expect(markdown).toContain("GitHub run 37458168482, attempt 2.");
+    expect(markdown).not.toContain("gardener runs view");
+  });
+
+  it("names the task on a skipped run", () => {
+    expect(renderPlanJobSummary({ skipped: "moved", context: { taskName: "pr-review-fix" } })).toContain("## Gardener · pr-review-fix: ⏭️ Planning skipped");
   });
 });
 
