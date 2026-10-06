@@ -5,6 +5,8 @@ import {
   SUBMISSION_KEY,
   completionHarnessOutcome,
   confirmTaskResult,
+  explainRefusedCompletion,
+  recordCompletionRefusal,
   readTaskCompletion,
   recordTaskCandidate,
   recordTaskSettlement,
@@ -187,5 +189,93 @@ describe("completion signal", () => {
     const aborted = untilWokenOrTimeout(new Promise(() => undefined), 60_000, control.signal);
     control.abort(new Error("superseded"));
     await expect(aborted).rejects.toThrow("superseded");
+  });
+});
+
+describe("explaining a refused result", () => {
+  const failed = (message: string) => ({
+    schemaVersion: "gardener.harness.outcome/v1" as const,
+    harness: submission.harness,
+    runId,
+    requestId,
+    submissionId,
+    status: "failed" as const,
+    error: { code: "provider-error", message, retryable: false },
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, turns: 0, toolCalls: 0, model: "" },
+    events: [],
+  });
+
+  it("replaces the generic failure with the recorded refusal", async () => {
+    const storage = await dispatched();
+    await recordCompletionRefusal(storage, new Error("Task completion tool call id is malformed"));
+    await recordCompletionRefusal(storage, new Error("a later refusal"));
+    const explained = await explainRefusedCompletion(storage, failed("Flue task execution failed") as never);
+    expect(explained).toMatchObject({
+      status: "failed",
+      error: { code: "invalid-outcome", message: "The model reported a result, but Gardener could not record it: Task completion tool call id is malformed" },
+    });
+  });
+
+  it("also beats the finish hook's missing-finish message, since the model did report", async () => {
+    const storage = await dispatched();
+    await recordCompletionRefusal(storage, new Error("Task result needs a finish_task outcome, found none"));
+    const explained = await explainRefusedCompletion(storage, failed("The model stopped without calling finish_task. It may have run out of output tokens") as never);
+    expect(explained).toMatchObject({
+      error: { message: "The model reported a result, but Gardener could not record it: Task result needs a finish_task outcome, found none. The model stopped without calling finish_task. It may have run out of output tokens" },
+    });
+  });
+
+  it("classifies a settlement that carries the finish hook's reason", async () => {
+    const storage = await dispatched();
+    await recordTaskSettlement(storage, {
+      runId,
+      submissionId,
+      outcome: "failed",
+      error: "task_tool_budget_exceeded\nAgentRunError\nThe agent submission failed because of an internal error.",
+    });
+    const harnessOutcome = completionHarnessOutcome(submission, (await readTaskCompletion(storage))!);
+    expect(await explainRefusedCompletion(storage, harnessOutcome)).toMatchObject({
+      status: "failed",
+      error: { code: "budget-exceeded", message: "Task tool-call limit was exceeded" },
+    });
+  });
+
+  it("leaves specific failures and refusal-free runs alone", async () => {
+    const storage = await dispatched();
+    const generic = failed("Flue task execution failed");
+    expect(await explainRefusedCompletion(storage, generic as never)).toBe(generic);
+    await recordCompletionRefusal(storage, new Error("x"));
+    const limit = failed("Task model-turn limit was exceeded");
+    expect(await explainRefusedCompletion(storage, limit as never)).toBe(limit);
+  });
+
+  it("names only the first schema issue, bounded", async () => {
+    const storage = await dispatched();
+    const schemaError = Object.assign(new Error("[{...long...}]"), {
+      name: "ZodError",
+      issues: [{ path: ["proposedEffects", 0, "kind"], message: "Invalid option" }, { path: ["summary"], message: "Too long" }],
+    });
+    await recordCompletionRefusal(storage, schemaError);
+    const explained = await explainRefusedCompletion(storage, failed("Flue task execution failed") as never);
+    expect(explained).toMatchObject({ error: { message: "The model reported a result, but Gardener could not record it: the result is not a valid task outcome (proposedEffects.0.kind: Invalid option)" } });
+    const long = await dispatched();
+    await recordCompletionRefusal(long, new Error(`Task candidate ${"x".repeat(1_000)}`));
+    const bounded = await explainRefusedCompletion(long, failed("Flue task execution failed") as never) as { error: { message: string } };
+    expect(bounded.error.message.length).toBeLessThan(400);
+  });
+
+  it("keeps anything but the completion paths' own messages in the Worker logs", async () => {
+    const storage = await dispatched();
+    await recordCompletionRefusal(storage, new Error("D1_ERROR: something with /repo/path and stderr"));
+    const explained = await explainRefusedCompletion(storage, failed("Flue task execution failed") as never);
+    expect(explained).toMatchObject({ error: { message: "The model reported a result, but Gardener could not record it: an unexpected error (details are in the Worker logs)" } });
+  });
+
+  it("detects a wrapped schema issue list by shape", async () => {
+    const storage = await dispatched();
+    await recordCompletionRefusal(storage, Object.assign(new Error('[{"received":"secret model text"}]'), { issues: [{ path: ["summary"], message: "Too long" }] }));
+    const explained = await explainRefusedCompletion(storage, failed("Flue task execution failed") as never) as { error: { message: string } };
+    expect(explained.error.message).toContain("the result is not a valid task outcome (summary: Too long)");
+    expect(explained.error.message).not.toContain("secret");
   });
 });

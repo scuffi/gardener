@@ -322,6 +322,9 @@ export function GardenerTaskFlueAgent(): string {
     });
     const refuse: (reason: string) => never = (reason) => {
       console.warn("gardener task finish refused", { taskId, reason });
+      // Flue reports a hook failure only as an internal error, so the
+      // settlement notice carries the reason instead.
+      rememberFinishRefusal(request.runId, reason);
       throw new Error(reason);
     };
     // There is deliberately no required-evidence check here. A task may
@@ -414,6 +417,31 @@ async function withSessionRetries<T>(action: string, call: () => Promise<T>): Pr
 
 let settlementNoticesInstalled = false;
 
+/** Finish-hook refusal reasons by run id, until the run's settlement notice takes them. */
+const finishRefusals = new Map<string, string>();
+const MAX_FINISH_REFUSALS = 100;
+
+function rememberFinishRefusal(runId: string, reason: string): void {
+  finishRefusals.delete(runId);
+  finishRefusals.set(runId, reason.slice(0, 200));
+  // Bounded: a notice that never comes must not leak entries.
+  while (finishRefusals.size > MAX_FINISH_REFUSALS) finishRefusals.delete(finishRefusals.keys().next().value!);
+}
+
+/**
+ * Adds a remembered finish-hook refusal to a failed run's settlement notice,
+ * ahead of Flue's own error, so the session can classify the real reason.
+ */
+export function withFinishRefusal(notice: TaskSettlementNoticeV1, refusals: Map<string, string> = finishRefusals): TaskSettlementNoticeV1 {
+  const reason = refusals.get(notice.runId);
+  if (reason === undefined) return notice;
+  // Consumed by the run's first notice whatever its outcome: a session has
+  // one submission, so no later notice for this run needs it.
+  refusals.delete(notice.runId);
+  if (notice.outcome !== "failed") return notice;
+  return { ...notice, error: [reason, notice.error].filter((part) => part).join("\n").slice(0, 2_000) };
+}
+
 /**
  * Pushes every settlement of a task submission to its session, so the session
  * learns that a run failed or was aborted without reading the agent.
@@ -441,7 +469,8 @@ function installSettlementNotices(): void {
     }
     // Opportunistic: Flue does not await observers, so these retries are best
     // effort, and the session's peek is the backstop.
-    return withSessionRetries("report the task settlement", () => facade.recordTaskSettlement(notice))
+    const explained = withFinishRefusal(notice);
+    return withSessionRetries("report the task settlement", () => facade.recordTaskSettlement(explained))
       .then(() => undefined, () => undefined);
   });
 }

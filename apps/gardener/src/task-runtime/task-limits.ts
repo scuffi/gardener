@@ -41,7 +41,9 @@ export function boundedTaskLimitFailure(cause: unknown): { code: "budget-exceede
  * the audit row. Only these fixed strings are ever returned, plus an HTTP
  * status number, so provider response bodies, prompts and repository content
  * never leave the Worker. Unrecognised failures return null and keep the
- * generic message.
+ * generic message. The one other operator-visible failure text is a refused
+ * completion (`explainRefusedCompletion`), which likewise forwards only the
+ * completion paths' own fixed messages.
  */
 export function classifyTaskFailure(cause: unknown): { code: "budget-exceeded" | "invalid-outcome" | "provider-error"; message: string } | null {
   const limit = boundedTaskLimitFailure(cause);

@@ -72,6 +72,8 @@ import {
   CompletionSignal,
   SUBMISSION_KEY,
   completionHarnessOutcome,
+  explainRefusedCompletion,
+  recordCompletionRefusal,
   confirmTaskResult,
   emptyUsage,
   readTaskCompletion,
@@ -249,6 +251,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
         kind,
         error: error instanceof Error ? error.message.slice(0, 300) : "non-error rejection",
       });
+      // Kept so a failed run can say why its result was refused; best effort.
+      if (kind !== "settlement") await recordCompletionRefusal(this.ctx.storage, error).catch(() => undefined);
       throw error;
     }
   }
@@ -267,7 +271,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       const wait = this.#completion.arm();
       try {
         const completion = await readTaskCompletion(this.ctx.storage);
-        if (completion) return completionHarnessOutcome(submission, completion);
+        if (completion) return await explainRefusedCompletion(this.ctx.storage, completionHarnessOutcome(submission, completion));
         const quietMs = Date.now() - Math.max(this.#lastAgentContactAt, this.#lastPeekAt);
         if (this.#agentCallsInFlight === 0 && quietMs >= COMPLETION_PEEK_AFTER_MS && peeks < COMPLETION_PEEKS_PER_WAIT) {
           peeks += 1;
@@ -281,7 +285,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
             );
             if (peeked) {
               console.warn("Gardener task settled without a pushed completion", { status: peeked.status });
-              return peeked;
+              return await explainRefusedCompletion(this.ctx.storage, peeked);
             }
           } finally {
             if (this.#activePeek === peek) this.#activePeek = undefined;

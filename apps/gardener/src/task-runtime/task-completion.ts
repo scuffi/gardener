@@ -21,6 +21,10 @@ import { classifyTaskFailure } from "./task-limits";
 const CANDIDATE_PREFIX = "task-candidate:";
 const RESULT_KEY = "task-result";
 const SETTLEMENT_KEY = "task-settlement";
+const REFUSAL_KEY = "task-completion-refusal";
+const GENERIC_FAILURE = "Flue task execution failed";
+const REFUSAL_MAX_LENGTH = 300;
+const MISSING_FINISH = "The model stopped without calling finish_task";
 /** The submission this session dispatched, so pushes for any other are refused. */
 export const SUBMISSION_KEY = "task-submission";
 
@@ -188,7 +192,7 @@ export async function recordTaskSettlement(
     submissionId: input.submissionId,
     outcome: input.outcome,
     error: input.outcome === "failed"
-      ? (typeof input.error === "string" && input.error ? input.error.slice(0, 2_000) : "Flue task execution failed")
+      ? (typeof input.error === "string" && input.error ? input.error.slice(0, 2_000) : GENERIC_FAILURE)
       : null,
   });
   return { duplicate: false };
@@ -201,6 +205,57 @@ export async function readTaskCompletion(storage: CompletionStorage): Promise<Ta
   const settlement = await storage.get<StoredSettlement>(SETTLEMENT_KEY);
   if (settlement) return { kind: "settlement", outcome: settlement.outcome, error: settlement.error };
   return null;
+}
+
+/**
+ * Remembers why the session refused the model's reported result. The finish
+ * hook then refuses the run, and Flue reports that only as an internal error,
+ * so without this the cause never leaves the Worker logs. First wins.
+ */
+export async function recordCompletionRefusal(storage: CompletionStorage, error: unknown): Promise<void> {
+  if (await storage.get<string>(REFUSAL_KEY)) return;
+  await storage.put<string>(REFUSAL_KEY, refusalText(error));
+}
+
+/**
+ * A failed outcome that only says the task failed, rewritten to the recorded
+ * refusal when there is one. Specific failures (limits, provider errors,
+ * cancellation) are left as they are.
+ */
+export async function explainRefusedCompletion(storage: CompletionStorage, outcome: HarnessOutcome): Promise<HarnessOutcome> {
+  // A recorded refusal means the model did report a result, so it also beats
+  // the finish hook's "stopped without calling finish_task".
+  if (outcome.status !== "failed") return outcome;
+  const message = outcome.error.message;
+  if (message !== GENERIC_FAILURE && !message.startsWith(MISSING_FINISH)) return outcome;
+  const refusal = await storage.get<string>(REFUSAL_KEY);
+  if (!refusal) return outcome;
+  const recorded = `The model reported a result, but Gardener could not record it: ${refusal}`;
+  // The two can both be true: an early refused result does not mean the model
+  // didn't later run out of output, so keep the missing-finish advice too.
+  const explained = message === GENERIC_FAILURE ? recorded : `${recorded}. ${message}`;
+  return { ...outcome, error: harnessError("invalid-outcome", explained.slice(0, 2_000), false) };
+}
+
+/**
+ * The operator-visible text for a refusal. Only the completion paths' own
+ * fixed messages leave the Worker (they name no model output, repository
+ * content or ids); anything else stays in the Worker logs.
+ */
+function refusalText(error: unknown): string {
+  // A schema failure names the first field only; the full issue list can be
+  // long and quote the model's input. Detected by shape, so a wrapped or
+  // re-thrown issue list is caught too.
+  const issues = error !== null && typeof error === "object" ? (error as { issues?: unknown }).issues : undefined;
+  if (Array.isArray(issues)) {
+    const issue = issues[0] as { path?: unknown[]; message?: unknown } | undefined;
+    const field = Array.isArray(issue?.path) ? issue.path.join(".") : "";
+    const detail = typeof issue?.message === "string" ? ` (${field || "outcome"}: ${issue.message})` : "";
+    return `the result is not a valid task outcome${detail}`.slice(0, REFUSAL_MAX_LENGTH);
+  }
+  const message = error instanceof Error ? error.message.replace(/\s+/g, " ").trim() : "";
+  if (/^Task (completion|candidate|result) /.test(message)) return message.slice(0, REFUSAL_MAX_LENGTH);
+  return "an unexpected error (details are in the Worker logs)";
 }
 
 /** The outcome the session's existing settle path takes, as a read of the agent used to produce it. */
@@ -242,7 +297,7 @@ export function completionHarnessOutcome(submission: HarnessSubmission, completi
   return {
     ...base,
     status: "failed",
-    error: harnessError(known?.code ?? "provider-error", known?.message ?? "Flue task execution failed", false),
+    error: harnessError(known?.code ?? "provider-error", known?.message ?? GENERIC_FAILURE, false),
     usage: emptyUsage(),
   };
 }

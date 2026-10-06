@@ -22,6 +22,7 @@ import {
   installGardenerTaskToolFacade,
   MAX_TASK_RUNTIME_SECONDS,
   taskSettlementNotice,
+  withFinishRefusal,
 } from "../src/task-runtime/flue-agent";
 
 function request(): HarnessRequest {
@@ -519,5 +520,28 @@ describe("canonical task Flue agent", () => {
     expect(taskSettlementNotice({ ...event, agentName: "another-agent" })).toBe("ignored");
     expect(taskSettlementNotice({ ...event, type: "submission_recovery" })).toBe("ignored");
     expect(taskSettlementNotice({ ...event, instanceId: undefined })).toBe("unaddressed");
+  });
+});
+
+describe("finish refusal on the settlement notice", () => {
+  const notice = { runId: "repo-1-run-2-attempt-1-plan", submissionId: "sub_1", outcome: "failed" as const, error: "AgentRunError\nThe agent submission failed because of an internal error." };
+
+  it("puts the hook's reason first and is used once", () => {
+    const refusals = new Map([[notice.runId, "task_completed_without_terminal_outcome"]]);
+    expect(withFinishRefusal(notice, refusals).error).toBe(`task_completed_without_terminal_outcome\n${notice.error}`);
+    expect(refusals.size).toBe(0);
+    expect(withFinishRefusal(notice, refusals)).toBe(notice);
+  });
+
+  it("only changes failed notices", () => {
+    const refusals = new Map([[notice.runId, "task_tool_budget_exceeded"]]);
+    const aborted = { ...notice, outcome: "aborted" as const };
+    expect(withFinishRefusal(aborted, refusals)).toBe(aborted);
+    expect(refusals.size).toBe(0);
+  });
+
+  it("adds an error to a notice that had none", () => {
+    const refusals = new Map([[notice.runId, "task_has_multiple_terminal_outcomes"]]);
+    expect(withFinishRefusal({ ...notice, error: undefined } as never, refusals).error).toBe("task_has_multiple_terminal_outcomes");
   });
 });
