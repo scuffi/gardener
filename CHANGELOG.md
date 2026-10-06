@@ -3,6 +3,32 @@
 Gardener is released as git tags. To move a connected repository to a release, follow
 [Upgrading](docs/onboarding.md#upgrading).
 
+## v0.1.11 (2026-10-06)
+
+- Every plan and apply job writes a GitHub job summary. Successful runs list the proposed steps,
+  then each applied step with a link. Failed runs lead with what happened and what to do: a task
+  limit to raise in TASK.md, a temporary provider or GitHub problem to retry, or a plan that went
+  stale because the issue or pull request changed. A stale plan needs **Re-run all jobs**, since
+  re-running only the apply job replays the same plan. Each summary ends with the exact
+  `gardener runs view` command for the run.
+- New effects `pull_request.review_comment.reply` and `pull_request.review_thread.resolve`, so a
+  review-fixing task can answer each finding in its own thread and resolve only the threads its
+  commit fixed. Both are limited to the pull request that triggered the run.
+- Comments, replies and resolves planned after a `commit.create` in the same run now accept the
+  head that commit produced. Before, they only passed because GitHub reported the new head a
+  couple of seconds late.
+- A review that waited behind an earlier round now plans on the pull request's current head, so it
+  sees that round's push instead of stopping on a stale checkout. Fork pull requests are unchanged.
+- When a repository and its runtime are on different releases, the runtime's refusal names both
+  releases and the fix: `gardener upgrade --workspace <name>` with the CLI from the newer release.
+- A failed run reports why Gardener refused the model's result, or which check the model's finish
+  failed, instead of "Flue task execution failed".
+- `max-tool-calls` is documented as including the final `finish_task` call.
+- The reusable workflows use `actions/checkout` v7.0.1, `actions/upload-artifact` v7.0.1 and
+  `actions/download-artifact` v8.0.1, which run on Node 24.
+- Upgrading: deploy the runtime first (`gardener upgrade` does), then commit and push the upgraded
+  repository. An older runtime refuses tasks that use the new effects.
+
 ## v0.1.10 (2026-10-01)
 
 - `authors` can be a list of exact GitHub logins, optionally with `maintainers`, such as
