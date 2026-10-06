@@ -304,6 +304,21 @@ the rebase or merge conflicts, and does nothing if the branch already contains i
 finishes the update a few seconds after the effect succeeds, so the effect reports no new head. It needs
 `contents: write`, and like other workflow-token pushes it does not re-run the pull request's checks.
 
+`pull_request.review_comment.reply` replies in an existing review thread. `commentId` can be any
+comment in the thread, because GitHub threads the reply under its first comment.
+`pull_request.review_thread.resolve` resolves a thread by its GraphQL node id (`PRRT_…`), and
+resolving a resolved thread succeeds.
+
+Both act only on the pull request that triggered the run. That includes a comment on its
+conversation, and a manual run started against it. A step naming any other pull request is refused,
+because resolving a thread hides a reviewer's objection, and text the model read must not be able
+to point that at someone else's pull request.
+
+After a `commit.create` earlier in the same plan pushes to the pull request's branch, these two and
+`pull_request.comment.create` accept that commit as the head. Any other change to the head still
+stops them. Resolve only threads the commit fixed: apply stops at the first failed step, so a
+resolve planned after the commit never runs unless the commit landed.
+
 ### Branches
 
 `branch.create`, `commit.create`, `pull_request.open` and `pull_request.open_draft` write to a named

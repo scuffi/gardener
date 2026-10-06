@@ -39991,6 +39991,8 @@ var operationKindValues = [
   "pull_request.label.add",
   "pull_request.label.remove",
   "pull_request.update_branch",
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve",
   "branch.create",
   "commit.create",
   "pull_request.open",
@@ -40058,6 +40060,7 @@ var pullBase = operationBase.extend({
 var discussionBase = operationBase.extend({ discussionNumber: external_exports.number().int().positive(), expectedDiscussionState: external_exports.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
 var commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body };
 var labelName = external_exports.string().trim().min(1).max(100);
+var graphqlNodeId = external_exports.string().regex(/^[A-Za-z0-9_=-]{1,256}$/);
 var requiredCheckSchema = external_exports.object({ context: external_exports.string().trim().min(1).max(255), appId: external_exports.number().int().positive() }).strict();
 var operationOptions = [
   issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: labelName }).strict(),
@@ -40104,6 +40107,10 @@ var operationOptions = [
   pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
   // GitHub rebases or merges the base in itself, leased on expectedHeadSha.
   pullBase.extend({ kind: external_exports.literal("pull_request.update_branch"), method: external_exports.enum(["merge", "rebase"]) }).strict(),
+  /** A reply in an existing review thread. `commentId` is any comment in it; GitHub threads the reply under the first. */
+  pullBase.extend({ kind: external_exports.literal("pull_request.review_comment.reply"), commentId: githubNumericIdSchema, body }).strict(),
+  /** Resolves a review thread, by its GraphQL node id. Resolving a resolved thread succeeds. */
+  pullBase.extend({ kind: external_exports.literal("pull_request.review_thread.resolve"), threadId: graphqlNodeId }).strict(),
   operationBase.extend({ kind: external_exports.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
@@ -40201,9 +40208,20 @@ function collectStrings(value, output2) {
   else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
   else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStrings(item, output2));
 }
+var operationMarkerBodyKinds = [
+  "issue.comment.create",
+  "issue.create",
+  "pull_request.review.submit",
+  "pull_request.open",
+  "pull_request.open_draft",
+  "pull_request.review_comment.reply"
+];
+function isOperationMarkerBodyKind(kind) {
+  return operationMarkerBodyKinds.includes(kind);
+}
 var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
   const strings = [];
-  if (operation.kind === "issue.comment.create" || operation.kind === "issue.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open" || operation.kind === "pull_request.open_draft") {
+  if (isOperationMarkerBodyKind(operation.kind) && "body" in operation && typeof operation.body === "string") {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
     const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
 ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
@@ -40272,6 +40290,8 @@ var operationOutputCatalog = {
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
   // No head output: GitHub finishes the update after the mutation returns.
   "pull_request.update_branch": pullOutputs,
+  "pull_request.review_comment.reply": { ...pullOutputs, ...commentOutputs },
+  "pull_request.review_thread.resolve": { ...pullOutputs, threadId: "nodeId" },
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",
@@ -41553,6 +41573,24 @@ var taskEventBindingV1Schema = external_exports.strictObject({
     context.addIssue({ code: "custom", path: ["action"], message: "action does not match the trigger kind" });
   }
 });
+var triggeringPullRequestKinds = [
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve"
+];
+function triggeringPullRequestRefusal(kind, payload, references, resource) {
+  if (!triggeringPullRequestKinds.includes(kind)) return void 0;
+  if (references["/pullNumber"] !== void 0) {
+    return `${kind} must name the pull request that triggered this run directly, not by reference`;
+  }
+  if (resource === null || resource.kind !== "pull_request" && resource.kind !== "issue") {
+    return `${kind} needs a run triggered from a pull request`;
+  }
+  const pullNumber = payload !== null && typeof payload === "object" ? payload.pullNumber : void 0;
+  if (pullNumber !== resource.number) {
+    return `${kind} may act only on #${resource.number}, which triggered this run`;
+  }
+  return void 0;
+}
 var captureMaterializedPointers = {
   "commit.create": ["/files"]
 };
@@ -41779,6 +41817,8 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
         if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal });
       }
     }
+    const pullRefusal = triggeringPullRequestRefusal(operation.kind, operation.payload, operation.references, plan.event.resource);
+    if (pullRefusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "pullNumber"], message: pullRefusal });
     if (operation.kind === "commit.create" && plan.capture !== void 0) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });

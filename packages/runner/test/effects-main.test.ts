@@ -756,6 +756,77 @@ describe("ordered effect application", () => {
   });
 });
 
+describe("pull request heads this plan pushed", () => {
+  it("hands a commit's new head to later thread steps, also on resume", async () => {
+    const content = Buffer.from("changed\n");
+    const capture = {
+      schemaVersion: "gardener.task-capture-manifest/v1" as const,
+      captureId: `cap_${"2".repeat(64)}`,
+      baseSha: SHA,
+      files: [{
+        path: "src/a.txt", status: "modified" as const, mode: "100644" as const, sizeBytes: content.length,
+        sha256: createHash("sha256").update(content).digest("hex"),
+      }],
+      totalBytes: content.length,
+      truncated: false as const,
+    };
+    const pull = {
+      pullNumber: 7, expectedHeadSha: SHA, expectedBaseRef: "main", expectedBaseSha: "a".repeat(40),
+      expectedState: "open", expectedDraft: false, expectedPullUpdatedAt: "2026-09-17T12:00:00Z",
+    };
+    const value = plan([
+      step("commit", "op_commit", "commit.create", { branch: "gardener/fix-1", expectedHeadSha: SHA, message: "Fix." }),
+      step("reply", "op_reply", "pull_request.review_comment.reply", { ...pull, commentId: "55", body: "Fixed." }),
+      step("resolve", "op_resolve", "pull_request.review_thread.resolve", { ...pull, threadId: "PRRT_thread" }),
+    ], {
+      capture,
+      changesSha256: "e".repeat(64),
+      provenance: {
+        sourcePath: ".gardener/tasks/fixture/TASK.md", commitSha: "9".repeat(40), checkoutSha: SHA,
+        workflowRunId: "2", workflowRunAttempt: 1,
+      },
+      event: {
+        kind: "github.pull_request_review.submitted", eventName: "pull_request_review", action: "submitted",
+        resource: { kind: "pull_request", id: "700", number: 7 }, commentId: null,
+      },
+    });
+    const pushed = { branch: "gardener/fix-1", from: SHA, to: "f".repeat(40) };
+    const execute = (failReply: boolean, seen: Record<string, unknown>) => async (operation: Operation, context: GitHubEffectsContext) => {
+      seen[operation.kind] = context.chainedHeads;
+      if (operation.kind === "commit.create") {
+        return success(operation, {
+          kind: operation.kind, branch: operation.branch, commitSha: pushed.to, treeSha: "1".repeat(40),
+          parentSha: SHA, commitUrl: `https://github.com/owner/repo/commit/${pushed.to}`,
+        });
+      }
+      if (operation.kind === "pull_request.review_comment.reply") {
+        if (failReply) return { receipt: receipt(operation, "failed") };
+        return success(operation, { kind: operation.kind, pullNumber: 7, commentId: "57", commentUrl: "https://github.com/owner/repo/pull/7#discussion_r57" });
+      }
+      if (operation.kind !== "pull_request.review_thread.resolve") throw new Error(`unexpected ${operation.kind}`);
+      return success(operation, { kind: operation.kind, pullNumber: 7, threadId: "PRRT_thread" });
+    };
+    const first: Record<string, unknown> = {};
+    const firstPass = await effects.applyOrderedPlan({
+      plan: value, artifactSha256: ARTIFACT_HASH, token: "token", deadlineAt: Date.now() + 60_000, prior: null,
+      captureDirectory: "/verified/capture", execute: execute(true, first), record: async () => undefined,
+    });
+    expect(first["commit.create"]).toBeUndefined();
+    expect(first["pull_request.review_comment.reply"]).toEqual([pushed]);
+    expect(firstPass.receipt.status).toBe("stopped");
+
+    const resumed: Record<string, unknown> = {};
+    const secondPass = await effects.applyOrderedPlan({
+      plan: value, artifactSha256: ARTIFACT_HASH, token: "token", deadlineAt: Date.now() + 60_000, prior: firstPass.receipt,
+      captureDirectory: "/verified/capture", execute: execute(false, resumed), record: async () => undefined,
+    });
+    expect(resumed["commit.create"]).toBeUndefined();
+    expect(resumed["pull_request.review_comment.reply"]).toEqual([pushed]);
+    expect(resumed["pull_request.review_thread.resolve"]).toEqual([pushed]);
+    expect(secondPass.receipt.status).toBe("applied");
+  });
+});
+
 describe("effects action artifact boundary", () => {
   it("rejects a tampered artifact before opening a runtime session", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "gardener-effect-tampered-"));

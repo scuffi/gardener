@@ -105,10 +105,10 @@ Coding agents can read `.gardener/SKILL.md`, which `init` and `generate` write: 
 the task format, in the CLI's own version.
 
 Tasks can respond to 26 kinds of issue, pull request, discussion, push, schedule, and manual
-events. They can use 29 kinds of GitHub operation, including:
+events. They can use 36 kinds of GitHub operation, including:
 
 - labels and comments;
-- reviews;
+- reviews, and replies and resolves in review threads;
 - branches and commits;
 - draft pull requests and merges;
 - check reruns;

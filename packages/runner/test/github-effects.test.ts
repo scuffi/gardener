@@ -210,6 +210,27 @@ const OPEN_PULL = {
   html_url: "https://github.com/acme/widgets/pull/7",
 };
 
+const REVIEW_COMMENT_REPLY = {
+  id: 56,
+  in_reply_to_id: 55,
+  user: { login: "devin-ai-integration[bot]" },
+  body: "Still broken.",
+  pull_request_url: "https://api.github.com/repos/acme/widgets/pulls/7",
+};
+function reviewReply(body: string) {
+  return {
+    id: 57,
+    in_reply_to_id: 55,
+    user: BOT,
+    body,
+    pull_request_url: "https://api.github.com/repos/acme/widgets/pulls/7",
+    html_url: "https://github.com/acme/widgets/pull/7#discussion_r57",
+  };
+}
+function reviewThread(isResolved: boolean, number = 7, nameWithOwner = "acme/widgets") {
+  return { node: { __typename: "PullRequestReviewThread", isResolved, pullRequest: { number, repository: { nameWithOwner } } } };
+}
+
 const OCTOCAT = { id: 42, login: "octocat" };
 const CREATED_ISSUE = {
   id: 900,
@@ -567,6 +588,34 @@ const scenarios: Record<string, Scenario> = {
       }]),
     ],
     outputs: { branch: "gardener/feature", commitSha: NEW_COMMIT, treeSha: NEW_TREE, parentSha: HEAD },
+  },
+  "pull_request.review_comment.reply": {
+    operation: operationSchema.parse({
+      ...pullBase,
+      id: "op-review-reply",
+      kind: "pull_request.review_comment.reply",
+      commentId: "56",
+      body: marked("op-review-reply", "Fixed, with a test."),
+    }),
+    apply: [
+      get(`${REPO}/pulls/7/comments`, []),
+      // 56 is itself a reply, so the new reply goes to the thread's root, 55.
+      get(`${REPO}/pulls/comments/56`, REVIEW_COMMENT_REPLY),
+      get(`${REPO}/pulls/7`, OPEN_PULL),
+      send("POST", `${REPO}/pulls/7/comments/55/replies`, reviewReply(marked("op-review-reply", "Fixed, with a test."))),
+    ],
+    duplicate: [get(`${REPO}/pulls/7/comments`, [reviewReply(marked("op-review-reply", "Fixed, with a test."))])],
+    outputs: { pullNumber: 7, commentId: "57" },
+  },
+  "pull_request.review_thread.resolve": {
+    operation: operationSchema.parse({ ...pullBase, id: "op-thread-resolve", kind: "pull_request.review_thread.resolve", threadId: "PRRT_thread" }),
+    apply: [
+      gql("node(id: $id)", reviewThread(false)),
+      get(`${REPO}/pulls/7`, OPEN_PULL),
+      gql("resolveReviewThread", { resolveReviewThread: { thread: { isResolved: true } } }),
+    ],
+    duplicate: [gql("node(id: $id)", reviewThread(true))],
+    outputs: { pullNumber: 7, threadId: "PRRT_thread" },
   },
   "pull_request.update_branch": {
     operation: operationSchema.parse({ ...pullBase, id: "op-update-branch", kind: "pull_request.update_branch", method: "rebase" }),
@@ -2420,5 +2469,110 @@ describe("exported helpers", () => {
     expect(OPERATION_TOKEN_PERMISSIONS["discussion.close"]).toEqual(["discussions:write"]);
     expect(OPERATION_TOKEN_PERMISSIONS["check.rerun"]).toEqual(["checks:write"]);
     expect(OPERATION_TOKEN_PERMISSIONS["pull_request.merge"]).toContain("contents:write");
+  });
+});
+
+describe("review thread replies and resolves", () => {
+  const reply = operationSchema.parse({
+    ...pullBase, id: "op-reply-neg", kind: "pull_request.review_comment.reply", commentId: "56", body: marked("op-reply-neg", "Fixed."),
+  });
+  const resolve = operationSchema.parse({ ...pullBase, id: "op-resolve-neg", kind: "pull_request.review_thread.resolve", threadId: "PRRT_thread" });
+  const PUSHED = "e".repeat(40);
+  const sameRepo = { id: 1 };
+  const pushedPull = {
+    ...OPEN_PULL,
+    head: { sha: PUSHED, ref: "gardener/feature", repo: sameRepo },
+    base: { ref: "main", sha: BASE, repo: sameRepo },
+  };
+  const replyRoutes = (pull: unknown) => [
+    get(`${REPO}/pulls/7/comments`, []),
+    get(`${REPO}/pulls/comments/56`, REVIEW_COMMENT_REPLY),
+    get(`${REPO}/pulls/7`, pull),
+    send("POST", `${REPO}/pulls/7/comments/55/replies`, reviewReply(marked("op-reply-neg", "Fixed."))),
+  ];
+
+  it("refuses a comment that is missing or on another pull request", async () => {
+    const missing = await run(reply, [get(`${REPO}/pulls/7/comments`, []), get(`${REPO}/pulls/comments/56`, { message: "Not Found" }, 404)]);
+    expect(missing.receipt.status).toBe("conflicted");
+    expect(missing.receipt.error?.code).toBe("review_comment_missing");
+    const elsewhere = await run(reply, [
+      get(`${REPO}/pulls/7/comments`, []),
+      get(`${REPO}/pulls/comments/56`, { ...REVIEW_COMMENT_REPLY, pull_request_url: "https://api.github.com/repos/acme/widgets/pulls/70" }),
+    ]);
+    expect(elsewhere.receipt.error?.code).toBe("review_comment_wrong_pull");
+  });
+
+  it("refuses a thread on another pull request or repository, or one that is not a thread", async () => {
+    for (const [data, code] of [
+      [reviewThread(false, 8), "review_thread_wrong_pull"],
+      [reviewThread(false, 7, "acme/other"), "review_thread_wrong_pull"],
+      [{ node: { __typename: "IssueComment" } }, "review_thread_missing"],
+      [{ node: null }, "review_thread_missing"],
+    ] as const) {
+      const { receipt, calls } = await run(resolve, [gql("node(id: $id)", data)]);
+      expect(receipt.error?.code).toBe(code);
+      expect(calls.some((call) => /resolveReviewThread/.test(String((call.body as { query?: string } | undefined)?.query)))).toBe(false);
+    }
+  });
+
+  it("fails a resolve GitHub does not report as resolved", async () => {
+    const { receipt } = await run(resolve, [
+      gql("node(id: $id)", reviewThread(false)),
+      get(`${REPO}/pulls/7`, OPEN_PULL),
+      gql("resolveReviewThread", { resolveReviewThread: { thread: { isResolved: false } } }),
+    ]);
+    expect(receipt.status).toBe("failed");
+  });
+
+  it("replies under a thread's first comment when given that comment itself", async () => {
+    const root = { ...REVIEW_COMMENT_REPLY, id: 55, in_reply_to_id: undefined };
+    const { receipt, calls } = await run(reply, [
+      get(`${REPO}/pulls/7/comments`, []),
+      get(`${REPO}/pulls/comments/56`, root),
+      get(`${REPO}/pulls/7`, OPEN_PULL),
+      send("POST", `${REPO}/pulls/7/comments/55/replies`, reviewReply(marked("op-reply-neg", "Fixed."))),
+    ]);
+    expect(receipt.status, JSON.stringify(receipt.error)).toBe("succeeded");
+    expect(calls.filter((call) => call.method === "POST").map((call) => call.path)).toEqual([`${REPO}/pulls/7/comments/55/replies`]);
+  });
+
+  it("refuses a thread id GitHub cannot resolve, as a missing thread rather than a failure", async () => {
+    for (const error of [
+      { type: "NOT_FOUND", message: "Could not resolve to a node with the global id of 'PRRT_thread'" },
+      { message: "Could not resolve to a node with the global id of 'PRRT_thread'" },
+    ]) {
+      const unresolvable: Handler = {
+        when: (call) => call.method === "POST" && call.path === "/graphql",
+        json: { data: { node: null }, errors: [error] },
+      };
+      const { receipt } = await run(resolve, [unresolvable]);
+      expect(receipt.status).toBe("conflicted");
+      expect(receipt.error?.code).toBe("review_thread_missing");
+    }
+  });
+
+  it("lets a pull request comment follow this plan's own commit", async () => {
+    const comment = operationSchema.parse({ ...pullBase, id: "op-comment-chain", kind: "pull_request.comment.create", body: "Round summary." });
+    const routes = [
+      get(`${REPO}/issues/7/comments`, []),
+      get(`${REPO}/pulls/7`, pushedPull),
+      send("POST", `${REPO}/issues/7/comments`, issueComment("Round summary.", COMMENT_UPDATED, 7)),
+    ];
+    expect((await run(comment, routes, { chainedHeads: [{ branch: "gardener/feature", from: HEAD, to: PUSHED }] })).receipt.status).toBe("succeeded");
+    expect((await run(comment, routes)).receipt.error?.code).toBe("pull_head_changed");
+  });
+
+  it("accepts a head this plan pushed from the planned head, and no other", async () => {
+    const chained = { chainedHeads: [{ branch: "gardener/feature", from: HEAD, to: PUSHED }] };
+    expect((await run(reply, replyRoutes(pushedPull), chained)).receipt.status).toBe("succeeded");
+    // Without the chain, or on another branch, or a fork head, the moved head conflicts.
+    expect((await run(reply, replyRoutes(pushedPull))).receipt.error?.code).toBe("pull_head_changed");
+    expect((await run(reply, replyRoutes(pushedPull), { chainedHeads: [{ branch: "gardener/other", from: HEAD, to: PUSHED }] }))
+      .receipt.error?.code).toBe("pull_head_changed");
+    const forkHead = { ...pushedPull, head: { ...pushedPull.head, repo: { id: 2 } } };
+    expect((await run(reply, replyRoutes(forkHead), chained)).receipt.error?.code).toBe("pull_head_changed");
+    // A head someone else pushed after this plan's commit still conflicts.
+    const later = { ...pushedPull, head: { ...pushedPull.head, sha: "f".repeat(40) } };
+    expect((await run(reply, replyRoutes(later), chained)).receipt.error?.code).toBe("pull_head_changed");
   });
 });

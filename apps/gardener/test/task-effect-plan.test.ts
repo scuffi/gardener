@@ -339,12 +339,12 @@ describe("ordered effect plan derivation", () => {
   });
 
   it("accepts every declared operation kind the model can name", async () => {
-    // All 29 kinds parse as proposals; authority is the bundle, not the schema.
+    // Every kind parses as a proposal; authority is the bundle, not the schema.
     const request = await runRequest();
     for (const kind of operationKindValues) {
       expect(request.bundle.effects).toContain(kind);
     }
-    expect(request.bundle.effects).toHaveLength(34);
+    expect(request.bundle.effects).toHaveLength(36);
   });
 });
 

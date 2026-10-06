@@ -67,6 +67,8 @@ export const OPERATION_TOKEN_PERMISSIONS: Readonly<Record<OperationKind, readonl
     // The issues labels API accepts pull-requests:write for a pull request.
     "pull_request.label.add": ["pull-requests:write"],
     "pull_request.label.remove": ["pull-requests:write"],
+    "pull_request.review_comment.reply": ["pull-requests:write"],
+    "pull_request.review_thread.resolve": ["pull-requests:write"],
     "branch.create": ["contents:write"],
     "commit.create": ["contents:write"],
     "pull_request.open": ["contents:read", "pull-requests:write"],

@@ -7,6 +7,8 @@ import {
   impliedEffectKinds,
   isBranchWriteKind,
   taskCheckoutSha,
+  taskEventBindingFromNormalizedEvent,
+  triggeringPullRequestRefusal,
   type TaskEffectProposalV1,
   type TaskRunRequestV1,
 } from "@gardener/contracts";
@@ -44,6 +46,13 @@ export function proposalAuthorityRefusal(
       if (refusal !== undefined) return refusal;
     }
   }
+  const pullRefusal = triggeringPullRequestRefusal(
+    proposal.kind,
+    proposal.payload,
+    proposal.references,
+    taskEventBindingFromNormalizedEvent(request.event).resource,
+  );
+  if (pullRefusal !== undefined) return pullRefusal;
   if (proposal.kind === "commit.create") {
     // The capture is taken from the checked-out commit.
     return commitBaseRefusal(proposal, earlier, taskCheckoutSha(request.bundle, request.event));

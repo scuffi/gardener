@@ -1846,6 +1846,38 @@ export type TaskEventBindingV1 = z.infer<typeof taskEventBindingV1Schema>;
  * Derives the binding from a normalized event so planning, apply, and tests all
  * produce byte-identical bindings instead of each reimplementing the mapping.
  */
+/**
+ * Kinds that may act only on the pull request the run was triggered from.
+ * Resolving a thread hides a reviewer's objection, so model-chosen text must
+ * not be able to point one at another pull request.
+ */
+export const triggeringPullRequestKinds = [
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve",
+] as const satisfies readonly OperationKind[];
+
+/** Why this step may not target its pull request, or `undefined` when it may. */
+export function triggeringPullRequestRefusal(
+  kind: string,
+  payload: unknown,
+  references: Readonly<Record<string, unknown>>,
+  resource: TaskEventResourceV1 | null,
+): string | undefined {
+  if (!(triggeringPullRequestKinds as readonly string[]).includes(kind)) return undefined;
+  if (references["/pullNumber"] !== undefined) {
+    return `${kind} must name the pull request that triggered this run directly, not by reference`;
+  }
+  // A comment on a pull request's conversation arrives as an issue event with the same number.
+  if (resource === null || (resource.kind !== "pull_request" && resource.kind !== "issue")) {
+    return `${kind} needs a run triggered from a pull request`;
+  }
+  const pullNumber = payload !== null && typeof payload === "object" ? (payload as { pullNumber?: unknown }).pullNumber : undefined;
+  if (pullNumber !== resource.number) {
+    return `${kind} may act only on #${resource.number}, which triggered this run`;
+  }
+  return undefined;
+}
+
 export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): TaskEventBindingV1 {
   const base = {
     kind: event.kind,
@@ -2228,6 +2260,8 @@ export const taskEffectPlanV1Schema = z.strictObject({
         if (refusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal });
       }
     }
+    const pullRefusal = triggeringPullRequestRefusal(operation.kind, operation.payload, operation.references, plan.event.resource);
+    if (pullRefusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", "pullNumber"], message: pullRefusal });
     if (operation.kind === "commit.create" && plan.capture !== undefined) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });

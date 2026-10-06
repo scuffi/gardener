@@ -75,6 +75,8 @@ export type OperationOutputsV1 =
   }
   | { kind: "pull_request.comment.create" | "pull_request.comment.update"; pullNumber: number; commentId: string; commentUrl: string }
   | { kind: "pull_request.review.submit"; pullNumber: number; reviewId: string; reviewUrl: string; reviewState: string }
+  | { kind: "pull_request.review_comment.reply"; pullNumber: number; commentId: string; commentUrl: string }
+  | { kind: "pull_request.review_thread.resolve"; pullNumber: number; threadId: string }
   | {
     kind: "pull_request.reviewer.request" | "pull_request.reviewer.remove";
     pullNumber: number;
@@ -168,6 +170,15 @@ export interface GitHubEffectsContext {
    * between its write and the read-back that follows it.
    */
   chainedResourceVersion?: string;
+  /**
+   * Commits an earlier step of this plan created, each on `branch` from `from`.
+   *
+   * A step planned against a pull request's head can't know the commit an
+   * earlier step will push. Append-style steps (comments, thread replies,
+   * thread resolves) accept that commit as the head instead of the planned one;
+   * any other head still conflicts.
+   */
+  chainedHeads?: readonly ChainedHead[];
   /**
    * Whether to read the resource back after a verified write. Set by the caller
    * when a later step of the plan may target the same resource; otherwise the
@@ -546,7 +557,14 @@ async function httpError(response: Response, label: string, requestId?: string):
 /* Shared lookups                                                              */
 /* -------------------------------------------------------------------------- */
 
+export interface ChainedHead {
+  branch: string;
+  from: string;
+  to: string;
+}
+
 interface ExecutionScope {
+  chainedHeads: readonly ChainedHead[];
   api: GitHubApi;
   repoPath: string;
   owner: string;
@@ -645,9 +663,14 @@ interface PullRevisionExpectation {
   expectedBaseSha: string;
 }
 
-function assertPullRevision(pull: JsonRecord, expected: PullRevisionExpectation): void {
+function assertPullRevision(
+  pull: JsonRecord,
+  expected: PullRevisionExpectation,
+  /** Only for append-style steps; see `GitHubEffectsContext.chainedHeads`. */
+  chainedHeads: readonly ChainedHead[] = [],
+): void {
   const head = record(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : null;
-  if (head !== expected.expectedHeadSha) {
+  if (head !== expected.expectedHeadSha && !headChainedByThisPlan(pull, head, expected.expectedHeadSha, chainedHeads)) {
     throw conflict("pull_head_changed", `Precondition failed: pull request head is ${String(head)}`);
   }
   if (!record(pull.base) || typeof pull.base.ref !== "string" || typeof pull.base.sha !== "string") {
@@ -656,6 +679,20 @@ function assertPullRevision(pull: JsonRecord, expected: PullRevisionExpectation)
   if (pull.base.ref !== expected.expectedBaseRef || pull.base.sha !== expected.expectedBaseSha) {
     throw conflict("pull_base_changed", `Precondition failed: pull request base is ${pull.base.ref} at ${pull.base.sha}`);
   }
+}
+
+/** Whether `head` is a commit this plan pushed onto the pull request's own branch, from the planned head. */
+function headChainedByThisPlan(pull: JsonRecord, head: string | null, planned: string, chainedHeads: readonly ChainedHead[]): boolean {
+  if (head === null || !record(pull.head) || !record(pull.base)) return false;
+  const headRepo = record(pull.head.repo) ? pull.head.repo.id : undefined;
+  const baseRepo = record(pull.base.repo) ? pull.base.repo.id : undefined;
+  // The plan only ever pushes to the base repository.
+  if (headRepo === undefined || headRepo !== baseRepo) return false;
+  let at = planned;
+  for (const chained of chainedHeads) {
+    if (chained.branch === pull.head.ref && chained.from === at) at = chained.to;
+  }
+  return at !== planned && head === at;
 }
 
 interface PullStateExpectation {
@@ -1064,7 +1101,7 @@ async function executePullCommentCreate(
     };
   }
   const pull = await loadPull(scope, operation.pullNumber);
-  assertPullRevision(pull, operation);
+  assertPullRevision(pull, operation, scope.chainedHeads);
   assertPullState(scope, pull, operation, "append");
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
     method: "POST",
@@ -1091,6 +1128,118 @@ async function executePullCommentUpdate(
     assertPullState(scope, pull, operation);
   });
   return { kind: operation.kind, pullNumber: operation.pullNumber, ...result };
+}
+
+type ReviewCommentReply = Extract<Operation, { kind: "pull_request.review_comment.reply" }>;
+
+async function executeReviewCommentReply(scope: ExecutionScope, operation: ReviewCommentReply): Promise<OperationOutputsV1> {
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure("canonical_marker_missing", "Exact review reply body is missing its operation marker");
+  }
+  const pullPath = `${scope.repoPath}/pulls/${operation.pullNumber}`;
+  // The marker makes the body unique to this operation, and a retry follows the
+  // first attempt closely, so only the newest pages can hold it.
+  const existing = await scope.api.findPaginated(
+    `${pullPath}/comments?sort=created&direction=desc`,
+    "Review reply idempotency lookup",
+    (candidate) => authoredByActor(candidate, scope) && candidate.body === operation.body,
+    undefined,
+    3,
+  );
+  if (existing) {
+    return {
+      kind: operation.kind,
+      pullNumber: operation.pullNumber,
+      commentId: numericId(existing.id, "comment id"),
+      commentUrl: htmlUrl(existing),
+    };
+  }
+  const target = await scope.api.restOptional(
+    `${scope.repoPath}/pulls/comments/${encodeURIComponent(operation.commentId)}`,
+    "Review comment lookup",
+  );
+  if (target === null) throw conflict("review_comment_missing", `Review comment ${operation.commentId} does not exist`);
+  if (!record(target.data) || typeof target.data.pull_request_url !== "string") {
+    throw failure("github_response_invalid", "Review comment response was invalid");
+  }
+  if (!target.data.pull_request_url.toLowerCase().endsWith(`${pullPath}`.toLowerCase())) {
+    throw conflict("review_comment_wrong_pull", `Review comment ${operation.commentId} is not on pull request #${operation.pullNumber}`);
+  }
+  // GitHub threads every reply under the thread's first comment.
+  const root = positiveInteger(target.data.in_reply_to_id)
+    ? String(target.data.in_reply_to_id)
+    : numericId(target.data.id, "comment id");
+  const pull = await loadPull(scope, operation.pullNumber);
+  assertPullRevision(pull, operation, scope.chainedHeads);
+  assertPullState(scope, pull, operation, "append");
+  const { data } = await scope.api.rest(`${pullPath}/comments/${encodeURIComponent(root)}/replies`, "Review reply creation", {
+    method: "POST",
+    body: JSON.stringify({ body: operation.body }),
+  });
+  if (!record(data)) throw failure("github_response_invalid", "Review reply response was invalid");
+  return {
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    commentId: numericId(data.id, "comment id"),
+    commentUrl: htmlUrl(data),
+  };
+}
+
+type ReviewThreadResolve = Extract<Operation, { kind: "pull_request.review_thread.resolve" }>;
+
+async function executeReviewThreadResolve(scope: ExecutionScope, operation: ReviewThreadResolve): Promise<OperationOutputsV1> {
+  const outputs = { kind: operation.kind, pullNumber: operation.pullNumber, threadId: operation.threadId } as const;
+  let lookup: JsonRecord;
+  try {
+    lookup = await scope.api.graphql(
+      `query($id: ID!) {
+        node(id: $id) {
+          __typename
+          ... on PullRequestReviewThread { isResolved pullRequest { number repository { nameWithOwner } } }
+        }
+      }`,
+      { id: operation.threadId },
+      "Review thread lookup",
+    );
+  } catch (error) {
+    // GitHub answers an id that resolves to nothing with a GraphQL error rather
+    // than a null node. That's the model naming a thread that doesn't exist,
+    // not trouble at GitHub; rate limits and HTTP failures pass through.
+    if (error instanceof GitHubEffectError && (error.code === "github_graphql_not_found" || error.code === "github_graphql_graphql_error")) {
+      throw conflict("review_thread_missing", `${operation.threadId} is not a review thread`, error.providerRequestId);
+    }
+    throw error;
+  }
+  const node = lookup.node;
+  if (!record(node) || node.__typename !== "PullRequestReviewThread") {
+    throw conflict("review_thread_missing", `${operation.threadId} is not a review thread`);
+  }
+  const owner = record(node.pullRequest) && record(node.pullRequest.repository)
+    ? node.pullRequest.repository.nameWithOwner
+    : undefined;
+  if (
+    !record(node.pullRequest)
+    || node.pullRequest.number !== operation.pullNumber
+    || typeof owner !== "string"
+    || owner.toLowerCase() !== `${scope.owner}/${scope.name}`.toLowerCase()
+  ) {
+    throw conflict("review_thread_wrong_pull", `Review thread ${operation.threadId} is not on pull request #${operation.pullNumber}`);
+  }
+  // Resolution is a flag, so a resolved thread is the effect already applied.
+  if (node.isResolved === true) return outputs;
+  const pull = await loadPull(scope, operation.pullNumber);
+  assertPullRevision(pull, operation, scope.chainedHeads);
+  assertPullState(scope, pull, operation, "append");
+  const data = await scope.api.graphql(
+    `mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { isResolved } } }`,
+    { id: operation.threadId },
+    "Review thread resolve",
+  );
+  const result = record(data.resolveReviewThread) && record(data.resolveReviewThread.thread)
+    ? data.resolveReviewThread.thread.isResolved
+    : undefined;
+  if (result !== true) throw failure("github_response_invalid", "Review thread resolve did not report the thread resolved");
+  return outputs;
 }
 
 type ReviewSubmit = Extract<Operation, { kind: "pull_request.review.submit" }>;
@@ -2401,6 +2550,10 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
       return executeReviewer(scope, operation);
     case "pull_request.update":
       return executePullUpdate(scope, operation);
+    case "pull_request.review_comment.reply":
+      return executeReviewCommentReply(scope, operation);
+    case "pull_request.review_thread.resolve":
+      return executeReviewThreadResolve(scope, operation);
     case "branch.create":
       return executeBranchCreate(scope, operation);
     case "commit.create":
@@ -2474,6 +2627,7 @@ function assertContext(context: GitHubEffectsContext, operation: Operation, oper
     operationHash,
     ...(context.readCapturedFile === undefined ? {} : { readCapturedFile: context.readCapturedFile }),
     ...(context.chainedResourceVersion === undefined ? {} : { chainedResourceVersion: context.chainedResourceVersion }),
+    chainedHeads: context.chainedHeads ?? [],
     branchPatterns: context.branchPatterns ?? DEFAULT_WRITE_BRANCHES,
     defaultBranch: operation.repository.defaultBranch,
     ...(context.captureBaseSha === undefined ? {} : { captureBaseSha: context.captureBaseSha }),

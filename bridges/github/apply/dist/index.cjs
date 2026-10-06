@@ -39999,6 +39999,8 @@ var operationKindValues = [
   "pull_request.label.add",
   "pull_request.label.remove",
   "pull_request.update_branch",
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve",
   "branch.create",
   "commit.create",
   "pull_request.open",
@@ -40066,6 +40068,7 @@ var pullBase = operationBase.extend({
 var discussionBase = operationBase.extend({ discussionNumber: external_exports.number().int().positive(), expectedDiscussionState: external_exports.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
 var commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body };
 var labelName = external_exports.string().trim().min(1).max(100);
+var graphqlNodeId = external_exports.string().regex(/^[A-Za-z0-9_=-]{1,256}$/);
 var requiredCheckSchema = external_exports.object({ context: external_exports.string().trim().min(1).max(255), appId: external_exports.number().int().positive() }).strict();
 var operationOptions = [
   issueBase.extend({ kind: external_exports.literal("issue.label.add"), label: labelName }).strict(),
@@ -40112,6 +40115,10 @@ var operationOptions = [
   pullBase.extend({ kind: external_exports.literal("pull_request.label.remove"), label: labelName }).strict(),
   // GitHub rebases or merges the base in itself, leased on expectedHeadSha.
   pullBase.extend({ kind: external_exports.literal("pull_request.update_branch"), method: external_exports.enum(["merge", "rebase"]) }).strict(),
+  /** A reply in an existing review thread. `commentId` is any comment in it; GitHub threads the reply under the first. */
+  pullBase.extend({ kind: external_exports.literal("pull_request.review_comment.reply"), commentId: githubNumericIdSchema, body }).strict(),
+  /** Resolves a review thread, by its GraphQL node id. Resolving a resolved thread succeeds. */
+  pullBase.extend({ kind: external_exports.literal("pull_request.review_thread.resolve"), threadId: graphqlNodeId }).strict(),
   operationBase.extend({ kind: external_exports.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: external_exports.literal(true) }).strict(),
   operationBase.extend({
     kind: external_exports.literal("commit.create"),
@@ -40209,9 +40216,20 @@ function collectStrings(value, output2) {
   else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
   else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStrings(item, output2));
 }
+var operationMarkerBodyKinds = [
+  "issue.comment.create",
+  "issue.create",
+  "pull_request.review.submit",
+  "pull_request.open",
+  "pull_request.open_draft",
+  "pull_request.review_comment.reply"
+];
+function isOperationMarkerBodyKind(kind) {
+  return operationMarkerBodyKinds.includes(kind);
+}
 var operationSchema = external_exports.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
   const strings = [];
-  if (operation.kind === "issue.comment.create" || operation.kind === "issue.create" || operation.kind === "pull_request.review.submit" || operation.kind === "pull_request.open" || operation.kind === "pull_request.open_draft") {
+  if (isOperationMarkerBodyKind(operation.kind) && "body" in operation && typeof operation.body === "string") {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
     const bodyWithoutExactMarker = operation.body === marker ? "" : operation.body.endsWith(`
 ${marker}`) ? operation.body.slice(0, -(marker.length + 1)) : operation.body;
@@ -40280,6 +40298,8 @@ var operationOutputCatalog = {
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
   // No head output: GitHub finishes the update after the mutation returns.
   "pull_request.update_branch": pullOutputs,
+  "pull_request.review_comment.reply": { ...pullOutputs, ...commentOutputs },
+  "pull_request.review_thread.resolve": { ...pullOutputs, threadId: "nodeId" },
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",
@@ -41545,6 +41565,24 @@ var taskEventBindingV1Schema = external_exports.strictObject({
     context.addIssue({ code: "custom", path: ["action"], message: "action does not match the trigger kind" });
   }
 });
+var triggeringPullRequestKinds = [
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve"
+];
+function triggeringPullRequestRefusal(kind, payload, references, resource) {
+  if (!triggeringPullRequestKinds.includes(kind)) return void 0;
+  if (references["/pullNumber"] !== void 0) {
+    return `${kind} must name the pull request that triggered this run directly, not by reference`;
+  }
+  if (resource === null || resource.kind !== "pull_request" && resource.kind !== "issue") {
+    return `${kind} needs a run triggered from a pull request`;
+  }
+  const pullNumber = payload !== null && typeof payload === "object" ? payload.pullNumber : void 0;
+  if (pullNumber !== resource.number) {
+    return `${kind} may act only on #${resource.number}, which triggered this run`;
+  }
+  return void 0;
+}
 function taskEventBindingFromNormalizedEvent(event) {
   const base = {
     kind: event.kind,
@@ -41807,6 +41845,8 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
         if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal });
       }
     }
+    const pullRefusal = triggeringPullRequestRefusal(operation.kind, operation.payload, operation.references, plan.event.resource);
+    if (pullRefusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "pullNumber"], message: pullRefusal });
     if (operation.kind === "commit.create" && plan.capture !== void 0) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
@@ -45894,6 +45934,8 @@ var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
   // The issues labels API accepts pull-requests:write for a pull request.
   "pull_request.label.add": ["pull-requests:write"],
   "pull_request.label.remove": ["pull-requests:write"],
+  "pull_request.review_comment.reply": ["pull-requests:write"],
+  "pull_request.review_thread.resolve": ["pull-requests:write"],
   "branch.create": ["contents:write"],
   "commit.create": ["contents:write"],
   "pull_request.open": ["contents:read", "pull-requests:write"],
@@ -46218,9 +46260,9 @@ async function loadPull(scope, pullNumber) {
   }
   return data;
 }
-function assertPullRevision(pull, expected) {
+function assertPullRevision(pull, expected, chainedHeads = []) {
   const head = record2(pull.head) && typeof pull.head.sha === "string" ? pull.head.sha : null;
-  if (head !== expected.expectedHeadSha) {
+  if (head !== expected.expectedHeadSha && !headChainedByThisPlan(pull, head, expected.expectedHeadSha, chainedHeads)) {
     throw conflict("pull_head_changed", `Precondition failed: pull request head is ${String(head)}`);
   }
   if (!record2(pull.base) || typeof pull.base.ref !== "string" || typeof pull.base.sha !== "string") {
@@ -46229,6 +46271,17 @@ function assertPullRevision(pull, expected) {
   if (pull.base.ref !== expected.expectedBaseRef || pull.base.sha !== expected.expectedBaseSha) {
     throw conflict("pull_base_changed", `Precondition failed: pull request base is ${pull.base.ref} at ${pull.base.sha}`);
   }
+}
+function headChainedByThisPlan(pull, head, planned, chainedHeads) {
+  if (head === null || !record2(pull.head) || !record2(pull.base)) return false;
+  const headRepo = record2(pull.head.repo) ? pull.head.repo.id : void 0;
+  const baseRepo = record2(pull.base.repo) ? pull.base.repo.id : void 0;
+  if (headRepo === void 0 || headRepo !== baseRepo) return false;
+  let at = planned;
+  for (const chained of chainedHeads) {
+    if (chained.branch === pull.head.ref && chained.from === at) at = chained.to;
+  }
+  return at !== planned && head === at;
 }
 function assertPullState(scope, pull, expected, check2 = "exact") {
   if (pull.state !== expected.expectedState) {
@@ -46529,7 +46582,7 @@ async function executePullCommentCreate(scope, operation) {
     };
   }
   const pull = await loadPull(scope, operation.pullNumber);
-  assertPullRevision(pull, operation);
+  assertPullRevision(pull, operation, scope.chainedHeads);
   assertPullState(scope, pull, operation, "append");
   const { data } = await scope.api.rest(`${issuePath}/comments`, "Pull request comment creation", {
     method: "POST",
@@ -46550,6 +46603,94 @@ async function executePullCommentUpdate(scope, operation) {
     assertPullState(scope, pull, operation);
   });
   return { kind: operation.kind, pullNumber: operation.pullNumber, ...result };
+}
+async function executeReviewCommentReply(scope, operation) {
+  if (!hasExactOperationMarker(operation.body, operation.id)) {
+    throw failure2("canonical_marker_missing", "Exact review reply body is missing its operation marker");
+  }
+  const pullPath = `${scope.repoPath}/pulls/${operation.pullNumber}`;
+  const existing = await scope.api.findPaginated(
+    `${pullPath}/comments?sort=created&direction=desc`,
+    "Review reply idempotency lookup",
+    (candidate) => authoredByActor(candidate, scope) && candidate.body === operation.body,
+    void 0,
+    3
+  );
+  if (existing) {
+    return {
+      kind: operation.kind,
+      pullNumber: operation.pullNumber,
+      commentId: numericId(existing.id, "comment id"),
+      commentUrl: htmlUrl(existing)
+    };
+  }
+  const target = await scope.api.restOptional(
+    `${scope.repoPath}/pulls/comments/${encodeURIComponent(operation.commentId)}`,
+    "Review comment lookup"
+  );
+  if (target === null) throw conflict("review_comment_missing", `Review comment ${operation.commentId} does not exist`);
+  if (!record2(target.data) || typeof target.data.pull_request_url !== "string") {
+    throw failure2("github_response_invalid", "Review comment response was invalid");
+  }
+  if (!target.data.pull_request_url.toLowerCase().endsWith(`${pullPath}`.toLowerCase())) {
+    throw conflict("review_comment_wrong_pull", `Review comment ${operation.commentId} is not on pull request #${operation.pullNumber}`);
+  }
+  const root = positiveInteger(target.data.in_reply_to_id) ? String(target.data.in_reply_to_id) : numericId(target.data.id, "comment id");
+  const pull = await loadPull(scope, operation.pullNumber);
+  assertPullRevision(pull, operation, scope.chainedHeads);
+  assertPullState(scope, pull, operation, "append");
+  const { data } = await scope.api.rest(`${pullPath}/comments/${encodeURIComponent(root)}/replies`, "Review reply creation", {
+    method: "POST",
+    body: JSON.stringify({ body: operation.body })
+  });
+  if (!record2(data)) throw failure2("github_response_invalid", "Review reply response was invalid");
+  return {
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    commentId: numericId(data.id, "comment id"),
+    commentUrl: htmlUrl(data)
+  };
+}
+async function executeReviewThreadResolve(scope, operation) {
+  const outputs = { kind: operation.kind, pullNumber: operation.pullNumber, threadId: operation.threadId };
+  let lookup;
+  try {
+    lookup = await scope.api.graphql(
+      `query($id: ID!) {
+        node(id: $id) {
+          __typename
+          ... on PullRequestReviewThread { isResolved pullRequest { number repository { nameWithOwner } } }
+        }
+      }`,
+      { id: operation.threadId },
+      "Review thread lookup"
+    );
+  } catch (error63) {
+    if (error63 instanceof GitHubEffectError && (error63.code === "github_graphql_not_found" || error63.code === "github_graphql_graphql_error")) {
+      throw conflict("review_thread_missing", `${operation.threadId} is not a review thread`, error63.providerRequestId);
+    }
+    throw error63;
+  }
+  const node2 = lookup.node;
+  if (!record2(node2) || node2.__typename !== "PullRequestReviewThread") {
+    throw conflict("review_thread_missing", `${operation.threadId} is not a review thread`);
+  }
+  const owner = record2(node2.pullRequest) && record2(node2.pullRequest.repository) ? node2.pullRequest.repository.nameWithOwner : void 0;
+  if (!record2(node2.pullRequest) || node2.pullRequest.number !== operation.pullNumber || typeof owner !== "string" || owner.toLowerCase() !== `${scope.owner}/${scope.name}`.toLowerCase()) {
+    throw conflict("review_thread_wrong_pull", `Review thread ${operation.threadId} is not on pull request #${operation.pullNumber}`);
+  }
+  if (node2.isResolved === true) return outputs;
+  const pull = await loadPull(scope, operation.pullNumber);
+  assertPullRevision(pull, operation, scope.chainedHeads);
+  assertPullState(scope, pull, operation, "append");
+  const data = await scope.api.graphql(
+    `mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { isResolved } } }`,
+    { id: operation.threadId },
+    "Review thread resolve"
+  );
+  const result = record2(data.resolveReviewThread) && record2(data.resolveReviewThread.thread) ? data.resolveReviewThread.thread.isResolved : void 0;
+  if (result !== true) throw failure2("github_response_invalid", "Review thread resolve did not report the thread resolved");
+  return outputs;
 }
 async function executeReviewSubmit(scope, operation) {
   if (!hasExactOperationMarker(operation.body, operation.id)) {
@@ -47549,6 +47690,10 @@ async function dispatch(scope, operation) {
       return executeReviewer(scope, operation);
     case "pull_request.update":
       return executePullUpdate(scope, operation);
+    case "pull_request.review_comment.reply":
+      return executeReviewCommentReply(scope, operation);
+    case "pull_request.review_thread.resolve":
+      return executeReviewThreadResolve(scope, operation);
     case "branch.create":
       return executeBranchCreate(scope, operation);
     case "commit.create":
@@ -47610,6 +47755,7 @@ function assertContext(context, operation, operationHash) {
     operationHash,
     ...context.readCapturedFile === void 0 ? {} : { readCapturedFile: context.readCapturedFile },
     ...context.chainedResourceVersion === void 0 ? {} : { chainedResourceVersion: context.chainedResourceVersion },
+    chainedHeads: context.chainedHeads ?? [],
     branchPatterns: context.branchPatterns ?? DEFAULT_WRITE_BRANCHES,
     defaultBranch: operation.repository.defaultBranch,
     ...context.captureBaseSha === void 0 ? {} : { captureBaseSha: context.captureBaseSha },
@@ -47762,6 +47908,7 @@ async function applyOrderedPlan(input2) {
   const outputs = /* @__PURE__ */ new Map();
   const completed = [];
   const versions = /* @__PURE__ */ new Map();
+  const heads = [];
   let resumeIndex = 0;
   if (input2.prior) {
     assertReceiptEnvelope(plan, input2.artifactSha256, input2.prior);
@@ -47791,6 +47938,7 @@ async function applyOrderedPlan(input2) {
       }
       completed.push(entry);
       outputs.set(entry.stepName, scalar);
+      recordPushedHead(heads, operation.kind, scalar);
       resumeIndex = index + 1;
     }
     if (input2.prior.status === "applied") {
@@ -47855,6 +48003,7 @@ async function applyOrderedPlan(input2) {
     const resource = resourceVersionKey(operation);
     const chained = resource === null ? void 0 : versions.get(resource);
     if (chained !== void 0) context.chainedResourceVersion = chained;
+    if (HEAD_CHAINED_KINDS.has(operation.kind) && heads.length > 0) context.chainedHeads = [...heads];
     if (resource !== null && laterStepMayTarget(plan, index, resource)) context.readBackVersion = true;
     const result = await (input2.execute ?? executeActionsOperation)(operation, context);
     const scalar = result.outputs === void 0 ? {} : scalarOutputs(operation.kind, result.outputs);
@@ -47868,6 +48017,7 @@ async function applyOrderedPlan(input2) {
       return { receipt: stopped, outputs };
     }
     outputs.set(plan.operations[index].stepName, scalar);
+    recordPushedHead(heads, operation.kind, scalar);
     const status = completed.length === plan.operations.length ? "applied" : "running";
     const progress = effectReceipt(plan, input2.artifactSha256, completed, status, null);
     await input2.record(progress);
@@ -47888,12 +48038,16 @@ function laterStepMayTarget(plan, index, resource) {
     return value !== void 0 && `${family}:${String(value)}` === resource;
   }));
 }
-var MARKER_BODY_KINDS = /* @__PURE__ */ new Set([
-  "issue.comment.create",
-  "issue.create",
-  "pull_request.review.submit",
-  "pull_request.open",
-  "pull_request.open_draft"
+function recordPushedHead(heads, kind, scalar) {
+  if (kind !== "commit.create") return;
+  const { branch, parentSha, commitSha } = scalar;
+  if (typeof branch !== "string" || typeof parentSha !== "string" || typeof commitSha !== "string") return;
+  if (parentSha !== commitSha) heads.push({ branch, from: parentSha, to: commitSha });
+}
+var HEAD_CHAINED_KINDS = /* @__PURE__ */ new Set([
+  "pull_request.comment.create",
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve"
 ]);
 function bodyWithOperationMarker(body2, operationId) {
   const marker = `<!-- gardener-operation:${operationId} -->`;
@@ -47950,7 +48104,7 @@ function materializeOperation(plan, index, outputs, owner, name2) {
     }
     setJsonPointer(payload, pointer, renderPlaceholders(template, values));
   }
-  if (MARKER_BODY_KINDS.has(step.kind)) {
+  if (isOperationMarkerBodyKind(step.kind)) {
     if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);
     payload.body = bodyWithOperationMarker(payload.body, step.operationId);
   }

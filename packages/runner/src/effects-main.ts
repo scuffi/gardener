@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   decodeJsonPointer,
   isBranchWriteKind,
+  isOperationMarkerBodyKind,
   isTemplateReference,
   operationOutputNames,
   operationOutputRenderedMaxLength,
@@ -41,6 +42,7 @@ import {
   canonicalOperationHash,
   executeActionsOperation,
   resourceVersionKey,
+  type ChainedHead,
   type GitHubEffectsContext,
   type OperationOutputsV1,
 } from "./github-effects";
@@ -135,6 +137,7 @@ export async function applyOrderedPlan(input: {
   // earlier step. Seeded from the prior receipt so a resumed run recognises
   // the writes of the attempt it continues.
   const versions = new Map<string, string>();
+  const heads: ChainedHead[] = [];
 
   let resumeIndex = 0;
   if (input.prior) {
@@ -184,6 +187,7 @@ export async function applyOrderedPlan(input: {
       }
       completed.push(entry);
       outputs.set(entry.stepName, scalar);
+      recordPushedHead(heads, operation.kind, scalar);
       resumeIndex = index + 1;
     }
     if (input.prior.status === "applied") {
@@ -253,6 +257,7 @@ export async function applyOrderedPlan(input: {
     const resource = resourceVersionKey(operation);
     const chained = resource === null ? undefined : versions.get(resource);
     if (chained !== undefined) context.chainedResourceVersion = chained;
+    if (HEAD_CHAINED_KINDS.has(operation.kind) && heads.length > 0) context.chainedHeads = [...heads];
     if (resource !== null && laterStepMayTarget(plan, index, resource)) context.readBackVersion = true;
     const result = await (input.execute ?? executeActionsOperation)(operation, context);
     const scalar = result.outputs === undefined ? {} : scalarOutputs(operation.kind, result.outputs);
@@ -269,6 +274,7 @@ export async function applyOrderedPlan(input: {
       return { receipt: stopped, outputs };
     }
     outputs.set(plan.operations[index]!.stepName, scalar);
+    recordPushedHead(heads, operation.kind, scalar);
     const status = completed.length === plan.operations.length ? "applied" : "running";
     const progress = effectReceipt(plan, input.artifactSha256, completed, status, null);
     await input.record(progress);
@@ -297,12 +303,23 @@ function laterStepMayTarget(plan: TaskEffectPlanV1, index: number, resource: str
   }));
 }
 
-const MARKER_BODY_KINDS = new Set<OperationKind>([
-  "issue.comment.create",
-  "issue.create",
-  "pull_request.review.submit",
-  "pull_request.open",
-  "pull_request.open_draft",
+/** Notes the head a succeeded `commit.create` left its branch at, from its recorded outputs. */
+function recordPushedHead(
+  heads: ChainedHead[],
+  kind: OperationKind,
+  scalar: Readonly<Record<string, string | number | boolean | null>>,
+): void {
+  if (kind !== "commit.create") return;
+  const { branch, parentSha, commitSha } = scalar;
+  if (typeof branch !== "string" || typeof parentSha !== "string" || typeof commitSha !== "string") return;
+  if (parentSha !== commitSha) heads.push({ branch, from: parentSha, to: commitSha });
+}
+
+/** Kinds that accept a pull request head an earlier commit step of this plan pushed. */
+const HEAD_CHAINED_KINDS = new Set<OperationKind>([
+  "pull_request.comment.create",
+  "pull_request.review_comment.reply",
+  "pull_request.review_thread.resolve",
 ]);
 
 function bodyWithOperationMarker(body: string, operationId: string): string {
@@ -386,7 +403,7 @@ function materializeOperation(
   // text, and the marker depends on Gardener's derived operation id. Add it
   // only after typed references have resolved so the final exact body is a
   // deterministic function of the validated plan and prior scalar outputs.
-  if (MARKER_BODY_KINDS.has(step.kind)) {
+  if (isOperationMarkerBodyKind(step.kind)) {
     if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);
     payload.body = bodyWithOperationMarker(payload.body, step.operationId);
   }

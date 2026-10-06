@@ -145,7 +145,7 @@ instructions ask for an effect that isn't declared, it can't happen.
 | Family | Kinds |
 | --- | --- |
 | Issues | `issue.comment.create`, `issue.comment.update`, `issue.label.add`, `issue.label.remove`, `issue.assignee.add`, `issue.assignee.remove`, `issue.close`, `issue.reopen`, `issue.create` |
-| Pull requests | `pull_request.comment.create`, `pull_request.comment.update`, `pull_request.review.submit`, `pull_request.reviewer.request`, `pull_request.reviewer.remove`, `pull_request.update`, `pull_request.label.add`, `pull_request.label.remove`, `pull_request.update_branch`, `pull_request.open`, `pull_request.open_draft`, `pull_request.merge` |
+| Pull requests | `pull_request.comment.create`, `pull_request.comment.update`, `pull_request.review.submit`, `pull_request.reviewer.request`, `pull_request.reviewer.remove`, `pull_request.update`, `pull_request.label.add`, `pull_request.label.remove`, `pull_request.update_branch`, `pull_request.review_comment.reply`, `pull_request.review_thread.resolve`, `pull_request.open`, `pull_request.open_draft`, `pull_request.merge` |
 | Git | `branch.create`, `commit.create` |
 | Discussions | `discussion.comment.create`, `discussion.comment.update`, `discussion.answer.mark`, `discussion.answer.unmark`, `discussion.close`, `discussion.reopen` |
 | Checks | `check.rerun` |
@@ -156,6 +156,9 @@ instructions ask for an effect that isn't declared, it can't happen.
 - Labels must already exist in the repository; the model can't create them. Tell it to pick only
   from existing labels (with `provider.api.read` it can list them).
 - `pull_request.open` / `open_draft` with `labels` also needs `pull_request.label.add`.
+- `pull_request.review_comment.reply` (a reply in a review thread, by any comment id in it) and
+  `pull_request.review_thread.resolve` (by the thread's GraphQL node id) act only on the pull
+  request that triggered the run. Resolve only threads the task's own commit fixed.
 - **Code changes** need `repository.exec` (to edit files), `branch.create`, `commit.create` and
   `pull_request.open_draft` (or `.open`). The commit is made from files changed in the checkout,
   on a branch created from the checked-out commit. Changes under `.github/workflows/`,

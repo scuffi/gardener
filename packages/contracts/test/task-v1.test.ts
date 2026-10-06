@@ -126,7 +126,7 @@ describe("Actions-native task v1 contracts", () => {
 
   it("exposes exactly the persistent provider operations as effect authority", () => {
     expect(taskEffectKindV1Schema.options).toEqual([...operationKindValues]);
-    expect(taskEffectKindV1Schema.options).toHaveLength(34);
+    expect(taskEffectKindV1Schema.options).toHaveLength(36);
     expect(taskBundleV1Schema.parse({
       ...fixtureBundle(),
       effects: [...operationKindValues],

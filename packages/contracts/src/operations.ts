@@ -6,6 +6,7 @@ export const operationKindValues = [
   "issue.label.add", "issue.label.remove", "issue.comment.create", "issue.comment.update", "issue.close", "issue.reopen", "issue.assignee.add", "issue.assignee.remove", "issue.create",
   "pull_request.comment.create", "pull_request.comment.update", "pull_request.review.submit", "pull_request.reviewer.request", "pull_request.reviewer.remove", "pull_request.update",
   "pull_request.label.add", "pull_request.label.remove", "pull_request.update_branch",
+  "pull_request.review_comment.reply", "pull_request.review_thread.resolve",
   "branch.create", "commit.create", "pull_request.open", "pull_request.open_draft", "pull_request.merge",
   "discussion.comment.create", "discussion.comment.update", "discussion.answer.mark", "discussion.answer.unmark", "discussion.close", "discussion.reopen",
   "check.rerun",
@@ -92,6 +93,8 @@ const pullBase = operationBase.extend({
 const discussionBase = operationBase.extend({ discussionNumber: z.number().int().positive(), expectedDiscussionState: z.enum(["open", "closed"]), expectedDiscussionUpdatedAt: expectedTimestamp });
 const commentUpdate = { commentId: githubNumericIdSchema, expectedCommentUpdatedAt: expectedTimestamp, body } as const;
 const labelName = z.string().trim().min(1).max(100);
+/** GraphQL node id, such as a review thread's `PRRT_…`. */
+const graphqlNodeId = z.string().regex(/^[A-Za-z0-9_=-]{1,256}$/);
 const requiredCheckSchema = z.object({ context: z.string().trim().min(1).max(255), appId: z.number().int().positive() }).strict();
 
 const operationOptions = [
@@ -137,6 +140,10 @@ const operationOptions = [
   pullBase.extend({ kind: z.literal("pull_request.label.remove"), label: labelName }).strict(),
   // GitHub rebases or merges the base in itself, leased on expectedHeadSha.
   pullBase.extend({ kind: z.literal("pull_request.update_branch"), method: z.enum(["merge", "rebase"]) }).strict(),
+  /** A reply in an existing review thread. `commentId` is any comment in it; GitHub threads the reply under the first. */
+  pullBase.extend({ kind: z.literal("pull_request.review_comment.reply"), commentId: githubNumericIdSchema, body }).strict(),
+  /** Resolves a review thread, by its GraphQL node id. Resolving a resolved thread succeeds. */
+  pullBase.extend({ kind: z.literal("pull_request.review_thread.resolve"), threadId: graphqlNodeId }).strict(),
   operationBase.extend({ kind: z.literal("branch.create"), branch: branchNameSchema, fromSha: shaSchema, expectedAbsent: z.literal(true) }).strict(),
   operationBase.extend({
     kind: z.literal("commit.create"), branch: branchNameSchema, expectedHeadSha: shaSchema, message: z.string().trim().min(1).max(1_000),
@@ -206,15 +213,27 @@ function collectStrings(value: unknown, output: string[]): void {
   else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStrings(item, output));
 }
 
+/**
+ * Kinds whose `body` apply ends with the exact operation marker, which is how
+ * a retried apply finds what an earlier attempt already wrote. The contract
+ * admits that one marker on these kinds and refuses every other.
+ */
+export const operationMarkerBodyKinds = [
+  "issue.comment.create",
+  "issue.create",
+  "pull_request.review.submit",
+  "pull_request.open",
+  "pull_request.open_draft",
+  "pull_request.review_comment.reply",
+] as const satisfies readonly OperationKind[];
+type OperationMarkerBodyKind = typeof operationMarkerBodyKinds[number];
+export function isOperationMarkerBodyKind(kind: string): kind is OperationMarkerBodyKind {
+  return (operationMarkerBodyKinds as readonly string[]).includes(kind);
+}
+
 export const operationSchema = z.discriminatedUnion("kind", operationOptions).superRefine((operation, context) => {
   const strings: string[] = [];
-  if (
-    operation.kind === "issue.comment.create" ||
-    operation.kind === "issue.create" ||
-    operation.kind === "pull_request.review.submit" ||
-    operation.kind === "pull_request.open" ||
-    operation.kind === "pull_request.open_draft"
-  ) {
+  if (isOperationMarkerBodyKind(operation.kind) && "body" in operation && typeof operation.body === "string") {
     const marker = `<!-- gardener-operation:${operation.id} -->`;
     const bodyWithoutExactMarker = operation.body === marker
       ? ""
@@ -390,6 +409,8 @@ export const operationOutputCatalog = {
   "pull_request.label.remove": { ...pullOutputs, label: "string" },
   // No head output: GitHub finishes the update after the mutation returns.
   "pull_request.update_branch": pullOutputs,
+  "pull_request.review_comment.reply": { ...pullOutputs, ...commentOutputs },
+  "pull_request.review_thread.resolve": { ...pullOutputs, threadId: "nodeId" },
   "branch.create": { branch: "branch", ref: "gitRef", commitSha: "commitSha", branchUrl: "url" },
   "commit.create": {
     branch: "branch",
