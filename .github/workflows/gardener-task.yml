@@ -78,7 +78,7 @@ jobs:
           ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
       - name: Run Gardener task
         id: gardener
-        uses: scuffi/gardener/bridges/github/plan@b1fae0183bf3fbfc2d135071dec6736d1c2d8f9f
+        uses: scuffi/gardener/bridges/github/plan@a97ea03cff4220a3b6f113b40f4e70a37e50c35d
         with:
           runtime-url: ${{ inputs.runtime-url }}
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
@@ -129,7 +129,7 @@ jobs:
         shell: bash
         run: echo "value=$(date -u -d '+4 minutes' '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
       - name: Apply exact Gardener plan
-        uses: scuffi/gardener/bridges/github/apply@b1fae0183bf3fbfc2d135071dec6736d1c2d8f9f
+        uses: scuffi/gardener/bridges/github/apply@a97ea03cff4220a3b6f113b40f4e70a37e50c35d
         with:
           artifact-path: ${{ runner.temp }}/gardener-effect/${{ needs.plan.outputs.effect-sha256 }}.json
           expected-sha256: ${{ needs.plan.outputs.effect-sha256 }}
