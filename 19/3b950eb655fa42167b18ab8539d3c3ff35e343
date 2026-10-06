@@ -1,0 +1,27 @@
+apps/gardener/package.json
+  s_de0b486c128948::t_4ea0b2dad7fc4a 27
+packages/cli/package.json
+  s_de0b486c128948::t_4e6644f18483a1 40
+packages/protocol/package.json
+  s_de0b486c128948::t_f16ad9ac6030d0 19
+packages/runner/package.json
+  s_de0b486c128948::t_084e18df86b5a1 22
+pnpm-lock.yaml
+  s_de0b486c128948::t_66bd616f9f9135 19,22,53,59,61-62,68,71,74,80,98-99,108,124,133,145-146,152,165,186-187,196,1411-1412,3633,3636,3638,3640,3918,3922,3926,4272,4279,4383,4459,4466,4468,4475,4495,4502,4518,5643,5646,5807,5982,6013,6302,6310,6317,6325,6332,6335,6346,6350,6355,6358,6369,6373,6423,6429
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "193b950eb655fa42167b18ab8539d3c3ff35e343",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
