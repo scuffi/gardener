@@ -7,6 +7,7 @@ import { type RunnerEventV1 } from "@gardener/protocol";
 import { authorPermissionLogin, fetchAuthorPermission, withAuthorPermission } from "./author-permission";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
+import { fetchCurrentPullRequest, UnconfirmedHeadError, withCurrentPullRequestHead } from "./current-head";
 import { createPlanningExecutor, planningCaptureBase } from "./executor";
 import { GitHubReadClient } from "./github-read";
 import { addSecret, jobSummaryContext, renderPlanJobSummary, writeJobSummary } from "./job-summary";
@@ -54,7 +55,16 @@ async function main(): Promise<void> {
         }
         : {}),
     });
-    const event = await githubEvent();
+    let event: RunnerEventV1 | undefined;
+    try {
+      event = await githubEvent(checkoutRef(process.env["INPUT_CHECKOUT-REF"]));
+    } catch (error) {
+      if (!(error instanceof UnconfirmedHeadError)) throw error;
+      // Nothing to plan against, and failing would not bring a newer run.
+      core.notice(`${error.message} Stopping without planning.`);
+      await writeJobSummary(() => renderPlanJobSummary({ skipped: error.message, context: jobSummaryContext() }));
+      return;
+    }
     const cancellation = new AbortController();
     const cancel = () => cancellation.abort();
     process.once("SIGINT", cancel);
@@ -119,7 +129,7 @@ async function main(): Promise<void> {
 }
 
 /** Reads the Actions event file and normalizes it through the pure module. */
-async function githubEvent(): Promise<RunnerEventV1 | undefined> {
+async function githubEvent(checkoutSha: string | undefined): Promise<RunnerEventV1 | undefined> {
   const eventName = process.env.GITHUB_EVENT_NAME;
   if (!eventName) return undefined;
   const raw: unknown = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
@@ -129,7 +139,7 @@ async function githubEvent(): Promise<RunnerEventV1 | undefined> {
   const resolved = target === null
     ? undefined
     : await fetchDispatchTarget({ target, repository: requiredEnvironment("GITHUB_REPOSITORY"), token: providerReadToken });
-  const event = normalizeGitHubEvent(eventName, raw, resolved);
+  const event = await onCheckedOutHead(normalizeGitHubEvent(eventName, raw, resolved), checkoutSha);
   // GitHub reports a private org member as a non-member, so `authors:
   // maintainers` also accepts write access, looked up here before any task
   // command runs. Without it the run falls back to the association alone.
@@ -141,6 +151,26 @@ async function githubEvent(): Promise<RunnerEventV1 | undefined> {
     token: providerReadToken,
   });
   return permission === null ? event : withAuthorPermission(event, permission);
+}
+
+/** Moves a queued run's event to the pull request head the workflow checked out. */
+async function onCheckedOutHead(event: RunnerEventV1, checkoutSha: string | undefined): Promise<RunnerEventV1> {
+  const pullRequest = "pullRequest" in event ? event.pullRequest : undefined;
+  if (checkoutSha === undefined || pullRequest === undefined || pullRequest.head.sha === checkoutSha) return event;
+  const current = await fetchCurrentPullRequest({
+    repository: requiredEnvironment("GITHUB_REPOSITORY"),
+    number: pullRequest.number,
+    token: providerReadToken,
+  });
+  const moved = withCurrentPullRequestHead(event, checkoutSha, current);
+  core.notice(`Pull request #${pullRequest.number} moved since this run was triggered; planning on its current head ${checkoutSha}.`);
+  return moved;
+}
+
+/** The commit the workflow checked out instead of GITHUB_SHA, when it named one. */
+function checkoutRef(value: string | undefined): string | undefined {
+  const ref = value?.trim() ?? "";
+  return ref === "" ? undefined : ref;
 }
 
 async function getIdTokenWithoutEnvironmentLeak(audience: string): Promise<string> {

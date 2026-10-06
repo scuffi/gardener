@@ -64,9 +64,16 @@ export function renderPlanJobSummary(input: {
   plan?: TaskEffectPlanV1;
   /** Set when the bridge failed before or around the session. */
   error?: string;
+  /** Set when the bridge stopped before planning without failing the job. */
+  skipped?: string;
   context?: JobSummaryContext;
 }): string {
   const lines: string[] = [];
+  if (input.skipped !== undefined) {
+    lines.push("## Gardener: ⏭️ Planning skipped", "", "**Why:** the run stopped before planning.", "", quote(input.skipped), "");
+    lines.push(...footer(input.context));
+    return lines.join("\n");
+  }
   const status = input.error !== undefined ? "failed" : input.terminal?.status ?? "failed";
   const task = input.plan ? ` · ${inline(input.plan.taskName)}` : "";
   lines.push(`## Gardener${task}: ${PLAN_HEADINGS[status]}`, "");

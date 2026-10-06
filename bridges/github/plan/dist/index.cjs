@@ -20280,6 +20280,9 @@ function error(message3, properties = {}) {
 function warning(message3, properties = {}) {
   issueCommand("warning", toCommandProperties(properties), message3 instanceof Error ? message3.toString() : message3);
 }
+function notice(message3, properties = {}) {
+  issueCommand("notice", toCommandProperties(properties), message3 instanceof Error ? message3.toString() : message3);
+}
 function getIDToken(aud) {
   return __awaiter5(this, void 0, void 0, function* () {
     return yield OidcClient.getIDToken(aud);
@@ -43169,6 +43172,74 @@ function normalizeGitHubEvent(eventName, source, resolved) {
   });
 }
 
+// src/current-head.ts
+var UnconfirmedHeadError = class extends Error {
+};
+var REPOSITORY3 = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+var MAX_RESPONSE_BYTES3 = 512 * 1024;
+var TIMEOUT_MS3 = 5e3;
+function withCurrentPullRequestHead(event, checkoutSha, current) {
+  const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+  if (checkoutSha === void 0 || pullRequest === void 0 || pullRequest.head.sha === checkoutSha) return event;
+  const reason = unconfirmedReason(current, checkoutSha, pullRequest.head.ref, pullRequest.base.repo.id);
+  const parsed = reason === null && current !== null ? runnerEventV1Schema.safeParse({
+    ...event,
+    pullRequest: { ...pullRequest, updatedAt: current.updatedAt, head: { ...pullRequest.head, sha: checkoutSha } }
+  }) : null;
+  if (parsed?.success) return parsed.data;
+  throw new UnconfirmedHeadError(
+    `Pull request #${pullRequest.number}: the event's head is ${pullRequest.head.sha} and the workflow checked out ${checkoutSha}, but ${reason ?? "the current pull request is not a valid event"}.`
+  );
+}
+function unconfirmedReason(current, checkoutSha, headRef, baseRepoId) {
+  if (current === null) return "its current head could not be read";
+  if (current.state !== "open") return "it is no longer open";
+  if (current.headSha !== checkoutSha) return `its head has moved again, to ${current.headSha}`;
+  if (current.headRef !== headRef) return "its head branch changed";
+  if (current.headRepoId === null || current.headRepoId !== current.baseRepoId || current.baseRepoId !== baseRepoId) {
+    return "only a same-repository pull request can move to its current head";
+  }
+  return null;
+}
+async function fetchCurrentPullRequest(input2) {
+  if (!input2.token || !Number.isSafeInteger(input2.number) || input2.number < 1) return null;
+  if (!REPOSITORY3.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) return null;
+  try {
+    const response = await (input2.fetch ?? fetch)(
+      `https://api.github.com/repos/${input2.repository.split("/").map(encodeURIComponent).join("/")}/pulls/${input2.number}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${input2.token}`,
+          "user-agent": "gardener-runner",
+          "x-github-api-version": "2022-11-28"
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS3)
+      }
+    );
+    if (!response.ok) return null;
+    const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES3);
+    if (body2.truncated) return null;
+    const value = JSON.parse(body2.text);
+    const headRepoId = value.head?.repo?.id;
+    const baseRepoId = value.base?.repo?.id;
+    if (typeof value.state !== "string" || typeof value.updated_at !== "string" || typeof value.head?.sha !== "string" || typeof value.head.ref !== "string" || typeof baseRepoId !== "number" || headRepoId !== void 0 && typeof headRepoId !== "number") {
+      return null;
+    }
+    return {
+      state: value.state,
+      updatedAt: value.updated_at,
+      headSha: value.head.sha,
+      headRef: value.head.ref,
+      headRepoId: typeof headRepoId === "number" ? String(headRepoId) : null,
+      baseRepoId: String(baseRepoId)
+    };
+  } catch {
+    return null;
+  }
+}
+
 // src/executor.ts
 var import_node_child_process2 = require("node:child_process");
 var import_promises3 = require("node:fs/promises");
@@ -43995,8 +44066,8 @@ function byPath(left, right) {
 }
 
 // src/executor.ts
-function planningCaptureBase(checkoutRef, githubSha) {
-  const ref = checkoutRef?.trim() ?? "";
+function planningCaptureBase(checkoutRef2, githubSha) {
+  const ref = checkoutRef2?.trim() ?? "";
   if (ref === "") return githubSha;
   if (!/^[a-f0-9]{40}$/.test(ref)) throw new Error("checkout-ref must be a lowercase 40-character commit SHA");
   return ref;
@@ -44450,6 +44521,11 @@ var PLAN_HEADINGS = {
 };
 function renderPlanJobSummary(input2) {
   const lines = [];
+  if (input2.skipped !== void 0) {
+    lines.push("## Gardener: \u23ED\uFE0F Planning skipped", "", "**Why:** the run stopped before planning.", "", quote(input2.skipped), "");
+    lines.push(...footer(input2.context));
+    return lines.join("\n");
+  }
   const status = input2.error !== void 0 ? "failed" : input2.terminal?.status ?? "failed";
   const task = input2.plan ? ` \xB7 ${inline(input2.plan.taskName)}` : "";
   lines.push(`## Gardener${task}: ${PLAN_HEADINGS[status]}`, "");
@@ -47697,7 +47773,15 @@ async function main() {
         })
       } : {}
     });
-    const event = await githubEvent();
+    let event;
+    try {
+      event = await githubEvent(checkoutRef(process.env["INPUT_CHECKOUT-REF"]));
+    } catch (error63) {
+      if (!(error63 instanceof UnconfirmedHeadError)) throw error63;
+      notice(`${error63.message} Stopping without planning.`);
+      await writeJobSummary(() => renderPlanJobSummary({ skipped: error63.message, context: jobSummaryContext() }));
+      return;
+    }
     const cancellation = new AbortController();
     const cancel = () => cancellation.abort();
     process.once("SIGINT", cancel);
@@ -47758,13 +47842,13 @@ async function main() {
     setFailed(message2(error63));
   }
 }
-async function githubEvent() {
+async function githubEvent(checkoutSha) {
   const eventName = process.env.GITHUB_EVENT_NAME;
   if (!eventName) return void 0;
   const raw = JSON.parse(await (0, import_promises4.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
   const target = dispatchTargetRequest(eventName, raw);
   const resolved = target === null ? void 0 : await fetchDispatchTarget({ target, repository: requiredEnvironment2("GITHUB_REPOSITORY"), token: providerReadToken });
-  const event = normalizeGitHubEvent(eventName, raw, resolved);
+  const event = await onCheckedOutHead(normalizeGitHubEvent(eventName, raw, resolved), checkoutSha);
   const login = authorPermissionLogin(event);
   if (login === null) return event;
   const permission = await fetchAuthorPermission({
@@ -47773,6 +47857,22 @@ async function githubEvent() {
     token: providerReadToken
   });
   return permission === null ? event : withAuthorPermission(event, permission);
+}
+async function onCheckedOutHead(event, checkoutSha) {
+  const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+  if (checkoutSha === void 0 || pullRequest === void 0 || pullRequest.head.sha === checkoutSha) return event;
+  const current = await fetchCurrentPullRequest({
+    repository: requiredEnvironment2("GITHUB_REPOSITORY"),
+    number: pullRequest.number,
+    token: providerReadToken
+  });
+  const moved = withCurrentPullRequestHead(event, checkoutSha, current);
+  notice(`Pull request #${pullRequest.number} moved since this run was triggered; planning on its current head ${checkoutSha}.`);
+  return moved;
+}
+function checkoutRef(value) {
+  const ref = value?.trim() ?? "";
+  return ref === "" ? void 0 : ref;
 }
 async function getIdTokenWithoutEnvironmentLeak(audience) {
   if (!oidcRequestUrl || !oidcRequestToken) throw new Error("GitHub Actions OIDC is unavailable; grant id-token: write");

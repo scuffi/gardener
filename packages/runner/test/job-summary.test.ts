@@ -92,6 +92,13 @@ describe("plan job summary", () => {
     expect(markdown).toContain("```text\ncapture digest mismatch\n```");
   });
 
+  it("shows a run that stopped before planning", () => {
+    const markdown = renderPlanJobSummary({ skipped: "Pull request #12 moved again", context });
+    expect(markdown).toContain("## Gardener: ⏭️ Planning skipped");
+    expect(markdown).toContain("```text\nPull request #12 moved again\n```");
+    expect(markdown).toContain("GitHub run 37458168482");
+  });
+
   it("shows a cancelled run", () => {
     expect(renderPlanJobSummary({ terminal: { status: "cancelled", summary: "Run was cancelled" } })).toContain("⏹️ Planning cancelled");
   });

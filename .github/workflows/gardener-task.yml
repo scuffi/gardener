@@ -48,18 +48,41 @@ jobs:
       effect-artifact-name: gardener-effect-${{ github.run_id }}-${{ github.run_attempt }}
       capture-artifact-name: gardener-capture-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      # A run queued behind an earlier round starts after that round pushed, so
+      # plan on the pull request's current head. The bridge confirms it before
+      # any task command runs; anything unexpected keeps the event's commit.
+      - name: Resolve current pull request head
+        id: head
+        if: ${{ inputs.checkout-ref != '' && github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_SHA: ${{ inputs.checkout-ref }}
+          EVENT_REF: ${{ github.event.pull_request.head.ref }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          sha="$EVENT_SHA"
+          if current="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_NUMBER" \
+            --jq 'select(.state == "open" and .head.repo.id == .base.repo.id) | "\(.head.sha) \(.head.ref)"')"; then
+            current_sha="${current%% *}"
+            current_ref="${current#* }"
+            if [[ "$current_sha" =~ ^[0-9a-f]{40}$ && "$current_ref" == "$EVENT_REF" ]]; then sha="$current_sha"; fi
+          else
+            echo "::warning::Could not read pull request #$PULL_NUMBER; planning on the event's head $EVENT_SHA"
+          fi
+          if [[ "$sha" != "$EVENT_SHA" ]]; then echo "Pull request head moved since the trigger: planning on $sha"; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - name: Check out without persisted credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          ref: ${{ inputs.checkout-ref }}
+          ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
       - name: Run Gardener task
         id: gardener
         uses: scuffi/gardener/bridges/github/plan@39272c439840559de05724229f125d558e292f34
         with:
           runtime-url: ${{ inputs.runtime-url }}
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
-          checkout-ref: ${{ inputs.checkout-ref }}
+          checkout-ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload exact effect plan
         if: ${{ steps.gardener.outputs.effect-artifact-sha256 != '' }}

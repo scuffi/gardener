@@ -374,7 +374,9 @@ effects:
 A task whose `commit.create` list is anything other than `gardener/**`, for example
 `branches: ["**"]`, also checks out the head without setting `checkout`. The generated workflow
 passes the head to the reusable workflow as `checkout-ref`, and runs one such task at a time per
-pull request, so two rounds never build on the same head. Manual runs and issue comment triggers keep the default
+pull request, so two rounds never build on the same head. A run that waited behind an earlier
+round plans on the pull request's current head, not the one in its event, so it sees that round's
+push. Manual runs and issue comment triggers keep the default
 checkout, so they cannot push to a pull request branch; Gardener refuses such a commit rather than
 build it on the wrong parent. Pull requests from forks are never planned.
 
