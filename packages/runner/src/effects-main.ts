@@ -46,6 +46,7 @@ import {
   type GitHubEffectsContext,
   type OperationOutputsV1,
 } from "./github-effects";
+import { addSecret, jobSummaryContext, renderApplyJobSummary, writeJobSummary } from "./job-summary";
 
 const inputToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
 delete process.env["INPUT_GITHUB-TOKEN"];
@@ -62,6 +63,8 @@ interface ApplyResult {
 
 export async function runEffectsMain(): Promise<void> {
   let connection: EffectsSession | undefined;
+  let plan: TaskEffectPlanV1 | undefined;
+  let receipt: RunnerEffectReceiptV1 | undefined;
   try {
     const artifactPath = core.getInput("artifact-path", { required: true });
     const expectedSha256 = core.getInput("expected-sha256", { required: true });
@@ -70,14 +73,14 @@ export async function runEffectsMain(): Promise<void> {
     const runtimeUrl = core.getInput("runtime-url", { required: true });
     const deadlineAt = Date.parse(core.getInput("deadline-at", { required: true }));
     if (!Number.isFinite(deadlineAt) || deadlineAt <= Date.now()) throw new Error("deadline-at must be a future ISO timestamp");
-    core.setSecret(token);
+    addSecret(token);
     if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("expected-sha256 must be a SHA-256 digest");
 
     const bytes = await readFile(artifactPath);
     if (bytes.byteLength > EFFECT_TRANSPORT_MAX_BYTES) throw new Error("Effect artifact is too large");
     const actualSha256 = createHash("sha256").update(bytes).digest("hex");
     if (!equalDigest(actualSha256, expectedSha256)) throw new Error("Effect artifact digest mismatch");
-    const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
+    plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
     await assertApplyBindings(plan, token);
 
     connection = await connectEffectsSession(runtimeUrl, plan.bundleHash);
@@ -95,6 +98,12 @@ export async function runEffectsMain(): Promise<void> {
       record: (receipt) => connection!.session.recordEffect(receipt),
     });
 
+    receipt = result.receipt;
+    // Nothing after this write can throw, so the catch below only writes when
+    // no summary was written here. A stopped plan is summarised by the catch.
+    if (result.receipt.status === "applied") {
+      await writeJobSummary(() => renderApplyJobSummary({ plan: plan!, receipt: receipt!, context: jobSummaryContext() }));
+    }
     core.setOutput("status", result.receipt.status);
     core.setOutput("completed-operations", String(result.receipt.operations.length));
     const last = result.receipt.operations.at(-1);
@@ -109,7 +118,14 @@ export async function runEffectsMain(): Promise<void> {
       throw new Error(`Effect plan stopped at ${result.receipt.stoppedAtStep}: ${error?.message ?? "provider operation failed"}`);
     }
   } catch (error) {
-    core.setFailed(error instanceof Error ? error.message : "Gardener effect failed");
+    const reason = error instanceof Error ? error.message : "Gardener effect failed";
+    await writeJobSummary(() => renderApplyJobSummary({
+      ...(plan ? { plan } : {}),
+      ...(receipt ? { receipt } : {}),
+      error: reason,
+      context: jobSummaryContext(),
+    }));
+    core.setFailed(reason);
   } finally {
     connection?.root[Symbol.dispose]();
   }
@@ -619,7 +635,7 @@ function captureReader(directory: string): NonNullable<GitHubEffectsContext["rea
 async function connectEffectsSession(runtimeUrl: string, bundleHash: string): Promise<EffectsSession> {
   const audience = new URL(runtimeUrl).origin;
   const oidcToken = await core.getIDToken(audience);
-  core.setSecret(oidcToken);
+  addSecret(oidcToken);
   const hello = helloFromOidcToken(oidcToken, bundleHash, "effects");
   const root = newWebSocketRpcSession<PublicSessionCapability>(sessionSocketUrl(runtimeUrl, hello, "effects"));
   const session = root.authenticate(hello, oidcToken, new EffectsRunnerApi());

@@ -2,13 +2,14 @@ import * as core from "@actions/core";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { taskEffectPlanV1Schema } from "@gardener/contracts";
+import { taskEffectPlanV1Schema, type TaskEffectPlanV1 } from "@gardener/contracts";
 import { type RunnerEventV1 } from "@gardener/protocol";
 import { authorPermissionLogin, fetchAuthorPermission, withAuthorPermission } from "./author-permission";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
 import { createPlanningExecutor, planningCaptureBase } from "./executor";
 import { GitHubReadClient } from "./github-read";
+import { addSecret, jobSummaryContext, renderPlanJobSummary, writeJobSummary } from "./job-summary";
 import { runPlanningSession } from "./session";
 
 const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
@@ -26,6 +27,8 @@ const providerReadToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
 delete process.env["INPUT_GITHUB-TOKEN"];
 
 async function main(): Promise<void> {
+  let terminal: Awaited<ReturnType<typeof runPlanningSession>> | undefined;
+  let plan: TaskEffectPlanV1 | undefined;
   try {
     const runtimeUrl = requiredInput("runtime-url");
     const agentHash = requiredInput("task-bundle-hash");
@@ -33,7 +36,7 @@ async function main(): Promise<void> {
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
     // Set only when the workflow checked out a pull request's head.
     const baseSha = planningCaptureBase(process.env["INPUT_CHECKOUT-REF"], process.env.GITHUB_SHA);
-    if (providerReadToken) core.setSecret(providerReadToken);
+    if (providerReadToken) addSecret(providerReadToken);
     // Built before the event is read and long before the session connects, so
     // the capture baseline is taken while the checkout is still exactly what
     // `actions/checkout` produced.
@@ -56,7 +59,6 @@ async function main(): Promise<void> {
     const cancel = () => cancellation.abort();
     process.once("SIGINT", cancel);
     process.once("SIGTERM", cancel);
-    let terminal: Awaited<ReturnType<typeof runPlanningSession>>;
     try {
       terminal = await runPlanningSession({
         harnessUrl: runtimeUrl,
@@ -87,7 +89,7 @@ async function main(): Promise<void> {
       if (digest !== terminal.effectArtifact.sha256) throw new Error("Gardener effect artifact digest mismatch");
       const directory = path.join(requiredEnvironment("RUNNER_TEMP"), "gardener-effect-plans");
       await mkdir(directory, { recursive: true, mode: 0o700 });
-      const plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
+      plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
       const artifactPath = path.join(directory, `${digest}.json`);
       await writeFile(artifactPath, bytes, { mode: 0o600 });
       outputs["effect-artifact-path"] = artifactPath;
@@ -103,8 +105,15 @@ async function main(): Promise<void> {
       }
     }
     for (const [name, value] of Object.entries(outputs)) core.setOutput(name, value);
+    await writeJobSummary(() => renderPlanJobSummary({ terminal: terminal!, ...(plan ? { plan } : {}), context: jobSummaryContext() }));
     if (terminal.status !== "completed") core.setFailed(terminal.summary);
   } catch (error) {
+    await writeJobSummary(() => renderPlanJobSummary({
+      ...(terminal ? { terminal } : {}),
+      ...(plan ? { plan } : {}),
+      error: message(error),
+      context: jobSummaryContext(),
+    }));
     core.setFailed(message(error));
   }
 }
@@ -140,7 +149,7 @@ async function getIdTokenWithoutEnvironmentLeak(audience: string): Promise<strin
   process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = oidcRequestToken;
   try {
     const token = await core.getIDToken(audience);
-    core.setSecret(token);
+    addSecret(token);
     return token;
   } finally {
     delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
