@@ -1,0 +1,33 @@
+.github/workflows/gardener-task.yml
+  s_de0b486c128948::t_0e8c30c52e99b0 51-73,78,85
+docs/task-authoring.md
+  s_de0b486c128948::t_87a52f44f11348 377-379
+packages/runner/src/current-head.ts
+  s_de0b486c128948::t_7bf1528eeebbcf 1-122
+packages/runner/src/job-summary.ts
+  s_de0b486c128948::t_fbb6706b3410f3 67-68,72-76
+packages/runner/src/main.ts
+  s_de0b486c128948::t_1ba7b626dd8d82 10,58-67,132,142,156-175
+packages/runner/test/current-head.test.ts
+  s_de0b486c128948::t_13c83f67d48e3e 1-114
+packages/runner/test/job-summary.test.ts
+  s_de0b486c128948::t_c7266adad4c29a 95-101
+packages/runner/test/resolve-head-step.test.ts
+  s_de0b486c128948::t_1659c7b9ae5c82 1-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b1fae0183bf3fbfc2d135071dec6736d1c2d8f9f",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
