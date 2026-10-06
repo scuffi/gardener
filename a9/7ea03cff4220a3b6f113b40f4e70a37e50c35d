@@ -1,0 +1,29 @@
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_de0b486c128948::t_82cb5657ee640f 325-327,420-444,472-473
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_f9d3e9e17342bc 75-76,254-255,274,288
+apps/gardener/src/task-runtime/task-completion.ts
+  s_de0b486c128948::t_1295aa6eb0d1aa 24-27,195,210-260,300
+apps/gardener/src/task-runtime/task-limits.ts
+  s_de0b486c128948::t_a7c27c94ab8fa8 44-46
+apps/gardener/test/task-completion.test.ts
+  s_de0b486c128948::t_1fc2be8b258d57 8-9,194-281
+apps/gardener/test/task-flue-agent.test.ts
+  s_de0b486c128948::t_c6af4608ea73e2 25,525-547
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a97ea03cff4220a3b6f113b40f4e70a37e50c35d",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
