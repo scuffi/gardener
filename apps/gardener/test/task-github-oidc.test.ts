@@ -1,7 +1,7 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { RunnerHelloV1 } from "@gardener/protocol";
-import { verifyActionsOidc, type ActionsEnrollmentPolicy } from "../src/task-runtime/github-oidc";
+import { UntrustedWorkflowError, verifyActionsOidc, type ActionsEnrollmentPolicy } from "../src/task-runtime/github-oidc";
 
 const now = new Date("2026-09-17T12:00:00.000Z");
 const audience = "https://gardener.example.workers.dev";
@@ -77,7 +77,13 @@ describe("product Actions OIDC enrollment", () => {
       .resolves.toMatchObject({ actorLogin: "scuffi" });
     const other = `scuffi/gardener/.github/workflows/gardener-task.yml@${"8".repeat(40)}`;
     await expect(verifyActionsOidc(await token({ job_workflow_ref: other }), { ...hello, jobWorkflowRef: other }, trusted))
-      .rejects.toThrow(/trusted reusable workflow/);
+      .rejects.toThrow(UntrustedWorkflowError);
+    // The typed refusal comes only after the signature checks out, so the
+    // session's advice never answers an unauthenticated caller.
+    const forged = `${(await token({ job_workflow_ref: other })).slice(0, -4)}AAAA`;
+    const refusal = await verifyActionsOidc(forged, { ...hello, jobWorkflowRef: other }, trusted).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(Error);
+    expect(refusal).not.toBeInstanceOf(UntrustedWorkflowError);
   });
 
   it("rejects environment-bound identities for both planning and automatic effects", async () => {

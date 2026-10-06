@@ -9,6 +9,13 @@ import type { RunnerHelloV1 } from "@gardener/protocol";
 const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_OIDC_JWKS = createRemoteJWKSet(new URL(`${GITHUB_OIDC_ISSUER}/.well-known/jwks`));
 
+/** A verified token from a workflow outside the trusted set; the session adds advice. */
+export class UntrustedWorkflowError extends Error {
+  constructor() {
+    super("Runner hello does not match the trusted reusable workflow");
+  }
+}
+
 export interface ActionsEnrollmentPolicy {
   audience: string;
   repositoryId: string;
@@ -52,7 +59,7 @@ export async function verifyActionsOidc(
     throw new Error("Runner hello does not match enrolled repository identity");
   }
   if (!policy.jobWorkflowRefs.includes(hello.jobWorkflowRef)) {
-    throw new Error("Runner hello does not match the trusted reusable workflow");
+    throw new UntrustedWorkflowError();
   }
   const expected: Record<string, string> = {
     repository_id: policy.repositoryId,

@@ -2,6 +2,7 @@ import { pinnedWorkflowRefPattern, syncRequestV1Schema, syncWorkflowRefFor, task
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTVerifyGetKey } from "jose";
 import type { Env } from "../env";
+import { releaseMismatchAdvice } from "./workflow-refs";
 
 const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_OIDC_JWKS = createRemoteJWKSet(new URL(`${GITHUB_OIDC_ISSUER}/.well-known/jwks`));
@@ -92,7 +93,9 @@ export async function syncRepository(
   }
   const body = await boundedJson(request);
   const parsed = syncRequestV1Schema.safeParse(body);
-  if (!parsed.success) throw new SyncRefused(400, `Invalid sync request: ${parsed.error.issues[0]?.message ?? "bad shape"}`);
+  if (!parsed.success) {
+    throw new SyncRefused(400, `Invalid sync request: ${parsed.error.issues[0]?.message ?? "bad shape"}. ${releaseMismatchAdvice(options.releaseWorkflowRef)}`);
+  }
   const input = parsed.data;
 
   const expected: Record<string, string> = {
@@ -126,7 +129,7 @@ export async function syncRepository(
     .filter((ref): ref is string => ref !== null);
   const jobWorkflowRef = String(claims.job_workflow_ref ?? "");
   if (!accepted.includes(jobWorkflowRef)) {
-    throw new SyncRefused(403, `Sync workflow ${jobWorkflowRef} is not the repository's pinned Gardener release or this runtime's; run gardener upgrade`);
+    throw new SyncRefused(403, `Sync workflow ${jobWorkflowRef} is not the repository's pinned Gardener release or this runtime's. ${releaseMismatchAdvice(options.releaseWorkflowRef, jobWorkflowRef)}`);
   }
   const taskWorkflowRef = taskWorkflowRefFor(jobWorkflowRef)!;
   if (input.workflowRef !== taskWorkflowRef) {
@@ -147,7 +150,11 @@ export async function syncRepository(
   const seen = new Set<string>();
   for (const task of input.tasks) {
     const bundle = taskBundleV1Schema.safeParse(task.bundle);
-    if (!bundle.success) throw new SyncRefused(400, `Task ${task.taskId} is not a valid task bundle`);
+    if (!bundle.success) {
+      const issue = bundle.error.issues[0];
+      const where = issue ? ` (${issue.path.join(".") || "bundle"}: ${issue.message})` : "";
+      throw new SyncRefused(400, `Task ${task.taskId} is not a task bundle this runtime accepts${where}. ${releaseMismatchAdvice(options.releaseWorkflowRef, jobWorkflowRef)}`);
+    }
     if (bundle.data.taskId !== task.taskId) throw new SyncRefused(400, `Task ${task.taskId} does not match its bundle`);
     if (seen.has(task.taskId)) throw new SyncRefused(400, `Task ${task.taskId} appears twice`);
     seen.add(task.taskId);

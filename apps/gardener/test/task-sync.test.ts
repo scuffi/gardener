@@ -145,7 +145,7 @@ describe("repository sync", () => {
   it("refuses every run that is not the pinned sync workflow on the default branch", async () => {
     const { sqlite, db } = database();
     const cases: Array<[Parameters<typeof sync>[1], number, RegExp]> = [
-      [{ claims: { job_workflow_ref: syncRef("d".repeat(40)) } }, 403, /not the repository's pinned Gardener release/],
+      [{ claims: { job_workflow_ref: syncRef("d".repeat(40)) } }, 403, /not the repository's pinned Gardener release or this runtime's\. This runtime is on Gardener release [a-f0-9]{12} and this workflow is on d{12}\. Usually the repository was upgraded first: run gardener upgrade --workspace <name> with the Gardener CLI from this workflow's release \(d{12}\)/],
       [{ claims: { job_workflow_ref: taskRef(oldSha) } }, 403, /not the repository's pinned/],
       [{ claims: { job_workflow_ref: `evil/gardener/.github/workflows/gardener-sync.yml@${oldSha}` } }, 403, /not the repository's pinned/],
       [{ claims: { ref: "refs/heads/feature" } }, 403, /Only the default branch/],
@@ -167,8 +167,8 @@ describe("repository sync", () => {
       [{ workflowRef: taskRef(newSha) }, 409, /The lock pins/],
       [{ tasks: [{ ...task(), taskId: "other" }] }, 400, /does not match its bundle/],
       [{ tasks: [task(), task()] }, 400, /appears twice/],
-      [{ tasks: [{ ...task(), bundle: { nope: true } }] }, 400, /not a valid task bundle/],
-      [{ tasks: [{ ...task(), source: "tasks/../TASK.md" }] }, 400, /Invalid sync request/],
+      [{ tasks: [{ ...task(), bundle: { nope: true } }] }, 400, /is not a task bundle this runtime accepts \(.+\)\. This runtime is on Gardener release [a-f0-9]{12} and this workflow is on [a-f0-9]{12}\. Usually the repository was upgraded first: run gardener upgrade/],
+      [{ tasks: [{ ...task(), source: "tasks/../TASK.md" }] }, 400, /Invalid sync request: .+\. This runtime is on Gardener release [a-f0-9]{12}\. Usually the repository was upgraded first: run gardener upgrade/],
     ];
     for (const [input, status, message] of cases) {
       const result = await refusal(sync(db, input));

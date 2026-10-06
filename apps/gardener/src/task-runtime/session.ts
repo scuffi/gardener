@@ -83,7 +83,7 @@ import {
   type TaskSettlementNoticeV1,
   type TaskSubmissionRecord,
 } from "./task-completion";
-import { verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
+import { UntrustedWorkflowError, verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { proposalAuthorityRefusal } from "./proposal-authority";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
@@ -91,7 +91,7 @@ import { instrumentD1 } from "./d1-diagnostics";
 import { taskToolInputKeys } from "./tool-input-schemas";
 import { listFilesPath, repositoryPath } from "./repository-paths";
 import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
-import { trustedTaskWorkflowRefs } from "./workflow-refs";
+import { releaseMismatchAdvice, trustedTaskWorkflowRefs } from "./workflow-refs";
 import { countToolCall, toolTarget, trailDigest, type ToolCallCounts } from "./run-trail";
 
 interface Enrollment {
@@ -325,7 +325,13 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   async authenticate(helloInput: RunnerHelloV1, oidcToken: string, runner: RpcStub<RunnerCapability>, routedSessionId: string): Promise<void> {
-    const hello = runnerHelloV1Schema.parse(helloInput);
+    const parsedHello = runnerHelloV1Schema.safeParse(helloInput);
+    if (!parsedHello.success) {
+      // The field path only: issue messages can quote the caller's input.
+      const field = parsedHello.error.issues[0]?.path.join(".") || "hello";
+      throw new Error(`This runtime does not accept the runner's hello (${field}), so the workflow is probably on a newer release than the runtime. ${releaseMismatchAdvice(this.env.GARDENER_RELEASE_WORKFLOW_REF)}`);
+    }
+    const hello = parsedHello.data;
     if (runnerSessionId(hello) !== routedSessionId) throw new Error("Runner identity does not match the routed durable session");
     const enrollment = await this.#db().prepare(
       "SELECT repository_id,owner_id,owner_login,repository_name,visibility,plan_job_workflow_ref,effects_job_workflow_ref,oidc_audience " +
@@ -334,6 +340,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (!enrollment) throw new Error("Repository is not enrolled for Actions task execution");
     const enrolledWorkflowRef = hello.phase === "plan" ? enrollment.plan_job_workflow_ref : enrollment.effects_job_workflow_ref;
     if (!enrolledWorkflowRef) throw new Error(`Repository has no enrolled ${hello.phase} workflow`);
+    const trustedWorkflowRefs = trustedTaskWorkflowRefs(enrolledWorkflowRef, this.env.GARDENER_RELEASE_WORKFLOW_REF);
+    // Wording only, after the verifier has checked the signature and refused
+    // the workflow: the advice never decides admission or answers pre-auth.
     const actor = await verifyActionsOidc(oidcToken, hello, {
       audience: enrollment.oidc_audience,
       repositoryId: enrollment.repository_id,
@@ -341,7 +350,10 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ownerLogin: enrollment.owner_login,
       repositoryName: enrollment.repository_name,
       visibility: enrollment.visibility,
-      jobWorkflowRefs: trustedTaskWorkflowRefs(enrolledWorkflowRef, this.env.GARDENER_RELEASE_WORKFLOW_REF),
+      jobWorkflowRefs: trustedWorkflowRefs,
+    }).catch((error: unknown) => {
+      if (!(error instanceof UntrustedWorkflowError)) throw error;
+      throw new Error(`Workflow ${hello.jobWorkflowRef} is not the repository's synced Gardener release or this runtime's. ${releaseMismatchAdvice(this.env.GARDENER_RELEASE_WORKFLOW_REF, hello.jobWorkflowRef)}`, { cause: error });
     });
     await this.consumeOidcToken(actor.jti, actor.expiresAt);
     const existingSessionId = await this.ctx.storage.get<string>("session-id");
