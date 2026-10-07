@@ -42,6 +42,11 @@ cp -r examples/tasks/triage examples/tasks/pr-review examples/tasks/mention-repl
    `<name>` is what people type after `@`. Pick a name that is **not** a real GitHub account
    (`gh api users/<name>` should return 404); otherwise every mention also notifies that person.
 
+   If the repository already has a `.github/workflows/gardener-sync.yml` that Gardener didn't
+   generate, add `"syncWorkflow": "gardener-repo-sync.yml"` (any `gardener-*.yml` name) so the
+   generated sync workflow uses that file instead. Gardener's own repository needs this, because it
+   publishes the reusable workflow at the default path.
+
 4. Deploy, compile, enroll and verify:
 
 ```bash

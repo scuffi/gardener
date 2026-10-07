@@ -11,7 +11,9 @@ import {
   pinCliScripts,
   planProject,
   staleProjectFiles,
+  GENERATED_MARKER,
   SYNC_WORKFLOW,
+  projectSyncWorkflow,
   upgradeProjectRelease,
 } from "../src/project";
 import { operationKindValues, taskToolV1Schema, taskTriggerKindValues } from "@gardener/contracts";
@@ -718,6 +720,95 @@ describe("sync workflow and staleness", () => {
     await mkdir(join(root, ".gardener/tasks/sync"), { recursive: true });
     await writeFile(join(root, ".gardener/tasks/sync/TASK.md"), TASK.replace(/^id: .*$/m, "id: sync"));
     await expect(buildProject({ repositoryRoot: root })).rejects.toThrow(/would overwrite \.github\/workflows\/gardener-sync\.yml/);
+  });
+
+  it("generates the sync workflow under a configured name and leaves the default path alone", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-sync-config-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    await writeFile(projectPath, `${JSON.stringify({ ...project, syncWorkflow: "gardener-repo-sync.yml" }, null, 2)}\n`);
+    // Gardener's own repository publishes a reusable workflow at the default path.
+    const reusable = "name: Sync Gardener tasks\non:\n  workflow_call:\n";
+    await mkdir(join(root, ".github/workflows"), { recursive: true });
+    await writeFile(join(root, SYNC_WORKFLOW), reusable);
+    await mkdir(join(root, ".gardener/tasks/triage"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/triage/TASK.md"), TASK);
+    await buildProject({ repositoryRoot: root });
+    expect(await readFile(join(root, SYNC_WORKFLOW), "utf8")).toBe(reusable);
+    const generated = parseYaml(await readFile(join(root, ".github/workflows/gardener-repo-sync.yml"), "utf8"));
+    expect(generated.jobs.sync.uses).toBe(DEFAULT_WORKFLOW_REF.replace("/gardener-task.yml@", "/gardener-sync.yml@"));
+    expect(await projectSyncWorkflow(root)).toBe(".github/workflows/gardener-repo-sync.yml");
+    expect(await staleProjectFiles(await planProject({ repositoryRoot: root }))).toEqual([]);
+  });
+
+  it("removes the old generated sync workflow when the name changes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-sync-rename-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await buildProject({ repositoryRoot: root });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    await writeFile(projectPath, JSON.stringify({ ...project, syncWorkflow: "gardener-repo-sync.yml" }));
+    // The sync check reports the old file until generate removes it.
+    expect(await staleProjectFiles(await planProject({ repositoryRoot: root }))).toContain(`${SYNC_WORKFLOW} (no longer generated)`);
+    await buildProject({ repositoryRoot: root });
+    const { readdir } = await import("node:fs/promises");
+    expect(await readdir(join(root, ".github/workflows"))).toEqual(["gardener-repo-sync.yml"]);
+    expect(await staleProjectFiles(await planProject({ repositoryRoot: root }))).toEqual([]);
+  });
+
+  it("changes nothing when it refuses to overwrite a workflow Gardener did not write", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-sync-refuse-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await mkdir(join(root, ".gardener/tasks/triage"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/triage/TASK.md"), TASK);
+    await mkdir(join(root, ".github/workflows"), { recursive: true });
+    await writeFile(join(root, SYNC_WORKFLOW), "name: Mine\n");
+    await expect(buildProject({ repositoryRoot: root })).rejects.toThrow(/Refusing to overwrite non-Gardener workflow/);
+    const { readdir } = await import("node:fs/promises");
+    expect(await readdir(join(root, ".github/workflows"))).toEqual(["gardener-sync.yml"]);
+  });
+
+  it("refuses a configured sync workflow name that a task also generates", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-sync-clash-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    await writeFile(projectPath, JSON.stringify({ ...project, syncWorkflow: "gardener-triage.yml" }));
+    await mkdir(join(root, ".gardener/tasks/triage"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/triage/TASK.md"), TASK.replace(/^id: .*$/m, "id: triage"));
+    await expect(buildProject({ repositoryRoot: root })).rejects.toThrow(/would overwrite \.github\/workflows\/gardener-triage\.yml/);
+  });
+
+  it("says to upgrade when gardener.json has a setting this release does not know", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-unknown-key-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    await writeFile(projectPath, JSON.stringify({ ...project, futureSetting: true }));
+    await expect(planProject({ repositoryRoot: root })).rejects.toThrow(/sets futureSetting, which this Gardener release does not support\. Upgrade Gardener/);
+    await writeFile(projectPath, JSON.stringify({ ...project, futureSetting: true, syncWorkflow: "sync.yml" }));
+    await expect(planProject({ repositoryRoot: root })).rejects.toThrow(/also has 1 other error: syncWorkflow: syncWorkflow must be a file name/);
+  });
+
+  it("never marks the published reusable workflows as generated, so generate cannot delete them", async () => {
+    // generate removes gardener-*.yml files that carry the marker; in Gardener's
+    // own repository these are what every connected repository calls.
+    for (const name of ["gardener-check.yml", "gardener-sync.yml", "gardener-task.yml"]) {
+      const content = await readFile(join(import.meta.dirname, "../../../.github/workflows", name), "utf8");
+      expect(content.includes(GENERATED_MARKER), name).toBe(false);
+    }
+  });
+
+  it("rejects a sync workflow name outside the gardener- prefix", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-sync-bad-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    for (const name of ["sync.yml", "gardener-sync.yml/../x.yml", "../gardener-x.yml", `gardener-${"a".repeat(60)}.yml`]) {
+      await writeFile(projectPath, JSON.stringify({ ...project, syncWorkflow: name }));
+      await expect(buildProject({ repositoryRoot: root })).rejects.toThrow(/syncWorkflow must be a file name/);
+    }
   });
 });
 

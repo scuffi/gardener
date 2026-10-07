@@ -23,7 +23,7 @@ those proposals. Nothing outside the declaration is possible, whatever the instr
   tasks/<dir>/TASK.md      one task per directory; the only files you write
 .github/workflows/
   gardener-<id>.yml        generated, one per task; never edit
-  gardener-sync.yml        generated; never edit
+  gardener-sync.yml        generated (or the "syncWorkflow" name in gardener.json); never edit
 ```
 
 ## Workflow

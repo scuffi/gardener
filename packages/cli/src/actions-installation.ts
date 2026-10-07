@@ -1,13 +1,13 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { taskBundleV1Schema } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { z } from "zod";
 import { actionsEnrollmentSql } from "./actions.js";
 import { executeD1, isolatedWranglerDirectory, queryD1, queryD1IfTableExists, sql } from "./actions-d1.js";
 import { compileGitHubActionsTask } from "./actions-target.js";
-import { DEFAULT_WORKFLOW_REF } from "./project.js";
+import { DEFAULT_WORKFLOW_REF, projectSyncWorkflow, SYNC_WORKFLOW } from "./project.js";
 import { runCommand, workerOrigin, wrangler } from "./commands.js";
 import { listDatabases, selectedAccountId, workerExists, workerSecretNames } from "./provision.js";
 
@@ -445,7 +445,9 @@ export async function connectActions(input: {
   // before this connect, their first sync failed; this one replaces it, and
   // makes the default branch's tasks the live ones if this checkout differs.
   // Before they merge there is no sync workflow yet, which is fine.
-  const sync = runCommand("gh", ["workflow", "run", "gardener-sync.yml", "--repo", repository], {
+  // Best effort, like the dispatch: the enrolment above already succeeded.
+  const syncWorkflow = basename(await projectSyncWorkflow(input.repositoryRoot).catch(() => SYNC_WORKFLOW));
+  const sync = runCommand("gh", ["workflow", "run", syncWorkflow, "--repo", repository], {
     cwd: input.repositoryRoot, quiet: true, allowFailure: true,
   });
   return { repositoryId: metadata.repositoryId, bundles, runtimeOrigin, syncStarted: sync.status === 0 };
