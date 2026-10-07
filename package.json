@@ -6,6 +6,7 @@
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "changeset": "changeset",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "check": "pnpm versions:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:actions-runtime && pnpm check:cli-package && pnpm check:bridge-dist && pnpm build:deploy",
@@ -19,6 +20,7 @@
     "gardener": "pnpm --filter @scuffi/gardener build && node packages/cli/dist/cli.js"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@cloudflare/workers-types": "5.20260924.1",
     "typescript": "7.0.2",
     "vitest": "5.0.3",

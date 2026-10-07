@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The Release workflow starts this on the Version Packages branch.
+  workflow_dispatch: {}
 
 permissions:
   contents: read

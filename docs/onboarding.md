@@ -1,6 +1,6 @@
 # Onboarding a repository (internal preview)
 
-Gardener is in preview. Releases are git tags; [CHANGELOG.md](../CHANGELOG.md) lists what each one
+Gardener is in preview. Releases are git tags; [the changelog](../packages/cli/CHANGELOG.md) lists what each one
 changes. One Gardener installation (a "workspace": one Worker and one D1 database) serves every
 repository you connect to it.
 
@@ -141,13 +141,27 @@ runtime that a newer release deployed.
 
 ## Cutting a release (Gardener maintainers)
 
-1. Land the change on `main`. If it touches contracts, protocol or runner code, finish its pin chain
-   ("Pin bridge actions", then "Pin CLI workflow ref") first.
-2. Bump `version` in `packages/cli/package.json`, add a matching section to `CHANGELOG.md`, and
-   commit both.
-3. `git tag v0.1.N && git push origin v0.1.N`. The Release workflow checks that the tag matches the
-   package version and that every pinned workflow and bridge exists (`pnpm check:release-pins`),
-   then stages `@scuffi/gardener@0.1.N` on npm.
+1. Land the change on `main` with a changeset: run `pnpm changeset`, pick `@scuffi/gardener` and the
+   bump, and write the changelog entry for users. Changes users won't notice need none. If the change
+   touches contracts, protocol or runner code, finish its pin chain ("Pin bridge actions", then
+   "Pin CLI workflow ref") first.
+2. The Release workflow keeps a **Version Packages** pull request open while changesets are pending.
+   It bumps `packages/cli/package.json`, adds the dated entry to `packages/cli/CHANGELOG.md`, and
+   moves this guide's version pins. Run `node scripts/changeset-version.mjs` locally to preview it,
+   then `git checkout .` to undo.
+3. Merge the Version Packages pull request. The Release workflow checks that every pinned workflow
+   and bridge exists (`pnpm check:release-pins`), stages `@scuffi/gardener@0.1.N` on npm, and tags
+   the merge commit `v0.1.N`.
 4. Approve the staged release with 2FA: `npm stage list @scuffi/gardener`, then
    `npm stage approve <stage-id>` (or approve it on npmjs.com). Nothing is installable until then.
    Tell users to upgrade.
+
+If a release goes wrong:
+
+- **A check failed before staging** (for example `check:release-pins`): fix it on `main`. The next
+  push to `main` tries the release again, because the version is neither tagged nor on npm. To retry
+  without a new commit, use **Run workflow** on the Release workflow, on `main`.
+- **Staged, but the tag job failed:** use **Re-run failed jobs** on that Release run. It retries only
+  the tag. npm refuses to stage the same version twice, so don't re-run the whole workflow.
+- **The stage was rejected:** the tag still marks the version as released, so nothing retries it.
+  Release the fix as the next version.
