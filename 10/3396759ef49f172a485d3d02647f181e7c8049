@@ -1,0 +1,37 @@
+.changeset/README.md
+  s_de0b486c128948::t_532c7657d5caf5 1-7
+.changeset/config.json
+  s_de0b486c128948::t_25e02d286e1b68 1-13
+.github/workflows/check.yml
+  s_de0b486c128948::t_e5768a43132beb 7-8
+.github/workflows/release.yml
+  s_de0b486c128948::t_b48f28df690524 3-15,18-19,24-27,29-94,96-97,99-100,105-106,124-129,131-133,136,138-168
+CHANGELOG.md
+  s_de0b486c128948::t_6f8f9a0943dedb 3
+docs/onboarding.md
+  s_de0b486c128948::t_c2a58f78f90c4f 3,144-154,158-167
+package.json
+  s_de0b486c128948::t_bba3ba3bbb660d 9,23
+packages/cli/CHANGELOG.md
+  s_de0b486c128948::t_1111c6622ee9fe 1-190
+pnpm-lock.yaml
+  s_de0b486c128948::t_3beb3725a98756 11-13,466-534,1196-1207,1259-1262,1796-1799,2058-2063,2067-2069,2196-2199,2252-2254,2303-2305,2321-2323,2675-2677,2867-2870,2893-2895,2962-2965,3743-3858,4366-4380,4454-4455,4882-4883,5184-5189,5192-5195,5355-5356,5396-5397,5454-5455,5494-5498,6018-6019,6307-6308,6347-6348,6420-6421
+scripts/changeset-version.mjs
+  s_de0b486c128948::t_e61d2d413d7205 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "103396759ef49f172a485d3d02647f181e7c8049",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
