@@ -3,6 +3,17 @@
 Each release is a git tag (`vX.Y.Z`) and the matching `@scuffi/gardener` version on npm. To move a
 connected repository to a release, follow [Upgrading](../../docs/onboarding.md#upgrading).
 
+## 0.1.12 (2026-10-07)
+
+### Patch Changes
+
+- 653f893: A repository whose `.github/workflows/gardener-sync.yml` is not Gardener's can name the generated
+  sync workflow with `"syncWorkflow": "gardener-<name>.yml"` in `.gardener/gardener.json`. `generate`
+  writes the sync workflow there, and `connect` starts that workflow for the first sync. Gardener's
+  own repository needs this, because it publishes the reusable workflow at the default path.
+  Upgrading: the field is read by this release's sync and check workflows, so upgrade before adding
+  it.
+
 ## 0.1.11 (2026-10-06)
 
 - Every plan and apply job writes a GitHub job summary. Successful runs list the proposed steps,
