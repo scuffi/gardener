@@ -1,0 +1,45 @@
+.gardener/SKILL.md
+  s_de0b486c128948::t_6a0a21da58f176 1-243
+.gardener/gardener.json
+  s_de0b486c128948::t_fad7ef7314078e 1-8
+.gardener/gardener.lock.json
+  s_de0b486c128948::t_fe971442612009 1-479
+.gardener/tasks/dependabot-merge/TASK.md
+  s_de0b486c128948::t_568f1a64bc3ea4 1-108
+.gardener/tasks/docs-review/TASK.md
+  s_de0b486c128948::t_234aca4933c994 1-48
+.gardener/tasks/examples-review/TASK.md
+  s_de0b486c128948::t_b735c1b7ee80a7 1-61
+.gardener/tasks/test-coverage-review/TASK.md
+  s_de0b486c128948::t_9b4ddfbd9b4c0b 1-49
+.gardener/tasks/triage/TASK.md
+  s_de0b486c128948::t_11c703b30d4805 1-52
+.github/workflows/gardener-dependabot-merge.yml
+  s_de0b486c128948::t_ca62b22ff798f2 1-44
+.github/workflows/gardener-docs-review.yml
+  s_de0b486c128948::t_e9c6d82512b366 1-44
+.github/workflows/gardener-examples-review.yml
+  s_de0b486c128948::t_af73c6dc683573 1-44
+.github/workflows/gardener-repo-sync.yml
+  s_de0b486c128948::t_00de8f8082f663 1-42
+.github/workflows/gardener-test-coverage-review.yml
+  s_de0b486c128948::t_990677bb81332f 1-44
+.github/workflows/gardener-triage.yml
+  s_de0b486c128948::t_79b051a7187e51 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7be2fa77318a8639e5637990bd2ba45d644ea44a",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
