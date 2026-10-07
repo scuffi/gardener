@@ -49,6 +49,9 @@ vi.mock("../src/context", () => ({
   sessionSocketUrl: vi.fn(() => "wss://gardener.example/session/effects"),
 }));
 
+// On a GitHub runner this is set, and the job summary would call core.summary,
+// which this mock leaves out. job-summary.test.ts covers the summary.
+delete process.env.GITHUB_STEP_SUMMARY;
 const effects = await import("../src/effects-main");
 await vi.waitFor(() => expect(core.setFailed).toHaveBeenCalled());
 
