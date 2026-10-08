@@ -3,6 +3,21 @@
 Each release is a git tag (`vX.Y.Z`) and the matching `@scuffi/gardener` version on npm. To move a
 connected repository to a release, follow [Upgrading](../../docs/onboarding.md#upgrading).
 
+## 0.1.13 (2026-10-08)
+
+### Patch Changes
+
+- b40c529: `connect`, `deploy` and the other commands that write to the Gardener database now pass their SQL to
+  Wrangler in a file rather than as an argument. Enrolment SQL carries whole task bundles, so it could
+  pass Windows' command-line limit, and some endpoint security tools kill processes started with very
+  long arguments.
+- 821001c: Tasks now react to the issue, pull request, comment or discussion that started a run: 👀 while
+  the task works, then 🚀 if it applied its plan or 😕 if it failed. A run that proposes nothing
+  just removes 👀. Reactions only go to authors the task admits, and review submissions get none.
+  Two small jobs make them, so generated workflows grant `issues: write`, `pull-requests: write` or
+  `discussions: write` for the triggers that need it. Set `reactions: false` in a `TASK.md` to turn
+  them off. Run `gardener upgrade` to get them; earlier releases' workflows have no reactions.
+
 ## 0.1.12 (2026-10-07)
 
 ### Patch Changes
