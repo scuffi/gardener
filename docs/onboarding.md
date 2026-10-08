@@ -19,7 +19,7 @@ Every command below runs the CLI from npm at one release. Use the same release f
 repository:
 
 ```bash
-GARDENER="npx @scuffi/gardener@0.1.13"
+GARDENER="npx @scuffi/gardener@0.1.14"
 ```
 
 ## Connect a repository
@@ -34,7 +34,7 @@ $GARDENER init
 for task in triage pr-review mention-reply; do
   mkdir -p ".gardener/tasks/$task"
   curl -sL -o ".gardener/tasks/$task/TASK.md" \
-    "https://raw.githubusercontent.com/scuffi/gardener/v0.1.13/examples/tasks/$task/TASK.md"
+    "https://raw.githubusercontent.com/scuffi/gardener/v0.1.14/examples/tasks/$task/TASK.md"
 done
 ```
 
@@ -93,7 +93,7 @@ Writing and checking a task needs only Node.js 24+ and the published CLI, with n
 ```bash
 cd /path/to/my-repo
 mkdir -p .gardener/tasks/my-task   # write .gardener/tasks/my-task/TASK.md
-npx @scuffi/gardener@0.1.13 generate
+npx @scuffi/gardener@0.1.14 generate
 ```
 
 `generate` validates every task, then writes the lock file and one workflow per task. Commit them
@@ -134,9 +134,9 @@ When a new version is released, upgrade every connected repository to it. From e
 root, on its default branch:
 
 ```bash
-GARDENER="npx @scuffi/gardener@0.1.13"
+GARDENER="npx @scuffi/gardener@0.1.14"
 $GARDENER upgrade --workspace my-gardener
-git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.13" && git push
+git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.14" && git push
 ```
 
 `upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned

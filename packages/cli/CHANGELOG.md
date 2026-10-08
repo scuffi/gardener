@@ -3,6 +3,13 @@
 Each release is a git tag (`vX.Y.Z`) and the matching `@scuffi/gardener` version on npm. To move a
 connected repository to a release, follow [Upgrading](../../docs/onboarding.md#upgrading).
 
+## 0.1.14 (2026-10-08)
+
+### Patch Changes
+
+- 4775453: The runtime now uses Flue 2.2 and pi-ai 1.0. Run `gardener upgrade` to deploy it; tasks and their
+  workflows don't change.
+
 ## 0.1.13 (2026-10-08)
 
 ### Patch Changes
