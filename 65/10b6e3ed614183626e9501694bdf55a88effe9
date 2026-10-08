@@ -1,0 +1,21 @@
+COLLABORATORS.md
+  s_de0b486c128948::t_e7b6be0d8ae210 1-109
+CONTRIBUTING.md
+  s_de0b486c128948::t_b8c701fcb69037 1-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6510b6e3ed614183626e9501694bdf55a88effe9",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
