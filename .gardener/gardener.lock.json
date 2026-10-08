@@ -3,10 +3,10 @@
   "target": {
     "id": "github-actions/v1",
     "adapterVersion": "1",
-    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d"
+    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@8aa3054967ee696be08ff61936c72e199c750ba7"
   },
   "release": {
-    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d"
+    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@8aa3054967ee696be08ff61936c72e199c750ba7"
   },
   "tasks": {
     "dependabot-merge": {
@@ -70,6 +70,7 @@
           "pull-requests": "write",
           "statuses": "read"
         },
+        "reactionPermissions": {},
         "callerPermissions": {
           "checks": "read",
           "contents": "write",
@@ -162,6 +163,7 @@
           "id-token": "write",
           "issues": "write"
         },
+        "reactionPermissions": {},
         "callerPermissions": {
           "checks": "read",
           "contents": "read",
@@ -257,6 +259,7 @@
           "id-token": "write",
           "pull-requests": "write"
         },
+        "reactionPermissions": {},
         "callerPermissions": {
           "checks": "read",
           "contents": "write",
@@ -349,6 +352,7 @@
           "id-token": "write",
           "issues": "write"
         },
+        "reactionPermissions": {},
         "callerPermissions": {
           "checks": "read",
           "contents": "read",
@@ -442,6 +446,9 @@
         },
         "effectsPermissions": {
           "id-token": "write",
+          "issues": "write"
+        },
+        "reactionPermissions": {
           "issues": "write"
         },
         "callerPermissions": {
