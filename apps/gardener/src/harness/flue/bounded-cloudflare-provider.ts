@@ -63,26 +63,29 @@ export function installBoundedCloudflareProvider(binding: CloudflareAIBinding): 
     return streamSimple(
       actual.model,
       context,
-      boundedProviderOptions(options as ProviderStreamOptions | undefined, context, budget, actual.requestOutputTokens),
+      boundedProviderOptions(options, context, budget, actual.requestOutputTokens),
     );
   }) as typeof provider.streamSimple;
 
   setProvider(provider);
 }
 
+/** The options both `stream` and `streamSimple` take that the budget sets. */
+type BudgetedOptions = Pick<ProviderStreamOptions, "maxTokens" | "signal">;
+
 /** Exported for tests. */
-export function boundedProviderOptions(
-  options: ProviderStreamOptions | undefined,
+export function boundedProviderOptions<Options extends BudgetedOptions>(
+  options: Options | undefined,
   context: { messages: readonly { role?: unknown; usage?: { output?: unknown } }[] },
   budget: EncodedBudget,
   requestOutputTokens: number,
-): ProviderStreamOptions {
+): Options {
   const remainingOutputTokens = outputTokensRemaining(context, budget.maxOutputTokens);
   return {
     ...options,
     maxTokens: Math.min(options?.maxTokens ?? Number.POSITIVE_INFINITY, remainingOutputTokens, requestOutputTokens),
     signal: deadlineSignal(options?.signal, budget.deadlineAtMs, budget.maxRuntimeMs),
-  };
+  } as Options;
 }
 
 function decodeBoundedModel(model: string): EncodedBudget {
