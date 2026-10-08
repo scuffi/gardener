@@ -1,44 +1,44 @@
-# Onboarding a repository (internal preview)
+# Onboarding a repository
 
-Gardener is in preview. Releases are git tags; [the changelog](../packages/cli/CHANGELOG.md) lists what each one
-changes. One Gardener installation (a "workspace": one Worker and one D1 database) serves every
-repository you connect to it.
+One Gardener installation (a "workspace": one Worker and one D1 database) serves every repository
+you connect to it. New to Gardener? [Getting started](getting-started.md) walks through a first
+install. This guide covers starter tasks, day-to-day operation and upgrades. Releases are tagged,
+and [the changelog](../packages/cli/CHANGELOG.md) lists what each one changes.
 
 ## Prerequisites
 
-- Node.js 24+ and pnpm.
-- `wrangler login` to the Cloudflare account that runs Gardener (Workers AI is billed there).
+- Node.js 24+.
+- `npx wrangler login` to the Cloudflare account that runs Gardener (Workers AI is billed there).
+  If the login can see several accounts, set `CLOUDFLARE_ACCOUNT_ID`.
 - `gh auth login` with admin access to the repositories you connect.
-- The organization's Actions policy must allow the reusable workflow `scuffi/gardener`
-  (**Organization settings → Actions → General**). Private repositories can call it because it is
-  public.
+- For repositories in an organization, an Actions policy that allows the reusable workflows in
+  `scuffi/gardener` (**Organization settings → Actions → General**). Private repositories can call
+  them because they are public.
 
-Get the CLI at a release tag:
+Every command below runs the CLI from npm at one release. Use the same release for every
+repository:
 
 ```bash
-git clone https://github.com/scuffi/gardener && cd gardener
-git checkout v0.1.13
-pnpm install
+GARDENER="npx @scuffi/gardener@0.1.13"
 ```
-
-Every command below runs from this checkout and passes `--source-root "$PWD"`.
 
 ## Connect a repository
 
-Check out the repository's default branch, then:
+Check out the repository's default branch, then from its root:
 
 ```bash
-REPO=/path/to/my-repo
-
-# 1. Create .gardener/gardener.json.
-pnpm gardener -- init --repository-root "$REPO"
+# 1. Create .gardener/gardener.json and .gardener/SKILL.md.
+$GARDENER init
 
 # 2. Pick starter tasks (see below).
-mkdir -p "$REPO/.gardener/tasks"
-cp -r examples/tasks/triage examples/tasks/pr-review examples/tasks/mention-reply "$REPO/.gardener/tasks/"
+for task in triage pr-review mention-reply; do
+  mkdir -p ".gardener/tasks/$task"
+  curl -sL -o ".gardener/tasks/$task/TASK.md" \
+    "https://raw.githubusercontent.com/scuffi/gardener/v0.1.13/examples/tasks/$task/TASK.md"
+done
 ```
 
-3. Mention tasks need a handle. Add `"handle": "<name>"` to `$REPO/.gardener/gardener.json`, where
+3. Mention tasks need a handle. Add `"handle": "<name>"` to `.gardener/gardener.json`, where
    `<name>` is what people type after `@`. Pick a name that is **not** a real GitHub account
    (`gh api users/<name>` should return 404); otherwise every mention also notifies that person.
 
@@ -50,14 +50,17 @@ cp -r examples/tasks/triage examples/tasks/pr-review examples/tasks/mention-repl
 4. Deploy, compile, enroll and verify:
 
 ```bash
-pnpm gardener -- yolo --workspace internal --repository my-org/my-repo \
-  --repository-root "$REPO" --source-root "$PWD"
+$GARDENER yolo --workspace my-gardener --repository my-org/my-repo
 ```
+
+`yolo` deploys the runtime if the workspace doesn't exist yet, compiles the tasks, connects the
+repository and runs `doctor`. If it stops because Cloudflare Access protects your `workers.dev`
+hostnames, see [Getting started](getting-started.md#1-deploy-the-runtime).
 
 5. Commit and push the generated files to the default branch:
 
 ```bash
-cd "$REPO" && git add .gardener .github/workflows && git commit -m "Add Gardener" && git push
+git add .gardener .github/workflows && git commit -m "Add Gardener" && git push
 ```
 
 Repeat for each repository, using the same `--workspace`.
@@ -107,16 +110,16 @@ in the last few days. Add `--min-release-age=0` to the `npx` command to use a ne
 
 ## Day to day
 
-All of these take `--workspace internal --source-root "$PWD"`:
+All of these take `--workspace my-gardener`:
 
 | Need | Command |
 | --- | --- |
 | Stop one task | Delete it, or set `draft: true`, on the default branch |
-| Pause a whole repository | `pnpm gardener -- repository disable --repository my-org/my-repo` |
-| Resume | `pnpm gardener -- repository enable --repository my-org/my-repo` |
-| Recent runs | `pnpm gardener -- runs --repository my-org/my-repo` |
-| One run in detail | `pnpm gardener -- runs view --run <run-id>` |
-| Check the installation | `pnpm gardener -- doctor --repository my-org/my-repo --repository-root "$REPO"` |
+| Pause a whole repository | `$GARDENER repository disable --repository my-org/my-repo` |
+| Resume | `$GARDENER repository enable --repository my-org/my-repo` |
+| Recent runs | `$GARDENER runs --repository my-org/my-repo` |
+| One run in detail | `$GARDENER runs view --run <run-id>` |
+| Check the installation | `$GARDENER doctor --repository my-org/my-repo`, from the repository's root |
 
 `runs view` includes the audit trail. `tool.called` rows show each tool call the model made, with
 its status and a short target (a file path or provider route, never command text), in order.
@@ -127,14 +130,13 @@ targets. A run that ends in `budget-exceeded` needs higher limits or narrower in
 
 ## Upgrading
 
-When a new tag is released, upgrade every connected repository to it:
+When a new version is released, upgrade every connected repository to it. From each repository's
+root, on its default branch:
 
 ```bash
-cd gardener && git fetch --tags && git checkout v0.1.13 && pnpm install
-
-pnpm gardener -- upgrade --workspace internal --repository-root "$REPO" --source-root "$PWD"
-
-cd "$REPO" && git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.13" && git push
+GARDENER="npx @scuffi/gardener@0.1.13"
+$GARDENER upgrade --workspace my-gardener
+git add .gardener .github/workflows package.json && git commit -m "Upgrade Gardener to v0.1.13" && git push
 ```
 
 `upgrade` redeploys the shared Worker, moves the repository's workflows to the release's pinned

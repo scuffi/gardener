@@ -27,27 +27,15 @@ repository code.
 
 ## Quick start
 
-To install from npm step by step, follow [Getting started](docs/getting-started.md). To run from a
-source checkout in one command:
+You need Node.js 24+, `npx wrangler login` and `gh auth login`, and a repository whose Actions can
+use this repository's reusable workflows (see [Prerequisites](docs/operations.md#prerequisites)).
+Tasks that open pull requests also need **Allow GitHub Actions to create and approve pull
+requests**, in the repository's **Settings → Actions → General**. New repositories have it off.
 
-Requirements:
-
-- Node.js 24+, pnpm 11.25, and authenticated `wrangler` and `gh` sessions;
-- a repository whose Actions can use this repository's reusable workflow (see
-  [Prerequisites](docs/operations.md#prerequisites));
-- for tasks that open pull requests, **Allow GitHub Actions to create and approve pull requests**
-  turned on in that repository's **Settings → Actions → General**. New repositories have it off.
+From a checkout of your repository's default branch:
 
 ```bash
-git clone https://github.com/scuffi/gardener && cd gardener
-pnpm install
-
-pnpm gardener -- yolo \
-  --workspace my-gardener \
-  --repository my-org/my-repo \
-  --repository-root /path/to/my-repo \
-  --source-root "$PWD" \
-  --demos
+npx @scuffi/gardener yolo --workspace my-gardener --repository my-org/my-repo --demos
 ```
 
 `yolo` does five things:
@@ -62,13 +50,15 @@ It is safe to rerun after an interruption. It never commits, so review and push 
 yourself:
 
 ```bash
-cd /path/to/my-repo
 git add .gardener .github/workflows
 git commit -m "Add Gardener"
 git push
 ```
 
 Open an issue labeled `gardener-bug` to run the bug-intake demo.
+
+[Getting started](docs/getting-started.md) walks through the same steps one at a time, with a
+starter task.
 
 ## Writing a task
 
@@ -101,8 +91,8 @@ Read the issue and the relevant code. If the report is missing reproduction step
 behaviour, or version information, post one comment asking for exactly what is missing.
 ```
 
-Save it as `.gardener/tasks/bug-intake/TASK.md` and run `pnpm gardener -- generate`, then
-`pnpm gardener -- connect`.
+Save it as `.gardener/tasks/bug-intake/TASK.md`, run `npx @scuffi/gardener generate`, then commit
+and push: the sync workflow enrolls it.
 
 Coding agents can read `.gardener/SKILL.md`, which `init` and `generate` write: a complete guide to
 the task format, in the CLI's own version.

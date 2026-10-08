@@ -1,20 +1,20 @@
 # Operations
 
-All commands run from a Gardener source checkout as `pnpm gardener -- <command>`. Most commands
-take these three flags:
+Run the CLI from npm as `npx @scuffi/gardener <command>`, pinned to one release with
+`@scuffi/gardener@<version>` when you operate several repositories. Most commands take these flags:
 
 | Flag | Meaning |
 | --- | --- |
 | `--workspace <name>` | Names the installation. Its Worker and D1 database are both `gardener-<workspace>`. |
 | `--repository-root <path>` | Points at the customer repository. It defaults to the current directory. |
-| `--source-root <path>` | Points at the trusted Gardener checkout used to build and deploy the Worker. |
+| `--source-root <path>` | Deploys the Worker from a Gardener source checkout instead of the runtime bundled in the package. Only for developing Gardener. |
 
 `gardener <command> --help` lists every option.
 
 ## Prerequisites
 
-- Node.js 24+ and pnpm 11.25.
-- `wrangler login` and `gh auth login` completed for the target accounts.
+- Node.js 24+.
+- `npx wrangler login` and `gh auth login` completed for the target accounts.
 - The customer repository's Actions policy must allow `scuffi/gardener`'s actions and reusable
   workflow. The default policy allows all actions. If the repository or its organization allows
   only selected actions, add the ones under `scuffi/gardener` to the allowed list.
@@ -35,11 +35,10 @@ take these three flags:
 ## Install
 
 ```bash
-pnpm gardener -- yolo \
+npx @scuffi/gardener yolo \
   --workspace my-gardener \
   --repository my-org/my-repo \
   --repository-root /path/to/my-repo \
-  --source-root "$PWD" \
   --demos
 ```
 
@@ -73,7 +72,7 @@ runners cannot reach the Worker. `deploy` detects this and stops. Provide a toke
 
 ```bash
 export CLOUDFLARE_API_TOKEN=...
-pnpm gardener -- deploy --workspace my-gardener --source-root "$PWD"
+npx @scuffi/gardener deploy --workspace my-gardener
 ```
 
 Gardener creates an Access bypass for the runtime hostname only. The bypass grants network
@@ -93,7 +92,7 @@ including one in another account, pass it to `deploy` with a token that may use 
 
 ```bash
 export GARDENER_AI_GATEWAY_TOKEN=...
-pnpm gardener -- deploy --workspace my-gardener --source-root "$PWD" \
+npx @scuffi/gardener deploy --workspace my-gardener \
   --ai-gateway <account-id>/<gateway-id> --ai-gateway-project my-project
 ```
 
@@ -150,10 +149,10 @@ required reviews or a CODEOWNERS entry for `.gardener/**` if that matters for th
 ## Inspecting runs
 
 ```bash
-pnpm gardener -- repositories --workspace my-gardener --source-root "$PWD"
-pnpm gardener -- tasks        --workspace my-gardener --source-root "$PWD"
-pnpm gardener -- runs         --workspace my-gardener --source-root "$PWD"
-pnpm gardener -- runs view --run <run-id> --workspace my-gardener --source-root "$PWD"
+npx @scuffi/gardener repositories --workspace my-gardener
+npx @scuffi/gardener tasks        --workspace my-gardener
+npx @scuffi/gardener runs         --workspace my-gardener
+npx @scuffi/gardener runs view --run <run-id> --workspace my-gardener
 ```
 
 `runs view` prints the run, its effect receipt, and its audit records.
@@ -161,7 +160,7 @@ pnpm gardener -- runs view --run <run-id> --workspace my-gardener --source-root 
 ## Kill switch
 
 ```bash
-pnpm gardener -- repository disable --workspace my-gardener --repository my-org/my-repo --source-root "$PWD"
+npx @scuffi/gardener repository disable --workspace my-gardener --repository my-org/my-repo
 ```
 
 `repository disable` blocks planning, apply and syncs for every task in the repository. It takes
@@ -173,8 +172,8 @@ it. To stop a single task, delete it or set `draft: true` on the default branch.
 After pushing the generated demo workflows:
 
 ```bash
-pnpm gardener -- debug --workspace my-gardener --repository my-org/my-repo \
-  --repository-root /path/to/my-repo --source-root "$PWD"
+npx @scuffi/gardener debug --workspace my-gardener --repository my-org/my-repo \
+  --repository-root /path/to/my-repo
 ```
 
 `debug` opens one issue per demo task and waits for both workflows. It then checks for exactly
@@ -186,13 +185,13 @@ repository is refused and that cancellation settles correctly.
 Existing repositories keep their workflow pin until you move them:
 
 ```bash
-pnpm gardener -- upgrade --workspace my-gardener \
-  --repository-root /path/to/my-repo --source-root "$PWD"
+npx @scuffi/gardener upgrade --workspace my-gardener \
+  --repository-root /path/to/my-repo
 ```
 
 `upgrade` performs these steps:
 
-1. redeploys the Worker from the current source;
+1. redeploys the Worker with the runtime bundled in this release;
 2. moves the repository to this CLI's workflow pin;
 3. rebuilds the workflows;
 4. moves `package.json` scripts that run a pinned `@scuffi/gardener` (such as a
@@ -225,8 +224,8 @@ Set up Gardener in this repository using only the Gardener CLI.
 
 1. Check `gh auth status` and `wrangler whoami` without printing credentials.
 2. Ask me for a short lowercase workspace name.
-3. Run `pnpm gardener -- yolo --workspace <name> --repository <owner/name> --demos`, passing
-   --repository-root and --source-root explicitly.
+3. Run `npx @scuffi/gardener yolo --workspace <name> --repository <owner/name> --demos`, passing
+   --repository-root explicitly.
 4. If it stops, rerun the identical command. Do not recreate any step by hand.
 5. Show me the generated files, runtime URL, bundle hashes, and doctor result.
 6. Do not commit or push.

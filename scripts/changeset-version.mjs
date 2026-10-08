@@ -32,7 +32,7 @@ writeFileSync(CHANGELOG, changelog.replace(heading, `## ${next} (${today})\n`));
 // (`@scuffi/gardener@0.1.11`); both must move, and nothing else may. The count
 // is exact so that a new mention of an old version fails loudly here instead
 // of being rewritten: update EXPECTED when the guide gains or loses a pin.
-const EXPECTED = 4;
+const EXPECTED = 5;
 const onboarding = readFileSync(ONBOARDING, "utf8");
 const escaped = previous.replaceAll(".", "\\.");
 const pattern = new RegExp(`(\\bv|@scuffi/gardener@)${escaped}\\b`, "g");
