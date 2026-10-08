@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   taskEffectPlanV1Schema,
   type Operation,
@@ -903,5 +903,205 @@ describe("apply event binding for manual runs", () => {
     const { fetch, result } = bind({ prompt: "x" }, {});
     await expect(result).resolves.toMatchObject({ binding: { resource: null } });
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("apply job guards before any write", () => {
+  const RAW_EVENT = {
+    repository: { id: 123, full_name: "owner/repo", default_branch: "main" },
+    sender: { id: 1, login: "maintainer" },
+    inputs: {},
+  };
+  const ENVIRONMENT = {
+    GITHUB_REPOSITORY: "owner/repo",
+    GITHUB_REPOSITORY_ID: "123",
+    GITHUB_SHA: SHA,
+    GITHUB_RUN_ID: "2",
+    GITHUB_RUN_ATTEMPT: "1",
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+  };
+  const saved = { ...process.env };
+  afterEach(() => {
+    for (const name of [...Object.keys(ENVIRONMENT), "GITHUB_EVENT_PATH"]) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  });
+
+  /** Runs the apply entry point against a correctly hashed artifact; returns the failure, if any. */
+  async function apply(options: {
+    plan?: TaskEffectPlanV1;
+    environment?: Partial<Record<keyof typeof ENVIRONMENT, string>>;
+    event?: unknown;
+    inputs?: Record<string, string>;
+    artifact?: Buffer;
+  } = {}): Promise<string | undefined> {
+    const directory = await mkdtemp(path.join(tmpdir(), "gardener-apply-guard-"));
+    const artifact = options.artifact ?? Buffer.from(JSON.stringify(options.plan ?? plan([])));
+    const artifactPath = path.join(directory, "effect.json");
+    const eventPath = path.join(directory, "event.json");
+    await writeFile(artifactPath, artifact);
+    await writeFile(eventPath, JSON.stringify(options.event ?? RAW_EVENT));
+    Object.assign(process.env, ENVIRONMENT, options.environment, { GITHUB_EVENT_PATH: eventPath });
+    core.inputs.set("artifact-path", artifactPath);
+    core.inputs.set("expected-sha256", createHash("sha256").update(artifact).digest("hex"));
+    core.inputs.set("github-token", "token");
+    core.inputs.set("runtime-url", "https://gardener.example");
+    core.inputs.set("deadline-at", new Date(Date.now() + 60_000).toISOString());
+    for (const [name, value] of Object.entries(options.inputs ?? {})) core.inputs.set(name, value);
+    await effects.runEffectsMain();
+    const failure = core.setFailed.mock.calls[0]?.[0];
+    return failure === undefined ? undefined : String(failure);
+  }
+
+  /** A refusal must come before the runtime session, so nothing is read or recorded. */
+  async function expectRefused(message: string | RegExp, options: Parameters<typeof apply>[0] = {}) {
+    const failure = await apply(options);
+    if (typeof message === "string") expect(failure).toBe(message);
+    else expect(failure).toMatch(message);
+    expect(core.priorEffectReceipt).not.toHaveBeenCalled();
+    expect(core.recordEffect).not.toHaveBeenCalled();
+  }
+
+  it("reaches the runtime session when every binding holds", async () => {
+    await apply();
+    expect(core.priorEffectReceipt).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a plan for another repository, commit or run", async () => {
+    await expectRefused("Effect repository binding mismatch", { environment: { GITHUB_REPOSITORY: "owner/other" } });
+    core.setFailed.mockClear();
+    await expectRefused("Effect repository identity mismatch", { environment: { GITHUB_REPOSITORY_ID: "124" } });
+    core.setFailed.mockClear();
+    await expectRefused("Effect commit binding mismatch", { environment: { GITHUB_SHA: "c".repeat(40) } });
+    core.setFailed.mockClear();
+    await expectRefused("Effect workflow run binding mismatch", { environment: { GITHUB_RUN_ID: "3" } });
+  });
+
+  it("refuses an attempt older than the plan's, or one that is not a number", async () => {
+    const later = plan([], { provenance: { ...plan([]).provenance, workflowRunAttempt: 2 } });
+    await expectRefused("Effect workflow attempt predates the plan", { plan: later });
+    core.setFailed.mockClear();
+    await expectRefused("Effect workflow attempt predates the plan", { environment: { GITHUB_RUN_ATTEMPT: "x" } });
+    core.setFailed.mockClear();
+    // A rerun of the same workflow run applies the plan its first attempt made.
+    await apply({ environment: { GITHUB_RUN_ATTEMPT: "2" } });
+    expect(core.priorEffectReceipt).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses an event payload from another repository", async () => {
+    await expectRefused("Effect event repository identity mismatch", {
+      event: { ...RAW_EVENT, repository: { ...RAW_EVENT.repository, id: 999 } },
+    });
+  });
+
+  it("refuses a recorded checkout that is not the event's pull request head", async () => {
+    const pinned = plan([], { provenance: { ...plan([]).provenance, checkoutSha: "d".repeat(40) } });
+    await expectRefused("Effect checkout binding mismatch", { plan: pinned });
+  });
+
+  it("refuses a plan made against another default branch", async () => {
+    await expectRefused("Effect default branch binding mismatch", {
+      event: { ...RAW_EVENT, repository: { ...RAW_EVENT.repository, default_branch: "trunk" } },
+    });
+  });
+
+  it("refuses a plan bound to a different event", async () => {
+    const issueEvent = plan([], {
+      event: { kind: "github.issue.opened", eventName: "issues", action: "opened", resource: { kind: "issue", id: "9", number: 9 }, commentId: null },
+    });
+    await expectRefused("Effect event binding mismatch", { plan: issueEvent });
+  });
+
+  it("refuses malformed inputs before reading the artifact", async () => {
+    await expectRefused("deadline-at must be a future ISO timestamp", { inputs: { "deadline-at": "2020-01-01T00:00:00.000Z" } });
+    core.setFailed.mockClear();
+    await expectRefused("deadline-at must be a future ISO timestamp", { inputs: { "deadline-at": "soon" } });
+    core.setFailed.mockClear();
+    await expectRefused("expected-sha256 must be a SHA-256 digest", { inputs: { "expected-sha256": "ABC" } });
+  });
+
+  it("refuses an artifact over the transport ceiling", async () => {
+    await expectRefused("Effect artifact is too large", { artifact: Buffer.alloc(4 * 1024 * 1024 + 1, 0x20) });
+  });
+
+  it("refuses a changes artifact for a plan that captured nothing", async () => {
+    const failure = await apply({ inputs: { "capture-artifact-path": "/tmp/unused-capture" } });
+    expect(failure).toBe("Effect changes artifact has no capture-bound plan");
+    expect(core.recordEffect).not.toHaveBeenCalled();
+  });
+});
+
+describe("resuming from a prior receipt", () => {
+  const output = (commentId: string) => ({
+    kind: "issue.comment.create" as const,
+    issueNumber: 7,
+    commentId,
+    commentUrl: `https://github.com/owner/repo/issues/7#issuecomment-${commentId}`,
+  });
+  const value = plan([commentStep("first", "op_first", "First."), commentStep("second", "op_second", "Second.")]);
+
+  /** A genuine receipt from a run that applied the first step and failed on the second. */
+  async function stoppedReceipt(): Promise<RunnerEffectReceiptV1> {
+    let calls = 0;
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute: async (operation) => (++calls === 2 ? { receipt: receipt(operation, "failed") } : success(operation, output("101"))),
+      record: async () => undefined,
+    });
+    expect(result.receipt.status).toBe("stopped");
+    return structuredClone(result.receipt);
+  }
+
+  async function resume(prior: RunnerEffectReceiptV1) {
+    const execute = vi.fn(async (operation: Operation) => success(operation, output("102")));
+    const result = effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior,
+      execute,
+      record: async () => undefined,
+    });
+    return { execute, result };
+  }
+
+  it("resumes an untampered receipt from the failed step", async () => {
+    const { execute, result } = await resume(await stoppedReceipt());
+    await expect(result).resolves.toMatchObject({ receipt: { status: "applied" } });
+    expect(execute.mock.calls.map(([operation]) => operation.id)).toEqual(["op_second"]);
+  });
+
+  it("refuses a receipt whose completed step is not this plan's", async () => {
+    const changedHash = await stoppedReceipt();
+    changedHash.operations[0]!.receipt.operationHash = "e".repeat(64);
+    const renamed = await stoppedReceipt();
+    renamed.operations[0]!.stepName = "second";
+    for (const prior of [changedHash, renamed]) {
+      const { execute, result } = await resume(prior);
+      await expect(result).rejects.toThrow("Prior effect receipt does not match the exact plan prefix");
+      expect(execute).not.toHaveBeenCalled();
+    }
+  });
+
+  it("refuses a recorded version for a resource the step did not write", async () => {
+    const prior = await stoppedReceipt();
+    prior.operations[0]!.resourceVersion = { resource: "issue:8", updatedAt: "2026-09-17T12:01:05Z" };
+    const { execute, result } = await resume(prior);
+    await expect(result).rejects.toThrow("Prior effect receipt records a version for a different resource");
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("refuses recorded outputs the step's kind never publishes", async () => {
+    const prior = await stoppedReceipt();
+    (prior.operations[0]!.outputs as Record<string, unknown>).pullUrl = "https://github.com/owner/repo/pull/1";
+    const { execute, result } = await resume(prior);
+    await expect(result).rejects.toThrow("Receipt carries an output issue.comment.create does not publish");
+    expect(execute).not.toHaveBeenCalled();
   });
 });

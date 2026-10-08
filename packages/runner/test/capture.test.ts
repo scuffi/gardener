@@ -956,3 +956,79 @@ function canonicalJson(value: unknown): string {
   return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined)
     .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
 }
+
+describe("WorkingTreeCapture authority over its own definitions", () => {
+  const files = {
+    ".github/workflows/ci.yml": "on: push\n",
+    ".gardener/gardener.json": "{}\n",
+    "CODEOWNERS": "* @owner\n",
+    "src/app.txt": "app\n",
+  };
+  const protectedPath = (entry: string) =>
+    new RegExp(`Cannot capture ${entry.replaceAll(".", "\\.")}: a run may not rewrite workflows`);
+
+  it("refuses to capture an edit, deletion or addition under a protected path", async () => {
+    const cases: Array<[string, (workspace: string) => Promise<void>]> = [
+      [".github/workflows/ci.yml", (workspace) => writeFile(path.join(workspace, ".github/workflows/ci.yml"), "on: pull_request\n")],
+      [".gardener/gardener.json", (workspace) => unlink(path.join(workspace, ".gardener/gardener.json"))],
+      ["CODEOWNERS", (workspace) => writeFile(path.join(workspace, "CODEOWNERS"), "* @someone-else\n")],
+      [".github/dependabot.yml", async (workspace) => writeFile(path.join(workspace, ".github/dependabot.yml"), "version: 2\n")],
+    ];
+    for (const [entry, change] of cases) {
+      const { capture, workspace } = await fixture(files);
+      await change(workspace);
+      await expect(capture.capture(), entry).rejects.toThrow(protectedPath(entry));
+    }
+  }, GIT_TEST_TIMEOUT);
+
+  it("still captures an ordinary change beside the protected files", async () => {
+    const { capture, workspace } = await fixture(files);
+    await writeFile(path.join(workspace, "src/app.txt"), "changed\n");
+    const result = await capture.capture();
+    if (result.status !== "captured") throw new Error("expected a capture");
+    expect(result.manifest.files.map((file) => file.path)).toEqual(["src/app.txt"]);
+  }, GIT_TEST_TIMEOUT);
+
+  it("refuses a workspace whose index holds an unmerged path", async () => {
+    const { capture, workspace } = await fixture({ "src/app.txt": "app\n" });
+    const blob = async (content: string) => {
+      await writeFile(path.join(workspace, "blob.tmp"), content);
+      const sha = (await git(workspace, ["hash-object", "-w", "blob.tmp"])).trim();
+      await unlink(path.join(workspace, "blob.tmp"));
+      return sha;
+    };
+    const [base, left, right] = [await blob("app\n"), await blob("left\n"), await blob("right\n")];
+    await git(workspace, ["update-index", "--force-remove", "src/app.txt"]);
+    const index = [`100644 ${base} 1\tsrc/app.txt`, `100644 ${left} 2\tsrc/app.txt`, `100644 ${right} 3\tsrc/app.txt`].join("\n");
+    await execFileAsync("sh", ["-c", `printf '%s\\n' "$1" | git update-index --index-info`, "sh", index], { cwd: workspace, env: gitEnvironment() });
+    await expect(capture.capture()).rejects.toThrow(/unmerged path/);
+  }, GIT_TEST_TIMEOUT);
+});
+
+describe("WorkingTreeCapture Git configuration changes", () => {
+  const lfs = { "filter.lfs.clean": "git-lfs clean -- %f" };
+
+  it("tolerates exactly the format key git-lfs writes on first use", async () => {
+    const { capture, workspace } = await fixture({ "a.txt": "a\n" }, { config: lfs });
+    await git(workspace, ["config", "lfs.repositoryformatversion", "0"]);
+    await expect(capture.capture()).resolves.toMatchObject({ status: "unchanged" });
+  }, GIT_TEST_TIMEOUT);
+
+  it("refuses any other configuration change, including one hidden beside that key", async () => {
+    const changes: Array<readonly string[][]> = [
+      [["config", "lfs.repositoryformatversion", "1"]],
+      [["config", "lfs.repositoryformatversion", "0"], ["config", "core.hooksPath", "/tmp/hooks"]],
+    ];
+    for (const commands of changes) {
+      const { capture, workspace } = await fixture({ "a.txt": "a\n" }, { config: lfs });
+      for (const argv of commands) await git(workspace, argv);
+      await expect(capture.capture()).rejects.toThrow(/Git configuration changed during execution/);
+    }
+  }, GIT_TEST_TIMEOUT);
+
+  it("does not extend the carve-out to a repository that never configured git-lfs", async () => {
+    const { capture, workspace } = await fixture({ "a.txt": "a\n" });
+    await git(workspace, ["config", "lfs.repositoryformatversion", "0"]);
+    await expect(capture.capture()).rejects.toThrow(/Git configuration changed during execution/);
+  }, GIT_TEST_TIMEOUT);
+});
