@@ -390,7 +390,8 @@ describe("local Gardener project", () => {
     // Mention triggers default to authors: maintainers, which the Worker
     // decides after the bridge looks up the author's permission, so a private
     // org member is not skipped here.
-    expect(workflow).not.toContain("author_association");
+    // Authors are not prefiltered in the job condition; only reactions use author_association.
+    expect((parseYaml(workflow) as { jobs: { gardener: { if: string } } }).jobs.gardener.if).not.toContain("author_association");
     expect(workflow).toContain(
       "(github.event_name == 'issue_comment' && github.event.action == 'created' && contains(github.event.comment.body, '@garden-bot'))",
     );
@@ -457,7 +458,7 @@ describe("local Gardener project", () => {
       "      pull-requests: write",
       "      statuses: read",
     ].join("\n"));
-    expect(workflow).not.toContain("actions:");
+    expect(workflow).not.toMatch(/^\s+actions:/m);
 
     // Rebuilds stay byte-identical.
     await buildProject({ repositoryRoot: root });
