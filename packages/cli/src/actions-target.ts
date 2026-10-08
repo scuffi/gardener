@@ -40,7 +40,12 @@ export interface GitHubActionsTaskPlanV1 {
   taskId: string;
   planningPermissions: GitHubPermissions;
   effectsPermissions: GitHubPermissions;
-  /** Union the generated caller job must grant so both called jobs can run. */
+  /**
+   * Writes the reaction jobs need to react to what started a run. Empty when
+   * the task turns reactions off or no trigger has anything to react to.
+   */
+  reactionPermissions: GitHubPermissions;
+  /** Union the generated caller job must grant so every called job can run. */
   callerPermissions: GitHubPermissions;
   triggers: GitHubActionsTriggerBindingV1[];
   /**
@@ -93,6 +98,26 @@ const TRIGGER_BINDINGS: Record<TaskTriggerKindV1, Omit<GitHubActionsTriggerBindi
   "github.discussion.unlabeled": { event: "discussion", action: "unlabeled", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
   "github.discussion_comment.created": { event: "discussion_comment", action: "created", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
   "github.discussion_comment.edited": { event: "discussion_comment", action: "edited", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
+};
+
+/**
+ * Events whose issue, pull request, comment or discussion can carry a
+ * reaction, and the write it needs. Review submissions have no reactions API,
+ * and pushes, schedules and manual runs have nothing to react to.
+ *
+ * Pull requests and their conversation comments react through the issues
+ * API, which accepts either issues or pull-requests write; issues write is the
+ * one grant that covers an issue_comment on both an issue and a pull request.
+ * (Operations ask for pull-requests write on a pull request instead, because
+ * their kinds always know which they target.)
+ */
+export const REACTION_PERMISSIONS: Partial<Record<GitHubActionsTriggerBindingV1["event"], GitHubPermissions>> = {
+  issues: { issues: "write" },
+  issue_comment: { issues: "write" },
+  pull_request: { issues: "write" },
+  pull_request_review_comment: { "pull-requests": "write" },
+  discussion: { discussions: "write" },
+  discussion_comment: { discussions: "write" },
 };
 
 /** Write scopes the checkout-free apply job needs for one exact operation kind. */
@@ -200,13 +225,18 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
     ? orderPermissions({ "id-token": "write" })
     : mergePermissions({ "id-token": "write" }, ...targetReadPermissions, ...bundle.effects.map(effectPermissions));
 
+  const reactionPermissions = bundle.reactions === false
+    ? {}
+    : mergePermissions(...triggers.flatMap((trigger) => REACTION_PERMISSIONS[trigger.event] ?? []));
+
   return {
     schemaVersion: "gardener.github-actions-task-plan/v1",
     target: GITHUB_ACTIONS_TARGET,
     taskId: bundle.taskId,
     planningPermissions,
     effectsPermissions,
-    callerPermissions: mergePermissions(planningPermissions, effectsPermissions),
+    reactionPermissions,
+    callerPermissions: mergePermissions(planningPermissions, effectsPermissions, reactionPermissions),
     triggers,
     // Describes the bundle, not the rendered triggers: a draft still acts on
     // pull requests when run by hand.

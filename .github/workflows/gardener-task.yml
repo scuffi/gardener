@@ -28,8 +28,52 @@ on:
         required: false
         type: number
         default: 10
+      reactions:
+        description: React to the issue or comment that started this run while it works, and with the result.
+        required: false
+        type: boolean
+        default: false
 
 jobs:
+  # Shows that the task is working on what started the run. Like apply, this
+  # job is checkout-free, runs no task code, and inherits the caller's grant;
+  # it only runs the fixed API calls below. A failure never fails the run.
+  acknowledge:
+    name: React
+    if: ${{ inputs.reactions }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      reaction: ${{ steps.react.outputs.reaction }}
+    steps:
+      - name: Add 👀 to what started this run
+        id: react
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          NODE_ID: ${{ github.event.comment.node_id || github.event.discussion.node_id }}
+        run: |
+          # GraphQL variables are literal $ names, not shell expansions.
+          # shellcheck disable=SC2016
+          case "$EVENT_NAME" in
+            issues|pull_request) path="issues/$NUMBER/reactions" ;;
+            issue_comment) path="issues/comments/$COMMENT_ID/reactions" ;;
+            pull_request_review_comment) path="pulls/comments/$COMMENT_ID/reactions" ;;
+            discussion|discussion_comment)
+              [[ "$NODE_ID" =~ ^[A-Za-z0-9_=-]{1,256}$ ]] || exit 0
+              gh api graphql -f id="$NODE_ID" \
+                -f query='mutation($id: ID!) { addReaction(input: {subjectId: $id, content: EYES}) { reaction { content } } }' >/dev/null
+              echo "reaction=graphql:$NODE_ID" >> "$GITHUB_OUTPUT"
+              exit 0 ;;
+            *) exit 0 ;;
+          esac
+          [[ "$path" =~ ^(issues|issues/comments|pulls/comments)/[0-9]+/reactions$ ]] || exit 0
+          id="$(gh api -X POST "repos/$GITHUB_REPOSITORY/$path" -f content=eyes --jq .id)"
+          [[ "$id" =~ ^[0-9]+$ ]] && echo "reaction=rest:$path/$id" >> "$GITHUB_OUTPUT"
+
   plan:
     name: Plan · ${{ inputs.task-name }}
     runs-on: ubuntu-24.04
@@ -110,8 +154,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     # No job-level permissions block: this checkout-free trusted job inherits
-    # the generated caller's fixed read union and task-exact write grants. The
-    # planning job above always downgrades that grant to read-only.
+    # the generated caller's fixed read union and task-exact write grants,
+    # plus the reaction jobs' issues, pull-requests or discussions write. It
+    # only ever runs the plan's operations. The planning job above always
+    # downgrades that grant to read-only.
     steps:
       - name: Download exact effect plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -138,3 +184,45 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           runtime-url: ${{ inputs.runtime-url }}
           task-name: ${{ inputs.task-name }}
+
+  # Replaces 👀 with the result: 🚀 when the plan was applied, 😕 when planning
+  # or applying failed, and nothing when the task proposed nothing or the run
+  # was skipped or cancelled.
+  settle:
+    name: React with result
+    needs: [acknowledge, plan, apply]
+    if: ${{ always() && needs.acknowledge.outputs.reaction != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Replace 👀 with the result
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REACTION: ${{ needs.acknowledge.outputs.reaction }}
+          PLAN: ${{ needs.plan.result }}
+          APPLY: ${{ needs.apply.result }}
+        run: |
+          result=""
+          if [[ "$APPLY" == success ]]; then result=rocket
+          elif [[ "$PLAN" == failure || "$APPLY" == failure ]]; then result=confused
+          fi
+          # GraphQL variables are literal $ names, not shell expansions.
+          # shellcheck disable=SC2016
+          case "$REACTION" in
+            rest:*)
+              reaction="${REACTION#rest:}"
+              [[ "$reaction" =~ ^((issues|issues/comments|pulls/comments)/[0-9]+/reactions)/([0-9]+)$ ]] || exit 0
+              path="${BASH_REMATCH[1]}"
+              if [[ -n "$result" ]]; then gh api -X POST "repos/$GITHUB_REPOSITORY/$path" -f content="$result" >/dev/null; fi
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/$path/${BASH_REMATCH[3]}" ;;
+            graphql:*)
+              id="${REACTION#graphql:}"
+              [[ "$id" =~ ^[A-Za-z0-9_=-]{1,256}$ ]] || exit 0
+              if [[ -n "$result" ]]; then
+                gh api graphql -f id="$id" -f content="${result^^}" \
+                  -f query='mutation($id: ID!, $content: ReactionContent!) { addReaction(input: {subjectId: $id, content: $content}) { reaction { content } } }' >/dev/null
+              fi
+              gh api graphql -f id="$id" \
+                -f query='mutation($id: ID!) { removeReaction(input: {subjectId: $id, content: EYES}) { reaction { content } } }' >/dev/null ;;
+          esac

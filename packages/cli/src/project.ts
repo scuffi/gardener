@@ -10,6 +10,7 @@ import {
   githubHandleV1Schema,
   isAuthoredTriggerKind,
   isEditedTriggerKind,
+  maintainerAssociations,
   type AuthoredTriggerKindV1,
 } from "@gardener/contracts";
 import {
@@ -17,6 +18,7 @@ import {
   GITHUB_ACTIONS_TARGET,
   GITHUB_PERMISSION_KEYS,
   planTimeoutMinutes,
+  REACTION_PERMISSIONS,
   type GitHubActionsTaskPlanV1,
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
@@ -623,6 +625,36 @@ function renderJobCondition(task: BuiltTask): string {
   return conditions.join("\n        || ");
 }
 
+/**
+ * When the reaction jobs react: events that carry something to react to, from
+ * an author the task admits. `authors: maintainers` is approximated by
+ * `author_association`, which reports a private org member as a non-member:
+ * such a member gets no reaction, but someone the task never admits never gets
+ * one. The job's own condition has already applied mentions and labels.
+ * Undefined when the task turns reactions off or nothing can be reacted to.
+ */
+function renderReactionCondition(task: BuiltTask): string | undefined {
+  if (Object.keys(task.actionsPlan.reactionPermissions).length === 0) return undefined;
+  const maintainers = `fromJSON('${JSON.stringify(maintainerAssociations)}')`;
+  const conditions = task.actionsPlan.triggers
+    .filter((binding) => REACTION_PERMISSIONS[binding.event] !== undefined)
+    .map((binding) => {
+      const clauses = [`github.event_name == '${binding.event}'`];
+      if (binding.action !== undefined) clauses.push(`github.event.action == '${binding.action}'`);
+      const trigger = task.bundle.triggers.find((candidate) => candidate.kind === binding.kind);
+      if (trigger !== undefined && "authors" in trigger && isAuthoredTriggerKind(trigger.kind) && trigger.authors !== "any") {
+        const subject = SUBJECT_EXPRESSIONS[authoredTriggerSubject[trigger.kind]];
+        const entries = trigger.authors === "maintainers" ? ["maintainers"] : trigger.authors;
+        const any = entries.map((entry) => entry === "maintainers"
+          ? `contains(${maintainers}, ${subject}.author_association)`
+          : `${subject}.user.login == '${entry}'`);
+        clauses.push(any.length === 1 ? any[0]! : `(${any.join(" || ")})`);
+      }
+      return clauses.length === 1 ? clauses[0]! : `(${clauses.join(" && ")})`;
+    });
+  return conditions.length === 0 ? undefined : conditions.join("\n        || ");
+}
+
 function renderPermissions(task: BuiltTask): string {
   const permissions = task.actionsPlan.callerPermissions;
   return GITHUB_PERMISSION_KEYS
@@ -646,6 +678,23 @@ const TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT = new Set([
   "3a0bc85d1f5cffccb50fba787b18334e4c21ba72",
 ]);
 
+/**
+ * The task workflows of releases before the `reactions` input (0.1.0–0.1.12).
+ * A fixed list for the same reason as the one above.
+ */
+const TASK_WORKFLOWS_WITHOUT_REACTIONS = new Set([
+  ...TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT,
+  "aae337cf4d2ad0c5fa33771c37cc811eccf39ff0",
+  "de534dff93a56527b45db8f46aedac72c8911da0",
+  "f3aca211a4ee2559f3df05cac12836090127812a",
+  "8e5fa4f844bfe26ff1d152757caf4ac0110ff6ef",
+  "868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d",
+]);
+
+function definesReactions(workflowRef: string): boolean {
+  return !TASK_WORKFLOWS_WITHOUT_REACTIONS.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+
 function definesPlanTimeout(workflowRef: string): boolean {
   return !TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
 }
@@ -656,6 +705,7 @@ const LEGACY_PLAN_TIMEOUT_MINUTES = 10;
 const LEGACY_MAX_RUNTIME_SECONDS = 480;
 
 function renderTaskWorkflow(task: BuiltTask, workflowRef: string, setsPlanTimeout: boolean): string {
+  const reactions = definesReactions(workflowRef) ? renderReactionCondition(task) : undefined;
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -695,7 +745,11 @@ ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundl
   // or commits beyond gardener/**) build on it, not GitHub's merge preview.
   // Empty for events without a pull request.
   ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n"
-  : ""}`;
+  : ""}${reactions === undefined ? "" : `      reactions: >-
+        \${{
+        ${reactions}
+        }}
+`}`;
 }
 
 /**

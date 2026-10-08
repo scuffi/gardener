@@ -89,6 +89,7 @@ Unknown keys are errors.
 | `model` | no | Model ID. Defaults to `"@cf/zai-org/glm-5.3"`. Quote IDs starting with `@`. |
 | `draft` | no | `true` makes the task run only by hand. See [Trying a task](#trying-a-task). |
 | `checkout` | no | `pull-request-head` checks out a pull request's head instead of GitHub's merge preview. Implied when `commit.create` may write beyond `gardener/**`. |
+| `reactions` | no | `false` stops the 👀 reaction while the task works on an issue or comment, and the 🚀 or 😕 it leaves after. On by default. |
 
 ## Triggers
 

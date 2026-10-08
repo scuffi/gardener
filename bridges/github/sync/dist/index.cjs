@@ -27578,6 +27578,7 @@ var authorAssociationV1Schema = external_exports.enum([
   "MANNEQUIN",
   "NONE"
 ]);
+var maintainerAssociations = ["OWNER", "MEMBER", "COLLABORATOR"];
 var authorPermissionV1Schema = external_exports.enum(["admin", "write", "read", "none"]);
 var taskMentionFilterV1Schema = external_exports.array(githubHandleV1Schema).max(20).default([]).refine(
   (handles) => new Set(handles).size === handles.length,
@@ -27836,7 +27837,14 @@ var taskBundleV1Schema = external_exports.strictObject({
    * so a manual run can still target the resource they describe, but no real
    * event starts it.
    */
-  draft: external_exports.literal(true).optional()
+  draft: external_exports.literal(true).optional(),
+  /**
+   * Turns off the reaction a target adds to the issue or comment that started
+   * a run while it works, and the result reaction it leaves. Present only when
+   * off, so bundles that keep the default hash as before. The runtime ignores
+   * it; only the generated workflow reads it.
+   */
+  reactions: external_exports.literal(false).optional()
 }).superRefine((bundle, context) => {
   if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
     context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
@@ -29109,6 +29117,14 @@ var TRIGGER_BINDINGS = {
   "github.discussion_comment.created": { event: "discussion_comment", action: "created", labelsExpression: DISCUSSION_LABELS, forkSensitive: false },
   "github.discussion_comment.edited": { event: "discussion_comment", action: "edited", labelsExpression: DISCUSSION_LABELS, forkSensitive: false }
 };
+var REACTION_PERMISSIONS = {
+  issues: { issues: "write" },
+  issue_comment: { issues: "write" },
+  pull_request: { issues: "write" },
+  pull_request_review_comment: { "pull-requests": "write" },
+  discussion: { discussions: "write" },
+  discussion_comment: { discussions: "write" }
+};
 var effectPermissions = operationApplyPermissions;
 var GITHUB_HOSTED_JOB_MAX_MINUTES = 360;
 var PLAN_JOB_OVERHEAD_MINUTES = 10;
@@ -29171,13 +29187,15 @@ function compileGitHubActionsTask(bundle) {
   }
   const targetReadPermissions = dispatchTargetKinds(bundle.triggers).map((target) => target === "issue" ? { issues: "read" } : { "pull-requests": "read" });
   const effectsPermissions = bundle.effects.length === 0 ? orderPermissions({ "id-token": "write" }) : mergePermissions({ "id-token": "write" }, ...targetReadPermissions, ...bundle.effects.map(effectPermissions));
+  const reactionPermissions = bundle.reactions === false ? {} : mergePermissions(...triggers.flatMap((trigger) => REACTION_PERMISSIONS[trigger.event] ?? []));
   return {
     schemaVersion: "gardener.github-actions-task-plan/v1",
     target: GITHUB_ACTIONS_TARGET,
     taskId: bundle.taskId,
     planningPermissions,
     effectsPermissions,
-    callerPermissions: mergePermissions(planningPermissions, effectsPermissions),
+    reactionPermissions,
+    callerPermissions: mergePermissions(planningPermissions, effectsPermissions, reactionPermissions),
     triggers,
     // Describes the bundle, not the rendered triggers: a draft still acts on
     // pull requests when run by hand.
@@ -29320,6 +29338,7 @@ var authoringSchema = external_exports.strictObject({
   triggers: external_exports.array(triggerAuthoringSchema).min(1).max(taskTriggerKindValues.length).optional(),
   draft: external_exports.boolean().optional(),
   checkout: external_exports.enum(["provider", "pull-request-head"]).optional(),
+  reactions: external_exports.boolean().optional(),
   model: taskModelIdSchema.optional(),
   tools: external_exports.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: external_exports.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
@@ -29449,7 +29468,8 @@ async function compileTaskSource(source, sourceName = "TASK.md", options = {}) {
     },
     model: authoring.model ?? DEFAULT_TASK_MODEL,
     ...authoring.checkout === "pull-request-head" ? { checkout: "pull-request-head" } : {},
-    ...authoring.draft === true ? { draft: true } : {}
+    ...authoring.draft === true ? { draft: true } : {},
+    ...authoring.reactions === false ? { reactions: false } : {}
   });
   return {
     bundle,
@@ -29710,6 +29730,23 @@ function renderJobCondition(task) {
   const conditions = task.actionsPlan.triggers.map((binding) => renderTriggerCondition(binding, task));
   return conditions.join("\n        || ");
 }
+function renderReactionCondition(task) {
+  if (Object.keys(task.actionsPlan.reactionPermissions).length === 0) return void 0;
+  const maintainers = `fromJSON('${JSON.stringify(maintainerAssociations)}')`;
+  const conditions = task.actionsPlan.triggers.filter((binding) => REACTION_PERMISSIONS[binding.event] !== void 0).map((binding) => {
+    const clauses = [`github.event_name == '${binding.event}'`];
+    if (binding.action !== void 0) clauses.push(`github.event.action == '${binding.action}'`);
+    const trigger = task.bundle.triggers.find((candidate) => candidate.kind === binding.kind);
+    if (trigger !== void 0 && "authors" in trigger && isAuthoredTriggerKind(trigger.kind) && trigger.authors !== "any") {
+      const subject = SUBJECT_EXPRESSIONS[authoredTriggerSubject[trigger.kind]];
+      const entries = trigger.authors === "maintainers" ? ["maintainers"] : trigger.authors;
+      const any2 = entries.map((entry) => entry === "maintainers" ? `contains(${maintainers}, ${subject}.author_association)` : `${subject}.user.login == '${entry}'`);
+      clauses.push(any2.length === 1 ? any2[0] : `(${any2.join(" || ")})`);
+    }
+    return clauses.length === 1 ? clauses[0] : `(${clauses.join(" && ")})`;
+  });
+  return conditions.length === 0 ? void 0 : conditions.join("\n        || ");
+}
 function renderPermissions(task) {
   const permissions = task.actionsPlan.callerPermissions;
   return GITHUB_PERMISSION_KEYS.filter((key) => permissions[key] !== void 0).map((key) => `      ${key}: ${permissions[key]}`).join("\n");
@@ -29720,12 +29757,24 @@ var TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT = /* @__PURE__ */ new Set([
   "ce457eb2b4ec4ea85f2e6e5dd9ce794d196da711",
   "3a0bc85d1f5cffccb50fba787b18334e4c21ba72"
 ]);
+var TASK_WORKFLOWS_WITHOUT_REACTIONS = /* @__PURE__ */ new Set([
+  ...TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT,
+  "aae337cf4d2ad0c5fa33771c37cc811eccf39ff0",
+  "de534dff93a56527b45db8f46aedac72c8911da0",
+  "f3aca211a4ee2559f3df05cac12836090127812a",
+  "8e5fa4f844bfe26ff1d152757caf4ac0110ff6ef",
+  "868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d"
+]);
+function definesReactions(workflowRef) {
+  return !TASK_WORKFLOWS_WITHOUT_REACTIONS.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
 function definesPlanTimeout(workflowRef) {
   return !TASK_WORKFLOWS_WITHOUT_PLAN_TIMEOUT.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
 }
 var LEGACY_PLAN_TIMEOUT_MINUTES = 10;
 var LEGACY_MAX_RUNTIME_SECONDS = 480;
 function renderTaskWorkflow(task, workflowRef, setsPlanTimeout) {
+  const reactions = definesReactions(workflowRef) ? renderReactionCondition(task) : void 0;
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -29759,7 +29808,11 @@ ${renderPermissions(task)}
       task-source: ${yamlString(`.gardener/${task.source}`)}
       task-bundle-hash: ${task.bundleHash}
 ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundle.limits.runtimeSeconds)}
-` : ""}${checksOutPullRequestHead(task.bundle) ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n" : ""}`;
+` : ""}${checksOutPullRequestHead(task.bundle) ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n" : ""}${reactions === void 0 ? "" : `      reactions: >-
+        \${{
+        ${reactions}
+        }}
+`}`;
 }
 function renderSyncWorkflow(workflowRef) {
   const syncRef = syncWorkflowRefFor(workflowRef);

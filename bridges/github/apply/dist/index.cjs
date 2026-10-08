@@ -40754,7 +40754,14 @@ var taskBundleV1Schema = external_exports.strictObject({
    * so a manual run can still target the resource they describe, but no real
    * event starts it.
    */
-  draft: external_exports.literal(true).optional()
+  draft: external_exports.literal(true).optional(),
+  /**
+   * Turns off the reaction a target adds to the issue or comment that started
+   * a run while it works, and the result reaction it leaves. Present only when
+   * off, so bundles that keep the default hash as before. The runtime ignores
+   * it; only the generated workflow reads it.
+   */
+  reactions: external_exports.literal(false).optional()
 }).superRefine((bundle, context) => {
   if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
     context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });

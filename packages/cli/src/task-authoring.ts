@@ -164,6 +164,7 @@ const authoringSchema = z.strictObject({
   triggers: z.array(triggerAuthoringSchema).min(1).max(taskTriggerKindValues.length).optional(),
   draft: z.boolean().optional(),
   checkout: z.enum(["provider", "pull-request-head"]).optional(),
+  reactions: z.boolean().optional(),
   model: taskModelIdSchema.optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: z.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
@@ -341,6 +342,7 @@ export async function compileTaskSource(
     model: authoring.model ?? DEFAULT_TASK_MODEL,
     ...(authoring.checkout === "pull-request-head" ? { checkout: "pull-request-head" } : {}),
     ...(authoring.draft === true ? { draft: true } : {}),
+    ...(authoring.reactions === false ? { reactions: false } : {}),
   });
   return {
     bundle,

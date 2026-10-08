@@ -471,7 +471,14 @@ describe("local Gardener project", () => {
       jobs: Record<string, { permissions?: Record<string, string>; environment?: unknown }>;
     };
     expect(workflow.permissions).toBeUndefined();
-    expect(Object.keys(workflow.jobs).sort()).toEqual(["apply", "plan"]);
+    expect(Object.keys(workflow.jobs).sort()).toEqual(["acknowledge", "apply", "plan", "settle"]);
+    // The reaction jobs are checkout-free and run only fixed API calls, so
+    // they inherit the caller's grant like apply, and never fail the run.
+    for (const name of ["acknowledge", "settle"]) {
+      const job = workflow.jobs[name] as { permissions?: unknown; steps: Array<{ uses?: string; "continue-on-error"?: boolean }> };
+      expect(job.permissions).toBeUndefined();
+      expect(job.steps.every((step) => step.uses === undefined && step["continue-on-error"] === true)).toBe(true);
+    }
     expect(workflow.jobs.plan?.permissions).toEqual({
       checks: "read",
       contents: "read",
@@ -809,6 +816,58 @@ describe("sync workflow and staleness", () => {
       await writeFile(projectPath, JSON.stringify({ ...project, syncWorkflow: name }));
       await expect(buildProject({ repositoryRoot: root })).rejects.toThrow(/syncWorkflow must be a file name/);
     }
+  });
+});
+
+describe("reactions", () => {
+  // A release after 0.1.12, whose task workflow takes the reactions input.
+  const REACTING_REF = `scuffi/gardener/.github/workflows/gardener-task.yml@${"a".repeat(40)}`;
+
+  async function render(task: string, workflowRef = REACTING_REF): Promise<{ text: string; parsed: any; hash: string }> {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-reactions-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    await writeFile(projectPath, JSON.stringify({ ...project, handle: "gardener-bot", release: { workflowRef } }));
+    await mkdir(join(root, ".gardener/tasks/t"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/t/TASK.md"), task);
+    const built = await buildProject({ repositoryRoot: root });
+    const text = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
+    return { text, parsed: parseYaml(text), hash: built.tasks[0]!.bundleHash };
+  }
+
+  const COMMENT_TASK = TASK.replace(
+    /trigger:[\s\S]*?tools:/,
+    "triggers:\n  - event: github.issue_comment.created\n    mentions: [self]\n    authors: [maintainers, renovate-bot]\n  - event: github.schedule\n    cron: 0 6 * * 1\ntools:",
+  );
+
+  it("reacts to the triggering issue for any author", async () => {
+    const { parsed } = await render(TASK.replace("  labels-all:\n    - gardener-example\n", "  authors: any\n"));
+    expect(parsed.jobs.gardener.with.reactions).toBe("${{ (github.event_name == 'issues' && github.event.action == 'opened') }}");
+    expect(parsed.jobs.gardener.permissions.issues).toBe("write");
+  });
+
+  it("reacts only for the authors a task admits, and not to schedules", async () => {
+    const { parsed } = await render(COMMENT_TASK);
+    expect(parsed.jobs.gardener.with.reactions).toBe(
+      "${{ (github.event_name == 'issue_comment' && github.event.action == 'created' && "
+        + "(contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association) "
+        + "|| github.event.comment.user.login == 'renovate-bot')) }}",
+    );
+  });
+
+  it("leaves reactions out when the task turns them off, without changing other bundles' hashes", async () => {
+    const quiet = TASK.replace("tools:", "reactions: false\ntools:").replace("effects:\n  - issue.comment.create\n", "");
+    const { parsed, text } = await render(quiet);
+    expect(text).not.toContain("reactions:");
+    expect(parsed.jobs.gardener.permissions.issues).toBe("read");
+    // Saying the default out loud changes nothing.
+    expect((await render(TASK.replace("tools:", "reactions: true\ntools:"))).hash).toBe((await render(TASK)).hash);
+  });
+
+  it("passes no reactions input to a release whose workflow does not define it", async () => {
+    const { text } = await render(TASK, "scuffi/gardener/.github/workflows/gardener-task.yml@868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d");
+    expect(text).not.toContain("reactions:");
   });
 });
 

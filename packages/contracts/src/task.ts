@@ -472,6 +472,13 @@ export const taskBundleV1Schema = z.strictObject({
    * event starts it.
    */
   draft: z.literal(true).optional(),
+  /**
+   * Turns off the reaction a target adds to the issue or comment that started
+   * a run while it works, and the result reaction it leaves. Present only when
+   * off, so bundles that keep the default hash as before. The runtime ignores
+   * it; only the generated workflow reads it.
+   */
+  reactions: z.literal(false).optional(),
 }).superRefine((bundle, context) => {
   if (bundle.checkout === "pull-request-head"
     && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {

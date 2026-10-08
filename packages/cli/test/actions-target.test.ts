@@ -223,9 +223,24 @@ describe("github-actions/v1 target adapter", () => {
   });
 
   it("keeps an effect-free inspection task free of apply write scopes", () => {
-    const plan = compileGitHubActionsTask(bundle({ effects: [] }));
+    const plan = compileGitHubActionsTask(bundle({ effects: [], reactions: false }));
     expect(plan.effectsPermissions).toEqual({ "id-token": "write" });
+    expect(plan.reactionPermissions).toEqual({});
     expect(plan.callerPermissions).toEqual(plan.planningPermissions);
+  });
+
+  it("grants the reaction jobs only the writes their triggers need, unless the task turns reactions off", () => {
+    const trigger = (kind: string) => ({ kind, labelsAll: [], authors: "any", mentions: [] });
+    const on = (...triggers: unknown[]) => compileGitHubActionsTask(bundle({ effects: [], triggers } as never));
+    expect(on(trigger("github.issue.opened")).reactionPermissions).toEqual({ issues: "write" });
+    expect(on({ kind: "github.issue_comment.created", labelsAll: [], authors: "maintainers", mentions: [] }).callerPermissions.issues).toBe("write");
+    expect(on({ kind: "github.pull_request_review_comment.created", labelsAll: [], authors: "maintainers", mentions: [] }).reactionPermissions)
+      .toEqual({ "pull-requests": "write" });
+    expect(on({ kind: "github.discussion_comment.created", labelsAll: [], authors: "maintainers", mentions: [] }).reactionPermissions)
+      .toEqual({ discussions: "write" });
+    // Reviews have no reactions API; schedules and manual runs have nothing to react to.
+    expect(on({ kind: "github.pull_request_review.submitted", labelsAll: [], authors: "maintainers", mentions: [] }).reactionPermissions).toEqual({});
+    expect(on({ kind: "github.workflow_dispatch" }, { kind: "github.schedule", cron: "0 6 * * 1" }).reactionPermissions).toEqual({});
   });
 
   it("lets apply read every kind of target a manual run can name", () => {

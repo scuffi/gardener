@@ -590,6 +590,24 @@ A draft task's workflow listens only for manual runs, and the runtime refuses an
 it. It still offers the targets its declared triggers imply, so you can run it against a real pull
 request. Remove `draft: true`, then rebuild and reconnect, to make it live.
 
+### Reactions
+
+When a run starts from an issue, pull request, comment or discussion, the workflow reacts to it
+with 👀 while the task works. When it finishes, it replaces 👀 with 🚀 if it applied the plan, or 😕
+if planning or applying failed. A run that proposes nothing, is skipped or is cancelled just removes
+👀. Review submissions get no reaction, because GitHub has no reactions API for them, and
+schedules, pushes and manual runs have nothing to react to.
+
+It reacts only to authors the task admits. `authors: maintainers` is checked against GitHub's
+`author_association`, which reports a private organization member as a non-member, so such a
+member gets no reaction even though the task still runs for them. The reactions are made by two
+small jobs that check nothing out and run only fixed API calls, so the caller grants
+`issues: write` (issues, pull requests and their comments), `pull-requests: write` (review comments)
+or `discussions: write` (discussions) for them. A reaction that fails never fails the run.
+
+To turn reactions off for a task, set `reactions: false` at the top level of `TASK.md`. It needs a
+release after 0.1.12; projects pinned to an earlier release get no reactions until they upgrade.
+
 ### Known limitation: one cron per task
 
 A task may declare at most one `github.schedule` trigger, because triggers are unique by kind. If
