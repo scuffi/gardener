@@ -206,7 +206,7 @@ network:            # tasks with repository.exec
 | `max-tool-calls` | Tool calls (each file read, API call or command counts, plus the final `finish_task`, so the task's own work gets one fewer). | at least 3 |
 | `input-tokens` | Largest single model request. The whole conversation is resent each turn. | any positive |
 | `output-tokens` | Total generated across the run, including reasoning. | at least 16 × `max-turns` |
-| `max-effect-operations` | Optional cap on proposed changes per run. | 1–1,000 |
+| `max-effect-operations` | Optional cap on proposed changes per run. Needs at least one effect. | 1–1,000 |
 | `max-effect-bytes` | Optional cap on the plan's size. | 1,024–50,000,000 |
 
 A run that runs out of any budget fails with `budget-exceeded` and changes nothing. What

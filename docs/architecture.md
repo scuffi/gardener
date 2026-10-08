@@ -30,8 +30,9 @@ Customer repository
 
 - **CLI** (`packages/cli`) compiles tasks, generates workflows, deploys the Worker, and enrolls
   repositories. It is the only component that uses Cloudflare or `gh` credentials.
-- **Worker** (`apps/gardener`) serves `GET /health` and `/session/<id>`. Sessions use Cap'n Web
-  over WebSocket, and each job gets its own `TaskRunnerSession`.
+- **Worker** (`apps/gardener`) serves `GET /health`, `/session/<id>` and `POST /v1/sync`. Sessions
+  use Cap'n Web over WebSocket, and each job gets its own `TaskRunnerSession`. `/v1/sync` enrols a
+  repository's tasks from its default branch.
 - **GitHub bridge** (`packages/runner`, built into `bridges/github`) is a pair of Node.js Actions
   that run inside the workflow jobs. The plan bridge executes tool calls for the Worker. The apply
   bridge executes the validated plan against the GitHub API.
@@ -87,7 +88,7 @@ The model works through two tools:
 For each declared kind, the prompt includes a compact JSON Schema of the payload. The Worker
 validates every proposal as it arrives and sends the error message back to the model on rejection.
 
-A plan is an ordered list of steps. Each step holds one exact operation, which is one of the 29
+A plan is an ordered list of steps. Each step holds one exact operation, which is one of the 36
 `OperationKind` values. A step can reference named scalar outputs of earlier steps, for example
 the `commitSha` from a `commit.create` feeding a `pull_request.open_draft`. The Worker assigns
 every operation ID and computes the plan digest over canonical JSON.
@@ -134,7 +135,7 @@ planning, is terminal.
 
 ## Data
 
-D1 is the only store. It holds six tables:
+D1 is the only store. It holds seven tables:
 
 | Table | Contents |
 | --- | --- |
@@ -146,7 +147,7 @@ D1 is the only store. It holds six tables:
 | `actions_control_audit` | Record of repository and task enable/disable changes, written by triggers |
 | `actions_repository_syncs` | One immutable row per accepted sync from the default branch, which also orders syncs |
 
-The schema is a single migration, `apps/gardener/migrations/0001_actions_baseline.sql`.
+The schema comes from the migrations in `apps/gardener/migrations/`, `0001` to `0004`.
 
 ## Releases and pinning
 

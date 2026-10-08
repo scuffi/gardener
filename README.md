@@ -104,7 +104,7 @@ Save it as `.gardener/tasks/bug-intake/TASK.md` and run `pnpm gardener -- genera
 Coding agents can read `.gardener/SKILL.md`, which `init` and `generate` write: a complete guide to
 the task format, in the CLI's own version.
 
-Tasks can respond to 26 kinds of issue, pull request, discussion, push, schedule, and manual
+Tasks can respond to 29 kinds of issue, pull request, discussion, push, schedule, and manual
 events. They can use 36 kinds of GitHub operation, including:
 
 - labels and comments;
@@ -147,8 +147,9 @@ Gardener is pre-release.
   effects you can.
 - **`repository.exec` has unrestricted network access.** It runs task-chosen commands with the
   runner's normal egress. Do not use it on sensitive private code.
-- **Install from source only.** Gardener is not published to npm. Repositories can use the
-  reusable workflow only if they can access this repository.
+- **Install from npm.** The CLI is published as `@scuffi/gardener`, and `deploy` uses the runtime
+  bundled in the package. Repositories call the reusable workflows in this repository, pinned to
+  the release's commit.
 - **Cloudflare Access.** If Access protects every `workers.dev` hostname on your account,
   `deploy` needs a `CLOUDFLARE_API_TOKEN` scoped to Access Apps and Policies. It uses this to add a
   bypass for the runtime hostname only.

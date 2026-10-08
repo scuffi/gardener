@@ -69,7 +69,7 @@ declare each trigger kind at most once.
 | `github.workflow_dispatch` | none |
 
 Every task can also be run by hand. If you do not declare `github.workflow_dispatch`, `gardener
-build` adds it, so the compiled bundle always contains it. See [Running a task by hand](#running-a-task-by-hand).
+generate` adds it, so the compiled bundle always contains it. See [Running a task by hand](#running-a-task-by-hand).
 
 `labels-all` is an AND filter over the labels of the issue, pull request, or discussion that carries
 the event. Supplying a key that an event does not support is a compilation error.
@@ -240,7 +240,7 @@ collapse without duplication.
 | Family glob | Expands to |
 | --- | --- |
 | `issue.*` | label add/remove, comment create/update, close, reopen, assignee add/remove, create |
-| `pull_request.*` | comment create/update, review submit, reviewer request/remove, update, label add/remove, update branch, open, open draft, merge |
+| `pull_request.*` | comment create/update, review submit, review comment reply, review thread resolve, reviewer request/remove, update, label add/remove, update branch, open, open draft, merge |
 | `git.*` | `branch.create`, `commit.create` |
 | `discussion.*` | comment create/update, answer mark/unmark, close, reopen |
 | `check.*` | `check.rerun` |
@@ -387,9 +387,9 @@ again with its own commit.
 
 ### Automatic V1 effects
 
-All 34 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
+All 36 declared effect kinds use the same automatic path in V1. The generated caller grants a fixed
 read-only permission union for planning plus only the write scopes implied by the task's declared
-effects. The model-facing planning job downgrades that grant to read-only; the checkout-free apply
+effects and, unless the task turns them off, its reactions. The model-facing planning job downgrades that grant to read-only; the checkout-free apply
 job receives the write grant and executes only the exact Worker-validated plan. Ordered receipts,
 provider preconditions, stop-on-first-failure, and exact-prefix resume still apply.
 
@@ -477,7 +477,7 @@ Two optional effect-plan ceilings are also available:
 
 | Key | Meaning |
 | --- | --- |
-| `max-effect-operations` | Maximum operations in one plan. |
+| `max-effect-operations` | Maximum operations in one plan. Needs at least one declared effect. |
 | `max-effect-bytes` | Maximum total plan artifact size. |
 
 Gardener imposes no operation-count ceiling of its own. When these keys are omitted, only the
@@ -528,20 +528,24 @@ output than its model produces (the catalog's figure, or 32,000 for models it do
 large `output-tokens` is. Gateway requests that fail with a network error, HTTP 429 or a 5xx are
 retried twice, with backoff, before the run fails; nothing is retried once a response has started.
 
-The target derives exact permissions rather than granting a fixed superset:
+Read scopes are fixed; write scopes come from the task:
 
-- planning always gets `contents: read` and `id-token: write`; declaring `provider.api.read` adds the
-  read scopes implied by the declared triggers and effects, and nothing else;
+- planning gets the same read-only union for every task: `checks`, `contents`, `discussions`,
+  `issues`, `pull-requests` and `statuses` read, plus `id-token: write`;
 - apply gets the union of the write scopes required by the declared effects, plus `id-token: write`;
-- the generated caller job grants the union of both, because GitHub requires a caller's permissions
-  to cover the workflow it calls.
+- the reaction jobs need `issues`, `pull-requests` or `discussions` write, depending on the
+  triggers, unless the task sets `reactions: false` (see [Reactions](#reactions));
+- the generated caller job grants the union of all of these, because GitHub requires a caller's
+  permissions to cover the workflow it calls.
 
 ### The caller union is a ceiling, not a grant
 
-The caller job's `permissions:` block is the union of the planning and apply scopes, but **a called
-reusable workflow can only ever receive permissions the caller already holds**. GitHub intersects
-the two, so the union in the caller does not widen what any individual job gets: planning still
-runs with only planning scopes and apply with only apply scopes, each declared on its own job.
+The caller job's `permissions:` block is the union of the planning, apply and reaction scopes, and
+**a called reusable workflow can only ever receive permissions the caller already holds**. The
+planning job declares its own read-only block, so it never receives a write scope, whatever the
+caller grants. Apply and the two reaction jobs declare none and inherit the caller's grant; they
+check nothing out and run only trusted code: apply executes the exact Worker-validated plan, and
+the reaction jobs make fixed reaction API calls.
 
 The practical consequence is that the union is what a reader of the generated workflow sees at the
 top of the file, and it is the correct thing to review when judging a task's maximum authority.

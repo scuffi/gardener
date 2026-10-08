@@ -36,7 +36,9 @@ Each one can influence what is proposed. None of them can widen what is allowed.
 
 ## Session authentication
 
-The Worker exposes two routes: `GET /health` and `/session/<id>`. Every other path returns 404.
+The Worker exposes three routes: `GET /health`, `/session/<id>` and `POST /v1/sync`. Every other
+path returns 404. `/v1/sync` accepts a repository's compiled tasks only with a GitHub OIDC token
+from the pinned sync workflow, run on the repository's default branch.
 Opening a session grants nothing until the runner presents a GitHub OIDC token. The Worker verifies
 the token signature against GitHub's issuer and requires all of the following:
 
