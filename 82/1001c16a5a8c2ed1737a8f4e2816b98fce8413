@@ -1,0 +1,37 @@
+.changeset/reactions.md
+  s_de0b486c128948::t_e1c78b4b9bbce5 1-10
+.github/workflows/gardener-task.yml
+  s_de0b486c128948::t_221cad94583634 31-35,38-76,157-160,187-228
+docs/task-authoring.md
+  s_de0b486c128948::t_1e5f225c7c68d7 593-610
+packages/cli/src/actions-target.ts
+  s_de0b486c128948::t_91295c4d9eadc3 43-48,103-122,228-231,238-239
+packages/cli/src/project.ts
+  s_de0b486c128948::t_388200e28a5f2e 13,21,628-657,681-697,708,748-752
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_f19de4af4234be 167,345
+packages/cli/src/task-guide.md
+  s_de0b486c128948::t_e06bf318ceff90 92
+packages/cli/test/actions-target.test.ts
+  s_de0b486c128948::t_61258754a2219f 226,228,232-245
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_f62ef19ee183f2 474-481,822-873
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_0a26b27e53ebbc 475-481
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "821001c16a5a8c2ed1737a8f4e2816b98fce8413",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
