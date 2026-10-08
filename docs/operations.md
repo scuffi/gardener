@@ -106,6 +106,15 @@ pnpm gardener -- deploy --workspace my-gardener --source-root "$PWD" \
   rotate the token, or pass `--ai-gateway off` to go back to the account's own gateway. An exported
   token is ignored when deploying an installation without a gateway.
 
+### Capping model use
+
+Task limits bound each run, not how many runs there are: a task runs once for every event that
+matches it. Keep tasks with public triggers on `authors: maintainers`, and cap total model use with
+AI Gateway [rate limiting](https://developers.cloudflare.com/ai-gateway/features/rate-limiting/).
+Set it on the account's `default` gateway, which `@cf/…` models always use, and on the gateway
+passed to `--ai-gateway` if there is one. A request over the limit fails with HTTP 429; Gardener
+retries it twice with backoff, then fails the run without changing anything.
+
 ## Changing tasks
 
 Edit `.gardener/tasks/<task>/TASK.md`, then run `gardener generate` and commit the updated lock

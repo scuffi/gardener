@@ -11,7 +11,9 @@ npx @scuffi/gardener generate
 generates one GitHub Actions workflow per task. Node.js 24 or later is required.
 
 Operators also use it to deploy the runtime and connect repositories (`deploy`, `yolo`, `upgrade`,
-`doctor`, `runs`). See the [onboarding guide](https://github.com/scuffi/gardener/blob/main/docs/onboarding.md)
-and [task authoring](https://github.com/scuffi/gardener/blob/main/docs/task-authoring.md).
+`doctor`, `runs`). See the [onboarding guide](https://github.com/scuffi/gardener/blob/main/docs/onboarding.md),
+[creating tasks](https://github.com/scuffi/gardener/blob/main/docs/task-authoring.md), the
+[task reference](https://github.com/scuffi/gardener/blob/main/docs/task-reference.md) and the
+[CLI reference](https://github.com/scuffi/gardener/blob/main/docs/cli.md).
 
 MIT licensed.

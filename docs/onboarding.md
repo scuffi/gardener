@@ -80,7 +80,7 @@ These are deliberately left out of the starters:
 
 To change a task, edit its `TASK.md`, run `generate`, then commit and push. The generated
 **Gardener · Sync tasks** workflow enrolls the change when it reaches the default branch. The task sets its own limits; the only ceiling
-is `runtime-seconds: 21000`, which fits a GitHub-hosted job. See [task-authoring.md](task-authoring.md)
+is `runtime-seconds: 21000`, which fits a GitHub-hosted job. See [Limits](task-reference.md#limits)
 for the format.
 
 ## Writing your own task (anyone)

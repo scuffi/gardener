@@ -115,7 +115,7 @@ events. They can use 36 kinds of GitHub operation, including:
 - releases.
 
 The GitHub token permissions in each generated workflow are derived from the task's declared
-effects. See [Task authoring](docs/task-authoring.md) for the full format.
+effects. See [Creating tasks](docs/task-authoring.md) and the [task reference](docs/task-reference.md).
 
 ## Security model
 
@@ -157,10 +157,13 @@ Gardener is pre-release.
 ## Documentation
 
 - [Onboarding](docs/onboarding.md): connecting a repository, starter tasks, and upgrading between releases
-- [Task authoring](docs/task-authoring.md): task format, triggers, tools, effects, and limits
+- [Creating tasks](docs/task-authoring.md): writing a task, and choosing its triggers, effects and limits
+- [Task reference](docs/task-reference.md): every task key, trigger, tool, effect and limit, and the project files
+- [CLI reference](docs/cli.md): every command and option
 - [Operations](docs/operations.md): deploying, upgrading, and the kill switch
 - [Architecture](docs/architecture.md): components, data, and the plan/apply protocol
 - [Security](SECURITY.md): trust boundaries and how to report a vulnerability
+- [Contributing](CONTRIBUTING.md): issues, and the [collaborator guide](COLLABORATORS.md)
 
 ## Development
 
