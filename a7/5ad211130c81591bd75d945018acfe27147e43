@@ -1,0 +1,23 @@
+.github/workflows/close-unrequested-prs.yml
+  s_de0b486c128948::t_066160dfc0fadf 1-48
+COLLABORATORS.md
+  s_de0b486c128948::t_5ef10483d8ee99 89-91
+CONTRIBUTING.md
+  s_de0b486c128948::t_e38cfd3f48c0c3 19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a75ad211130c81591bd75d945018acfe27147e43",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
