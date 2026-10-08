@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -38,16 +38,23 @@ function d1(rows: Array<Record<string, unknown>>) {
   return { status: 0, stdout: JSON.stringify([{ results: rows }]), stderr: "" };
 }
 
+/** The SQL of one wrangler call. Writes arrive as a file that is removed after the call. */
 function command(args: string[]): string {
-  return args[args.indexOf("--command") + 1]!;
+  return args.includes("--file")
+    ? readFileSync(args[args.indexOf("--file") + 1]!, "utf8")
+    : args[args.indexOf("--command") + 1]!;
 }
+
+const executed: string[] = [];
 
 describe("Actions operational controls", () => {
   afterAll(() => rmSync(isolatedWranglerDirectory(), { recursive: true, force: true }));
   beforeEach(() => {
     vi.clearAllMocks();
+    executed.length = 0;
     mocks.wrangler.mockImplementation((_root: string, _cwd: string, args: string[]) => {
       const sql = command(args);
+      executed.push(sql);
       if (/SELECT repository_id FROM actions_repository_enrollments/.test(sql)) return d1([{ repository_id: "1379585475" }]);
       if (/SELECT enabled FROM actions_repository_tasks/.test(sql)) return d1([{ enabled: 1 }]);
       if (/SELECT COUNT\(\*\) AS task_count/.test(sql)) return d1([{ task_count: 2, enabled_count: 0 }]);
@@ -66,7 +73,7 @@ describe("Actions operational controls", () => {
       sourceRoot: "/trusted/gardener",
       enabled: false,
     })).resolves.toEqual({ repositoryId: "1379585475", enabled: false });
-    expect(mocks.wrangler.mock.calls.map((call) => command(call[2])).join("\n"))
+    expect(executed.join("\n"))
       .toContain("UPDATE actions_repository_enrollments SET enabled=0");
   });
 });

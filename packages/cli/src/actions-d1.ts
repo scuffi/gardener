@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wrangler } from "./commands.js";
@@ -22,19 +22,56 @@ export function isolatedWranglerDirectory(): string {
   return isolated;
 }
 
-/** Runs D1 commands against a Gardener database, resolved by name through the selected account. */
+let executions = 0;
+
+/**
+ * Runs SQL that changes the database. The SQL goes in a file, not an
+ * argument: enrolment SQL carries whole task bundles, which is past Windows'
+ * command-line limit, and endpoint security tools may kill processes started
+ * with very long arguments. Remote `--file` runs through D1's import, which
+ * reports no rows and reports a SQL error as a failed import rather than
+ * naming the statement, so queries stay on `--command`. The file is removed
+ * afterwards; only a CLI killed outright leaves it, in the private directory.
+ */
+/**
+ * Callers must keep every statement idempotent (upserts, or updates that can
+ * repeat) and put anything that disables or removes rows last: an import may
+ * stop part-way, and running the command again must then finish the job.
+ */
 export function executeD1(database: string, command: string): void {
-  d1(database, ["--command", command]);
+  const directory = isolatedWranglerDirectory();
+  const file = join(directory, `execute-${process.pid}-${++executions}.sql`);
+  writeFileSync(file, command, { mode: 0o600, flag: "wx" });
+  try {
+    // --yes answers the confirmation wrangler asks before a remote import.
+    d1(database, ["--yes", "--file", file]);
+  } catch (error) {
+    // The file is gone by the time anyone reads the error, so quote the SQL.
+    const excerpt = command.length > 2_000 ? `${command.slice(0, 2_000)}…` : command;
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nSQL: ${excerpt}`, { cause: error });
+  } finally {
+    unlinkSync(file);
+  }
+}
+
+/** Queries go in an argument, so they must stay short; see executeD1. */
+const MAX_QUERY_LENGTH = 1_000;
+
+function shortQuery(command: string): string {
+  if (command.length > MAX_QUERY_LENGTH) {
+    throw new Error(`D1 query is ${command.length} characters; queries are passed as an argument and must stay under ${MAX_QUERY_LENGTH}. Use executeD1 for long SQL.`);
+  }
+  return command;
 }
 
 export function queryD1(database: string, command: string): Array<Record<string, unknown>> {
-  return d1Rows(d1(database, ["--json", "--command", command]).stdout);
+  return d1Rows(d1(database, ["--json", "--command", shortQuery(command)]).stdout);
 }
 
 /** Like queryD1, but returns null when the queried table does not exist yet. */
 export function queryD1IfTableExists(database: string, command: string): Array<Record<string, unknown>> | null {
   const result = wrangler(isolatedWranglerDirectory(), ".", [
-    "d1", "execute", database, "--remote", "--json", "--command", command,
+    "d1", "execute", database, "--remote", "--json", "--command", shortQuery(command),
   ], undefined, { quiet: true, allowFailure: true });
   if (result.status !== 0) {
     const output = `${result.stdout}\n${result.stderr}`;
@@ -44,6 +81,7 @@ export function queryD1IfTableExists(database: string, command: string): Array<R
   return d1Rows(result.stdout);
 }
 
+/** Runs D1 commands against a Gardener database, resolved by name through the selected account. */
 function d1(database: string, args: string[]) {
   return wrangler(isolatedWranglerDirectory(), ".", [
     "d1", "execute", database, "--remote", ...args,
