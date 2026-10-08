@@ -86,6 +86,9 @@ change, and put dependency bumps in their own commits.
 Describe the problem, the change and how you verified it. Link the issue if there is one. Behaviour
 that runs in GitHub Actions is best verified on a test repository before it reaches a live one.
 
+Pull requests from people who are not collaborators are closed automatically. To accept one a
+maintainer asked for, add the `allow-pr` label and reopen it.
+
 ## Releases
 
 Releases use [changesets](https://github.com/changesets/changesets). A change users will notice

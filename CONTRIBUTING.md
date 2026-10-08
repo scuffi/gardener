@@ -16,8 +16,9 @@ Open an issue at <https://github.com/scuffi/gardener/issues/new> for:
 
 ## Pull requests
 
-Please do not open a pull request unless a maintainer has asked you to. Pull requests that do not
-come from an approved collaborator may be closed and redirected to an issue.
+Please do not open a pull request unless a maintainer has asked you to. Pull requests from anyone
+who is not a collaborator are closed automatically. If a maintainer asked for yours, they will add
+the `allow-pr` label and reopen it.
 
 If you already have a patch, open an issue instead and include:
 

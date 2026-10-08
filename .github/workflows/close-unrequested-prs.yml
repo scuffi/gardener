@@ -1,0 +1,48 @@
+name: Close unrequested pull requests
+
+# pull_request_target runs with this repository's token, so this workflow must never check out or
+# run anything from the pull request. It reads only the pull request's metadata.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  # Covers both the comment (an issues endpoint, which accepts this scope on pull requests) and the close.
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Close pull requests from unapproved contributors
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            // MEMBER only occurs if this repository moves to an organization; its members would then be exempt.
+            const allowedAssociations = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+            // Dependabot's pull requests are CONTRIBUTOR, so its entry is what keeps them open for the
+            // dependabot-merge task. Pull requests Gardener opens use the workflow token, which starts no
+            // workflows, so the github-actions[bot] entry is only a backstop.
+            const allowedBots = new Set(['dependabot[bot]', 'github-actions[bot]']);
+            const allowLabel = 'allow-pr';
+
+            const { data: pullRequest } = await github.rest.pulls.get({ owner, repo, pull_number });
+            if (allowedAssociations.has(pullRequest.author_association)) return;
+            if (allowedBots.has(pullRequest.user?.login)) return;
+            if ((pullRequest.labels || []).some((label) => label.name.toLowerCase() === allowLabel)) return;
+
+            const body = [
+              'Thanks for your interest in Gardener.',
+              '',
+              'This repository does not accept unsolicited pull requests. Please open an issue instead: https://github.com/scuffi/gardener/issues/new',
+              '',
+              'See [CONTRIBUTING.md](https://github.com/scuffi/gardener/blob/main/CONTRIBUTING.md) for what to include. If a maintainer asked you to open this pull request, they can add the `allow-pr` label and reopen it.',
+            ].join('\n');
+            // Explain once. A reopened pull request is closed again without another comment, so reopening
+            // cannot be used to repeat it.
+            if (context.payload.action === 'opened') {
+              await github.rest.issues.createComment({ owner, repo, issue_number: pull_number, body });
+            }
+            await github.rest.pulls.update({ owner, repo, pull_number, state: 'closed' });
