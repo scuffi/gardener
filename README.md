@@ -27,6 +27,9 @@ repository code.
 
 ## Quick start
 
+To install from npm step by step, follow [Getting started](docs/getting-started.md). To run from a
+source checkout in one command:
+
 Requirements:
 
 - Node.js 24+, pnpm 11.25, and authenticated `wrangler` and `gh` sessions;
@@ -156,6 +159,7 @@ Gardener is pre-release.
 
 ## Documentation
 
+- [Getting started](docs/getting-started.md): deploy Gardener and run your first task with `npx`
 - [Onboarding](docs/onboarding.md): connecting a repository, starter tasks, and upgrading between releases
 - [Creating tasks](docs/task-authoring.md): writing a task, and choosing its triggers, effects and limits
 - [Task reference](docs/task-reference.md): every task key, trigger, tool, effect and limit, and the project files
