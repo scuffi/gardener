@@ -1,0 +1,21 @@
+README.md
+  s_de0b486c128948::t_c46b562a494dbd 30-32,162
+docs/getting-started.md
+  s_de0b486c128948::t_7f747f32a06aa9 1-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fbc4a0924837a3a08e2cce6943ad88b82609686c",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
