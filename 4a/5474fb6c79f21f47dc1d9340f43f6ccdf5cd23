@@ -1,0 +1,21 @@
+packages/runner/test/capture.test.ts
+  s_de0b486c128948::t_ad036b987713be 959-1034
+packages/runner/test/effects-main.test.ts
+  s_de0b486c128948::t_06b9829bd5212a 5,908-1107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4a5474fb6c79f21f47dc1d9340f43f6ccdf5cd23",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
