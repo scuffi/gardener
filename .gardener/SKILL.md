@@ -3,7 +3,7 @@ name: gardener-tasks
 description: How to write, change and check Gardener tasks (.gardener/tasks/*/TASK.md), the AI maintenance tasks this repository runs from GitHub Actions. Use before creating or editing anything under .gardener/.
 ---
 
-<!-- Written by Gardener 0.1.13. `gardener generate` rewrites this file; do not edit it. -->
+<!-- Written by Gardener 0.1.14. `gardener generate` rewrites this file; do not edit it. -->
 
 # Gardener tasks
 
@@ -29,7 +29,7 @@ those proposals. Nothing outside the declaration is possible, whatever the instr
 ## Workflow
 
 1. Create `.gardener/tasks/<dir>/TASK.md`. Start from the template below or an existing task.
-2. Run `npx @scuffi/gardener@0.1.13 generate` from the repository root (or the repository's own
+2. Run `npx @scuffi/gardener@0.1.14 generate` from the repository root (or the repository's own
    `package.json` script, if it has one). Use this exact version: a different one produces files the
    pull request's **Check tasks** check rejects.
 3. Fix every error `generate` prints and read its warnings. Repeat until it succeeds.
@@ -206,7 +206,7 @@ network:            # tasks with repository.exec
 | `max-tool-calls` | Tool calls (each file read, API call or command counts, plus the final `finish_task`, so the task's own work gets one fewer). | at least 3 |
 | `input-tokens` | Largest single model request. The whole conversation is resent each turn. | any positive |
 | `output-tokens` | Total generated across the run, including reasoning. | at least 16 × `max-turns` |
-| `max-effect-operations` | Optional cap on proposed changes per run. | 1–1,000 |
+| `max-effect-operations` | Optional cap on proposed changes per run. Needs at least one effect. | 1–1,000 |
 | `max-effect-bytes` | Optional cap on the plan's size. | 1,024–50,000,000 |
 
 A run that runs out of any budget fails with `budget-exceeded` and changes nothing. What
