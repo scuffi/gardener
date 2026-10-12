@@ -2,7 +2,7 @@
 #
 # Source: .gardener/tasks/mention-reply/TASK.md
 # Task: mention-reply
-# Bundle: sha256:5a83a3170ebf6d25d76e0adc380a5a7cd7d71c4b73d08f23bf10bb59b79bc736
+# Bundle: sha256:596124755ff7649e4ad0d57801cec31f29a1ff639b1d389004f8d05908b6ada2
 # Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: "Gardener · Mention reply"
@@ -20,6 +20,10 @@ on:
         description: Issue number to run against. Optional.
         required: false
         type: string
+      pull_request:
+        description: Pull request number to run against. Optional.
+        required: false
+        type: string
 
 permissions: {}
 
@@ -30,6 +34,9 @@ jobs:
         (github.event_name == 'issue_comment' && github.event.action == 'created' && contains(github.event.comment.body, '@gardener-cf'))
         || github.event_name == 'workflow_dispatch'
       }}
+    concurrency:
+      group: gardener-mention-reply-${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || github.run_id }}
+      cancel-in-progress: false
     permissions:
       checks: read
       contents: write
@@ -38,14 +45,16 @@ jobs:
       issues: write
       pull-requests: write
       statuses: read
-    uses: scuffi/gardener/.github/workflows/gardener-task.yml@8aa3054967ee696be08ff61936c72e199c750ba7
+    uses: scuffi/gardener/.github/workflows/gardener-task.yml@4007bf661f62730882de20dd2df36b30c3e4a593
     with:
       runtime-url: ${{ vars.GARDENER_RUNTIME_URL }}
       task-id: "mention-reply"
       task-name: "Mention reply"
       task-source: ".gardener/tasks/mention-reply/TASK.md"
-      task-bundle-hash: 5a83a3170ebf6d25d76e0adc380a5a7cd7d71c4b73d08f23bf10bb59b79bc736
+      task-bundle-hash: 596124755ff7649e4ad0d57801cec31f29a1ff639b1d389004f8d05908b6ada2
       plan-timeout-minutes: 40
+      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}
+      merge-base: true
       reactions: >-
         ${{
         (github.event_name == 'issue_comment' && github.event.action == 'created' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
