@@ -165,7 +165,7 @@ A family glob grants every current and future member of its family. Prefer exact
 | `pull_request.review_thread.resolve` | Resolve a review thread on the triggering pull request. | `pull-requests` | `pullNumber`, `threadId` |
 | `branch.create` | Create a branch. | `contents` | `branch`, `branchUrl`, `commitSha`, `ref` |
 | `commit.create` | Commit the files the task changed in its checkout. | `contents` | `branch`, `commitSha`, `commitUrl`, `parentSha`, `treeSha` |
-| `commit.merge_base` | Adds a merge commit to the triggering pull request's branch that brings its base branch in; never rewrites history. | `contents` | `baseSha`, `branch`, `commitSha`, `commitUrl`, `pullNumber`, `treeSha` |
+| `commit.merge_base` | Add a merge commit to the triggering pull request's branch that brings its base branch in; never rewrites history. | `contents` | `baseSha`, `branch`, `commitSha`, `commitUrl`, `pullNumber`, `treeSha` |
 | `pull_request.open` | Open a pull request, ready for review. | `pull-requests` | `baseRef`, `headRef`, `headSha`, `pullNodeId`, `pullNumber`, `pullUrl` |
 | `pull_request.open_draft` | Open a draft pull request. | `pull-requests` | `baseRef`, `headRef`, `headSha`, `pullNodeId`, `pullNumber`, `pullUrl` |
 | `pull_request.merge` | Merge a pull request after verifying its checks. | `contents`, `pull-requests` | `mergeCommitSha`, `pullNumber`, `pullUrl` |
