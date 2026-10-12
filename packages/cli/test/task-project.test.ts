@@ -424,8 +424,8 @@ describe("local Gardener project", () => {
     ).replace("id: example-task", "id: drafter"));
     const built = await buildProject({ repositoryRoot: root });
     const workflowOf = async (id: string) => readFile(join(root, built.tasks.find((task) => task.taskId === id)!.workflow), "utf8");
-    expect(await workflowOf("pusher")).toContain("      checkout-ref: ${{ github.event.pull_request.head.sha }}\n");
-    expect(await workflowOf("drafter")).not.toContain("checkout-ref");
+    expect(await workflowOf("pusher")).toContain("      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}\n");
+    expect(await workflowOf("drafter")).not.toContain("pull-request-head");
   });
 
   it("renders deterministic multi-trigger workflows with derived permissions", async () => {
@@ -942,8 +942,8 @@ describe("authors lists, opened-by and pull request head checkout", () => {
     );
     // The manual trigger keeps its own clause, untouched by the pull request guards.
     expect(workflow).toContain("|| github.event_name == 'workflow_dispatch'");
-    expect(workflow).toContain("    concurrency:\n      group: gardener-review-fix-${{ github.event.pull_request.number || github.run_id }}\n      cancel-in-progress: false\n");
-    expect(workflow).toContain("      checkout-ref: ${{ github.event.pull_request.head.sha }}\n");
+    expect(workflow).toContain("    concurrency:\n      group: gardener-review-fix-${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || github.run_id }}\n      cancel-in-progress: false\n");
+    expect(workflow).toContain("      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}\n");
     expect(() => parseYaml(workflow)).not.toThrow();
   });
 
@@ -1030,10 +1030,11 @@ describe("pull request head callers", () => {
   });
 
   it("refuses merge commits on an older pin", async () => {
-    await expect(build(MERGE_TASK, DEFAULT_WORKFLOW_REF)).rejects.toThrow(
+    const OLD_REF = `scuffi/gardener/.github/workflows/gardener-task.yml@${OLD_PINS.at(-1)}`;
+    await expect(build(MERGE_TASK, OLD_REF)).rejects.toThrow(
       /Task head declares repository.merge_base and commit.merge_base, which this project's pinned Gardener workflow .* cannot run\. Run gardener upgrade/,
     );
-    await expect(build(MERGE_TASK.replace("  - kind: commit.merge_base\n    branches: [\"**\"]", ""), DEFAULT_WORKFLOW_REF))
+    await expect(build(MERGE_TASK.replace("  - kind: commit.merge_base\n    branches: [\"**\"]", ""), OLD_REF))
       .rejects.toThrow(/declares repository.merge_base, which/);
   });
 

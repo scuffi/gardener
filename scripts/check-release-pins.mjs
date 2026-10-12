@@ -57,7 +57,8 @@ function checkInputs(where, passed, declared) {
 }
 
 // Layer 1: the callers this CLI generates, including the optional
-// `checkout-ref` input, against the reusable workflows they pin.
+// `pull-request-head` and `merge-base` inputs, against the reusable workflows
+// they pin.
 execFileSync("pnpm", ["--filter", "@scuffi/gardener", "build"], { stdio: "ignore" });
 const project = mkdtempSync(join(tmpdir(), "gardener-release-pins-"));
 const reusable = new Map();
@@ -69,13 +70,15 @@ try {
 schema: gardener.task/v1
 id: head-commit
 name: Head commit
-description: Commits onto feature branches, so its workflow checks out the pull request head.
+description: Commits and merges onto feature branches, so its workflow checks out the pull request head.
 trigger:
   event: github.pull_request.labeled
   labels-all: [fix]
-tools: [repository.read_file]
+tools: [repository.read_file, repository.merge_base]
 effects:
   - kind: commit.create
+    branches: ["feature/**"]
+  - kind: commit.merge_base
     branches: ["feature/**"]
 network: { default: deny, allow: [], deny: [] }
 limits: { runtime-seconds: 60, max-turns: 3, max-tool-calls: 3, input-tokens: 10000, output-tokens: 2000 }
@@ -84,7 +87,8 @@ Propose one commit.
 `);
   cli("generate");
   const workflows = join(project, ".github/workflows");
-  let sawCheckoutRef = false;
+  let sawPullRequestHead = false;
+  let sawMergeBase = false;
   for (const file of readdirSync(workflows)) {
     const workflow = parse(readFileSync(join(workflows, file), "utf8"));
     for (const [id, job] of Object.entries(workflow.jobs ?? {})) {
@@ -100,10 +104,12 @@ Propose one commit.
       const trigger = parse(called)?.on?.workflow_call;
       if (trigger === undefined) problems.push(`${ref[2]} at ${ref[3]} is not a reusable workflow (no workflow_call)`);
       checkInputs(`generated ${file} job ${id}`, job.with, trigger?.inputs);
-      if (job.with && "checkout-ref" in job.with) sawCheckoutRef = true;
+      if (job.with && "pull-request-head" in job.with) sawPullRequestHead = true;
+      if (job.with && "merge-base" in job.with) sawMergeBase = true;
     }
   }
-  if (!sawCheckoutRef) problems.push("the fixture no longer renders checkout-ref; update it");
+  if (!sawPullRequestHead) problems.push("the fixture no longer renders pull-request-head; update it");
+  if (!sawMergeBase) problems.push("the fixture no longer renders merge-base; update it");
 } finally {
   rmSync(project, { recursive: true, force: true });
 }
