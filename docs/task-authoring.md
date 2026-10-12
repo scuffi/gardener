@@ -230,7 +230,10 @@ needs and the outputs later steps can use, and what each family glob expands to.
 >   commits and branches through the Git Data API, which is how a coding task produces changes. It
 >   compiles to `contents: write`. It does **not** grant force-push, branch deletion, tag or release
 >   authority, or the ability to merge. Writes stay on `gardener/**` branches unless an effect
->   entry lists other `branches` (see [Branches](#branches)).
+>   entry lists other `branches` (see [Branches](#branches)). In a task that declares the
+>   `repository.merge_base` tool, `git.*` also includes `commit.merge_base`, which adds merge
+>   commits to pull request branches (see
+>   [Merging the base branch into a pull request](#merging-the-base-branch-into-a-pull-request)).
 > - `pull_request.*` includes `pull_request.merge`, which merges code, `pull_request.open`, which
 >   opens a pull request ready for review, and `pull_request.update`, which can take a pull request
 >   out of draft.
@@ -350,17 +353,67 @@ effects:
 
 A task whose `commit.create` list is anything other than `gardener/**`, for example
 `branches: ["**"]`, also checks out the head without setting `checkout`. The generated workflow
-passes the head to the reusable workflow as `checkout-ref`, and runs one such task at a time per
-pull request, so two rounds never build on the same head. A run that waited behind an earlier
-round plans on the pull request's current head, not the one in its event, so it sees that round's
-push. Manual runs and issue comment triggers keep the default
-checkout, so they cannot push to a pull request branch; Gardener refuses such a commit rather than
-build it on the wrong parent. Pull requests from forks are never planned.
+passes the pull request to the reusable workflow, and runs one such task at a time per pull
+request, so two rounds never build on the same head. A run that waited behind an earlier round
+plans on the pull request's current head, not the one in its event, so it sees that round's push.
+
+A comment on a pull request's conversation, and a manual run started against a pull request, check
+out its head too, so a task triggered by `github.issue_comment.created` can push to the pull request
+it was asked about, for example after "@bot rename this variable". `checkout: pull-request-head`
+accepts an issue comment trigger for this. A comment on an issue, or on a pull request that is
+closed or from a fork, keeps the default checkout, and Gardener refuses a commit to a pull request
+branch rather than build it on the wrong parent. Pull requests from forks are never planned.
+Projects pinned to Gardener 0.1.14 or earlier keep the older behaviour, in which comments and
+manual runs always use the default checkout, until `gardener upgrade`.
 
 GitHub treats pull requests and commits made with a workflow's token specially: their checks can
 wait in "action required" for a maintainer to approve them, or not start until someone else pushes.
 The same rule stops a task triggered by `github.pull_request.synchronize` from triggering itself
 again with its own commit.
+
+### Merging the base branch into a pull request
+
+`commit.merge_base` adds a merge commit to the triggering pull request's branch that brings its
+base branch in, the way GitHub's "Resolve conflicts" button does. It never rewrites history: the
+pull request's commits stay as they are, and the push is an ordinary fast-forward. It needs the
+`repository.merge_base` tool, which prepares the merge, and runs on the pull request's head:
+
+```yaml
+checkout: pull-request-head
+trigger:
+  event: github.issue_comment.created
+  mentions: true
+  authors: maintainers
+tools: [provider.api.read, repository.read_file, repository.exec, repository.merge_base]
+effects:
+  - pull_request.comment.create
+  - kind: commit.merge_base
+    branches: ["**"]
+```
+
+Before the task runs, the bridge fetches the base branch and asks Git for the merge. The model
+calls `repository.merge_base`, which writes that merge into the checkout and lists the files that
+conflict, resolves those files, runs the repository's checks, and proposes `commit.merge_base`.
+The model never runs `git merge`, `rebase`, `commit` or `push`: the checkout has no credentials,
+and a capture taken after the index or `HEAD` moved fails the run.
+
+Gardener checks the result before anything is pushed:
+
+- every file the model did not resolve must be exactly what Git merged, so a merge commit cannot
+  hide other changes or drop the base branch's;
+- a file Git marked as conflicted may not still contain `<<<<<<<` or `>>>>>>>` lines;
+- a workflow or `.gardener/` file may change only to the base branch's version of it;
+- apply refuses if the pull request's head moved, its base changed, or the base branch no longer
+  contains the commit that was merged.
+
+Merge conflicts that are not about lines, such as a file one side changed and the other deleted,
+are left to the model, guided by Git's messages. A merge Gardener cannot carry is refused, and
+the task can explain why on the pull request instead: one that changes `.gitattributes`,
+`.gitmodules` or a submodule, or that touches more than 1,000 files.
+
+`pull_request.update_branch` with `method: rebase` rewrites the branch instead, and only works
+without conflicts. A task can declare either or both. Like every workflow-token push, a merge
+commit does not start the pull request's checks.
 
 ### Automatic V1 effects
 
