@@ -1,0 +1,23 @@
+.gardener/gardener.lock.json
+  s_de0b486c128948::t_197c55d5de3994 297,304
+.gardener/tasks/mention-reply/TASK.md
+  s_de0b486c128948::t_93510d3b75df7b 89-93
+.github/workflows/gardener-mention-reply.yml
+  s_de0b486c128948::t_00c7b4780502ce 5,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3c9fcf429439e912c49562bffdab791382bfcc46",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
