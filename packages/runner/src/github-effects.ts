@@ -1704,6 +1704,10 @@ async function executeCommitMergeBase(scope: ExecutionScope, operation: CommitMe
     throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
   }
 
+  // The branch head was checked exactly against git/refs above. The pull
+  // request API below can lag a push by a moment, so its head check is a
+  // second, exact check here, not a place for the chained-head allowance the
+  // append-style steps get.
   const pull = await loadPull(scope, operation.pullNumber);
   const pullHead = pull.head as JsonRecord;
   const pullBase = pull.base as JsonRecord;

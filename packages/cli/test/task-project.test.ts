@@ -977,6 +977,8 @@ describe("pull request head callers", () => {
   const HEAD_TASK = TASK
     .replace("id: example-task", "id: head")
     .replace("trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example", "checkout: pull-request-head\ntrigger:\n  event: github.issue_comment.created");
+  // A head-checkout task older pins can run: its trigger is a pull request event.
+  const PULL_HEAD_TASK = HEAD_TASK.replace("event: github.issue_comment.created", "event: github.pull_request.opened");
   const MERGE_TASK = HEAD_TASK
     .replace("checkout: pull-request-head\n", "")
     .replace("  - repository.read_file\n", "  - repository.read_file\n  - repository.merge_base\n")
@@ -1022,7 +1024,7 @@ describe("pull request head callers", () => {
 
   it("keeps checkout-ref and the old concurrency key for every older pin", async () => {
     for (const sha of OLD_PINS) {
-      const workflow = await build(HEAD_TASK, `scuffi/gardener/.github/workflows/gardener-task.yml@${sha}`);
+      const workflow = await build(PULL_HEAD_TASK, `scuffi/gardener/.github/workflows/gardener-task.yml@${sha}`);
       expect(workflow, sha).toContain("      checkout-ref: ${{ github.event.pull_request.head.sha }}\n");
       expect(workflow, sha).toContain("    concurrency:\n      group: gardener-head-${{ github.event.pull_request.number || github.run_id }}\n");
       expect(workflow, sha).not.toContain("pull-request-head:");
@@ -1036,6 +1038,8 @@ describe("pull request head callers", () => {
     );
     await expect(build(MERGE_TASK.replace("  - kind: commit.merge_base\n    branches: [\"**\"]", ""), OLD_REF))
       .rejects.toThrow(/declares repository.merge_base, which/);
+    // A comment task asking for the head would plan on the default branch there.
+    await expect(build(HEAD_TASK, OLD_REF)).rejects.toThrow(/checkout: pull-request-head with only comment triggers/);
   });
 
   it("expands git.* exactly as before unless the task declares repository.merge_base", async () => {

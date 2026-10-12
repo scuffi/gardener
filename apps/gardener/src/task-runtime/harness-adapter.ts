@@ -514,7 +514,7 @@ function mergeBaseGuidance(request: TaskRunRequestV1): string[] {
   return [
     "To bring the pull request's base branch in, call repository.merge_base first, before changing anything; it writes the merge into the working tree and refuses once you have changed files.",
     "Edit only the files it lists as conflictedFiles, and resolve each fully: no conflict markers may remain. Then run the repository's checks with repository.exec.",
-    "A conflicted file under .github/workflows/ or .gardener/ may only end up exactly as the base branch has it, which drops the pull request's change to it. If that change matters, do not merge: say a person must resolve that file.",
+    "A conflicted protected file (anything under .github/workflows/, .github/actions/ or .gardener/, a CODEOWNERS file, or .github/dependabot.yml) may only end up exactly as the base branch has it, which drops the pull request's change to it. If that change matters, do not merge: say a person must resolve that file.",
     ...(merges ? [
       "Then propose commit.merge_base with exactly the values the tool returned (pullNumber, branch, expectedHeadSha, baseBranch, baseSha) and a message, omitting files and conflictedPaths. It adds a merge commit bringing the base branch in and never rewrites history.",
     ] : []),

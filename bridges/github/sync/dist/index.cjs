@@ -29914,9 +29914,11 @@ function definesPullRequestHead(workflowRef) {
 }
 function pinnedWorkflowRefusal(task, workflowRef) {
   if (definesPullRequestHead(workflowRef)) return void 0;
+  const commentHead = task.bundle.checkout === "pull-request-head" && !task.bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind));
   const needs = [
     ...task.bundle.tools.includes("repository.merge_base") ? ["repository.merge_base"] : [],
-    ...task.bundle.effects.includes("commit.merge_base") ? ["commit.merge_base"] : []
+    ...task.bundle.effects.includes("commit.merge_base") ? ["commit.merge_base"] : [],
+    ...commentHead ? ["checkout: pull-request-head with only comment triggers"] : []
   ];
   return needs.length === 0 ? void 0 : `Task ${task.bundle.taskId} declares ${needs.join(" and ")}, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
 }

@@ -5,6 +5,7 @@ import {
   authoredTriggerSubject,
   checkWorkflowRefFor,
   checksOutPullRequestHead,
+  pullRequestFamilyTriggerKindValues,
   syncWorkflowRefFor,
   dispatchTargetKinds,
   githubHandleV1Schema,
@@ -713,9 +714,15 @@ function definesPullRequestHead(workflowRef: string): boolean {
 /** Why this task cannot run on the pinned workflow, or `undefined` when it can. */
 function pinnedWorkflowRefusal(task: BuiltTask, workflowRef: string): string | undefined {
   if (definesPullRequestHead(workflowRef)) return undefined;
+  // Older workflows check out a pull request head only for pull request
+  // events, so a comment task that asks for the head would silently plan on
+  // the default branch.
+  const commentHead = task.bundle.checkout === "pull-request-head"
+    && !task.bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind));
   const needs = [
     ...(task.bundle.tools.includes("repository.merge_base") ? ["repository.merge_base"] : []),
     ...(task.bundle.effects.includes("commit.merge_base") ? ["commit.merge_base"] : []),
+    ...(commentHead ? ["checkout: pull-request-head with only comment triggers"] : []),
   ];
   return needs.length === 0
     ? undefined
