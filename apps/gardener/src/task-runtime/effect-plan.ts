@@ -28,6 +28,7 @@ import {
   type RunnerEffectReceiptV1,
 } from "@gardener/protocol";
 import { assertRunnerToolBudget } from "./task-limits";
+import { mergeBaseProposalRefusal } from "./proposal-authority";
 
 export type CompletedTaskOutcomeV1 = Extract<TaskOutcomeV1, { status: "completed" }>;
 
@@ -352,6 +353,14 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     // needs a capture, and the proposal contract has already refused any
     // attempt to inline the bytes instead.
     if (captureDeferredPointers(proposal.kind).length > 0) materializing.push(proposal.stepName);
+    if (proposal.kind === "commit.merge_base") {
+      const refusal = mergeBaseProposalRefusal(request, proposal);
+      if (refusal !== undefined) throw new Error(refusal);
+    }
+    if (capture !== undefined) {
+      const refusal = captureConsumerRefusal(proposal, capture.manifest);
+      if (refusal !== undefined) throw new Error(refusal);
+    }
     operations.push({
       stepName: proposal.stepName,
       operationId: await deriveOperationId(request.runId, index, proposal),
@@ -419,6 +428,32 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     ...(capture === undefined ? {} : { capture: capture.manifest, changesSha256: capture.changesSha256 }),
     operations,
   });
+}
+
+/**
+ * Why this step cannot materialize this capture, or `undefined`. A merge
+ * capture holds the base branch's changes, so only `commit.merge_base`, at
+ * the base commit the capture merged, may commit it, and `commit.merge_base`
+ * commits nothing else. Its `files` and `conflictedPaths` are filled from
+ * the capture at apply, never from the proposal. The plan contract refuses
+ * the same mismatches; this says so in words the model can act on.
+ */
+export function captureConsumerRefusal(
+  proposal: Pick<TaskEffectProposalV1, "kind" | "payload" | "references">,
+  manifest: TaskCaptureManifestV1,
+): string | undefined {
+  if (proposal.kind === "commit.create" && manifest.merge !== undefined) {
+    return "commit.create cannot commit a merge capture: the working tree holds the merge repository.merge_base wrote, which only commit.merge_base commits";
+  }
+  if (proposal.kind !== "commit.merge_base") return undefined;
+  if (manifest.merge === undefined) {
+    return "commit.merge_base needs a merge capture, taken after repository.merge_base wrote the merge, and this run's capture is not one";
+  }
+  const baseSha = (proposal.payload as Record<string, unknown>).baseSha;
+  if (proposal.references["/baseSha"] !== undefined || typeof baseSha !== "string" || baseSha.toLowerCase() !== manifest.merge.baseSha) {
+    return `commit.merge_base baseSha must be ${manifest.merge.baseSha}, the base commit the captured merge merged`;
+  }
+  return undefined;
 }
 
 /**
@@ -495,6 +530,8 @@ export async function captureRecordFromResult(result: RunnerActionResultV1, base
     ["run base commit", manifest.baseSha, baseSha],
     ["file count", String(manifest.files.length), String(ref.fileCount)],
     ["size", String(totalBytes), String(ref.sizeBytes)],
+    // The ref's merge travels outside the manifest, so it must say the same.
+    ["merge", canonicalJson(manifest.merge ?? null), canonicalJson(ref.merge ?? null)],
   ];
   for (const [label, actual, expected] of agreements) {
     if (actual !== expected) throw new Error(`Capture ${label} mismatch: ${actual} is not ${expected}`);

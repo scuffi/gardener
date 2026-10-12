@@ -1,4 +1,4 @@
-import type { TaskToolV1 } from "@gardener/contracts";
+import { normalizedPullRequest, type NormalizedEventV1, type TaskToolV1 } from "@gardener/contracts";
 import type { RunnerActionV1 } from "@gardener/protocol";
 
 /**
@@ -11,6 +11,7 @@ export const TASK_TOOL_BY_HARNESS_NAME = {
   repository_list_files: "repository.list_files",
   repository_exec: "repository.exec",
   provider_api_read: "provider.api.read",
+  repository_merge_base: "repository.merge_base",
 } as const satisfies Record<string, TaskToolV1>;
 
 export type HarnessToolName = keyof typeof TASK_TOOL_BY_HARNESS_NAME;
@@ -30,6 +31,10 @@ export type HarnessToolName = keyof typeof TASK_TOOL_BY_HARNESS_NAME;
  * issues it after the model's last turn, on the strength of a durable
  * proposal. An empty list therefore fails every authority check, which is
  * exactly right for the one action that must never arrive by request.
+ *
+ * `repository.merge_base` maps only to its own tool. It changes the working
+ * tree, but it is not a shell, so it must never authorize `shell.exec`, and
+ * no repository tool authorizes it.
  */
 export function actionToolAuthority(kind: RunnerActionV1["kind"]): readonly HarnessToolName[] {
   switch (kind) {
@@ -39,10 +44,8 @@ export function actionToolAuthority(kind: RunnerActionV1["kind"]): readonly Harn
       return ["repository_exec", "repository_read_file", "repository_list_files"];
     case "repository.capture":
       return [];
-    // TODO(merge-base stage 3): authorized by the repository.merge_base tool.
-    // Until then no tool authorizes it, so every check fails closed.
     case "repository.merge_base":
-      return [];
+      return ["repository_merge_base"];
   }
 }
 
@@ -55,4 +58,31 @@ export function taskDeclaresActionAuthority(
   kind: RunnerActionV1["kind"],
 ): boolean {
   return actionToolAuthority(kind).some((name) => tools.includes(TASK_TOOL_BY_HARNESS_NAME[name]));
+}
+
+/**
+ * Why this run may not write a merge into its working tree, or `undefined`
+ * when it may.
+ *
+ * Checked by the Worker on every `repository.merge_base` request, however it
+ * arrives, independently of the bridge that prepared the merge: a merge
+ * belongs on a same-repository pull request whose head the planning job
+ * checked out and the bridge confirmed (`checkoutSha`). The bridge prepares
+ * nothing otherwise, but a bridge is runner code and this must not rest on it.
+ */
+export function mergeBaseToolRefusal(event: NormalizedEventV1): string | undefined {
+  const pullRequest = normalizedPullRequest(event);
+  if (pullRequest === undefined) {
+    return "repository.merge_base needs a run on a pull request's head, and this run is not on one: it was not triggered from a pull request, "
+      + "or the planning job kept the default checkout because the pull request is closed or comes from a fork";
+  }
+  if (event.checkoutSha === undefined) {
+    return `repository.merge_base needs the head of #${pullRequest.number} checked out, and the planning job did not confirm checking it out`;
+  }
+  // The base repository is the event's repository: the run is bound to it.
+  if (pullRequest.head.repo === null || pullRequest.head.repo.id !== event.repository.id) {
+    return `repository.merge_base cannot merge into #${pullRequest.number}: its head belongs to ${pullRequest.head.repo?.fullName ?? "a deleted repository"}, `
+      + "not this repository, and Gardener never pushes to a fork";
+  }
+  return undefined;
 }

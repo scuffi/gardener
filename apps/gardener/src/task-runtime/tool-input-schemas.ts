@@ -41,6 +41,8 @@ export const taskToolInputSchemas = {
     timeoutMs: v.optional(integerInRange(1, 10 * 60_000, "Timeout in milliseconds. Defaults to 30000.")),
     maxOutputBytes: v.optional(integerInRange(1, 1_024 * 1_024, "Maximum response bytes. Defaults to 262144.")),
   }),
+  /** No input: the merge was prepared before the model ran, from the event alone. */
+  repository_merge_base: v.strictObject({}),
 } as const;
 
 export function taskToolInputSchema(toolName: string) {

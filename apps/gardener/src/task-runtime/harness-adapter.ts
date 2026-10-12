@@ -26,6 +26,7 @@ import {
   impliedEffectKinds,
 } from "@gardener/contracts";
 import { canonicalSha256 } from "@gardener/core";
+import { mergeBaseToolRefusal } from "./tool-authority";
 import {
   HARNESS_ADAPTER_VERSIONS,
   type AgentHarness,
@@ -63,11 +64,11 @@ const TOOL_DESCRIPTORS = {
     ].join(" "),
     authority: "observe",
   },
-  // TODO(merge-base stage 2/3): offered once the runner can prepare a merge;
-  // createTaskHarnessRequest refuses the tool until then.
+  // Offered whenever the bundle declares it; the session refuses it on a run
+  // that is not on a same-repository pull request head (mergeBaseToolRefusal).
   "repository.merge_base": {
     name: "repository_merge_base",
-    description: "Write the merge of the pull request's base branch, prepared before you ran, into the working tree; conflicted files carry git's markers. It never commits. Input: {}.",
+    description: "Write the merge of the pull request's base branch, prepared before you ran, into the working tree; conflicted files carry git's markers. It never commits: commit.merge_base then adds a merge commit bringing the base branch in, and never rewrites history. Returns the values commit.merge_base needs, or why the merge was refused. Input: {}.",
     authority: "workspace",
   },
 } as const satisfies Record<TaskToolV1, HarnessToolDescriptor>;
@@ -82,8 +83,6 @@ export async function createTaskHarnessRequest(input: unknown, repositoryObserva
   if (actualBundleHash !== request.bundleHash) throw new Error("Task bundle hash does not match canonical bundle bytes");
   assertTriggerMatches(request.event, request.bundle.triggers);
   assertSameRepositoryHead(request.event, request.bundle);
-  // TODO(merge-base stage 2/3)
-  if (request.bundle.tools.includes("repository.merge_base")) throw new Error("repository.merge_base is not implemented yet");
   const admittedAt = Date.parse(request.admittedAt);
   const deadlineAt = Date.parse(request.deadlineAt);
   if (deadlineAt > admittedAt + request.bundle.limits.runtimeSeconds * 1_000) {
@@ -434,7 +433,7 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
       "",
       "Exact payloadJson contracts for the declared kinds follow. Use these field names and JSON types exactly.",
       "Fields listed in required are mandatory unless referencesJson supplies that exact JSON pointer.",
-      "Never add schemaVersion, id, repository, kind, or commit.create files; trusted Gardener code owns them.",
+      "Never add schemaVersion, id, repository, kind, commit.create files, or commit.merge_base files and conflictedPaths; trusted Gardener code owns them.",
       ...request.bundle.effects.map((kind) => `  ${kind}: ${operationProposalPayloadJsonSchema(kind)}`),
       "",
       "Outputs each kind publishes once it runs, which later steps may use through referencesJson, whole or as {{placeholders}} in text (nullable outputs cannot fill a placeholder):",
@@ -481,6 +480,7 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
       `commit.create must build directly on the checked-out commit ${taskCheckoutSha(request.bundle, request.event)}: set expectedHeadSha to it, or reference the commitSha of a branch.create whose fromSha is that commit.`,
     );
   }
+  notes.push(...mergeBaseGuidance(request));
   if (effects.includes("issue.create")) {
     notes.push("issue.create: set labels and assigneeIds only when the task instructions call for them.");
   }
@@ -492,6 +492,33 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
     notes.push("Labels must already exist in the repository; Gardener never creates a label.");
   }
   return notes.length === 0 ? [] : ["", ...notes];
+}
+
+/**
+ * How to bring a pull request's base branch in, for a task that declares
+ * `repository.merge_base`. The order matters: the merge is written into an
+ * unchanged working tree, and the capture refuses a moved HEAD or a changed
+ * index, so anything git-level the model does fails the run.
+ */
+function mergeBaseGuidance(request: TaskRunRequestV1): string[] {
+  if (!request.bundle.tools.includes("repository.merge_base")) return [];
+  const refusal = mergeBaseToolRefusal(request.event);
+  if (refusal !== undefined) {
+    return [
+      `A merge of the base branch is not possible in this run: ${refusal}. If you were asked to merge or update the branch, say so in your reply and why; do not call repository.merge_base.`,
+    ];
+  }
+  const merges = request.bundle.effects.includes("commit.merge_base");
+  return [
+    "To bring the pull request's base branch in, call repository.merge_base first, before changing anything; it writes the merge into the working tree and refuses once you have changed files.",
+    "Edit only the files it lists as conflictedFiles, and resolve each fully: no conflict markers may remain. Then run the repository's checks with repository.exec.",
+    ...(merges ? [
+      "Then propose commit.merge_base with exactly the values the tool returned (pullNumber, branch, expectedHeadSha, baseBranch, baseSha) and a message, omitting files and conflictedPaths. It adds a merge commit bringing the base branch in and never rewrites history.",
+    ] : []),
+    "Never run git merge, rebase, commit, reset, checkout or push, and never stage files: the index and HEAD must stay as checked out, or the capture fails and nothing is committed.",
+    "A run either merges or makes ordinary commits (commit.create), not both.",
+    "Pushes made with the workflow token do not start the pull request's checks; say so in your reply when you propose a merge.",
+  ];
 }
 
 /** Keep the boundary explicitly JSON-only when passed through Flue. */

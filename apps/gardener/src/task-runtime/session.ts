@@ -9,6 +9,7 @@ import {
   runnerEffectReceiptV1Schema,
   runnerEventV1Schema,
   runnerHelloV1Schema,
+  runnerMergeBaseResultV1Schema,
   runnerSessionId,
   type AuthenticatedSessionCapability,
   type PublicSessionCapability,
@@ -20,6 +21,7 @@ import {
   type RunnerEffectReceiptV1,
   type RunnerEventV1,
   type RunnerHelloV1,
+  type RunnerMergeBaseResultV1,
   type RunnerTerminalV1,
 } from "@gardener/protocol";
 import {
@@ -92,7 +94,7 @@ import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
 import { taskToolInputKeys } from "./tool-input-schemas";
 import { listFilesPath, repositoryPath } from "./repository-paths";
-import { actionToolAuthority, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
+import { actionToolAuthority, mergeBaseToolRefusal, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 import { releaseMismatchAdvice, trustedTaskWorkflowRefs } from "./workflow-refs";
 import { countToolCall, toolTarget, trailDigest, type ToolCallCounts } from "./run-trail";
 
@@ -133,6 +135,13 @@ const COMPLETION_PEEK_TIMEOUT_MS = 20_000;
  * a peek. A reconnect starts a fresh request chain and a fresh allowance.
  */
 const COMPLETION_PEEKS_PER_WAIT = 8;
+/**
+ * Ceiling on a `repository.merge_base` result, which carries no
+ * `maxOutputBytes` because nothing about it is the model's to choose. The
+ * protocol schema bounds its fields (up to 1,000 conflicted paths and 8 KiB
+ * of messages); this keeps the stored result inside the transport ceiling.
+ */
+const MERGE_BASE_RESULT_MAX_BYTES = EFFECT_TRANSPORT_MAX_BYTES;
 const OIDC_PREFIX = "oidc:";
 /**
  * Trusted repository capture admitted for this run.
@@ -148,6 +157,12 @@ const SETTLED_TRAIL_KEY = "run-trail-settled";
 const CAPTURE_PENDING_KEY = "effect-capture-pending";
 /** Incremented only after a terminal, non-captured attempt is released. */
 const CAPTURE_GENERATION_KEY = "effect-capture-generation";
+/**
+ * The merge `repository.merge_base` wrote into the working tree, once the
+ * runner reports one. The runner remembers it too, and captures in merge mode
+ * from then on, so proposals are checked against it as they arrive.
+ */
+const WRITTEN_MERGE_KEY = "merge-base-written";
 
 interface CapturePending {
   operationId: string;
@@ -401,6 +416,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     await this.assertRunActive(invocation.runId);
     await this.assertCaptureNotSettled();
     await this.assertToolDeclared(invocation.runId, invocation.toolName);
+    if (invocation.toolName === "repository_merge_base") await this.assertMergeBaseAllowed(invocation.runId);
     await this.reserveRunnerToolBudget(invocation.runId, operationId);
     await this.settleUnresolvedBeforeNewAction(invocation.runId);
     const sequence = await this.nextSequence();
@@ -467,6 +483,23 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   /**
+   * Refuses `repository.merge_base` unless the admitted event is a confirmed
+   * same-repository pull request head (`mergeBaseToolRefusal`). Read from the
+   * immutable request, never from the runner, which also prepared the merge.
+   */
+  private async assertMergeBaseAllowed(runId: string): Promise<void> {
+    const request = await this.loadRunRequest(runId, "merge authority enforcement");
+    const refusal = mergeBaseToolRefusal(request.event);
+    if (refusal !== undefined) throw new Error(refusal);
+    // The merge would turn the capture into a merge capture, which the
+    // ordinary commit already proposed could never commit.
+    const ordinary = (await readProposalLedger(this.ctx.storage)).find((step) => step.kind === "commit.create");
+    if (ordinary !== undefined) {
+      throw new Error(`A run either merges the base branch or makes ordinary commits, not both; step ${ordinary.stepName} already proposed commit.create`);
+    }
+  }
+
+  /**
    * Records one ordered effect proposal durably.
    *
    * Durability lives here rather than in the Flue agent because the agent body
@@ -516,7 +549,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
     }
     await this.assertRunActive(input.runId);
     const request = await this.loadRunRequest(input.runId, "effect authority enforcement");
-    const refusal = proposalAuthorityRefusal(request, proposal, await readProposalLedger(this.ctx.storage));
+    const refusal = proposalAuthorityRefusal(request, proposal, await readProposalLedger(this.ctx.storage), {
+      writtenMerge: await this.ctx.storage.get<{ baseSha: string }>(WRITTEN_MERGE_KEY),
+    });
     if (refusal !== undefined) throw new Error(refusal);
     // Proposals are model tool calls and share the one declared tool budget
     // with repository reads, so a task cannot buy extra turns by proposing.
@@ -756,6 +791,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       // the same declared-tool authority and tool budget as the ones the harness
       // requests, so this path cannot be used to bypass either.
       await this.assertToolDeclared(identity.sessionId, ...actionToolAuthority(action.kind));
+      if (action.kind === "repository.merge_base") await this.assertMergeBaseAllowed(identity.sessionId);
       await this.reserveRunnerToolBudget(identity.sessionId, action.operationId);
     }
     return this.invoke(action);
@@ -809,9 +845,16 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (!existing) throw new Error("Unknown operation result");
     if (existing.action.sequence !== result.sequence) throw new Error("Operation sequence mismatch");
     const bytes = new TextEncoder().encode(result.stdout).byteLength + new TextEncoder().encode(result.stderr).byteLength;
-    // TODO(merge-base stage 3): bound the merge result; the Worker never issues it yet.
-    if (!("maxOutputBytes" in existing.action)) throw new Error("repository.merge_base is not implemented yet");
-    if (bytes > existing.action.maxOutputBytes) throw new Error("Operation output exceeds its byte limit");
+    const limit = existing.action.kind === "repository.merge_base" ? MERGE_BASE_RESULT_MAX_BYTES : existing.action.maxOutputBytes;
+    if (bytes > limit) throw new Error("Operation output exceeds its byte limit");
+    // The model reads this result and copies its values into commit.merge_base,
+    // so only a well-formed one is stored; planning checks those values again.
+    if (existing.action.kind === "repository.merge_base") {
+      const merge = mergeBaseResult(result);
+      if (merge.status !== "refused" && existing.state !== "completed") {
+        await this.ctx.storage.put(WRITTEN_MERGE_KEY, { baseSha: merge.baseSha });
+      }
+    }
     const canonicalResult = canonicalValue(result);
     if (existing.state === "completed") {
       if (existing.canonicalResult !== canonicalResult) throw new Error("Operation result conflict");
@@ -1396,6 +1439,12 @@ function toolAction(sequence: number, operationId: string, invocation: HarnessTo
   if (input === null || typeof input !== "object" || Array.isArray(input)) throw new Error("Repository tool input must be an object");
   const value = input as Record<string, JsonValue>;
   if (invocation.toolName === "provider_api_read") return providerReadAction(sequence, operationId, value);
+  if (invocation.toolName === "repository_merge_base") {
+    // No field at all: the runner writes the merge it prepared before the
+    // session, so there is nothing for the model to choose.
+    exactKeys(value, taskToolInputKeys("repository_merge_base"));
+    return runnerActionV1Schema.parse({ schemaVersion: "gardener.runner.action/v1", sequence, operationId, kind: "repository.merge_base" });
+  }
   let command: string;
   let cwd = "/workspace";
   let timeoutMs = 30_000;
@@ -1492,6 +1541,21 @@ function providerReadAction(sequence: number, operationId: string, value: Record
 }
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+/** A merge result must be the protocol's, whether it reports a merge or a refusal. */
+function mergeBaseResult(result: RunnerActionResultV1): RunnerMergeBaseResultV1 {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("repository.merge_base returned a malformed result");
+  }
+  const merge = runnerMergeBaseResultV1Schema.parse(parsed);
+  if ((merge.status === "refused") !== (result.status !== "completed")) {
+    throw new Error("repository.merge_base result status disagrees with its action status");
+  }
+  return merge;
+}
 
 function exactKeys(value: Record<string, JsonValue>, allowed: readonly string[], optional = false): void {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Error(`Unknown repository tool input ${key}`);

@@ -20,6 +20,7 @@ export function toolTarget(harnessToolName: string, input: unknown): string {
   if (harnessToolName === "repository_read_file") target = text(value.path, "?");
   else if (harnessToolName === "repository_list_files") target = text(value.path, ".");
   else if (harnessToolName === "repository_exec") target = "command";
+  else if (harnessToolName === "repository_merge_base") target = "base branch";
   else if (harnessToolName === "provider_api_read") {
     target = value.transport === "graphql"
       ? `graphql ${text(value.operationName, "query")}`

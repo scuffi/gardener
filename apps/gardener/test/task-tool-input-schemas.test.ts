@@ -14,6 +14,7 @@ describe("repository tool input schemas", () => {
     expect(taskToolInputKeys("repository_read_file")).toEqual(["path"]);
     expect(taskToolInputKeys("repository_list_files")).toEqual(["path", "maxEntries"]);
     expect(taskToolInputKeys("repository_exec")).toEqual(["command", "cwd", "timeoutMs", "maxOutputBytes"]);
+    expect(taskToolInputKeys("repository_merge_base")).toEqual([]);
     expect([...taskToolInputKeys("provider_api_read")].sort()).toEqual(
       ["maxOutputBytes", "method", "operationName", "path", "query", "timeoutMs", "transport", "variables"],
     );

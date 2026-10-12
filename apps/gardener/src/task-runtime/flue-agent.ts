@@ -144,6 +144,7 @@ export function GardenerTaskFlueAgent(): string {
       "kind: one of the declared effect kinds listed in your instructions. Any other kind is refused.",
       "payloadJson: a JSON object string with that kind's fields only. Never include schemaVersion, id, kind, or repository; Gardener binds those.",
       "For commit.create, omit files: Gardener commits the exact working tree you changed on the runner, and a files value is refused.",
+      "For commit.merge_base, likewise omit files and conflictedPaths: both come from the merge Gardener prepared and the working tree you resolved.",
       "referencesJson: optional JSON object keyed by payload JSON pointer, for values an earlier step will produce.",
       "To fill a whole field, map its pointer to {\"step\":\"earlier-step\",\"output\":\"name\"}.",
       "To put such values inside text you write, such as a comment body, write {{name}} in the text and map its pointer to {\"placeholders\":{\"name\":{\"step\":\"earlier-step\",\"output\":\"name\"}}}; every {{name}} is replaced when the step runs.",
@@ -286,7 +287,7 @@ export function GardenerTaskFlueAgent(): string {
               toolName: descriptor.name,
               input: normalizeJson(data),
             });
-            const modelOutput = taskToolModelOutput(output);
+            const modelOutput = taskToolModelOutput(output, descriptor.name);
             console.log("gardener task repository tool completed", { taskId, tool: descriptor.name });
             return { output: modelOutput };
           } catch (error) {
@@ -558,11 +559,17 @@ function renderContext(request: HarnessRequest): string {
   return request.context.map((item) => `<untrusted-context name=${JSON.stringify(item.name)}>\n${item.content}\n</untrusted-context>`).join("\n\n");
 }
 
-function taskToolModelOutput(value: unknown): v.InferOutput<typeof taskToolOutputSchema> {
+export function taskToolModelOutput(value: unknown, toolName?: string): v.InferOutput<typeof taskToolOutputSchema> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Repository tool returned an invalid result");
   }
   const result = value as Record<string, unknown>;
+  // A refused merge is a failed action whose stdout says why (for example,
+  // that the working tree was changed first). The model needs that reason to
+  // put things right or explain it, so it gets the result as the runner wrote it.
+  if (toolName === "repository_merge_base" && result.status === "failed" && typeof result.stdout === "string" && result.stdout !== "") {
+    return { content: result.stdout };
+  }
   if (result.status !== "completed" || typeof result.stdout !== "string" || typeof result.stderr !== "string") {
     throw new Error(`Repository tool did not complete: ${String(result.status ?? "unknown")}`);
   }
