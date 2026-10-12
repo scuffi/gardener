@@ -1,0 +1,21 @@
+.changeset/merge-base.md
+  s_de0b486c128948::t_9bbd935df59b88 1-5
+docs/task-authoring.md
+  s_de0b486c128948::t_afd56def62026f 233-236,356-367,374-417
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "eafc33852e67ea4ff0dafde3b501a4f40a621760",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
