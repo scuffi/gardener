@@ -1,0 +1,41 @@
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_9e31c9b237d3ea 84,248,251,268,272
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_d85c3332fe37d9 96,283-289
+bridges/github/plan/action.yml
+  s_de0b486c128948::t_5717b7a70636fe 25-26
+packages/cli/src/actions-target.ts
+  s_de0b486c128948::t_13cce4978fb20e 2,223
+packages/cli/src/project.ts
+  s_de0b486c128948::t_ddf52bfc77556b 527,765-766,768
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_33f70683d134e9 985,1007-1013
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_958121e3f58c6c 328-330,332-336,338-342
+packages/contracts/test/normalized-event-v1.test.ts
+  s_de0b486c128948::t_471019ffe5827d 191-195
+packages/runner/src/capture.ts
+  s_de0b486c128948::t_ae58e2f0d90206 1369-1375
+packages/runner/src/executor.ts
+  s_de0b486c128948::t_ba898dec289e57 28-30,41,149-155,269-271,295-297,364
+packages/runner/src/merge-base.ts
+  s_de0b486c128948::t_be6dc3d3cea6d6 357-366,368-371,391-393
+packages/runner/test/merge-base.test.ts
+  s_de0b486c128948::t_b0db22a86e9eec 2,285-306,380,383-390
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1a19c583f18e079cdd5a8410540a4affb24665c4",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
