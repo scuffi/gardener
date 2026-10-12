@@ -1,0 +1,23 @@
+packages/cli/src/project.ts
+  s_de0b486c128948::t_5fff9a4f9725b5 29
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_c892562ebd62a5 427-428,945-946,1033-1034,1037
+scripts/check-release-pins.mjs
+  s_de0b486c128948::t_f8a67f0832ef64 60-61,73,77,81-82,90-91,107-108,111-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b1426b44e68ae58671ac7dccd821627d37d60240",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
