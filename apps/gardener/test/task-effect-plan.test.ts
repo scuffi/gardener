@@ -165,7 +165,8 @@ describe("branch authority", () => {
     expect(plan.provenance.checkoutSha).toBe(head);
     expect(plan.provenance.commitSha).toBe(COMMIT);
 
-    const drafting = await runRequest({ event: pullEvent });
+    // commit.merge_base always checks out the head, so it is left out here.
+    const drafting = await runRequest({ event: pullEvent, effects: operationKindValues.filter((kind) => kind !== "commit.merge_base") });
     expect((await buildTaskEffectPlan({ request: drafting, outcome: outcome(drafting, [branch]) })).provenance.checkoutSha)
       .toBeUndefined();
   });
@@ -344,7 +345,7 @@ describe("ordered effect plan derivation", () => {
     for (const kind of operationKindValues) {
       expect(request.bundle.effects).toContain(kind);
     }
-    expect(request.bundle.effects).toHaveLength(36);
+    expect(request.bundle.effects).toHaveLength(37);
   });
 });
 

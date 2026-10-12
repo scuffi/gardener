@@ -32,7 +32,7 @@ const pull = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-function run(fixture: unknown, options: { fail?: boolean; eventRef?: string } = {}): { sha: string; log: string } {
+function run(fixture: unknown, options: { fail?: boolean; eventRef?: string; pullNumber?: string } = {}): { sha: string; log: string } {
   const directory = mkdtempSync(path.join(tmpdir(), "gardener-resolve-head-"));
   const fixturePath = path.join(directory, "pull.json");
   writeFileSync(fixturePath, JSON.stringify(fixture));
@@ -50,7 +50,7 @@ function run(fixture: unknown, options: { fail?: boolean; eventRef?: string } = 
       GITHUB_OUTPUT: output,
       EVENT_SHA: eventSha,
       EVENT_REF: options.eventRef ?? "gardener/fix-12",
-      PULL_NUMBER: "12",
+      PULL_NUMBER: options.pullNumber ?? "12",
       ...(options.fail ? { GH_FAIL: "1" } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -85,5 +85,39 @@ describe("resolve current pull request head step", () => {
     const result = run(pull(), { fail: true });
     expect(result.sha).toBe(eventSha);
     expect(result.log).toContain("::warning::Could not read pull request #12; planning on the event's head");
+  });
+
+  // A comment on a pull request, or a manual run naming one: no event head.
+  describe("for a pull request named by number", () => {
+    it("plans on the head of an open same-repository pull request", () => {
+      const result = run(pull({ head: { sha: movedSha, ref: "any-branch", repo: { id: 1 } } }), { eventRef: "" });
+      expect(result.sha).toBe(movedSha);
+      expect(result.log).toContain(`Planning on the head of pull request #12, ${movedSha}`);
+    });
+
+    it("warns and keeps the default checkout for forks, closed pull requests and failed lookups", () => {
+      const warning = "::warning::#12 is closed or from a fork, or could not be read; planning on the default branch";
+      for (const fixture of [
+        pull({ state: "closed" }),
+        pull({ head: { sha: movedSha, ref: "x", repo: { id: 2 } } }),
+        pull({ head: { sha: movedSha, ref: "x", repo: null } }),
+        pull({ head: { sha: "not-a-sha", ref: "x", repo: { id: 1 } } }),
+      ]) {
+        const result = run(fixture, { eventRef: "" });
+        expect(result.sha).toBe("");
+        expect(result.log).toContain(warning);
+      }
+      const failed = run(pull(), { eventRef: "", fail: true });
+      expect(failed.sha).toBe("");
+      expect(failed.log).toContain(warning);
+    });
+
+    it("refuses anything that is not a pull request number", () => {
+      for (const pullNumber of ["0", "12; rm -rf /", "abc", "12345678901"]) {
+        const result = run(pull(), { eventRef: "", pullNumber });
+        expect(result.sha, pullNumber).toBe("");
+        expect(result.log).toContain("is not a pull request number");
+      }
+    });
   });
 });

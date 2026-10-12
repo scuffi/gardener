@@ -52,7 +52,7 @@ tools, effects, network access or permissions.
 | `limits` | yes | Run budget. See [Limits](#limits). |
 | `model` | no | Model ID. Defaults to `"@cf/zai-org/glm-5.3"`. See [Model](#model). |
 | `draft` | no | `true` makes the task run only by hand. |
-| `checkout` | no | `pull-request-head` checks out the pull request's head instead of GitHub's merge preview. Needs a pull request trigger. Implied when a `commit.create` entry lists `branches` other than `gardener/**`. |
+| `checkout` | no | `pull-request-head` checks out the pull request's head instead of GitHub's merge preview, also for a comment on a pull request or a manual run naming one. Needs a pull request or issue comment trigger. Implied by `commit.merge_base`, and when a `commit.create` entry lists `branches` other than `gardener/**`. |
 | `reactions` | no | `false` turns off the 👀 → 🚀/😕 reactions. On by default. See [Reactions](#reactions). |
 
 ## Triggers
@@ -114,6 +114,7 @@ ignore `labels-all`, `mentions` and `authors`.
 | `repository.list_files` | List files in the checkout. |
 | `repository.read_file` | Read a file in the checkout. |
 | `repository.exec` | Run shell commands in the checkout, with unrestricted network access. See [Network](#network). |
+| `repository.merge_base` | Write the merge of the pull request's base branch, prepared before the model ran, into the checkout with conflicts marked. Never commits; `commit.merge_base` does, and needs this tool. |
 | `provider.api.read` | Read the GitHub API: REST `GET`/`HEAD` and GraphQL queries. |
 
 No tool ever holds a token that can write. `provider.api.read` is served by the bridge; its token is
@@ -129,7 +130,7 @@ kind with options. Every declared effect is applied automatically, with no appro
 | --- | --- |
 | `check.*` | `check.rerun` |
 | `discussion.*` | `discussion.comment.create`, `discussion.comment.update`, `discussion.answer.mark`, `discussion.answer.unmark`, `discussion.close`, `discussion.reopen` |
-| `git.*` | `branch.create`, `commit.create` |
+| `git.*` | `branch.create`, `commit.create`, `commit.merge_base` (only for tasks that declare the `repository.merge_base` tool) |
 | `issue.*` | `issue.label.add`, `issue.label.remove`, `issue.comment.create`, `issue.comment.update`, `issue.close`, `issue.reopen`, `issue.assignee.add`, `issue.assignee.remove`, `issue.create` |
 | `pull_request.*` | `pull_request.comment.create`, `pull_request.comment.update`, `pull_request.review.submit`, `pull_request.reviewer.request`, `pull_request.reviewer.remove`, `pull_request.update`, `pull_request.label.add`, `pull_request.label.remove`, `pull_request.update_branch`, `pull_request.review_comment.reply`, `pull_request.review_thread.resolve`, `pull_request.open`, `pull_request.open_draft`, `pull_request.merge` |
 | `release.*` | `release.create`, `release.update`, `release.publish`, `release.delete` |
@@ -164,6 +165,7 @@ A family glob grants every current and future member of its family. Prefer exact
 | `pull_request.review_thread.resolve` | Resolve a review thread on the triggering pull request. | `pull-requests` | `pullNumber`, `threadId` |
 | `branch.create` | Create a branch. | `contents` | `branch`, `branchUrl`, `commitSha`, `ref` |
 | `commit.create` | Commit the files the task changed in its checkout. | `contents` | `branch`, `commitSha`, `commitUrl`, `parentSha`, `treeSha` |
+| `commit.merge_base` | Adds a merge commit to the triggering pull request's branch that brings its base branch in; never rewrites history. | `contents` | `baseSha`, `branch`, `commitSha`, `commitUrl`, `pullNumber`, `treeSha` |
 | `pull_request.open` | Open a pull request, ready for review. | `pull-requests` | `baseRef`, `headRef`, `headSha`, `pullNodeId`, `pullNumber`, `pullUrl` |
 | `pull_request.open_draft` | Open a draft pull request. | `pull-requests` | `baseRef`, `headRef`, `headSha`, `pullNodeId`, `pullNumber`, `pullUrl` |
 | `pull_request.merge` | Merge a pull request after verifying its checks. | `contents`, `pull-requests` | `mergeCommitSha`, `pullNumber`, `pullUrl` |

@@ -126,9 +126,12 @@ describe("Actions-native task v1 contracts", () => {
 
   it("exposes exactly the persistent provider operations as effect authority", () => {
     expect(taskEffectKindV1Schema.options).toEqual([...operationKindValues]);
-    expect(taskEffectKindV1Schema.options).toHaveLength(36);
+    expect(taskEffectKindV1Schema.options).toHaveLength(37);
+    // commit.merge_base needs its tool and a trigger whose head it can merge into.
     expect(taskBundleV1Schema.parse({
       ...fixtureBundle(),
+      triggers: [{ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers" }, { kind: "github.workflow_dispatch" }],
+      tools: [...fixtureBundle().tools, "repository.merge_base"],
       effects: [...operationKindValues],
     }).effects).toEqual([...operationKindValues]);
     expect(() => taskBundleV1Schema.parse({
@@ -147,6 +150,7 @@ describe("Actions-native task v1 contracts", () => {
       "repository.list_files",
       "repository.exec",
       "provider.api.read",
+      "repository.merge_base",
     ]);
     expect(taskBundleV1Schema.parse({
       ...fixtureBundle(),

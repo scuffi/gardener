@@ -71,6 +71,8 @@ export const OPERATION_TOKEN_PERMISSIONS: Readonly<Record<OperationKind, readonl
     "pull_request.review_thread.resolve": ["pull-requests:write"],
     "branch.create": ["contents:write"],
     "commit.create": ["contents:write"],
+    // Apply reads the pull request again to confirm its head and base.
+    "commit.merge_base": ["contents:write", "pull-requests:read"],
     "pull_request.open": ["contents:read", "pull-requests:write"],
     "pull_request.update_branch": ["contents:write", "pull-requests:write"],
     "pull_request.open_draft": ["contents:read", "pull-requests:write"],

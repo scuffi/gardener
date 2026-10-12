@@ -77,7 +77,12 @@ describe("github-actions/v1 target adapter", () => {
   });
 
   it("compiles every operation kind and unions the required write scopes", () => {
-    const plan = compileGitHubActionsTask(bundle({ effects: [...operationKindValues] }));
+    // commit.merge_base needs its tool and a trigger whose pull request head it merges into.
+    const plan = compileGitHubActionsTask(bundle({
+      effects: [...operationKindValues],
+      tools: ["repository.list_files", "repository.read_file", "repository.merge_base"],
+      triggers: [{ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers" }],
+    }));
     expect(plan.effectsPermissions).toEqual({
       checks: "write",
       contents: "write",
@@ -102,6 +107,12 @@ describe("github-actions/v1 target adapter", () => {
     expect(scopeFor("pull_request.comment.create")).toEqual({ "id-token": "write", "pull-requests": "write" });
     expect(scopeFor("branch.create")).toEqual({ contents: "write", "id-token": "write" });
     expect(scopeFor("commit.create")).toEqual({ contents: "write", "id-token": "write" });
+    // Apply reads the pull request again before adding a merge commit to it.
+    expect(compileGitHubActionsTask(bundle({
+      effects: ["commit.merge_base"],
+      tools: ["repository.merge_base"],
+      triggers: [{ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors: "maintainers" }],
+    })).effectsPermissions).toEqual({ contents: "write", "id-token": "write", issues: "read", "pull-requests": "read" });
     expect(scopeFor("pull_request.open_draft")).toEqual({
       contents: "read",
       "id-token": "write",

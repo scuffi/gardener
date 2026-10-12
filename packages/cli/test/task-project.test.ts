@@ -183,8 +183,12 @@ describe("TASK.md compiler", () => {
       "issue.create",
     ]);
     expect(expandEffectSelectors(["git.*"])).toEqual(["branch.create", "commit.create"]);
+    // A merge commit comes with git.* only for tasks that can prepare one.
+    expect(expandEffectSelectors(["git.*"], ["repository.exec"])).toEqual(["branch.create", "commit.create"]);
+    expect(expandEffectSelectors(["git.*"], ["repository.merge_base"])).toEqual(["branch.create", "commit.create", "commit.merge_base"]);
     expect(expandEffectSelectors(["check.*"])).toEqual(["check.rerun"]);
-    expect(expandEffectSelectors([...effectFamilyGlobValues])).toEqual([...operationKindValues]);
+    expect(expandEffectSelectors([...effectFamilyGlobValues])).toEqual(operationKindValues.filter((kind) => kind !== "commit.merge_base"));
+    expect(expandEffectSelectors([...effectFamilyGlobValues], ["repository.merge_base"])).toEqual([...operationKindValues]);
     // Overlapping selectors collapse to canonical order without duplication.
     expect(expandEffectSelectors(["release.publish", "release.*", "issue.close"])).toEqual([
       "issue.close",
@@ -919,9 +923,9 @@ describe("authors lists, opened-by and pull request head checkout", () => {
       .resolves.toMatchObject({ bundle: { triggers: expect.arrayContaining([expect.objectContaining({ openedBy: ["dependabot[bot]"] })]) } });
   });
 
-  it("refuses pull request head checkout without a pull request trigger", async () => {
+  it("refuses pull request head checkout without a pull request or issue comment trigger", async () => {
     await expect(compileTaskSource(`---\ncheckout: pull-request-head\n${TASK.slice(4)}`))
-      .rejects.toThrow(/checkout: pull-request-head needs a pull request trigger/);
+      .rejects.toThrow(/checkout: pull-request-head needs a pull request or issue comment trigger/);
   });
 
   it("renders the opener prefilter, the head checkout and one round per pull request", async () => {
@@ -952,6 +956,87 @@ describe("authors lists, opened-by and pull request head checkout", () => {
     const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
     expect(workflow).not.toContain("concurrency:");
     expect(workflow).not.toContain("checkout-ref");
+  });
+});
+
+describe("pull request head callers", () => {
+  // A release after 0.1.14, whose task workflow takes pull-request-head and merge-base.
+  const NEW_REF = `scuffi/gardener/.github/workflows/gardener-task.yml@${"a".repeat(40)}`;
+  const OLD_PINS = [
+    "ec7eded3ffeae332f745200e270f3601d8b35aa8",
+    "aad5c2bb2560f5a2f9830f9ff4d9456dd48985a4",
+    "ce457eb2b4ec4ea85f2e6e5dd9ce794d196da711",
+    "3a0bc85d1f5cffccb50fba787b18334e4c21ba72",
+    "aae337cf4d2ad0c5fa33771c37cc811eccf39ff0",
+    "de534dff93a56527b45db8f46aedac72c8911da0",
+    "f3aca211a4ee2559f3df05cac12836090127812a",
+    "8e5fa4f844bfe26ff1d152757caf4ac0110ff6ef",
+    "868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d",
+    "8aa3054967ee696be08ff61936c72e199c750ba7",
+  ];
+  const HEAD_TASK = TASK
+    .replace("id: example-task", "id: head")
+    .replace("trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example", "checkout: pull-request-head\ntrigger:\n  event: github.issue_comment.created");
+  const MERGE_TASK = HEAD_TASK
+    .replace("checkout: pull-request-head\n", "")
+    .replace("  - repository.read_file\n", "  - repository.read_file\n  - repository.merge_base\n")
+    .replace("effects:\n  - issue.comment.create", "effects:\n  - issue.comment.create\n  - kind: commit.merge_base\n    branches: [\"**\"]");
+  const PULL_REQUEST_HEAD = "      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}\n";
+  const NEW_GROUP = "    concurrency:\n      group: gardener-head-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pull_request || github.run_id }}\n      cancel-in-progress: false\n";
+
+  async function build(task: string, workflowRef: string) {
+    const root = await mkdtemp(join(tmpdir(), "gardener-pull-request-head-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8"));
+    await writeFile(projectPath, JSON.stringify({ ...project, release: { workflowRef } }));
+    await mkdir(join(root, ".gardener/tasks/t"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/t/TASK.md"), task);
+    return buildProject({ repositoryRoot: root }).then(async (built) => readFile(join(root, built.tasks[0]!.workflow), "utf8"));
+  }
+
+  it("passes the pull request number, from a pull request, a comment on one or a manual run", async () => {
+    const workflow = await build(HEAD_TASK, NEW_REF);
+    expect(workflow).toContain(PULL_REQUEST_HEAD);
+    expect(workflow).toContain(NEW_GROUP);
+    expect(workflow).not.toContain("checkout-ref");
+    expect(workflow).not.toContain("merge-base");
+    expect(() => parseYaml(workflow)).not.toThrow();
+  });
+
+  it("asks for the merge only for tasks with repository.merge_base, which may push it", async () => {
+    const workflow = await build(MERGE_TASK, NEW_REF);
+    expect(workflow).toContain(`${PULL_REQUEST_HEAD}      merge-base: true\n`);
+    expect(workflow).toContain(NEW_GROUP);
+    const parsed = parseYaml(workflow) as { jobs: { gardener: { permissions: Record<string, string>; with: Record<string, unknown> } } };
+    expect(parsed.jobs.gardener.permissions.contents).toBe("write");
+    expect(parsed.jobs.gardener.with["merge-base"]).toBe(true);
+  });
+
+  it("keeps checkout-ref and the old concurrency key for every older pin", async () => {
+    for (const sha of OLD_PINS) {
+      const workflow = await build(HEAD_TASK, `scuffi/gardener/.github/workflows/gardener-task.yml@${sha}`);
+      expect(workflow, sha).toContain("      checkout-ref: ${{ github.event.pull_request.head.sha }}\n");
+      expect(workflow, sha).toContain("    concurrency:\n      group: gardener-head-${{ github.event.pull_request.number || github.run_id }}\n");
+      expect(workflow, sha).not.toContain("pull-request-head:");
+    }
+  });
+
+  it("refuses merge commits on an older pin", async () => {
+    await expect(build(MERGE_TASK, DEFAULT_WORKFLOW_REF)).rejects.toThrow(
+      /Task head declares repository.merge_base and commit.merge_base, which this project's pinned Gardener workflow .* cannot run\. Run gardener upgrade/,
+    );
+    await expect(build(MERGE_TASK.replace("  - kind: commit.merge_base\n    branches: [\"**\"]", ""), DEFAULT_WORKFLOW_REF))
+      .rejects.toThrow(/declares repository.merge_base, which/);
+  });
+
+  it("expands git.* exactly as before unless the task declares repository.merge_base", async () => {
+    const globbed = await compileTaskSource(TASK.replace("effects:\n  - issue.comment.create", "effects:\n  - git.*"));
+    const exact = await compileTaskSource(TASK.replace("effects:\n  - issue.comment.create", "effects:\n  - branch.create\n  - commit.create"));
+    expect(globbed.bundle.effects).toEqual(["branch.create", "commit.create"]);
+    expect(globbed.bundleHash).toBe(exact.bundleHash);
+    const withTool = await compileTaskSource(MERGE_TASK.replace("  - kind: commit.merge_base\n    branches: [\"**\"]", "  - git.*"));
+    expect(withTool.bundle.effects).toEqual(["issue.comment.create", "branch.create", "commit.create", "commit.merge_base"]);
   });
 });
 

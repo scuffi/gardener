@@ -41,6 +41,7 @@ const EFFECT_DESCRIPTIONS: Record<OperationKind, string> = {
   "pull_request.review_thread.resolve": "Resolve a review thread on the triggering pull request.",
   "branch.create": "Create a branch.",
   "commit.create": "Commit the files the task changed in its checkout.",
+  "commit.merge_base": "Adds a merge commit to the triggering pull request's branch that brings its base branch in; never rewrites history.",
   "pull_request.open": "Open a pull request, ready for review.",
   "pull_request.open_draft": "Open a draft pull request.",
   "pull_request.merge": "Merge a pull request after verifying its checks.",
@@ -114,7 +115,11 @@ async function renderTriggers(): Promise<string> {
 function renderFamilies(): string {
   const rows = ["| Glob | Expands to |", "| --- | --- |"];
   for (const glob of effectFamilyGlobValues) {
-    rows.push(`| \`${glob}\` | ${expandEffectSelectors([glob]).map((kind) => `\`${kind}\``).join(", ")} |`);
+    const plain = expandEffectSelectors([glob]);
+    // Kinds a glob includes only for tasks that declare the tool they need.
+    const conditional = expandEffectSelectors([glob], taskToolV1Schema.options).filter((kind) => !plain.includes(kind))
+      .map((kind) => `\`${kind}\` (only for tasks that declare the \`repository.merge_base\` tool)`);
+    rows.push(`| \`${glob}\` | ${[...plain.map((kind) => `\`${kind}\``), ...conditional].join(", ")} |`);
   }
   return rows.join("\n");
 }

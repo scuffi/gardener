@@ -63,6 +63,13 @@ const TOOL_DESCRIPTORS = {
     ].join(" "),
     authority: "observe",
   },
+  // TODO(merge-base stage 2/3): offered once the runner can prepare a merge;
+  // createTaskHarnessRequest refuses the tool until then.
+  "repository.merge_base": {
+    name: "repository_merge_base",
+    description: "Write the merge of the pull request's base branch, prepared before you ran, into the working tree; conflicted files carry git's markers. It never commits. Input: {}.",
+    authority: "workspace",
+  },
 } as const satisfies Record<TaskToolV1, HarnessToolDescriptor>;
 
 /**
@@ -75,6 +82,8 @@ export async function createTaskHarnessRequest(input: unknown, repositoryObserva
   if (actualBundleHash !== request.bundleHash) throw new Error("Task bundle hash does not match canonical bundle bytes");
   assertTriggerMatches(request.event, request.bundle.triggers);
   assertSameRepositoryHead(request.event, request.bundle);
+  // TODO(merge-base stage 2/3)
+  if (request.bundle.tools.includes("repository.merge_base")) throw new Error("repository.merge_base is not implemented yet");
   const admittedAt = Date.parse(request.admittedAt);
   const deadlineAt = Date.parse(request.deadlineAt);
   if (deadlineAt > admittedAt + request.bundle.limits.runtimeSeconds * 1_000) {

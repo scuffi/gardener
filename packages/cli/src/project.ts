@@ -352,6 +352,10 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
     });
   }
   tasks.sort((left, right) => left.bundle.taskId.localeCompare(right.bundle.taskId));
+  for (const task of tasks) {
+    const refusal = pinnedWorkflowRefusal(task, project.release.workflowRef);
+    if (refusal !== undefined) throw new Error(refusal);
+  }
 
   const lock = {
     schemaVersion: "gardener.lock/v1",
@@ -691,6 +695,33 @@ const TASK_WORKFLOWS_WITHOUT_REACTIONS = new Set([
   "868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d",
 ]);
 
+/**
+ * The task workflows of releases before the `pull-request-head` and
+ * `merge-base` inputs (0.1.0–0.1.14; 0.1.14 kept 0.1.13's workflow). Callers
+ * for these keep `checkout-ref`, byte for byte. A fixed list for the same
+ * reason as the ones above.
+ */
+const TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD = new Set([
+  ...TASK_WORKFLOWS_WITHOUT_REACTIONS,
+  "8aa3054967ee696be08ff61936c72e199c750ba7",
+]);
+
+function definesPullRequestHead(workflowRef: string): boolean {
+  return !TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+
+/** Why this task cannot run on the pinned workflow, or `undefined` when it can. */
+function pinnedWorkflowRefusal(task: BuiltTask, workflowRef: string): string | undefined {
+  if (definesPullRequestHead(workflowRef)) return undefined;
+  const needs = [
+    ...(task.bundle.tools.includes("repository.merge_base") ? ["repository.merge_base"] : []),
+    ...(task.bundle.effects.includes("commit.merge_base") ? ["commit.merge_base"] : []),
+  ];
+  return needs.length === 0
+    ? undefined
+    : `Task ${task.bundle.taskId} declares ${needs.join(" and ")}, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
+}
+
 function definesReactions(workflowRef: string): boolean {
   return !TASK_WORKFLOWS_WITHOUT_REACTIONS.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
 }
@@ -706,6 +737,7 @@ const LEGACY_MAX_RUNTIME_SECONDS = 480;
 
 function renderTaskWorkflow(task: BuiltTask, workflowRef: string, setsPlanTimeout: boolean): string {
   const reactions = definesReactions(workflowRef) ? renderReactionCondition(task) : undefined;
+  const pullRequestHead = definesPullRequestHead(workflowRef);
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -729,8 +761,12 @@ jobs:
 ${checksOutPullRequestHead(task.bundle)
   // One round per pull request at a time: two at once would build on the same
   // head, and the second push would be refused. Events without a pull request
-  // fall back to their own run id, so they are never serialised.
-  ? `    concurrency:\n      group: gardener-${task.bundle.taskId}-\${{ github.event.pull_request.number || github.run_id }}\n      cancel-in-progress: false\n`
+  // fall back to their own run id, so they are never serialised. Comments
+  // and manual runs naming a pull request plan on its head too, so they share
+  // its key (an issue's number is its pull request's).
+  ? `    concurrency:\n      group: gardener-${task.bundle.taskId}-\${{ ${pullRequestHead
+    ? "github.event.pull_request.number || github.event.issue.number || github.event.inputs.pull_request || github.run_id"
+    : "github.event.pull_request.number || github.run_id"} }}\n      cancel-in-progress: false\n`
   : ""}    permissions:
 ${renderPermissions(task)}
     uses: ${workflowRef}
@@ -743,8 +779,13 @@ ${renderPermissions(task)}
 ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundle.limits.runtimeSeconds)}\n` : ""}${checksOutPullRequestHead(task.bundle)
   // Tasks that check out the pull request head (checkout: pull-request-head,
   // or commits beyond gardener/**) build on it, not GitHub's merge preview.
-  // Empty for events without a pull request.
-  ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n"
+  // Empty for events without a pull request. Newer workflows take the pull
+  // request's number instead, from a pull request event, a comment on one, or
+  // a manual run naming one, and resolve its current head themselves.
+  ? pullRequestHead
+    ? "      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}\n"
+      + (task.bundle.tools.includes("repository.merge_base") ? "      merge-base: true\n" : "")
+    : "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n"
   : ""}${reactions === undefined ? "" : `      reactions: >-
         \${{
         ${reactions}

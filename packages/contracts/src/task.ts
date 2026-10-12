@@ -340,6 +340,12 @@ export const taskToolV1Schema = z.enum([
   "repository.list_files",
   "repository.exec",
   "provider.api.read",
+  /**
+   * Writes the merge of the pull request's base branch, prepared by trusted
+   * code before the model ran, into the working tree for the model to finish.
+   * It never commits; `commit.merge_base` does.
+   */
+  "repository.merge_base",
 ]);
 export type TaskToolV1 = z.infer<typeof taskToolV1Schema>;
 
@@ -414,6 +420,7 @@ const taskEffectOptionsV1Schema = z.strictObject({ branches: branchPatternsSchem
 export const taskEffectOptionsMapV1Schema = z.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
+  "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
   "pull_request.open_draft": taskEffectOptionsV1Schema.optional(),
 });
@@ -426,6 +433,7 @@ export type TaskEffectOptionsMapV1 = z.infer<typeof taskEffectOptionsMapV1Schema
 export const taskBranchPatternsV1Schema = z.strictObject({
   "branch.create": branchPatternsSchema.optional(),
   "commit.create": branchPatternsSchema.optional(),
+  "commit.merge_base": branchPatternsSchema.optional(),
   "pull_request.open": branchPatternsSchema.optional(),
   "pull_request.open_draft": branchPatternsSchema.optional(),
 });
@@ -456,7 +464,8 @@ export const taskBundleV1Schema = z.strictObject({
   /**
    * Check out the triggering pull request's head instead of the commit GitHub
    * supplies (a merge preview), so commits build on the branch they push to.
-   * Opt-in, and only for tasks with a pull request trigger.
+   * Opt-in, and only for tasks with a pull request or issue comment trigger
+   * (a comment on a pull request's conversation).
    */
   checkout: z.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
@@ -480,9 +489,20 @@ export const taskBundleV1Schema = z.strictObject({
    */
   reactions: z.literal(false).optional(),
 }).superRefine((bundle, context) => {
-  if (bundle.checkout === "pull-request-head"
-    && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
-    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  // A comment on a pull request's conversation arrives as an issue_comment
+  // event, and the planning job can check out that pull request's head too.
+  const headTrigger = bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind)
+    || eventNameByTriggerKind[trigger.kind] === "issue_comment");
+  if (bundle.checkout === "pull-request-head" && !headTrigger) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request or issue comment trigger" });
+  }
+  if (bundle.effects.includes("commit.merge_base")) {
+    if (!headTrigger) {
+      context.addIssue({ code: "custom", path: ["effects"], message: "commit.merge_base needs a pull request or issue comment trigger" });
+    }
+    if (!bundle.tools.includes("repository.merge_base")) {
+      context.addIssue({ code: "custom", path: ["tools"], message: "commit.merge_base needs the repository.merge_base tool, which prepares the merge it commits" });
+    }
   }
   for (const key of ["tools", "effects"] as const) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
@@ -834,7 +854,18 @@ const normalizedPushV1Schema = z.strictObject({
 const changedLabel = z.string().trim().min(1).max(100);
 
 function eventMember<Kind extends TaskTriggerKindV1, Shape extends z.ZodRawShape>(kind: Kind, shape: Shape) {
-  return z.strictObject({ ...normalizedEventBase, kind: z.literal(kind), ...shape });
+  return z.strictObject({
+    ...normalizedEventBase,
+    kind: z.literal(kind),
+    ...shape,
+    /**
+     * The pull request head the planning job checked out, when it checked one
+     * out. Set by the bridge only after confirming it is `pullRequest`'s
+     * current head, so it is present only with `pullRequest` and equal to its
+     * head. Absent from older bridges, which `taskCheckoutSha` still handles.
+     */
+    checkoutSha: sha1.optional(),
+  });
 }
 
 const issuePayload = { issue: normalizedIssueV1Schema };
@@ -845,6 +876,13 @@ const issuePayload = { issue: normalizedIssueV1Schema };
  */
 const editedPayload = { previousBody: z.string().max(65_536).optional() };
 const pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+/**
+ * A comment on a pull request's conversation, when the planning job checked
+ * out that pull request's head. The bridge attaches it only then; the issue
+ * stays the event's resource, so binding, matching and thread opener keep
+ * reading the issue.
+ */
+const commentPullRequestPayload = { pullRequest: normalizedPullRequestV1Schema.optional() };
 const discussionPayload = { discussion: normalizedDiscussionV1Schema };
 
 export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
@@ -853,8 +891,8 @@ export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
   eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.reopened", issuePayload),
-  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
-  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload }),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema, ...commentPullRequestPayload }),
+  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload, ...commentPullRequestPayload }),
   eventMember("github.pull_request.opened", pullRequestPayload),
   eventMember("github.pull_request.reopened", pullRequestPayload),
   eventMember("github.pull_request.synchronize", pullRequestPayload),
@@ -892,6 +930,18 @@ export const normalizedEventV1Schema = z.discriminatedUnion("kind", [
   if (event.kind === "github.workflow_dispatch" && event.issue !== undefined && event.pullRequest !== undefined) {
     context.addIssue({ code: "custom", path: ["pullRequest"], message: "a manual run may target an issue or a pull request, not both" });
   }
+  if (event.checkoutSha !== undefined) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : undefined;
+    if (pullRequest === undefined) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited")
+    && event.pullRequest !== undefined && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
+  }
   if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
     context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
   }
@@ -902,12 +952,14 @@ export type NormalizedPullRequestV1 = z.infer<typeof normalizedPullRequestV1Sche
 /**
  * Whether the planning job checks out a pull request's head instead of the
  * commit GitHub supplies (for pull request events, a merge preview). Only a
- * task that may commit beyond `gardener/**` needs it, to build on the head of
- * the pull request branch it pushes to. The generated workflow and the runtime
- * both derive the checkout from this one rule.
+ * task that may commit beyond `gardener/**`, or adds merge commits to pull
+ * request branches, needs it, to build on the head of the branch it pushes
+ * to. The generated workflow and the runtime both derive the checkout from
+ * this one rule.
  */
-export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptions" | "checkout">): boolean {
+export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptions" | "checkout"> & { readonly effects?: readonly string[] }): boolean {
   if (bundle.checkout === "pull-request-head") return true;
+  if (bundle.effects?.includes("commit.merge_base")) return true;
   const patterns = bundle.effectOptions?.["commit.create"]?.branches;
   if (patterns === undefined) return false;
   // Restating the default changes nothing, so it must not change the checkout.
@@ -917,12 +969,16 @@ export function checksOutPullRequestHead(bundle: Pick<TaskBundleV1, "effectOptio
 
 /**
  * The commit the planning job checks out for this event, which every capture
- * and commit builds on. A pull request head is used only for events whose
- * payload carries the pull request, because that is what the workflow can
- * check out; a manual run naming a pull request keeps the default checkout.
+ * and commit builds on. A bridge that checked out a pull request head says so
+ * in `checkoutSha`, which covers comments on a pull request and manual runs
+ * naming one. Without it (older bridges) a pull request event's own head is
+ * used, because that is what the workflow could check out, and a comment or
+ * manual run keeps the default checkout.
  */
-export function taskCheckoutSha(bundle: Pick<TaskBundleV1, "effectOptions" | "checkout">, event: NormalizedEventV1): string {
-  if (checksOutPullRequestHead(bundle) && event.kind !== "github.workflow_dispatch" && "pullRequest" in event && event.pullRequest !== undefined) {
+export function taskCheckoutSha(bundle: Pick<TaskBundleV1, "effectOptions" | "checkout"> & { readonly effects?: readonly string[] }, event: NormalizedEventV1): string {
+  if (!checksOutPullRequestHead(bundle)) return event.repository.commitSha;
+  if (event.checkoutSha !== undefined) return event.checkoutSha;
+  if (event.kind.startsWith("github.pull_request") && "pullRequest" in event && event.pullRequest !== undefined) {
     return event.pullRequest.head.sha;
   }
   return event.repository.commitSha;
@@ -1664,6 +1720,14 @@ export function isProtectedCapturePath(path: string): boolean {
  * Data API. A digest per file is what lets apply prove it wrote what planning
  * captured.
  */
+/**
+ * Set by the runner, only in a merge capture and only on a protected path,
+ * after proving the captured change makes the path equal (blob and mode, or
+ * absent) to the merge's base commit. It is what lets a merge commit carry a
+ * protected path the base branch already changed.
+ */
+const baseIdentical = z.literal(true).optional();
+
 export const taskCaptureFileV1Schema = z.discriminatedUnion("status", [
   z.strictObject({
     path: relativePath,
@@ -1671,10 +1735,12 @@ export const taskCaptureFileV1Schema = z.discriminatedUnion("status", [
     mode: taskCaptureFileModeV1Schema,
     sizeBytes: fileByteCount,
     sha256,
+    baseIdentical,
   }),
   z.strictObject({
     path: relativePath,
     status: z.literal("deleted"),
+    baseIdentical,
   }),
 ]);
 export type TaskCaptureFileV1 = z.infer<typeof taskCaptureFileV1Schema>;
@@ -1689,6 +1755,19 @@ export type TaskCaptureFileV1 = z.infer<typeof taskCaptureFileV1Schema>;
  * fit inside the plan's canonical transport ceiling alongside the task's
  * optional `maxEffectOperations` and `maxEffectBytes`.
  */
+/**
+ * What a merge capture merged: the base commit, and the paths git could not
+ * merge itself, which the model resolved. Present only on a capture taken
+ * after `repository.merge_base` applied a merge.
+ */
+export const taskCaptureMergeV1Schema = z.strictObject({
+  baseSha: sha1,
+  /** Sorted and unique, so equal merges hash equally. May be empty: a clean merge. */
+  conflictedPaths: z.array(relativePath).max(COMMIT_FILE_LIMIT)
+    .refine(sortedUnique, "conflicted paths must be sorted and unique"),
+});
+export type TaskCaptureMergeV1 = z.infer<typeof taskCaptureMergeV1Schema>;
+
 export const taskCaptureManifestV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-capture-manifest/v1"),
   captureId: boundIdentifier,
@@ -1707,13 +1786,25 @@ export const taskCaptureManifestV1Schema = z.strictObject({
    * the change the model believed it was making.
    */
   truncated: z.literal(false),
+  /** Present only on a merge capture; absent, the manifest is exactly as before. */
+  merge: taskCaptureMergeV1Schema.optional(),
 }).superRefine((manifest, context) => {
   const paths = manifest.files.map((file) => file.path);
   if (new Set(paths).size !== paths.length) {
     context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
   }
   manifest.files.forEach((file, index) => {
-    if (isProtectedCapturePath(file.path)) {
+    const isProtected = isProtectedCapturePath(file.path);
+    if (file.baseIdentical !== undefined && (manifest.merge === undefined || !isProtected)) {
+      context.addIssue({ code: "custom", path: ["files", index, "baseIdentical"], message: "baseIdentical is recorded only for a protected path in a merge capture" });
+    }
+    // A merge commit may carry a protected path only as the base commit has
+    // it. That adds nothing new: the commit's second parent is the base
+    // commit, and apply checks it is still an ancestor of (or equal to) the
+    // base branch, so the content is already reachable from a branch of this
+    // repository. The ancestry check is therefore a security control, not a
+    // freshness nicety. A plain capture never gets this exemption.
+    if (isProtected && !(manifest.merge !== undefined && file.baseIdentical === true)) {
       context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file.path}` });
     }
   });
@@ -1757,14 +1848,23 @@ export function taskCaptureManifestText(value: TaskCaptureManifestV1): string {
 export function taskCaptureChangesDigestInput(manifest: TaskCaptureManifestV1): Uint8Array {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
-  for (const file of manifest.files) {
-    const fields = file.status === "deleted"
-      ? ["delete", file.path]
-      : ["upsert", file.path, file.mode, String(file.sizeBytes), file.sha256];
+  const push = (fields: readonly string[]) => {
     for (const field of fields) {
       const bytes = encoder.encode(field);
       chunks.push(encoder.encode(`${bytes.byteLength}:`), bytes);
     }
+  };
+  for (const file of manifest.files) {
+    push(file.status === "deleted"
+      ? ["delete", file.path]
+      : ["upsert", file.path, file.mode, String(file.sizeBytes), file.sha256]);
+    // Merge-only fields are appended only when present, so a plain capture's
+    // stream, and every identity derived from it, is unchanged. Each starts
+    // with its own tag, which keeps the stream injective.
+    if (file.baseIdentical === true) push(["base-identical"]);
+  }
+  if (manifest.merge !== undefined) {
+    push(["merge", manifest.merge.baseSha, String(manifest.merge.conflictedPaths.length), ...manifest.merge.conflictedPaths]);
   }
   const output = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
   let offset = 0;
@@ -1793,6 +1893,8 @@ export const taskCaptureRefV1Schema = z.strictObject({
   changesSha256: sha256,
   fileCount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   sizeBytes: captureByteCount,
+  /** The manifest's `merge`, present only on a merge capture. Covered by `changesSha256`. */
+  merge: taskCaptureMergeV1Schema.optional(),
 });
 export type TaskCaptureRefV1 = z.infer<typeof taskCaptureRefV1Schema>;
 
@@ -1861,6 +1963,9 @@ export type TaskEventBindingV1 = z.infer<typeof taskEventBindingV1Schema>;
 export const triggeringPullRequestKinds = [
   "pull_request.review_comment.reply",
   "pull_request.review_thread.resolve",
+  // A merge commit pushes to a pull request's branch on a maintainer's request
+  // on that pull request, so it is confined to it too.
+  "commit.merge_base",
 ] as const satisfies readonly OperationKind[];
 
 /** Why this step may not target its pull request, or `undefined` when it may. */
@@ -1939,6 +2044,7 @@ export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): T
  */
 export const captureMaterializedPointers = {
   "commit.create": ["/files"],
+  "commit.merge_base": ["/files", "/conflictedPaths"],
 } as const satisfies Partial<Record<TaskEffectKindV1, readonly string[]>>;
 
 /**
@@ -2272,10 +2378,54 @@ export const taskEffectPlanV1Schema = z.strictObject({
     if (operation.kind === "commit.create" && plan.capture !== undefined) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
+      // A merge capture holds the base branch's changes; written by an
+      // ordinary single-parent commit they would look like the task's own.
+      if (plan.capture.merge !== undefined) {
+        context.addIssue({ code: "custom", path: ["operations", index, "kind"], message: "commit.create cannot commit a merge capture; use commit.merge_base" });
+      }
+    }
+    if (operation.kind === "commit.merge_base" && plan.capture !== undefined) {
+      for (const message of mergeBaseRefusals(operation, plan.capture)) {
+        context.addIssue({ code: "custom", path: ["operations", index, "payload"], message });
+      }
     }
   });
+  const kinds = plan.operations.map((operation) => operation.kind);
+  if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
+  }
+  // Both would materialize the same capture, one of them as a merge.
+  if (kinds.includes("commit.merge_base") && kinds.includes("commit.create")) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may not hold both commit.create and commit.merge_base" });
+  }
 });
 export type TaskEffectPlanV1 = z.infer<typeof taskEffectPlanV1Schema>;
+
+/**
+ * Why a `commit.merge_base` step cannot commit this capture. Its base must be
+ * the merge the capture recorded, written directly (a reference could name
+ * any commit), on top of the commit the capture was taken against.
+ * `conflictedPaths` is capture-owned, so apply fills it from `capture.merge`.
+ */
+function mergeBaseRefusals(
+  operation: Pick<TaskEffectPlanOperationV1, "payload" | "references">,
+  capture: TaskCaptureManifestV1,
+): string[] {
+  if (capture.merge === undefined) return ["commit.merge_base needs a merge capture, taken after repository.merge_base applied the merge"];
+  const refusals: string[] = [];
+  for (const field of ["baseSha", "expectedHeadSha"] as const) {
+    if (operation.references[`/${field}`] !== undefined) refusals.push(`commit.merge_base ${field} must be written directly, not by reference`);
+  }
+  const { baseSha, expectedHeadSha } = operation.payload;
+  if (operation.references["/baseSha"] === undefined && (typeof baseSha !== "string" || baseSha.toLowerCase() !== capture.merge.baseSha)) {
+    refusals.push(`commit.merge_base baseSha must be the merged base commit ${capture.merge.baseSha}`);
+  }
+  if (operation.references["/expectedHeadSha"] === undefined
+    && (typeof expectedHeadSha !== "string" || expectedHeadSha.toLowerCase() !== capture.baseSha)) {
+    refusals.push(`commit.merge_base must build on the captured commit ${capture.baseSha}: set expectedHeadSha to it`);
+  }
+  return refusals;
+}
 
 export const taskObservationV1Schema = z.strictObject({
   kind: z.enum(["repository", "event", "test", "diagnostic"]),

@@ -19,10 +19,20 @@ on:
         required: true
         type: string
       checkout-ref:
-        description: Commit to check out instead of the event's, for tasks that commit to pull request branches.
+        description: Commit to check out instead of the event's, for tasks that commit to pull request branches. Callers for releases before pull-request-head pass this.
         required: false
         type: string
         default: ""
+      pull-request-head:
+        description: Number of a pull request whose current head to plan on, from a pull request event, a comment on one, or a manual run naming one. Empty for none.
+        required: false
+        type: string
+        default: ""
+      merge-base:
+        description: Prepare the merge of the pull request's base branch before the task runs, for tasks that declare repository.merge_base.
+        required: false
+        type: boolean
+        default: false
       plan-timeout-minutes:
         description: The plan job's timeout, derived from the task's runtime-seconds.
         required: false
@@ -95,15 +105,33 @@ jobs:
       # A run queued behind an earlier round starts after that round pushed, so
       # plan on the pull request's current head. The bridge confirms it before
       # any task command runs; anything unexpected keeps the event's commit.
+      # A comment or manual run naming a pull request has no head of its own:
+      # it plans on the head only of an open same-repository pull request, and
+      # otherwise keeps the default checkout.
       - name: Resolve current pull request head
         id: head
-        if: ${{ inputs.checkout-ref != '' && github.event.pull_request.number }}
+        if: ${{ inputs.pull-request-head != '' || (inputs.checkout-ref != '' && github.event.pull_request.number) }}
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_SHA: ${{ inputs.checkout-ref }}
+          EVENT_SHA: ${{ inputs.checkout-ref || github.event.pull_request.head.sha }}
           EVENT_REF: ${{ github.event.pull_request.head.ref }}
-          PULL_NUMBER: ${{ github.event.pull_request.number }}
+          PULL_NUMBER: ${{ inputs.pull-request-head || github.event.pull_request.number }}
         run: |
+          if [[ ! "$PULL_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]]; then
+            echo "::warning::pull-request-head is not a pull request number; planning on the default checkout"
+            exit 0
+          fi
+          if [[ -z "$EVENT_REF" ]]; then
+            current_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_NUMBER" \
+              --jq 'select(.state == "open" and .head.repo.id == .base.repo.id) | .head.sha' || true)"
+            if [[ "$current_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Planning on the head of pull request #$PULL_NUMBER, $current_sha"
+              echo "sha=$current_sha" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::#$PULL_NUMBER is closed or from a fork, or could not be read; planning on the default branch"
+            fi
+            exit 0
+          fi
           sha="$EVENT_SHA"
           if current="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_NUMBER" \
             --jq 'select(.state == "open" and .head.repo.id == .base.repo.id) | "\(.head.sha) \(.head.ref)"')"; then
@@ -128,6 +156,7 @@ jobs:
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
           task-name: ${{ inputs.task-name }}
           checkout-ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
+          merge-base: ${{ inputs.merge-base }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload exact effect plan
         if: ${{ steps.gardener.outputs.effect-artifact-sha256 != '' }}

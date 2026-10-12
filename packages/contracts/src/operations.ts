@@ -7,7 +7,7 @@ export const operationKindValues = [
   "pull_request.comment.create", "pull_request.comment.update", "pull_request.review.submit", "pull_request.reviewer.request", "pull_request.reviewer.remove", "pull_request.update",
   "pull_request.label.add", "pull_request.label.remove", "pull_request.update_branch",
   "pull_request.review_comment.reply", "pull_request.review_thread.resolve",
-  "branch.create", "commit.create", "pull_request.open", "pull_request.open_draft", "pull_request.merge",
+  "branch.create", "commit.create", "commit.merge_base", "pull_request.open", "pull_request.open_draft", "pull_request.merge",
   "discussion.comment.create", "discussion.comment.update", "discussion.answer.mark", "discussion.answer.unmark", "discussion.close", "discussion.reopen",
   "check.rerun",
   "release.create", "release.update", "release.publish", "release.delete",
@@ -19,7 +19,7 @@ export const operationCatalogEntrySchema = z.object({ kind: operationKindSchema,
 export type OperationCatalogEntry = z.infer<typeof operationCatalogEntrySchema>;
 export const operationCatalog: readonly OperationCatalogEntry[] = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
   kind,
-  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind === "commit.create" ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
+  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind.startsWith("commit.") ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
   persistent: true,
   highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete",
 })));
@@ -154,6 +154,25 @@ const operationOptions = [
       if (paths.has(file.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file.path);
     });
+  }),
+  /**
+   * A merge commit on the triggering pull request's branch whose second parent
+   * is `baseSha`, the head of `baseBranch` when the merge was prepared. It
+   * brings the base branch in and never rewrites history. `files` and
+   * `conflictedPaths` come only from the merge capture, never from the model.
+   */
+  operationBase.extend({
+    kind: z.literal("commit.merge_base"), pullNumber: z.number().int().positive(), branch: branchNameSchema, expectedHeadSha: shaSchema,
+    baseBranch: branchNameSchema, baseSha: shaSchema, message: z.string().trim().min(1).max(1_000),
+    files: z.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
+    conflictedPaths: z.array(commitFilePathSchema).max(COMMIT_FILE_LIMIT),
+  }).strict().superRefine((value, context) => {
+    const paths = new Set<string>();
+    value.files.forEach((file, index) => {
+      if (paths.has(file.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file.path);
+    });
+    if (new Set(value.conflictedPaths).size !== value.conflictedPaths.length) context.addIssue({ code: "custom", path: ["conflictedPaths"], message: "conflicted paths must be unique" });
   }),
   operationBase.extend({
     kind: z.literal("pull_request.open"), head: branchNameSchema, base: branchNameSchema, expectedHeadSha: shaSchema, expectedBaseSha: shaSchema,
@@ -305,10 +324,11 @@ export function operationProposalPayloadJsonSchema(kind: OperationKind): string 
   }
   const source = structuredClone(option) as Record<string, unknown>;
   const properties = source.properties as Record<string, unknown>;
-  for (const field of ["schemaVersion", "id", "repository", "kind", ...(kind === "commit.create" ? ["files"] : [])]) {
+  const captureOwned = kind === "commit.create" ? ["files"] : kind === "commit.merge_base" ? ["files", "conflictedPaths"] : [];
+  for (const field of ["schemaVersion", "id", "repository", "kind", ...captureOwned]) {
     delete properties[field];
   }
-  const omitted = new Set(["schemaVersion", "id", "repository", "kind", ...(kind === "commit.create" ? ["files"] : [])]);
+  const omitted = new Set(["schemaVersion", "id", "repository", "kind", ...captureOwned]);
   source.required = Array.isArray(source.required)
     ? source.required.filter((field): field is string => typeof field === "string" && !omitted.has(field))
     : [];
@@ -417,6 +437,15 @@ export const operationOutputCatalog = {
     commitSha: "commitSha",
     treeSha: "commitSha",
     parentSha: "commitSha",
+    commitUrl: "url",
+  },
+  // `parentShas` is a list, so only the scalar receipt fields are outputs.
+  "commit.merge_base": {
+    ...pullOutputs,
+    branch: "branch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    baseSha: "commitSha",
     commitUrl: "url",
   },
   "pull_request.open": {

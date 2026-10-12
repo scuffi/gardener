@@ -73,6 +73,16 @@ function payloadFor(kind: typeof operationKindValues[number]): Record<string, un
       message: "Fix issue",
       files: [{ path: "src/a.ts", captured: { status: "modified", mode: "100644", sizeBytes: 5, sha256: "c".repeat(64) } }],
     };
+    case "commit.merge_base": return {
+      pullNumber: 3,
+      branch: "gardener/fix-2",
+      expectedHeadSha: sha1,
+      baseBranch: "main",
+      baseSha: "d".repeat(40),
+      message: "Merge main into gardener/fix-2",
+      files: [{ path: "src/a.ts", captured: { status: "modified", mode: "100644", sizeBytes: 5, sha256: "c".repeat(64) } }],
+      conflictedPaths: ["src/a.ts"],
+    };
     case "pull_request.open": return {
       head: "gardener/fix-2", base: "main", expectedHeadSha: sha1, expectedBaseSha: sha1, title: "Fix", body: "",
     };
@@ -307,7 +317,8 @@ describe("effect proposals", () => {
     // an inlined file set into a legitimate capture-free commit.
     expect(captureDeferredPointers("commit.create")).toEqual(["/files"]);
     expect(captureDeferredPointers("issue.comment.create")).toEqual([]);
-    expect(Object.keys(captureMaterializedPointers)).toEqual(["commit.create"]);
+    expect(captureDeferredPointers("commit.merge_base")).toEqual(["/files", "/conflictedPaths"]);
+    expect(Object.keys(captureMaterializedPointers)).toEqual(["commit.create", "commit.merge_base"]);
   });
 
   it("never lets the model choose an operation ID", () => {

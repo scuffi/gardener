@@ -9,6 +9,7 @@ import { isValidGitBranchName, type OperationKind } from "./operations";
 export const branchWriteFields = {
   "branch.create": "branch",
   "commit.create": "branch",
+  "commit.merge_base": "branch",
   "pull_request.open": "head",
   "pull_request.open_draft": "head",
 } as const satisfies Partial<Record<OperationKind, string>>;

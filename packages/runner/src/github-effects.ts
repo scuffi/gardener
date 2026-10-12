@@ -2558,6 +2558,9 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
       return executeBranchCreate(scope, operation);
     case "commit.create":
       return executeCommitCreate(scope, operation);
+    case "commit.merge_base":
+      // TODO(merge-base stage 2/3)
+      throw new Error("commit.merge_base is not implemented yet");
     case "pull_request.open":
     case "pull_request.open_draft":
       return executePullOpenDraft(scope, operation);

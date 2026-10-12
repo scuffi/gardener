@@ -216,16 +216,28 @@ function effectOptionsOf(entries: readonly EffectEntry[]): { effectOptions?: Tas
 }
 
 /** Deterministic expansion of exact kinds and family globs into the canonical allowlist. */
-export function expandEffectSelectors(selectors: readonly string[]): TaskEffectKindV1[] {
+/**
+ * Kinds a family glob includes only for tasks that declare a tool. A merge
+ * commit needs the tool that prepares it, so `git.*` in a task without that
+ * tool expands exactly as it did before the kind existed: same bundle, same
+ * hash. Naming the kind exactly still works (and then needs the tool).
+ */
+const GLOB_KINDS_NEEDING_TOOL: ReadonlyMap<TaskEffectKindV1, string> = new Map([
+  ["commit.merge_base", "repository.merge_base"],
+]);
+
+export function expandEffectSelectors(selectors: readonly string[], tools: readonly string[] = []): TaskEffectKindV1[] {
   const exact = new Set<string>();
   const families = new Set<string>();
   for (const selector of selectors) {
     if (selector.endsWith(".*")) families.add(selector.slice(0, -".*".length));
     else exact.add(selector);
   }
-  return operationKindValues.filter(
-    (kind) => exact.has(kind) || families.has(OPERATION_FAMILY_BY_KIND.get(kind)!),
-  );
+  const globbed = (kind: TaskEffectKindV1) => {
+    const tool = GLOB_KINDS_NEEDING_TOOL.get(kind);
+    return families.has(OPERATION_FAMILY_BY_KIND.get(kind)!) && (tool === undefined || tools.includes(tool));
+  };
+  return operationKindValues.filter((kind) => exact.has(kind) || globbed(kind));
 }
 
 type AuthoredTrigger = z.output<typeof triggerAuthoringSchema>;
@@ -327,7 +339,7 @@ export async function compileTaskSource(
     instructions,
     triggers: authoredTriggers.map((trigger) => toContractTrigger(trigger, options, sourceName)),
     tools: authoring.tools,
-    effects: expandEffectSelectors(authoring.effects.map(effectSelector)),
+    effects: expandEffectSelectors(authoring.effects.map(effectSelector), authoring.tools),
     ...effectOptionsOf(authoring.effects),
     network: authoring.network,
     limits: {
