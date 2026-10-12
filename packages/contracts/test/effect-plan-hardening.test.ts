@@ -257,7 +257,8 @@ describe("pointer array bounds", () => {
   });
 
   it("caps how many problems one step reports", () => {
-    const manyWrong = Array.from({ length: 500 }, () => 42);
+    // Within the array's length limit, so each element is checked and fails.
+    const manyWrong = Array.from({ length: 100 }, () => 42);
     const messages = probeOperationShape({
       kind: "pull_request.review.submit",
       payload: {
