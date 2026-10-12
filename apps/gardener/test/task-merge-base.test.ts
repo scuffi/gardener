@@ -280,6 +280,7 @@ describe("merge guidance in the prompt", () => {
     const { prompt } = await createTaskHarnessRequest(await runRequest(commentEvent()));
     expect(prompt).toContain("call repository.merge_base first, before changing anything");
     expect(prompt).toContain("Edit only the files it lists as conflictedFiles");
+    expect(prompt).toContain("may only end up exactly as the base branch has it");
     expect(prompt).toContain("propose commit.merge_base with exactly the values the tool returned (pullNumber, branch, expectedHeadSha, baseBranch, baseSha)");
     expect(prompt).toContain("Never run git merge, rebase, commit, reset, checkout or push, and never stage files");
     expect(prompt).toContain("A run either merges or makes ordinary commits");
