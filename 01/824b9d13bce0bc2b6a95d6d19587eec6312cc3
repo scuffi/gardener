@@ -1,0 +1,19 @@
+apps/gardener/src/task-runtime/session.ts
+  s_de0b486c128948::t_8421f5b63c2d62 1446-1450
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "01824b9d13bce0bc2b6a95d6d19587eec6312cc3",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
