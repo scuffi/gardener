@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  taskCaptureChangesDigestInput,
+  taskCaptureManifestText,
   taskEffectPlanV1Schema,
   type Operation,
+  type TaskCaptureManifestV1,
   type TaskEffectPlanV1,
 } from "@gardener/contracts";
 import type { RunnerEffectReceiptV1 } from "@gardener/protocol";
@@ -268,15 +271,67 @@ describe("ordered effect application", () => {
     expect(requests.filter((request) => request.includes("/pulls"))).toEqual([]);
   });
 
-  it("binds a recorded checkout to the pull request head in apply's own event", () => {
+  it("binds a recorded checkout to the pull request head in apply's own event", async () => {
     const head = "e".repeat(40);
-    const withCheckout = { provenance: { ...plan([]).provenance, checkoutSha: head } };
-    expect(effects.checkoutBindingHolds(withCheckout, { pull_request: { head: { sha: head } } })).toBe(true);
-    expect(effects.checkoutBindingHolds(withCheckout, { pull_request: { head: { sha: "f".repeat(40) } } })).toBe(false);
-    expect(effects.checkoutBindingHolds(withCheckout, { inputs: { pull_request: "5" } })).toBe(false);
-    expect(effects.checkoutBindingHolds(withCheckout, null)).toBe(false);
+    const read = { repository: "owner/repo", token: "token", fetch: vi.fn(async () => { throw new Error("no read expected"); }) };
+    const withCheckout = { ...plan([]), provenance: { ...plan([]).provenance, checkoutSha: head } };
+    expect(await effects.checkoutBindingHolds(withCheckout, { pull_request: { head: { sha: head } } }, read)).toBe(true);
+    expect(await effects.checkoutBindingHolds(withCheckout, { pull_request: { head: { sha: "f".repeat(40) } } }, read)).toBe(false);
+    // No pull request in the payload and none bound: nothing can confirm the head.
+    await expect(effects.checkoutBindingHolds(withCheckout, { inputs: { pull_request: "5" } }, read)).rejects.toThrow(effects.CheckoutBindingError);
+    await expect(effects.checkoutBindingHolds(withCheckout, null, read)).rejects.toThrow(effects.CheckoutBindingError);
     // Without a recorded checkout the capture sits on GITHUB_SHA, bound separately.
-    expect(effects.checkoutBindingHolds(plan([]), { pull_request: { head: { sha: head } } })).toBe(true);
+    expect(await effects.checkoutBindingHolds(plan([]), { pull_request: { head: { sha: head } } }, read)).toBe(true);
+    expect(read.fetch).not.toHaveBeenCalled();
+  });
+
+  describe("a comment or manual run's recorded checkout", () => {
+    const head = "e".repeat(40);
+    const commentPlan = plan([], {
+      provenance: { ...plan([]).provenance, checkoutSha: head },
+      event: {
+        kind: "github.issue_comment.created", eventName: "issue_comment", action: "created",
+        resource: { kind: "issue", id: "700", number: 7 }, commentId: "55",
+      },
+    });
+    const pull = (overrides: Record<string, unknown> = {}) => ({
+      state: "open", updated_at: "2026-09-17T12:00:00Z",
+      head: { sha: head, ref: "feature", repo: { id: 123 } }, base: { repo: { id: 123 } }, ...overrides,
+    });
+    const reader = (respond: () => Promise<Response>) => {
+      const fetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => respond());
+      return { repository: "owner/repo", token: "apply-token", fetch };
+    };
+
+    it("reads the bound pull request with the apply token and accepts only its open same-repository head", async () => {
+      const read = reader(async () => Response.json(pull()));
+      expect(await effects.checkoutBindingHolds(commentPlan, { issue: { number: 7 } }, read)).toBe(true);
+      expect(read.fetch.mock.calls[0]![0]).toBe("https://api.github.com/repos/owner/repo/pulls/7");
+      expect(read.fetch.mock.calls[0]![1]!.headers).toMatchObject({ authorization: "Bearer apply-token" });
+      const manual = plan([], {
+        provenance: commentPlan.provenance,
+        event: { kind: "github.workflow_dispatch", eventName: "workflow_dispatch", action: null, resource: { kind: "pull_request", id: "700", number: 7 }, commentId: null },
+      });
+      expect(await effects.checkoutBindingHolds(manual, { inputs: { pull_request: "7" } }, read)).toBe(true);
+    });
+
+    it("fails closed on every error, other state, fork, or head, and never answers true", async () => {
+      const cases: Array<[string, () => Promise<Response>]> = [
+        ["moved head", async () => Response.json(pull({ head: { sha: "f".repeat(40), ref: "feature", repo: { id: 123 } } }))],
+        ["closed", async () => Response.json(pull({ state: "closed" }))],
+        ["fork", async () => Response.json(pull({ head: { sha: head, ref: "feature", repo: { id: 999 } } }))],
+        ["deleted fork", async () => Response.json(pull({ head: { sha: head, ref: "feature", repo: null } }))],
+        ["another repository's pull request", async () => Response.json(pull({ head: { sha: head, ref: "feature", repo: { id: 5 } }, base: { repo: { id: 5 } } }))],
+        ["unavailable", async () => new Response("down", { status: 503 })],
+        ["missing", async () => new Response("{}", { status: 404 })],
+        ["malformed", async () => new Response("not json", { status: 200 })],
+        ["network error", async () => { throw new TypeError("fetch failed"); }],
+      ];
+      for (const [label, respond] of cases) {
+        await expect(effects.checkoutBindingHolds(commentPlan, { issue: { number: 7 } }, reader(respond)), label)
+          .rejects.toThrow(effects.CheckoutBindingError);
+      }
+    });
   });
 
   it("derives provider-visible idempotency markers after planning", async () => {
@@ -830,6 +885,60 @@ describe("pull request heads this plan pushed", () => {
   });
 });
 
+describe("pull request heads a merge commit pushed", () => {
+  it("hands the merge commit's new head to a later comment on the pull request", async () => {
+    const content = Buffer.from("resolved\n");
+    const capture = {
+      schemaVersion: "gardener.task-capture-manifest/v1" as const,
+      captureId: `cap_${"3".repeat(64)}`,
+      baseSha: SHA,
+      files: [{
+        path: "src/a.ts", status: "modified" as const, mode: "100644" as const, sizeBytes: content.length,
+        sha256: createHash("sha256").update(content).digest("hex"),
+      }],
+      totalBytes: content.length,
+      truncated: false as const,
+      merge: { baseSha: "a".repeat(40), conflictedPaths: ["src/a.ts"] },
+    };
+    const value = plan([
+      step("merge", "op_merge", "commit.merge_base", {
+        pullNumber: 7, branch: "feature", expectedHeadSha: SHA, baseBranch: "main", baseSha: "a".repeat(40), message: "Merge main.",
+      }),
+      step("explain", "op_explain", "pull_request.comment.create", {
+        pullNumber: 7, expectedHeadSha: SHA, expectedBaseRef: "main", expectedBaseSha: "a".repeat(40),
+        expectedState: "open", expectedDraft: false, expectedPullUpdatedAt: "2026-09-17T12:00:00Z", body: "Merged main.",
+      }),
+    ], {
+      capture,
+      changesSha256: "e".repeat(64),
+      branchPatterns: { "commit.merge_base": ["feature"] },
+      provenance: { ...plan([]).provenance, commitSha: "9".repeat(40), checkoutSha: SHA },
+      event: {
+        kind: "github.issue_comment.created", eventName: "issue_comment", action: "created",
+        resource: { kind: "issue", id: "700", number: 7 }, commentId: "55",
+      },
+    });
+    const seen: Record<string, unknown> = {};
+    const result = await effects.applyOrderedPlan({
+      plan: value, artifactSha256: ARTIFACT_HASH, token: "token", deadlineAt: Date.now() + 60_000, prior: null,
+      captureDirectory: "/verified/capture", record: async () => undefined,
+      execute: async (operation, context) => {
+        seen[operation.kind] = context.chainedHeads;
+        if (operation.kind === "commit.merge_base") {
+          expect(operation.conflictedPaths).toEqual(["src/a.ts"]);
+          return success(operation, {
+            kind: operation.kind, pullNumber: 7, branch: "feature", commitSha: "f".repeat(40), treeSha: "1".repeat(40),
+            parentShas: [SHA, "a".repeat(40)], baseSha: "a".repeat(40), commitUrl: `https://github.com/owner/repo/commit/${"f".repeat(40)}`,
+          });
+        }
+        return success(operation, { kind: "pull_request.comment.create", pullNumber: 7, commentId: "9", commentUrl: "https://github.com/owner/repo/pull/7#issuecomment-9" });
+      },
+    });
+    expect(result.receipt.status).toBe("applied");
+    expect(seen["pull_request.comment.create"]).toEqual([{ branch: "feature", from: SHA, to: "f".repeat(40) }]);
+  });
+});
+
 describe("effects action artifact boundary", () => {
   it("rejects a tampered artifact before opening a runtime session", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "gardener-effect-tampered-"));
@@ -997,7 +1106,7 @@ describe("apply job guards before any write", () => {
 
   it("refuses a recorded checkout that is not the event's pull request head", async () => {
     const pinned = plan([], { provenance: { ...plan([]).provenance, checkoutSha: "d".repeat(40) } });
-    await expectRefused("Effect checkout binding mismatch", { plan: pinned });
+    await expectRefused(/^Effect checkout binding mismatch: the plan records a checked-out head but its event names no pull request$/, { plan: pinned });
   });
 
   it("refuses a plan made against another default branch", async () => {
@@ -1103,5 +1212,162 @@ describe("resuming from a prior receipt", () => {
     const { execute, result } = await resume(prior);
     await expect(result).rejects.toThrow("Receipt carries an output issue.comment.create does not publish");
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("applying a merge commit end to end", () => {
+  const HEAD = "1".repeat(40);
+  const BASE_TIP = "2".repeat(40);
+  const PARENT_TREE = "3".repeat(40);
+  const NEW_TREE = "4".repeat(40);
+  const NEW_COMMIT = "5".repeat(40);
+  const RAW_EVENT = {
+    action: "created",
+    repository: { id: 123, full_name: "owner/repo", default_branch: "main" },
+    sender: { id: 1, login: "maintainer" },
+    issue: {
+      id: 700, number: 7, title: "Fix", body: null, state: "open", updated_at: "2026-09-17T12:00:00Z", labels: [],
+      user: { id: 2, login: "author" }, pull_request: { url: "https://api.github.com/repos/owner/repo/pulls/7" },
+    },
+    comment: { id: 55, body: "@gardener merge main", user: { id: 1, login: "maintainer" }, author_association: "OWNER" },
+  };
+  const ENVIRONMENT = {
+    GITHUB_REPOSITORY: "owner/repo", GITHUB_REPOSITORY_ID: "123", GITHUB_SHA: SHA, GITHUB_RUN_ID: "2",
+    GITHUB_RUN_ATTEMPT: "1", GITHUB_EVENT_NAME: "issue_comment",
+  };
+  const saved = { ...process.env };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const name of [...Object.keys(ENVIRONMENT), "GITHUB_EVENT_PATH"]) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  });
+
+  /** A capture artifact exactly as the planning runner writes one. */
+  async function artifact(files: Record<string, string>, conflictedPaths: string[]): Promise<{ directory: string; manifest: TaskCaptureManifestV1; changesSha256: string }> {
+    const directory = await mkdtemp(path.join(tmpdir(), "gardener-merge-capture-"));
+    await mkdir(path.join(directory, "content"));
+    const entries = Object.entries(files).sort(([left], [right]) => (left < right ? -1 : 1)).map(([file, content]) => {
+      const bytes = Buffer.from(content);
+      return { path: file, bytes, sha256: createHash("sha256").update(bytes).digest("hex") };
+    });
+    for (const entry of entries) await writeFile(path.join(directory, "content", entry.sha256), entry.bytes);
+    const draft = {
+      schemaVersion: "gardener.task-capture-manifest/v1" as const,
+      captureId: "",
+      baseSha: HEAD,
+      files: entries.map((entry) => ({ path: entry.path, status: "modified" as const, mode: "100644" as const, sizeBytes: entry.bytes.length, sha256: entry.sha256 })),
+      totalBytes: entries.reduce((total, entry) => total + entry.bytes.length, 0),
+      truncated: false as const,
+      merge: { baseSha: BASE_TIP, conflictedPaths },
+    };
+    const header = Buffer.concat(["gardener.task-capture/v1", HEAD].map((field) => Buffer.concat([Buffer.from(`${Buffer.byteLength(field)}:`), Buffer.from(field)])));
+    const stream = Buffer.from(taskCaptureChangesDigestInput(draft));
+    const manifest = { ...draft, captureId: `cap_${createHash("sha256").update(Buffer.concat([header, stream])).digest("hex")}` };
+    await writeFile(path.join(directory, "manifest.json"), taskCaptureManifestText(manifest));
+    return { directory, manifest, changesSha256: createHash("sha256").update(stream).digest("hex") };
+  }
+
+  function mergePlan(capture: TaskCaptureManifestV1, changesSha256: string): TaskEffectPlanV1 {
+    return plan([
+      step("merge", "op_merge", "commit.merge_base", {
+        pullNumber: 7, branch: "feature", expectedHeadSha: HEAD, baseBranch: "main", baseSha: BASE_TIP, message: "Merge main into feature",
+      }),
+    ], {
+      capture,
+      changesSha256,
+      branchPatterns: { "commit.merge_base": ["feature"] },
+      provenance: { ...plan([]).provenance, checkoutSha: HEAD },
+      event: {
+        kind: "github.issue_comment.created", eventName: "issue_comment", action: "created",
+        resource: { kind: "issue", id: "700", number: 7 }, commentId: "55",
+      },
+    });
+  }
+
+  function github(options: { pullHead?: string; compare?: string } = {}) {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const pull = {
+      number: 7, state: "open", updated_at: "2026-09-17T12:00:00Z",
+      head: { sha: options.pullHead ?? HEAD, ref: "feature", repo: { id: 123 } }, base: { ref: "main", sha: BASE_TIP, repo: { id: 123 } },
+    };
+    const routes: Array<[string, string, unknown]> = [
+      ["GET", "/repos/owner/repo/pulls/7", pull],
+      ["GET", "/repos/owner/repo/git/ref/heads/feature", { object: { sha: HEAD } }],
+      ["GET", `/repos/owner/repo/compare/${BASE_TIP}...main?per_page=1`, { status: options.compare ?? "ahead" }],
+      ["GET", "/repos/owner/repo", { default_branch: "main" }],
+      ["GET", `/repos/owner/repo/git/commits/${HEAD}`, { tree: { sha: PARENT_TREE } }],
+      ["GET", `/repos/owner/repo/git/trees/${PARENT_TREE}?recursive=1`, { tree: [{ path: "src/a.ts", type: "blob", mode: "100644" }], truncated: false }],
+      ["POST", "/repos/owner/repo/git/blobs", { sha: "6".repeat(40) }],
+      ["POST", "/repos/owner/repo/git/trees", { sha: NEW_TREE }],
+      ["POST", "/repos/owner/repo/git/commits", { sha: NEW_COMMIT }],
+      ["PATCH", "/repos/owner/repo/git/refs/heads/feature", { object: { sha: NEW_COMMIT } }],
+    ];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const call = { method: (init?.method ?? "GET").toUpperCase(), path: `${url.pathname}${url.search}`, body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined };
+      calls.push(call);
+      const route = routes.find(([method, route]) => method === call.method && route === call.path);
+      if (!route) return new Response(`unhandled ${call.method} ${call.path}`, { status: 599 });
+      return Response.json(route[2]);
+    }));
+    return calls;
+  }
+
+  async function applyMerge(files: Record<string, string>, conflictedPaths: string[], options: Parameters<typeof github>[0] = {}) {
+    const capture = await artifact(files, conflictedPaths);
+    const value = mergePlan(capture.manifest, capture.changesSha256);
+    const directory = await mkdtemp(path.join(tmpdir(), "gardener-merge-apply-"));
+    const bytes = Buffer.from(JSON.stringify(value));
+    await writeFile(path.join(directory, "effect.json"), bytes);
+    await writeFile(path.join(directory, "event.json"), JSON.stringify(RAW_EVENT));
+    Object.assign(process.env, ENVIRONMENT, { GITHUB_EVENT_PATH: path.join(directory, "event.json") });
+    core.inputs.set("artifact-path", path.join(directory, "effect.json"));
+    core.inputs.set("expected-sha256", createHash("sha256").update(bytes).digest("hex"));
+    core.inputs.set("github-token", "token");
+    core.inputs.set("runtime-url", "https://gardener.example");
+    core.inputs.set("deadline-at", new Date(Date.now() + 60_000).toISOString());
+    core.inputs.set("capture-artifact-path", capture.directory);
+    const calls = github(options);
+    core.setFailed.mockClear();
+    core.recordEffect.mockClear();
+    await effects.runEffectsMain();
+    core.inputs.delete("capture-artifact-path");
+    return { calls, failure: core.setFailed.mock.calls[0]?.[0] as string | undefined, receipts: core.recordEffect.mock.calls.map(([receipt]) => receipt) };
+  }
+
+  it("confirms the comment's pull request, then commits the capture with both parents and the capture's conflicted paths", async () => {
+    const { calls, failure, receipts } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"]);
+    expect(failure).toBeUndefined();
+    expect(receipts.at(-1)).toMatchObject({ status: "applied" });
+    expect(receipts.at(-1)?.operations[0]?.outputs).toEqual({
+      pullNumber: 7, branch: "feature", commitSha: NEW_COMMIT, treeSha: NEW_TREE, baseSha: BASE_TIP,
+      commitUrl: `https://github.com/owner/repo/commit/${NEW_COMMIT}`,
+    });
+    // The checkout binding read comes first, before the runtime session.
+    expect(calls[0]).toMatchObject({ method: "GET", path: "/repos/owner/repo/pulls/7" });
+    expect(calls.find((call) => call.method === "POST" && call.path.endsWith("/git/commits"))?.body)
+      .toMatchObject({ parents: [HEAD, BASE_TIP] });
+    expect(calls.at(-1)).toMatchObject({ method: "PATCH", body: { sha: NEW_COMMIT, force: false } });
+  });
+
+  it("refuses before the session when the pull request moved since planning", async () => {
+    const { calls, failure, receipts } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"], { pullHead: "7".repeat(40) });
+    expect(failure).toMatch(/^Effect checkout binding mismatch: pull request #7 is at 7{40}/);
+    expect(receipts).toEqual([]);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+
+  it("stops at the merge when the base branch no longer contains the planned base", async () => {
+    const { calls, failure } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"], { compare: "diverged" });
+    expect(failure).toMatch(/no longer contains the planned base/);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+
+  it("stops at the merge when a conflicted file the capture names still holds markers", async () => {
+    const { calls, failure } = await applyMerge({ "src/a.ts": "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n" }, ["src/a.ts"]);
+    expect(failure).toMatch(/src\/a\.ts still holds a conflict marker/);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 });

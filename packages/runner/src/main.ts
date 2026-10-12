@@ -6,11 +6,12 @@ import { taskEffectPlanV1Schema, type TaskEffectPlanV1 } from "@gardener/contrac
 import { type RunnerEventV1 } from "@gardener/protocol";
 import { authorPermissionLogin, fetchAuthorPermission, withAuthorPermission } from "./author-permission";
 import { fetchDispatchTarget } from "./dispatch-target";
-import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
-import { fetchCurrentPullRequest, UnconfirmedHeadError, withCurrentPullRequestHead } from "./current-head";
+import { dispatchTargetRequest, normalizeGitHubEvent, normalizePullRequest } from "./event";
+import { fetchCurrentPullRequest, UnconfirmedHeadError, withCheckoutSha, withCurrentPullRequestHead } from "./current-head";
 import { createPlanningExecutor, planningCaptureBase } from "./executor";
 import { GitHubReadClient } from "./github-read";
 import { addSecret, jobSummaryContext, renderPlanJobSummary, writeJobSummary } from "./job-summary";
+import { prepareMerge, type MergePreparation } from "./merge-base";
 import { runPlanningSession } from "./session";
 
 const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
@@ -37,24 +38,11 @@ async function main(): Promise<void> {
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
     // Set only when the workflow checked out a pull request's head.
     const baseSha = planningCaptureBase(process.env["INPUT_CHECKOUT-REF"], process.env.GITHUB_SHA);
+    const mergeRequested = booleanInput("merge-base");
     if (providerReadToken) addSecret(providerReadToken);
-    // Built before the event is read and long before the session connects, so
-    // the capture baseline is taken while the checkout is still exactly what
-    // `actions/checkout` produced.
-    const executor = await createPlanningExecutor({
-      workspace: requiredEnvironment("GITHUB_WORKSPACE"),
-      runnerTemp: process.env.RUNNER_TEMP,
-      baseSha,
-      ...(providerReadToken
-        ? {
-          createReadClient: (signal: AbortSignal, maxResponseBytes: number) => new GitHubReadClient({
-            token: providerReadToken,
-            signal,
-            limits: { maxResponseBytes },
-          }),
-        }
-        : {}),
-    });
+    const workspace = requiredEnvironment("GITHUB_WORKSPACE");
+    // Reading the event only calls the GitHub API; nothing has touched the
+    // checkout yet, and no task command can run until the session connects.
     let event: RunnerEventV1 | undefined;
     try {
       event = await githubEvent(checkoutRef(process.env["INPUT_CHECKOUT-REF"]));
@@ -65,6 +53,29 @@ async function main(): Promise<void> {
       await writeJobSummary(() => renderPlanJobSummary({ skipped: error.message, context: jobSummaryContext() }));
       return;
     }
+    // The merge is prepared before the capture baseline below, because its
+    // fetch writes objects and shallow state; it never touches the working
+    // tree, index, configuration or attributes that the baseline digests.
+    const merge = mergeRequested ? await mergePreparation(workspace, event) : undefined;
+    if (merge?.status === "unavailable") core.warning(merge.reason);
+    // Built long before the session connects, so the capture baseline is
+    // taken while the checkout is still exactly what `actions/checkout`
+    // produced.
+    const executor = await createPlanningExecutor({
+      workspace,
+      runnerTemp: process.env.RUNNER_TEMP,
+      baseSha,
+      ...(merge === undefined ? {} : { merge }),
+      ...(providerReadToken
+        ? {
+          createReadClient: (signal: AbortSignal, maxResponseBytes: number) => new GitHubReadClient({
+            token: providerReadToken,
+            signal,
+            limits: { maxResponseBytes },
+          }),
+        }
+        : {}),
+    });
     const cancellation = new AbortController();
     const cancel = () => cancellation.abort();
     process.once("SIGINT", cancel);
@@ -139,7 +150,8 @@ async function githubEvent(checkoutSha: string | undefined): Promise<RunnerEvent
   const resolved = target === null
     ? undefined
     : await fetchDispatchTarget({ target, repository: requiredEnvironment("GITHUB_REPOSITORY"), token: providerReadToken });
-  const event = await onCheckedOutHead(normalizeGitHubEvent(eventName, raw, resolved), checkoutSha);
+  const normalized = await onCheckedOutHead(normalizeGitHubEvent(eventName, raw, resolved), checkoutSha);
+  const event = withCheckoutSha(normalized, checkoutSha, await commentPullRequest(eventName, raw, checkoutSha));
   // GitHub reports a private org member as a non-member, so `authors:
   // maintainers` also accepts write access, looked up here before any task
   // command runs. Without it the run falls back to the association alone.
@@ -167,6 +179,45 @@ async function onCheckedOutHead(event: RunnerEventV1, checkoutSha: string | unde
   return moved;
 }
 
+/**
+ * The pull request a comment was written on, read now, when the workflow
+ * checked out a pull request head for that comment. Undefined when there is
+ * none to read; null when it could not be read, which stops the run.
+ */
+async function commentPullRequest(eventName: string, raw: unknown, checkoutSha: string | undefined): Promise<Record<string, unknown> | null | undefined> {
+  if (eventName !== "issue_comment" || checkoutSha === undefined) return undefined;
+  const issue = raw !== null && typeof raw === "object" ? (raw as { issue?: { number?: unknown; pull_request?: unknown } }).issue : undefined;
+  if (issue?.pull_request === undefined || issue.pull_request === null || typeof issue.number !== "number") return undefined;
+  try {
+    const { pull_request: value } = await fetchDispatchTarget({
+      target: { kind: "pull_request", number: issue.number },
+      repository: requiredEnvironment("GITHUB_REPOSITORY"),
+      token: providerReadToken,
+    });
+    return normalizePullRequest(value);
+  } catch {
+    return null;
+  }
+}
+
+/** Prepares the merge for an event whose pull request head the workflow checked out. */
+async function mergePreparation(workspace: string, event: RunnerEventV1 | undefined): Promise<MergePreparation> {
+  const pullRequest = event !== undefined && "pullRequest" in event ? event.pullRequest : undefined;
+  if (event?.checkoutSha === undefined || pullRequest === undefined) {
+    return {
+      status: "unavailable",
+      reason: "No merge was prepared: this run did not check out a pull request's head (the pull request is closed or from a fork, or the event names none).",
+    };
+  }
+  return prepareMerge({
+    workspace,
+    repository: requiredEnvironment("GITHUB_REPOSITORY"),
+    token: providerReadToken,
+    pullRequest,
+    checkoutSha: event.checkoutSha,
+  });
+}
+
 /** The commit the workflow checked out instead of GITHUB_SHA, when it named one. */
 function checkoutRef(value: string | undefined): string | undefined {
   const ref = value?.trim() ?? "";
@@ -191,6 +242,13 @@ function requiredInput(name: string): string {
   const value = core.getInput(name, { required: true }).trim();
   if (!value) throw new Error(`${name} is required`);
   return value;
+}
+
+function booleanInput(name: string): boolean {
+  const raw = core.getInput(name).trim();
+  if (raw === "" || raw === "false") return false;
+  if (raw === "true") return true;
+  throw new Error(`${name} must be true or false`);
 }
 
 function integerInput(name: string, fallback: number, minimum: number, maximum: number): number {

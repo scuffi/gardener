@@ -62,6 +62,7 @@ import {
   type TaskCaptureManifestV1,
   type TaskCaptureRefV1,
 } from "@gardener/contracts";
+import { ConflictMarkerScanner } from "./merge-markers";
 
 /** Git index mode for a submodule entry. Submodule contents are never capturable. */
 const GITLINK_MODE = "160000";
@@ -150,6 +151,30 @@ export interface CaptureRequest {
   maxBytes?: number;
   /** Optional ceiling on captured entries, enforced as entries are classified. */
   maxFiles?: number;
+  /**
+   * The merge `repository.merge_base` wrote into the working tree, as the
+   * bridge recorded it before the model ran. Present, the capture is a merge
+   * capture, checked against it in addition to every ordinary rule.
+   */
+  merge?: CaptureMergeExpectation;
+}
+
+/**
+ * What a merge capture must equal. Recorded in the bridge's memory before
+ * the session connected, so nothing the model did can have chosen it.
+ */
+export interface CaptureMergeExpectation {
+  baseSha: string;
+  /** Sorted and unique: the paths git could not merge, which the model resolves. */
+  conflictedPaths: readonly string[];
+  /** Every difference from HEAD to git's merged tree. */
+  differences: ReadonlyMap<string, {
+    status: "added" | "modified" | "deleted";
+    mode: string;
+    blobSha: string | null;
+  }>;
+  /** The base commit's entry for protected paths the merge touches; `null` where it has none. */
+  protectedBase: ReadonlyMap<string, { mode: string; blobSha: string } | null>;
 }
 
 export type CaptureResult =
@@ -226,10 +251,16 @@ interface ChangedFile {
   path: string;
   status: "added" | "modified";
   mode: TaskCaptureFileModeV1;
-  /** Git blob id of the canonical content, or `undefined` for a symlink. */
+  /**
+   * Git blob id of the canonical content. For a symlink it is the id of the
+   * target bytes, used only for comparison; the target is materialized from
+   * `linkTarget`.
+   */
   blobSha?: string;
   /** Symlink target bytes, materialized directly rather than through Git. */
   linkTarget?: Buffer;
+  /** A protected path a merge capture proved equal to the merge's base commit. */
+  baseIdentical?: true;
 }
 
 /**
@@ -271,6 +302,16 @@ export class WorkingTreeCapture {
   /** Commit this capture is bound to. */
   get baseSha(): string {
     return this.#baseSha;
+  }
+
+  /**
+   * Refuses when the index, configuration, exclude rules or any attributes
+   * file moved since the pre-execution snapshot. `repository.merge_base`
+   * calls this before and after writing the merge, because that write runs
+   * the repository's filters and must run only the ones the snapshot saw.
+   */
+  async assertAuthorityUnchanged(): Promise<void> {
+    await this.#assertFreshAuthority();
   }
 
   /**
@@ -335,7 +376,11 @@ export class WorkingTreeCapture {
       .sort(byPath);
 
     const budget = captureBudget(maxBytes);
-    const { deletions, changed } = await this.#classify(candidates, walked, maxFiles, budget);
+    const merge = request.merge;
+    const { deletions, changed } = await this.#classify(candidates, walked, maxFiles, budget, merge);
+    // Before the unchanged answer: a merge whose recorded changes are gone
+    // is a broken merge, not an empty one.
+    if (merge !== undefined) assertMergeMatches(merge, deletions, changed);
     if (deletions.length + changed.length === 0) return { status: "unchanged" };
     await this.#assertChangeWithinBudget(changed, walked, budget);
     // Classification invokes Git clean filters. Re-read every authority input
@@ -353,8 +398,9 @@ export class WorkingTreeCapture {
       if (blobPaths.length > 0) {
         await gitText(this.#workspace, ["hash-object", "-w", "--stdin-paths"], { input: `${blobPaths.join("\n")}\n` });
       }
+      const conflicted = new Set(merge?.conflictedPaths ?? []);
       for (const file of changed) {
-        const written = await this.#materialize(staging, file, budget, totalBytes);
+        const written = await this.#materialize(staging, file, budget, totalBytes, conflicted.has(file.path));
         totalBytes += written.sizeBytes;
         materialized.push(written);
       }
@@ -365,7 +411,8 @@ export class WorkingTreeCapture {
 
       const files: TaskCaptureFileV1[] = [...deletions, ...materialized]
         .sort((left, right) => byPath(left.path, right.path));
-      const captureId = `cap_${sha256Hex(identityStream(this.#baseSha, files))}`;
+      const mergeRecord = merge === undefined ? undefined : { baseSha: merge.baseSha, conflictedPaths: [...merge.conflictedPaths] };
+      const captureId = `cap_${sha256Hex(identityStream(this.#baseSha, { files, ...(mergeRecord ? { merge: mergeRecord } : {}) }))}`;
       const manifest = parseManifest({
         schemaVersion: "gardener.task-capture-manifest/v1",
         captureId,
@@ -373,6 +420,7 @@ export class WorkingTreeCapture {
         files,
         totalBytes,
         truncated: false,
+        ...(mergeRecord ? { merge: mergeRecord } : {}),
       });
       const manifestBytes = Buffer.from(taskCaptureManifestText(manifest), "utf8");
       const target = path.join(this.#artifactRoot, captureId);
@@ -393,6 +441,7 @@ export class WorkingTreeCapture {
         changesSha256: sha256Hex(changesStream(manifest)),
         fileCount: files.length,
         sizeBytes: totalBytes,
+        ...(mergeRecord ? { merge: mergeRecord } : {}),
       });
       return { status: "captured", ref, manifest, directory: target };
     } catch (error) {
@@ -547,6 +596,7 @@ export class WorkingTreeCapture {
     walked: ReadonlyMap<string, WalkedEntry>,
     maxFiles: number | undefined,
     budget: CaptureBudget,
+    merge: CaptureMergeExpectation | undefined,
   ): Promise<{ deletions: TaskCaptureFileV1[]; changed: ChangedFile[] }> {
     const deletions: TaskCaptureFileV1[] = [];
     const present: { path: string; entry: WalkedEntry; mode: TaskCaptureFileModeV1 }[] = [];
@@ -557,8 +607,8 @@ export class WorkingTreeCapture {
       const indexed = this.#authority.index.get(entry);
       if (walkedEntry === undefined) {
         if (indexed === undefined) continue;
-        assertCapturableTarget(entry);
-        deletions.push({ path: entry, status: "deleted" });
+        const baseIdentical = capturableTarget(entry, merge, null);
+        deletions.push({ path: entry, status: "deleted", ...(baseIdentical ? { baseIdentical } : {}) });
         continue;
       }
       if (walkedEntry.kind === "special") {
@@ -583,8 +633,11 @@ export class WorkingTreeCapture {
         const target = Buffer.from(await readlink(candidate.entry.absolute), "utf8");
         const blobSha = gitBlobSha1(target);
         if (indexed !== undefined && indexed.mode === "120000" && indexed.blobSha === blobSha) continue;
-        assertCapturableTarget(candidate.path);
-        changed.push({ path: candidate.path, status: indexed === undefined ? "added" : "modified", mode: "120000", linkTarget: target });
+        const baseIdentical = capturableTarget(candidate.path, merge, { mode: "120000", blobSha });
+        changed.push({
+          path: candidate.path, status: indexed === undefined ? "added" : "modified", mode: "120000", blobSha, linkTarget: target,
+          ...(baseIdentical ? { baseIdentical } : {}),
+        });
         continue;
       }
       const blobSha = blobShas.get(candidate.path);
@@ -601,8 +654,11 @@ export class WorkingTreeCapture {
           `Cannot capture ${candidate.path}: it uses the Git filter '${driver}', which is not available under Gardener's pinned Git configuration`,
         );
       }
-      assertCapturableTarget(candidate.path);
-      changed.push({ path: candidate.path, status: indexed === undefined ? "added" : "modified", mode: candidate.mode, blobSha });
+      const baseIdentical = capturableTarget(candidate.path, merge, { mode: candidate.mode, blobSha });
+      changed.push({
+        path: candidate.path, status: indexed === undefined ? "added" : "modified", mode: candidate.mode, blobSha,
+        ...(baseIdentical ? { baseIdentical } : {}),
+      });
     }
 
     const total = deletions.length + changed.length;
@@ -677,7 +733,10 @@ export class WorkingTreeCapture {
     file: ChangedFile,
     budget: CaptureBudget,
     capturedBytes: number,
+    /** A merge's conflicted path: its canonical bytes must hold no conflict marker. */
+    scanMarkers = false,
   ): Promise<MaterializedFile> {
+    const markers = scanMarkers ? new ConflictMarkerScanner() : undefined;
     const temporary = path.join(directory, "content", `.tmp-${process.pid}-${uniqueSuffix()}`);
     const handle = await open(temporary, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, FILE_MODE);
     const hash = createHash("sha256");
@@ -698,6 +757,7 @@ export class WorkingTreeCapture {
           return;
         }
         hash.update(chunk);
+        markers?.push(chunk);
         callback(null, chunk);
       },
     });
@@ -716,9 +776,19 @@ export class WorkingTreeCapture {
       await handle.close();
     }
 
+    // Scanned on the same canonical bytes the commit will carry, so neither
+    // a clean filter nor line-ending normalization can hide a marker.
+    if (markers?.finish() === true) {
+      throw new Error(
+        `Cannot capture ${file.path}: it still holds a conflict marker (a line starting <<<<<<< or >>>>>>>); resolve the conflict before proposing the merge commit`,
+      );
+    }
     const sha256 = hash.digest("hex");
     await rename(temporary, path.join(directory, "content", sha256));
-    return { path: file.path, status: file.status, mode: file.mode, sizeBytes, sha256 };
+    return {
+      path: file.path, status: file.status, mode: file.mode, sizeBytes, sha256,
+      ...(file.baseIdentical ? { baseIdentical: file.baseIdentical } : {}),
+    };
   }
 
   async #walk(absolute: string, relative: string, output: Map<string, WalkedEntry>): Promise<void> {
@@ -821,7 +891,9 @@ export async function verifyCaptureArtifact(
     ["file count", String(manifest.files.length), String(reference.fileCount)],
     ["size", String(totalBytes), String(reference.sizeBytes)],
     ["changes digest", sha256Hex(changesStream(manifest)), reference.changesSha256],
-    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest.files))}`, reference.captureId],
+    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest))}`, reference.captureId],
+    // A plan-bound reference must not claim a different merge than the manifest holds.
+    ["merge", JSON.stringify(manifest.merge ?? null), JSON.stringify(reference.merge ?? null)],
   ];
   for (const [label, actual, want] of expectations) {
     if (!equalsConstantTime(actual, want)) throw new Error(`Capture ${label} mismatch`);
@@ -849,19 +921,18 @@ function changesStream(manifest: TaskCaptureManifestV1): Buffer {
   return Buffer.from(taskCaptureChangesDigestInput(manifest));
 }
 
-/** Capture identity input: the base commit followed by the canonical changes stream. */
-function identityStream(baseSha: string, files: readonly TaskCaptureFileV1[]): Buffer {
-  return Buffer.concat([framed(["gardener.task-capture/v1", baseSha]), ...files.map(fileRecord)]);
-}
-
 /**
- * The one definition of a per-file record, shared by both digest streams so the
- * capture identity and the changes digest cannot drift apart.
+ * Capture identity input: the base commit followed by the canonical changes
+ * stream. Both streams use the contract's one encoding, so the capture
+ * identity and the changes digest cannot drift apart, and a merge capture's
+ * `merge` and `baseIdentical` fields are part of its identity while a plain
+ * capture's identity is exactly what it always was.
  */
-function fileRecord(file: TaskCaptureFileV1): Buffer {
-  return file.status === "deleted"
-    ? framed(["delete", file.path])
-    : framed(["upsert", file.path, file.mode, String(file.sizeBytes), file.sha256]);
+function identityStream(baseSha: string, manifest: Pick<TaskCaptureManifestV1, "files" | "merge">): Buffer {
+  return Buffer.concat([
+    framed(["gardener.task-capture/v1", baseSha]),
+    Buffer.from(taskCaptureChangesDigestInput(manifest as TaskCaptureManifestV1)),
+  ]);
 }
 
 /** `<byteLength>:<bytes>` per field, so concatenation is injective. */
@@ -1273,6 +1344,70 @@ function assertCapturablePath(entry: string): void {
     throw new Error(`Repository path escapes the workspace: ${entry}`);
   }
   if (components[0] === ".git") throw new Error(`Cannot capture Git internals: ${entry}`);
+}
+
+/**
+ * Refuses a protected path, except in a merge capture where the path ends up
+ * exactly as the merge's base commit has it (mode and blob, or absent): that
+ * adds nothing the base branch does not already hold. Returns whether that
+ * exemption applied, which the manifest records as `baseIdentical`. Any
+ * other protected change is refused exactly as in a plain capture.
+ */
+function capturableTarget(
+  entry: string,
+  merge: CaptureMergeExpectation | undefined,
+  actual: { mode: string; blobSha: string } | null,
+): boolean {
+  const isRunnerHome = entry === RUNNER_HOME_PATH || entry.startsWith(RUNNER_HOME_PREFIX);
+  if (merge !== undefined && !isRunnerHome && isProtectedCapturePath(entry)) {
+    const base = merge.protectedBase.get(entry);
+    if (base !== undefined && (base === null
+      ? actual === null
+      : actual !== null && actual.mode === base.mode && actual.blobSha === base.blobSha)) {
+      return true;
+    }
+  }
+  assertCapturableTarget(entry);
+  return false;
+}
+
+/**
+ * Outside the conflicted files a merge commit must be git's automatic merge,
+ * exactly: every captured path there must be a recorded difference with the
+ * same status, mode and blob, and every recorded difference there must be
+ * captured. Blob ids come from capture's own `hash-object` path (pinned
+ * attributes, clean filters), which agrees with merge-tree's canonical blobs
+ * whenever clean(smudge(x)) is x, which the refusal of unrunnable filters
+ * makes the case. Conflicted paths are the model's to resolve: they need only
+ * be capturable and free of markers (checked while materializing), and may be
+ * absent, for example when the resolution keeps the head's version.
+ */
+function assertMergeMatches(
+  merge: CaptureMergeExpectation,
+  deletions: readonly TaskCaptureFileV1[],
+  changed: readonly ChangedFile[],
+): void {
+  const conflicted = new Set(merge.conflictedPaths);
+  const captured = new Map<string, { status: string; mode: string | null; blobSha: string | null }>();
+  for (const file of deletions) captured.set(file.path, { status: "deleted", mode: null, blobSha: null });
+  for (const file of changed) captured.set(file.path, { status: file.status, mode: file.mode, blobSha: file.blobSha ?? null });
+  const strict = "outside the conflicted files a merge commit must equal git's automatic merge exactly";
+  for (const [entry, actual] of captured) {
+    if (conflicted.has(entry)) continue;
+    const expected = merge.differences.get(entry);
+    if (expected === undefined) {
+      throw new Error(`Cannot capture ${entry}: ${strict}, and the merge does not change this path`);
+    }
+    if (expected.status !== actual.status
+      || (actual.status !== "deleted" && (expected.mode !== actual.mode || expected.blobSha !== actual.blobSha))) {
+      throw new Error(`Cannot capture ${entry}: ${strict}, and this path differs from the merge`);
+    }
+  }
+  for (const entry of merge.differences.keys()) {
+    if (!conflicted.has(entry) && !captured.has(entry)) {
+      throw new Error(`Cannot capture the merge: ${strict}, and ${entry}, which the merge changes, is no longer changed in the working tree`);
+    }
+  }
 }
 
 /**

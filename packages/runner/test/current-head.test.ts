@@ -1,7 +1,7 @@
 import type { RunnerEventV1 } from "@gardener/protocol";
 import { describe, expect, it, vi } from "vitest";
-import { fetchCurrentPullRequest, UnconfirmedHeadError, withCurrentPullRequestHead, type CurrentPullRequest } from "../src/current-head";
-import { normalizeGitHubEvent } from "../src/event";
+import { fetchCurrentPullRequest, UnconfirmedHeadError, withCheckoutSha, withCurrentPullRequestHead, type CurrentPullRequest } from "../src/current-head";
+import { normalizeGitHubEvent, normalizePullRequest } from "../src/event";
 
 const actor = { id: 45369682, login: "scuffi" };
 const eventHead = "d".repeat(40);
@@ -110,5 +110,61 @@ describe("reading the current pull request", () => {
     await expect(fetchCurrentPullRequest({ repository: "scuffi/gardener", number: 12, token: "", fetch: failing as typeof fetch })).resolves.toBeNull();
     await expect(fetchCurrentPullRequest({ repository: "../x", number: 12, token: "t", fetch: failing as typeof fetch })).resolves.toBeNull();
     await expect(fetchCurrentPullRequest({ repository: "scuffi/gardener", number: 0, token: "t", fetch: failing as typeof fetch })).resolves.toBeNull();
+  });
+});
+
+describe("recording the checked-out pull request head", () => {
+  const repository = { id: 1374842705, full_name: "scuffi/gardener", default_branch: "main" };
+  const rawPull = (overrides: Record<string, unknown> = {}) => ({
+    id: 555, number: 12, title: "Fix", body: null, labels: [], user: actor, draft: false, state: "open", merged: false,
+    updated_at: "2026-10-06T12:00:00.000Z",
+    base: { ref: "main", sha: "a".repeat(40), repo: { id: 1374842705, full_name: "scuffi/gardener" } },
+    head: { ref: "feature", sha: eventHead, repo: { id: 1374842705, full_name: "scuffi/gardener" } },
+    ...overrides,
+  });
+  const comment = () => normalizeGitHubEvent("issue_comment", {
+    repository,
+    action: "created",
+    issue: { id: 555, number: 12, title: "Fix", body: null, state: "open", labels: [], user: actor, pull_request: { url: "x" } },
+    comment: { id: 9, body: "@gardener merge main", user: actor },
+  });
+  const manual = (pull = rawPull()) => normalizeGitHubEvent("workflow_dispatch", { repository, inputs: { pull_request: "12" } }, { pull_request: pull });
+
+  it("attaches a comment's open same-repository pull request at the checkout", () => {
+    const event = withCheckoutSha(comment(), eventHead, normalizePullRequest(rawPull()));
+    expect(event).toMatchObject({ kind: "github.issue_comment.created", checkoutSha: eventHead, pullRequest: { number: 12, head: { sha: eventHead } } });
+    // The issue stays the event's resource.
+    expect(event).toMatchObject({ issue: { number: 12 } });
+  });
+
+  it("stops without planning when a comment's pull request cannot be confirmed", () => {
+    const cases: Array<[Record<string, unknown> | null, RegExp]> = [
+      [null, /could not be read/],
+      [normalizePullRequest(rawPull({ state: "closed" })), /no longer open/],
+      [normalizePullRequest(rawPull({ head: { ref: "feature", sha: eventHead, repo: { id: 7, full_name: "fork/gardener" } } })), /same-repository/],
+      [normalizePullRequest(rawPull({ head: { ref: "feature", sha: eventHead, repo: null } })), /same-repository/],
+      [normalizePullRequest(rawPull({ head: { ref: "feature", sha: movedHead, repo: { id: 1374842705, full_name: "scuffi/gardener" } } })), /its head is/],
+      [normalizePullRequest(rawPull({ number: 13 })), /not a valid event/],
+    ];
+    for (const [pullRequest, message] of cases) {
+      expect(() => withCheckoutSha(comment(), eventHead, pullRequest)).toThrow(UnconfirmedHeadError);
+      expect(() => withCheckoutSha(comment(), eventHead, pullRequest)).toThrow(message);
+    }
+  });
+
+  it("confirms a manual run's resolved pull request the same way", () => {
+    expect(withCheckoutSha(manual(), eventHead)).toMatchObject({ checkoutSha: eventHead });
+    expect(() => withCheckoutSha(manual(), movedHead)).toThrow(UnconfirmedHeadError);
+    expect(() => withCheckoutSha(manual(rawPull({ state: "closed" })), eventHead)).toThrow(/no longer open/);
+  });
+
+  it("records a pull request event's confirmed head, and leaves events without a checkout alone", () => {
+    expect(withCheckoutSha(reviewEvent(), eventHead)).toMatchObject({ checkoutSha: eventHead });
+    const moved = withCurrentPullRequestHead(reviewEvent(), movedHead, live);
+    expect(withCheckoutSha(moved, movedHead)).toMatchObject({ checkoutSha: movedHead });
+    const plain = comment();
+    expect(withCheckoutSha(plain, undefined, normalizePullRequest(rawPull()))).toBe(plain);
+    // A comment on a plain issue has no pull request to read.
+    expect(withCheckoutSha(plain, eventHead, undefined)).toBe(plain);
   });
 });

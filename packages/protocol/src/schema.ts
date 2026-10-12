@@ -133,7 +133,67 @@ export const runnerActionV1Schema = z.discriminatedUnion("kind", [
     baseSha: sha1,
     maxOutputBytes: z.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES),
   }),
+  /**
+   * Trusted merge of the pull request's base branch into the working tree.
+   *
+   * Like capture, there is deliberately no field a model could fill. The
+   * merge was computed by the bridge before the session connected, and this
+   * only asks the runner to write that recorded result into the working tree.
+   */
+  z.strictObject({
+    ...runnerActionBaseFields,
+    kind: z.literal("repository.merge_base"),
+  }),
 ]);
+
+/** Ceiling on git's merge messages returned to the model, in UTF-8 bytes. */
+export const MERGE_BASE_MESSAGES_MAX_BYTES = 8 * 1_024;
+/** Mirrors `COMMIT_FILE_LIMIT` in `@gardener/contracts`: a merge larger than one commit could never be applied. */
+const MERGE_BASE_FILE_LIMIT = 1_000;
+const mergeBasePath = z.string().min(1).max(1_024);
+
+/**
+ * Result of `repository.merge_base`, carried in the action's `stdout`.
+ *
+ * Every value comes from the runner's own pre-session preparation, never from
+ * the model; the model passes them on into `commit.merge_base`, where planning
+ * checks each against the event and the merge capture. A refusal carries the
+ * reason, for example that the working tree was already changed or that the
+ * merge touches `.gitattributes`, which a person must merge.
+ */
+export const runnerMergeBaseResultV1Schema = z.discriminatedUnion("status", [
+  z.strictObject({
+    schemaVersion: z.literal("gardener.runner.merge-base-result/v1"),
+    status: z.enum(["clean", "conflicted"]),
+    pullNumber: z.number().int().positive(),
+    branch: z.string().min(1).max(255),
+    expectedHeadSha: sha1,
+    baseBranch: z.string().min(1).max(255),
+    baseSha: sha1,
+    mergeBaseSha: sha1,
+    /** Sorted and unique. Empty exactly when `status` is `clean`. */
+    conflictedFiles: z.array(mergeBasePath).max(MERGE_BASE_FILE_LIMIT),
+    changedFileCount: z.number().int().nonnegative().max(MERGE_BASE_FILE_LIMIT),
+    /** Git's merge messages, bounded to `MERGE_BASE_MESSAGES_MAX_BYTES`. */
+    messages: z.string().max(MERGE_BASE_MESSAGES_MAX_BYTES).refine(
+      (value) => new TextEncoder().encode(value).byteLength <= MERGE_BASE_MESSAGES_MAX_BYTES,
+      `messages exceed ${MERGE_BASE_MESSAGES_MAX_BYTES} bytes`,
+    ),
+  }).superRefine((result, context) => {
+    if ((result.status === "clean") !== (result.conflictedFiles.length === 0)) {
+      context.addIssue({ code: "custom", path: ["conflictedFiles"], message: "a clean merge has no conflicted files, a conflicted one has some" });
+    }
+    if (result.conflictedFiles.some((file, index) => index > 0 && !(result.conflictedFiles[index - 1]! < file))) {
+      context.addIssue({ code: "custom", path: ["conflictedFiles"], message: "conflicted files must be sorted and unique" });
+    }
+  }),
+  z.strictObject({
+    schemaVersion: z.literal("gardener.runner.merge-base-result/v1"),
+    status: z.literal("refused"),
+    reason: z.string().min(1).max(2_000),
+  }),
+]);
+export type RunnerMergeBaseResultV1 = z.infer<typeof runnerMergeBaseResultV1Schema>;
 
 /**
  * Plan-bound pointer to one capture. Mirrors `taskCaptureRefV1Schema` in
@@ -148,6 +208,14 @@ export const runnerCaptureRefV1Schema = z.strictObject({
   changesSha256: sha256,
   fileCount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   sizeBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  /**
+   * Present only on a merge capture, taken after `repository.merge_base`
+   * applied a merge. Mirrors `taskCaptureMergeV1Schema`.
+   */
+  merge: z.strictObject({
+    baseSha: sha1,
+    conflictedPaths: z.array(mergeBasePath).max(MERGE_BASE_FILE_LIMIT),
+  }).optional(),
 });
 export type RunnerCaptureRefV1 = z.infer<typeof runnerCaptureRefV1Schema>;
 
@@ -348,11 +416,22 @@ function runnerEventMember<Kind extends string, Shape extends z.ZodRawShape>(kin
     kind: z.literal(kind),
     repository: eventRepository,
     ...shape,
+    /**
+     * The pull request head the planning job checked out, set by the bridge
+     * only after confirming it is `pullRequest`'s current head. Mirrors the
+     * contract: present only with `pullRequest`, and equal to its head sha.
+     */
+    checkoutSha: sha1.optional(),
   });
 }
 
 const issuePayload = { issue: eventIssue };
 const pullRequestPayload = { pullRequest: eventPullRequest };
+/**
+ * A comment on a pull request's conversation, when the planning job checked
+ * out that pull request's head. The issue stays the event's resource.
+ */
+const commentPullRequestPayload = { pullRequest: eventPullRequest.optional() };
 const discussionPayload = { discussion: eventDiscussion };
 
 export const runnerEventV1Schema = z.discriminatedUnion("kind", [
@@ -361,8 +440,8 @@ export const runnerEventV1Schema = z.discriminatedUnion("kind", [
   runnerEventMember("github.issue.labeled", { ...issuePayload, label: eventChangedLabel }),
   runnerEventMember("github.issue.unlabeled", { ...issuePayload, label: eventChangedLabel }),
   runnerEventMember("github.issue.reopened", issuePayload),
-  runnerEventMember("github.issue_comment.created", { ...issuePayload, comment: eventComment }),
-  runnerEventMember("github.issue_comment.edited", { ...issuePayload, comment: eventComment, ...eventEdited }),
+  runnerEventMember("github.issue_comment.created", { ...issuePayload, comment: eventComment, ...commentPullRequestPayload }),
+  runnerEventMember("github.issue_comment.edited", { ...issuePayload, comment: eventComment, ...eventEdited, ...commentPullRequestPayload }),
   runnerEventMember("github.pull_request.opened", pullRequestPayload),
   runnerEventMember("github.pull_request.reopened", pullRequestPayload),
   runnerEventMember("github.pull_request.synchronize", pullRequestPayload),
@@ -393,7 +472,20 @@ export const runnerEventV1Schema = z.discriminatedUnion("kind", [
   runnerEventMember("github.discussion.unlabeled", { ...discussionPayload, label: eventChangedLabel }),
   runnerEventMember("github.discussion_comment.created", { ...discussionPayload, comment: eventDiscussionComment }),
   runnerEventMember("github.discussion_comment.edited", { ...discussionPayload, comment: eventDiscussionComment, ...eventEdited }),
-]);
+]).superRefine((event, context) => {
+  if (event.checkoutSha !== undefined) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : undefined;
+    if (pullRequest === undefined) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited")
+    && event.pullRequest !== undefined && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
+  }
+});
 
 /**
  * Step name from the ordered plan. Mirrors `taskStepNameV1Schema` in
@@ -640,6 +732,7 @@ export type RunnerActionV1 = z.infer<typeof runnerActionV1Schema>;
 export type RunnerShellActionV1 = Extract<RunnerActionV1, { kind: "shell.exec" }>;
 export type RunnerGitHubReadActionV1 = Extract<RunnerActionV1, { kind: "github.read" }>;
 export type RunnerCaptureActionV1 = Extract<RunnerActionV1, { kind: "repository.capture" }>;
+export type RunnerMergeBaseActionV1 = Extract<RunnerActionV1, { kind: "repository.merge_base" }>;
 export type RunnerActionResultV1 = z.infer<typeof runnerActionResultV1Schema>;
 export type RunnerEventV1 = z.infer<typeof runnerEventV1Schema>;
 export type RunnerEffectReceiptV1 = z.infer<typeof runnerEffectReceiptV1Schema>;

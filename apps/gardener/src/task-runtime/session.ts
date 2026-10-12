@@ -809,6 +809,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (!existing) throw new Error("Unknown operation result");
     if (existing.action.sequence !== result.sequence) throw new Error("Operation sequence mismatch");
     const bytes = new TextEncoder().encode(result.stdout).byteLength + new TextEncoder().encode(result.stderr).byteLength;
+    // TODO(merge-base stage 3): bound the merge result; the Worker never issues it yet.
+    if (!("maxOutputBytes" in existing.action)) throw new Error("repository.merge_base is not implemented yet");
     if (bytes > existing.action.maxOutputBytes) throw new Error("Operation output exceeds its byte limit");
     const canonicalResult = canonicalValue(result);
     if (existing.state === "completed") {

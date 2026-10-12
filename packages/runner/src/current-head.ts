@@ -120,3 +120,58 @@ export async function fetchCurrentPullRequest(input: {
     return null;
   }
 }
+
+/**
+ * The event with `checkoutSha` set to the pull request head the workflow
+ * checked out, once that head is confirmed.
+ *
+ * - A comment on a pull request gains the pull request itself
+ *   (`commentPullRequest`, read now with the provider read token), which
+ *   must be open, from this repository, and at exactly `checkoutSha`.
+ * - A manual run naming a pull request was resolved when the run started;
+ *   the same three things must hold for it.
+ * - A pull request event has already been moved to `checkoutSha` by
+ *   `withCurrentPullRequestHead`.
+ *
+ * Anything else stops the run without planning (`UnconfirmedHeadError`):
+ * the workflow checked out a commit the event cannot vouch for, and planning
+ * on the default branch instead would build on a different commit than the
+ * one checked out. An event that names no pull request is returned unchanged.
+ */
+export function withCheckoutSha(
+  event: RunnerEventV1,
+  checkoutSha: string | undefined,
+  commentPullRequest?: Record<string, unknown> | null,
+): RunnerEventV1 {
+  if (checkoutSha === undefined) return event;
+  const isComment = event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited";
+  const pullRequest = isComment ? commentPullRequest : "pullRequest" in event ? event.pullRequest : undefined;
+  if (pullRequest === undefined) return event;
+  const number = isComment ? event.issue.number : (pullRequest as { number?: unknown } | null)?.number;
+  const confirm = isComment || event.kind === "github.workflow_dispatch";
+  const reason = !confirm
+    ? null
+    : pullRequest === null
+      ? "it could not be read"
+      : checkoutReason(pullRequest, checkoutSha);
+  const parsed = reason === null
+    ? runnerEventV1Schema.safeParse({ ...event, ...(isComment ? { pullRequest } : {}), checkoutSha })
+    : null;
+  if (parsed?.success) return parsed.data;
+  throw new UnconfirmedHeadError(
+    `Pull request #${String(number)}: the workflow checked out ${checkoutSha}, but ${reason ?? "the pull request is not a valid event"}.`,
+  );
+}
+
+function checkoutReason(value: Record<string, unknown>, checkoutSha: string): string | null {
+  const pullRequest = value as {
+    state?: unknown;
+    head?: { sha?: unknown; repo?: { id?: unknown } | null };
+    base?: { repo?: { id?: unknown } };
+  };
+  if (pullRequest.state !== "open") return "it is no longer open";
+  const headRepo = pullRequest.head?.repo?.id;
+  if (headRepo === undefined || headRepo !== pullRequest.base?.repo?.id) return "only a same-repository pull request can be checked out";
+  if (pullRequest.head?.sha !== checkoutSha) return `its head is ${String(pullRequest.head?.sha)}`;
+  return null;
+}

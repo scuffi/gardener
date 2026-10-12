@@ -39,6 +39,10 @@ export function actionToolAuthority(kind: RunnerActionV1["kind"]): readonly Harn
       return ["repository_exec", "repository_read_file", "repository_list_files"];
     case "repository.capture":
       return [];
+    // TODO(merge-base stage 3): authorized by the repository.merge_base tool.
+    // Until then no tool authorizes it, so every check fails closed.
+    case "repository.merge_base":
+      return [];
   }
 }
 

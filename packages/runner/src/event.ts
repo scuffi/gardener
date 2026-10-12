@@ -97,6 +97,15 @@ function pullRequestPayload(raw: Raw): Raw {
   };
 }
 
+/**
+ * A pull request as GitHub's REST API returns it, normalized exactly as an
+ * event payload's pull request is. Used for the pull request a comment was
+ * written on, which the comment payload itself does not carry.
+ */
+export function normalizePullRequest(value: unknown): Record<string, unknown> {
+  return pullRequestPayload({ pull_request: value });
+}
+
 function commentPayload(raw: Raw): Raw {
   const comment = object(raw.comment, "a comment");
   return {

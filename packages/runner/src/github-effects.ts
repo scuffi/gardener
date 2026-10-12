@@ -10,6 +10,7 @@ import {
   type Operation,
   type OperationReceipt,
 } from "@gardener/contracts";
+import { hasConflictMarkerLine } from "./merge-markers";
 
 /**
  * Checkout-free executor for every canonical `Operation` kind.
@@ -86,6 +87,17 @@ export type OperationOutputsV1 =
   | { kind: "pull_request.update"; pullNumber: number; pullUrl: string; title: string; state: string; draft: boolean }
   | { kind: "branch.create"; branch: string; ref: string; commitSha: string; branchUrl: string }
   | { kind: "commit.create"; branch: string; commitSha: string; treeSha: string; parentSha: string; commitUrl: string }
+  | {
+    kind: "commit.merge_base";
+    pullNumber: number;
+    branch: string;
+    commitSha: string;
+    treeSha: string;
+    /** `[expectedHeadSha, baseSha]`; not a scalar, so not a step output. */
+    parentShas: string[];
+    baseSha: string;
+    commitUrl: string;
+  }
   | {
     kind: "pull_request.open" | "pull_request.open_draft";
     pullNumber: number;
@@ -1489,6 +1501,13 @@ async function readVerifiedCapturedContent(
   scope: ExecutionScope,
   file: CommitFile,
 ): Promise<string> {
+  return Buffer.from(await readVerifiedCapturedBytes(scope, file)).toString("base64");
+}
+
+async function readVerifiedCapturedBytes(
+  scope: ExecutionScope,
+  file: CommitFile,
+): Promise<Uint8Array> {
   if (file.captured.status === "deleted") throw new Error("A deleted capture entry has no content to read");
   const reader = scope.readCapturedFile;
   if (reader === undefined) throw new Error("No capture reader was provided");
@@ -1506,7 +1525,7 @@ async function readVerifiedCapturedContent(
   if (digest !== sha256) {
     throw failure("capture_content_mismatch", `Captured content for ${file.path} does not match its recorded digest`);
   }
-  return Buffer.from(bytes).toString("base64");
+  return bytes;
 }
 
 async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreate): Promise<OperationOutputsV1> {
@@ -1573,8 +1592,214 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
     throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
   }
   await confirmDefaultBranch(scope);
+  const treeSha = await createCommitTree(scope, operation.expectedHeadSha, operation.files);
+  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
+    method: "POST",
+    body: JSON.stringify({
+      message: `${operation.message}\n\n${marker}`,
+      tree: treeSha,
+      parents: [operation.expectedHeadSha],
+    }),
+  });
+  if (!record(createdCommit) || typeof createdCommit.sha !== "string") {
+    throw failure("github_response_invalid", "Git commit response was invalid");
+  }
+  await scope.api.rest(
+    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
+    "Branch fast-forward",
+    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) },
+  );
+  return {
+    kind: operation.kind,
+    branch: operation.branch,
+    commitSha: createdCommit.sha,
+    treeSha,
+    parentSha: operation.expectedHeadSha,
+    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${createdCommit.sha}`,
+  };
+}
+
+type CommitMergeBase = Extract<Operation, { kind: "commit.merge_base" }>;
+
+/**
+ * Adds a merge commit to the triggering pull request's branch: parents
+ * `[expectedHeadSha, baseSha]`, tree = the head's tree plus the merge
+ * capture's files, ref moved with `force: false`. History is never rewritten.
+ *
+ * Planning already proved, against a merge computed before the model ran,
+ * that the files equal git's automatic merge outside the conflicted paths.
+ * Apply re-verifies what the GitHub API can show it:
+ *
+ * - the pull request is open, from this repository, at the planned head,
+ *   on the planned branch, against the planned base branch;
+ * - `baseSha` is still the base branch's head or an ancestor of it. This is
+ *   a security control, not a freshness check: it is what makes a protected
+ *   path equal to the base commit's version safe to commit, because that
+ *   content is then already reachable from a branch of this repository;
+ * - every protected path equals the base commit's blob and mode (or is
+ *   absent there, for a deletion);
+ * - no conflicted path still carries a conflict marker.
+ *
+ * Resume adopts an existing commit only when it carries this operation's
+ * marker trailer AND has exactly the planned two parents.
+ */
+async function executeCommitMergeBase(scope: ExecutionScope, operation: CommitMergeBase): Promise<OperationOutputsV1> {
+  if (scope.captureBaseSha === undefined) {
+    throw failure("capture_base_missing", "commit.merge_base requires the plan's capture base commit");
+  }
+  if (operation.expectedHeadSha.toLowerCase() !== scope.captureBaseSha.toLowerCase()) {
+    throw failure(
+      "commit_base_mismatch",
+      `commit.merge_base must build on the captured commit ${scope.captureBaseSha}, not ${operation.expectedHeadSha}`,
+    );
+  }
+  if (operation.files.some((file) => !isSafeFilePath(file.path))) {
+    throw failure("invalid_commit_path", "Commit contains an invalid file path");
+  }
+  if (operation.files.some((file) => file.captured.status !== "deleted") && scope.readCapturedFile === undefined) {
+    throw new Error("commit.merge_base requires capture-backed content but no capture reader was provided");
+  }
+  assertBranchWrite(scope, operation.kind, operation.branch);
+  const parents = [operation.expectedHeadSha.toLowerCase(), operation.baseSha.toLowerCase()];
+  const outputs = (commitSha: string, treeSha: string): OperationOutputsV1 => ({
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    branch: operation.branch,
+    commitSha,
+    treeSha,
+    parentShas: parents,
+    baseSha: parents[1]!,
+    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${commitSha}`,
+  });
+  const marker = commitMarker(operation.id, scope.operationHash);
+  const head = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
+  if (head === null) throw conflict("branch_missing", "Target branch does not exist");
+  if (head !== operation.expectedHeadSha) {
+    const matched = await scope.api.findPaginated(
+      `${scope.repoPath}/commits?sha=${encodeURIComponent(operation.branch)}`,
+      "Commit idempotency lookup",
+      (candidate) => {
+        const message = record(candidate.commit) ? candidate.commit.message : undefined;
+        const found = Array.isArray(candidate.parents)
+          ? candidate.parents.map((parent) => (record(parent) && typeof parent.sha === "string" ? parent.sha.toLowerCase() : null))
+          : [];
+        return typeof candidate.sha === "string"
+          && typeof message === "string"
+          && message.split(/\r?\n/).includes(marker)
+          && found.length === 2 && found[0] === parents[0] && found[1] === parents[1];
+      },
+    );
+    if (matched && typeof matched.sha === "string") {
+      if (!record(matched.commit) || !record(matched.commit.tree) || typeof matched.commit.tree.sha !== "string") {
+        throw failure("github_response_invalid", "Reconciled commit response omitted its tree sha");
+      }
+      return outputs(matched.sha, matched.commit.tree.sha);
+    }
+    throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
+  }
+
+  const pull = await loadPull(scope, operation.pullNumber);
+  const pullHead = pull.head as JsonRecord;
+  const pullBase = pull.base as JsonRecord;
+  const headRepo = record(pullHead.repo) ? pullHead.repo.id : undefined;
+  const baseRepo = record(pullBase.repo) ? pullBase.repo.id : undefined;
+  if (pull.state !== "open") throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
+  if (headRepo === undefined || headRepo === null || headRepo !== baseRepo) {
+    throw conflict("pull_head_repository", "Precondition failed: only a same-repository pull request's branch can be merged into");
+  }
+  if (pullHead.ref !== operation.branch) throw conflict("pull_head_ref_changed", `Precondition failed: pull request head branch is ${String(pullHead.ref)}`);
+  if (pullHead.sha !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${String(pullHead.sha)}`);
+  if (pullBase.ref !== operation.baseBranch) throw conflict("pull_base_changed", `Precondition failed: pull request base is ${String(pullBase.ref)}`);
+
+  const { data: comparison } = await scope.api.rest(
+    `${scope.repoPath}/compare/${encodeURIComponent(operation.baseSha)}...${encodeRefPath(operation.baseBranch)}?per_page=1`,
+    "Base branch ancestry lookup",
+  );
+  const ancestry = record(comparison) ? comparison.status : undefined;
+  if (ancestry !== "identical" && ancestry !== "ahead") {
+    throw conflict(
+      "base_branch_rewritten",
+      `Precondition failed: ${operation.baseBranch} no longer contains the planned base ${operation.baseSha} (${String(ancestry)})`,
+    );
+  }
+
+  const protectedFiles = operation.files.filter((file) => isProtectedCapturePath(file.path));
+  if (protectedFiles.length > 0) {
+    const { data: baseCommit } = await scope.api.rest(`${scope.repoPath}/git/commits/${encodeURIComponent(operation.baseSha)}`, "Base commit lookup");
+    if (!record(baseCommit) || !record(baseCommit.tree) || typeof baseCommit.tree.sha !== "string") {
+      throw failure("github_response_invalid", "Base commit response was invalid");
+    }
+    for (const file of protectedFiles) {
+      const entry = await treeEntry(scope, baseCommit.tree.sha, file.path);
+      const identical = file.captured.status === "deleted"
+        ? entry === null
+        : entry !== null && entry.type === "blob" && entry.mode === file.captured.mode
+          && entry.sha === gitBlobSha(await readVerifiedCapturedBytes(scope, file));
+      if (!identical) {
+        throw failure("protected_commit_path", `Commit touches the protected path ${file.path}, which differs from the merged base commit`);
+      }
+    }
+  }
+  const conflicted = new Set(operation.conflictedPaths);
+  for (const file of operation.files) {
+    if (!conflicted.has(file.path) || file.captured.status === "deleted") continue;
+    if (hasConflictMarkerLine(await readVerifiedCapturedBytes(scope, file))) {
+      throw failure("conflict_markers", `${file.path} still holds a conflict marker (a line starting <<<<<<< or >>>>>>>)`);
+    }
+  }
+
+  await confirmDefaultBranch(scope);
+  const treeSha = await createCommitTree(scope, operation.expectedHeadSha, operation.files);
+  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
+    method: "POST",
+    body: JSON.stringify({ message: `${operation.message}\n\n${marker}`, tree: treeSha, parents }),
+  });
+  if (!record(createdCommit) || typeof createdCommit.sha !== "string") {
+    throw failure("github_response_invalid", "Git commit response was invalid");
+  }
+  await scope.api.rest(
+    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
+    "Branch fast-forward",
+    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) },
+  );
+  return outputs(createdCommit.sha, treeSha);
+}
+
+/**
+ * One path's entry in a tree, walked a segment at a time so no response can
+ * be truncated by size the way a recursive listing can; a truncated one is
+ * refused rather than read as "absent".
+ */
+async function treeEntry(scope: ExecutionScope, rootTreeSha: string, filePath: string): Promise<{ mode: string; type: string; sha: string } | null> {
+  const segments = filePath.split("/");
+  let treeSha = rootTreeSha;
+  for (const [index, segment] of segments.entries()) {
+    const { data } = await scope.api.rest(`${scope.repoPath}/git/trees/${encodeURIComponent(treeSha)}`, "Base tree lookup");
+    if (!record(data) || !Array.isArray(data.tree) || data.truncated === true) {
+      throw failure("github_tree_truncated", "Base tree response was invalid or truncated");
+    }
+    const entry = data.tree.find((candidate) => record(candidate) && candidate.path === segment);
+    if (!record(entry) || typeof entry.mode !== "string" || typeof entry.type !== "string" || typeof entry.sha !== "string") return null;
+    if (index === segments.length - 1) return { mode: entry.mode, type: entry.type, sha: entry.sha.toLowerCase() };
+    if (entry.type !== "tree") return null;
+    treeSha = entry.sha;
+  }
+  return null;
+}
+
+function gitBlobSha(bytes: Uint8Array): string {
+  return createHash("sha1").update(`blob ${bytes.byteLength}\u0000`, "utf8").update(bytes).digest("hex");
+}
+
+/**
+ * Uploads the captured files and creates the tree they make on top of
+ * `parentSha`'s tree: whole contents for added and modified paths, deletions
+ * for the rest. Shared by `commit.create` and `commit.merge_base`, so a merge
+ * commit's tree is built exactly as an ordinary commit's.
+ */
+async function createCommitTree(scope: ExecutionScope, parentSha: string, files: readonly CommitFile[]): Promise<string> {
   const { data: parent } = await scope.api.rest(
-    `${scope.repoPath}/git/commits/${encodeURIComponent(operation.expectedHeadSha)}`,
+    `${scope.repoPath}/git/commits/${encodeURIComponent(parentSha)}`,
     "Parent commit lookup",
   );
   if (!record(parent) || !record(parent.tree) || typeof parent.tree.sha !== "string") {
@@ -1591,7 +1816,7 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
     (entry) => (record(entry) && typeof entry.path === "string" ? [[entry.path, entry] as const] : []),
   ));
   const tree: Array<Record<string, unknown>> = [];
-  for (const file of operation.files) {
+  for (const file of files) {
     const existing = existingEntries.get(file.path);
     const existingMode = existing?.mode;
     const supportedModes = ["100644", "100755", "120000"];
@@ -1625,30 +1850,7 @@ async function executeCommitCreate(scope: ExecutionScope, operation: CommitCreat
   if (!record(createdTree) || typeof createdTree.sha !== "string") {
     throw failure("github_response_invalid", "Git tree response was invalid");
   }
-  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
-    method: "POST",
-    body: JSON.stringify({
-      message: `${operation.message}\n\n${marker}`,
-      tree: createdTree.sha,
-      parents: [operation.expectedHeadSha],
-    }),
-  });
-  if (!record(createdCommit) || typeof createdCommit.sha !== "string") {
-    throw failure("github_response_invalid", "Git commit response was invalid");
-  }
-  await scope.api.rest(
-    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
-    "Branch fast-forward",
-    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) },
-  );
-  return {
-    kind: operation.kind,
-    branch: operation.branch,
-    commitSha: createdCommit.sha,
-    treeSha: createdTree.sha,
-    parentSha: operation.expectedHeadSha,
-    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${createdCommit.sha}`,
-  };
+  return createdTree.sha;
 }
 
 type PullOpenDraft = Extract<Operation, { kind: "pull_request.open" | "pull_request.open_draft" }>;
@@ -2559,8 +2761,7 @@ async function dispatch(scope: ExecutionScope, operation: Operation): Promise<Op
     case "commit.create":
       return executeCommitCreate(scope, operation);
     case "commit.merge_base":
-      // TODO(merge-base stage 2/3)
-      throw new Error("commit.merge_base is not implemented yet");
+      return executeCommitMergeBase(scope, operation);
     case "pull_request.open":
     case "pull_request.open_draft":
       return executePullOpenDraft(scope, operation);

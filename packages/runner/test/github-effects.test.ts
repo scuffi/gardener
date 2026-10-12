@@ -323,6 +323,41 @@ const COMMIT_OPERATION = operationSchema.parse({
 });
 const COMMIT_MARKER = `Gardener-Operation: op-commit:${canonicalOperationHash(COMMIT_OPERATION)}`;
 
+const MERGE_OPERATION = operationSchema.parse({
+  schemaVersion: "v2",
+  repository: REPOSITORY,
+  id: "op-merge",
+  kind: "commit.merge_base",
+  pullNumber: 7,
+  branch: "gardener/feature",
+  expectedHeadSha: HEAD,
+  baseBranch: "main",
+  baseSha: BASE_TIP,
+  message: "Merge main into gardener/feature",
+  files: [{ path: "src/a.ts", captured: CAPTURED_FILE }],
+  conflictedPaths: ["src/a.ts"],
+});
+const MERGE_MARKER = `Gardener-Operation: op-merge:${canonicalOperationHash(MERGE_OPERATION)}`;
+const MERGE_PULL = {
+  ...OPEN_PULL,
+  head: { sha: HEAD, ref: "gardener/feature", repo: { id: 100 } },
+  base: { ref: "main", sha: BASE, repo: { id: 100 } },
+};
+/** Everything a first merge commit reads and writes, in order, after the branch head. */
+function mergeApply(overrides: { pull?: unknown; compare?: string } = {}): Handler[] {
+  return [
+    get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: HEAD } }),
+    get(`${REPO}/pulls/7`, overrides.pull ?? MERGE_PULL),
+    get(`${REPO}/compare/${BASE_TIP}...main`, { status: overrides.compare ?? "ahead" }),
+    get(`${REPO}/git/commits/${HEAD}`, { tree: { sha: PARENT_TREE } }),
+    get(`${REPO}/git/trees/${PARENT_TREE}`, { tree: [{ path: "src/a.ts", type: "blob", mode: "100644" }], truncated: false }),
+    send("POST", `${REPO}/git/blobs`, { sha: BLOB }),
+    send("POST", `${REPO}/git/trees`, { sha: NEW_TREE }),
+    send("POST", `${REPO}/git/commits`, { sha: NEW_COMMIT }),
+    send("PATCH", `${REPO}/git/refs/heads/gardener/feature`, { object: { sha: NEW_COMMIT } }),
+  ];
+}
+
 const scenarios: Record<string, Scenario> = {
   "issue.label.add": {
     operation: operationSchema.parse({ ...issueBase, id: "op-label-add", kind: "issue.label.add", label: "bug" }),
@@ -588,6 +623,22 @@ const scenarios: Record<string, Scenario> = {
       }]),
     ],
     outputs: { branch: "gardener/feature", commitSha: NEW_COMMIT, treeSha: NEW_TREE, parentSha: HEAD },
+  },
+  "commit.merge_base": {
+    operation: MERGE_OPERATION,
+    apply: mergeApply(),
+    duplicate: [
+      get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: NEW_COMMIT } }),
+      get(`${REPO}/commits`, [{
+        sha: NEW_COMMIT,
+        commit: { message: `Merge main into gardener/feature\n\n${MERGE_MARKER}`, tree: { sha: NEW_TREE } },
+        parents: [{ sha: HEAD }, { sha: BASE_TIP }],
+      }]),
+    ],
+    outputs: {
+      pullNumber: 7, branch: "gardener/feature", commitSha: NEW_COMMIT, treeSha: NEW_TREE, baseSha: BASE_TIP, parentShas: [HEAD, BASE_TIP],
+    },
+    resourceUrl: `https://github.com/acme/widgets/commit/${NEW_COMMIT}`,
   },
   "pull_request.review_comment.reply": {
     operation: operationSchema.parse({
@@ -954,8 +1005,7 @@ function scenarioFor(kind: string): Scenario {
 
 describe("executeActionsOperation dispatch", () => {
   it("covers every canonical operation kind", () => {
-    // TODO(merge-base stage 2/3): commit.merge_base gets scenarios once apply implements it.
-    expect(Object.keys(scenarios).sort()).toEqual(operationKindValues.filter((kind) => kind !== "commit.merge_base").sort());
+    expect(Object.keys(scenarios).sort()).toEqual([...operationKindValues].sort());
   });
 
   for (const [kind, scenario] of Object.entries(scenarios)) {
@@ -2575,5 +2625,156 @@ describe("review thread replies and resolves", () => {
     // A head someone else pushed after this plan's commit still conflicts.
     const later = { ...pushedPull, head: { ...pushedPull.head, sha: "f".repeat(40) } };
     expect((await run(reply, replyRoutes(later), chained)).receipt.error?.code).toBe("pull_head_changed");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Merge commits                                                               */
+/* -------------------------------------------------------------------------- */
+
+describe("commit.merge_base", () => {
+  const writes = (calls: Call[]) => calls.filter((call) => call.method !== "GET");
+  const gitBlob = (bytes: Uint8Array) => createHash("sha1").update(`blob ${bytes.byteLength}\u0000`).update(bytes).digest("hex");
+  const captured = (content: string, mode = "100644") => {
+    const bytes = new TextEncoder().encode(content);
+    return { bytes, file: { status: "modified", mode, sizeBytes: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex") } as const };
+  };
+  const reader = (...files: { bytes: Uint8Array; file: { sha256: string } }[]) => async (requested: { sha256: string }) => {
+    const found = files.find((candidate) => candidate.file.sha256 === requested.sha256);
+    if (!found) throw new Error("unknown captured file");
+    return found.bytes;
+  };
+  const merge = (changes: Record<string, unknown>) => operationSchema.parse({ ...MERGE_OPERATION, ...changes });
+
+  it("commits on the head with the base as second parent and never forces the ref", async () => {
+    const { receipt, calls } = await run(MERGE_OPERATION, mergeApply());
+    expect(receipt.status, JSON.stringify(receipt.error)).toBe("succeeded");
+    const commit = calls.find((call) => call.method === "POST" && call.path === `${REPO}/git/commits`);
+    expect(commit?.body).toEqual({ message: `Merge main into gardener/feature\n\n${MERGE_MARKER}`, tree: NEW_TREE, parents: [HEAD, BASE_TIP] });
+    expect(calls.at(-1)).toMatchObject({ method: "PATCH", body: { sha: NEW_COMMIT, force: false } });
+    expect(calls.find((call) => call.path.startsWith(`${REPO}/compare/`))?.path).toBe(`${REPO}/compare/${BASE_TIP}...main?per_page=1`);
+  });
+
+  it("refuses unless the pull request is open, same-repository, and at the planned head, branch and base", async () => {
+    const cases: Array<[string, unknown, string]> = [
+      ["closed", { ...MERGE_PULL, state: "closed" }, "pull_state_changed"],
+      ["fork", { ...MERGE_PULL, head: { ...MERGE_PULL.head, repo: { id: 999 } } }, "pull_head_repository"],
+      ["deleted fork", { ...MERGE_PULL, head: { ...MERGE_PULL.head, repo: null } }, "pull_head_repository"],
+      ["other branch", { ...MERGE_PULL, head: { ...MERGE_PULL.head, ref: "gardener/other" } }, "pull_head_ref_changed"],
+      ["moved head", { ...MERGE_PULL, head: { ...MERGE_PULL.head, sha: NEW_COMMIT } }, "pull_head_changed"],
+      ["retargeted", { ...MERGE_PULL, base: { ...MERGE_PULL.base, ref: "release" } }, "pull_base_changed"],
+    ];
+    for (const [label, pull, code] of cases) {
+      const { receipt, calls } = await run(MERGE_OPERATION, mergeApply({ pull }));
+      expect(receipt.status, label).toBe("conflicted");
+      expect(receipt.error?.code, label).toBe(code);
+      expect(writes(calls), label).toEqual([]);
+    }
+  });
+
+  it("accepts a base branch that still contains the planned base, and refuses one that does not", async () => {
+    for (const status of ["identical", "ahead"]) {
+      expect((await run(MERGE_OPERATION, mergeApply({ compare: status }))).receipt.status, status).toBe("succeeded");
+    }
+    for (const status of ["behind", "diverged"]) {
+      const { receipt, calls } = await run(MERGE_OPERATION, mergeApply({ compare: status }));
+      expect(receipt.status, status).toBe("conflicted");
+      expect(receipt.error?.code).toBe("base_branch_rewritten");
+      expect(writes(calls)).toEqual([]);
+    }
+  });
+
+  describe("protected paths", () => {
+    const workflow = captured("on: push\n");
+    const BASE_TREE = "1".repeat(40);
+    const GITHUB_TREE = "2".repeat(40);
+    const WORKFLOWS_TREE = "3".repeat(40);
+    const baseTree = (entry: Record<string, unknown> | null, truncated = false): Handler[] => [
+      get(`${REPO}/git/commits/${BASE_TIP}`, { tree: { sha: BASE_TREE } }),
+      get(`${REPO}/git/trees/${BASE_TREE}`, { tree: [{ path: ".github", type: "tree", mode: "040000", sha: GITHUB_TREE }], truncated: false }),
+      get(`${REPO}/git/trees/${GITHUB_TREE}`, { tree: [{ path: "workflows", type: "tree", mode: "040000", sha: WORKFLOWS_TREE }], truncated }),
+      get(`${REPO}/git/trees/${WORKFLOWS_TREE}`, { tree: entry === null ? [] : [{ path: "ci.yml", ...entry }], truncated: false }),
+    ];
+    const operation = (file: unknown) => merge({ files: [{ path: ".github/workflows/ci.yml", captured: file }], conflictedPaths: [] });
+    const handlers = (entry: Record<string, unknown> | null, truncated = false) => {
+      const [ref, pull, compare, ...rest] = mergeApply();
+      return [ref!, pull!, compare!, ...baseTree(entry, truncated), ...rest];
+    };
+
+    it("commits a protected path only when it is the base commit's blob and mode", async () => {
+      const options = { readCapturedFile: reader(workflow) };
+      const same = { type: "blob", mode: "100644", sha: gitBlob(workflow.bytes) };
+      expect((await run(operation(workflow.file), handlers(same), options)).receipt.status).toBe("succeeded");
+      for (const [label, entry] of [
+        ["other blob", { ...same, sha: "4".repeat(40) }],
+        ["other mode", { ...same, mode: "100755" }],
+        ["absent at base", null],
+      ] as const) {
+        const { receipt, calls } = await run(operation(workflow.file), handlers(entry), options);
+        expect(receipt.status, label).toBe("failed");
+        expect(receipt.error?.code, label).toBe("protected_commit_path");
+        expect(writes(calls), label).toEqual([]);
+      }
+      const truncated = await run(operation(workflow.file), handlers(same, true), options);
+      expect(truncated.receipt.error?.code).toBe("github_tree_truncated");
+    });
+
+    it("deletes a protected path only when the base commit has none", async () => {
+      const deletion = (entry: Record<string, unknown> | null) => handlers(entry).map((handler) => (
+        handler.when({ method: "GET", path: `${REPO}/git/trees/${PARENT_TREE}`, body: undefined })
+          ? get(`${REPO}/git/trees/${PARENT_TREE}`, { tree: [{ path: ".github/workflows/ci.yml", type: "blob", mode: "100644" }], truncated: false })
+          : handler));
+      expect((await run(operation({ status: "deleted" }), deletion(null))).receipt.status).toBe("succeeded");
+      const present = await run(operation({ status: "deleted" }), deletion({ type: "blob", mode: "100644", sha: gitBlob(workflow.bytes) }));
+      expect(present.receipt.error?.code).toBe("protected_commit_path");
+      expect(writes(present.calls)).toEqual([]);
+    });
+  });
+
+  it("refuses conflict markers in the conflicted files only", async () => {
+    for (const [label, content, refused] of [
+      ["ours marker", "a\n<<<<<<< HEAD\nb\n", true],
+      ["theirs marker", "a\n>>>>>>> main\n", true],
+      ["bare marker, CRLF", "a\r\n<<<<<<<\r\nb\r\n", true],
+      ["separator only", "a\n=======\nb\n", false],
+      ["eight characters", "<<<<<<<<\n", false],
+      ["indented", " <<<<<<< HEAD\n", false],
+    ] as const) {
+      const file = captured(content);
+      const operation = merge({ files: [{ path: "src/a.ts", captured: file.file }] });
+      const { receipt, calls } = await run(operation, mergeApply(), { readCapturedFile: reader(file) });
+      expect(receipt.status, label).toBe(refused ? "failed" : "succeeded");
+      if (refused) {
+        expect(receipt.error?.code, label).toBe("conflict_markers");
+        expect(writes(calls), label).toEqual([]);
+      }
+    }
+    // The same bytes outside the conflicted set are git's own merge, already proven at planning.
+    const marked = captured("<<<<<<< HEAD\n");
+    const outside = merge({ files: [{ path: "src/a.ts", captured: marked.file }], conflictedPaths: [] });
+    expect((await run(outside, mergeApply(), { readCapturedFile: reader(marked) })).receipt.status).toBe("succeeded");
+  });
+
+  it("resumes only a commit with its marker and both planned parents", async () => {
+    const listed = (parents: string[]) => [
+      get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: NEW_COMMIT } }),
+      get(`${REPO}/commits`, [{
+        sha: NEW_COMMIT,
+        commit: { message: `Merge main into gardener/feature\n\n${MERGE_MARKER}`, tree: { sha: NEW_TREE } },
+        parents: parents.map((sha) => ({ sha })),
+      }]),
+    ];
+    expect((await run(MERGE_OPERATION, listed([HEAD, BASE_TIP]))).receipt.status).toBe("skipped");
+    for (const parents of [[HEAD], [HEAD, BASE], [BASE_TIP, HEAD], [HEAD, BASE_TIP, BASE]]) {
+      const { receipt } = await run(MERGE_OPERATION, listed(parents));
+      expect(receipt.status, parents.join(",")).toBe("conflicted");
+      expect(receipt.error?.code).toBe("branch_head_changed");
+    }
+  });
+
+  it("builds only on the captured commit", async () => {
+    const { receipt, calls } = await run(MERGE_OPERATION, mergeApply(), { captureBaseSha: BASE });
+    expect(receipt.error?.code).toBe("commit_base_mismatch");
+    expect(calls).toEqual([]);
   });
 });

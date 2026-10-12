@@ -4,6 +4,8 @@ import {
   runnerActionV1Schema,
   runnerCaptureResultV1Schema,
   runnerEventV1Schema,
+  runnerMergeBaseResultV1Schema,
+  MERGE_BASE_MESSAGES_MAX_BYTES,
 } from "../src/schema";
 
 const base = {
@@ -159,7 +161,60 @@ describe("runner action contract", () => {
 
   it("bounds read payloads below the shell output ceiling", () => {
     expect(() => runnerActionV1Schema.parse({ ...restRead, maxOutputBytes: 4 * 1_024 * 1_024 })).toThrow();
-    expect(runnerActionV1Schema.parse({ ...shell, maxOutputBytes: 4 * 1_024 * 1_024 }).maxOutputBytes)
+    expect((runnerActionV1Schema.parse({ ...shell, maxOutputBytes: 4 * 1_024 * 1_024 }) as typeof shell).maxOutputBytes)
       .toBe(4 * 1_024 * 1_024);
+  });
+});
+
+describe("pull request merges", () => {
+  const sha = (character: string) => character.repeat(40);
+  const pullRequest = {
+    id: "700", number: 7, title: "Fix", body: null, labels: [], author: { id: "1", login: "octo" },
+    draft: false, state: "open", merged: false,
+    base: { ref: "main", sha: sha("a"), repo: { id: "1", fullName: "acme/widgets" } },
+    head: { ref: "feature", sha: sha("b"), repo: { id: "1", fullName: "acme/widgets" } },
+  };
+  const comment = {
+    schemaVersion: "gardener.runner.event/v1",
+    kind: "github.issue_comment.created",
+    repository: { defaultBranch: "main" },
+    issue: { id: "700", number: 7, title: "Fix", body: null, labels: [], author: { id: "1", login: "octo" } },
+    comment: { id: "9", body: "@gardener merge main", author: { id: "2", login: "maintainer" } },
+  };
+
+  it("accepts the merge action with nothing but the common envelope", () => {
+    const action = { ...base, kind: "repository.merge_base" as const };
+    expect(runnerActionV1Schema.parse(action)).toEqual(action);
+    expect(() => runnerActionV1Schema.parse({ ...action, baseSha: sha("a") })).toThrow();
+    expect(() => runnerActionV1Schema.parse({ ...action, paths: ["a"] })).toThrow();
+  });
+
+  it("carries a comment's pull request and the checked-out head only together and in agreement", () => {
+    expect(runnerEventV1Schema.parse(comment)).toEqual(comment);
+    const attached = { ...comment, pullRequest, checkoutSha: sha("b") };
+    expect(runnerEventV1Schema.parse(attached)).toEqual(attached);
+    expect(runnerEventV1Schema.safeParse({ ...comment, checkoutSha: sha("b") }).success).toBe(false);
+    expect(runnerEventV1Schema.safeParse({ ...attached, checkoutSha: sha("c") }).success).toBe(false);
+    expect(runnerEventV1Schema.safeParse({ ...attached, pullRequest: { ...pullRequest, number: 8 } }).success).toBe(false);
+    const dispatch = { schemaVersion: "gardener.runner.event/v1", kind: "github.workflow_dispatch", repository: { defaultBranch: "main" } };
+    expect(runnerEventV1Schema.safeParse({ ...dispatch, pullRequest, checkoutSha: sha("b") }).success).toBe(true);
+    expect(runnerEventV1Schema.safeParse({ ...dispatch, checkoutSha: sha("b") }).success).toBe(false);
+    // Only conversation comments gain a pull request; an issue event does not.
+    expect(runnerEventV1Schema.safeParse({ ...comment, kind: "github.issue.opened", comment: undefined, pullRequest }).success).toBe(false);
+  });
+
+  it("bounds the merge result and keeps its conflicted files consistent", () => {
+    const result = {
+      schemaVersion: "gardener.runner.merge-base-result/v1" as const,
+      status: "conflicted" as const,
+      pullNumber: 7, branch: "feature", expectedHeadSha: sha("b"), baseBranch: "main", baseSha: sha("a"), mergeBaseSha: sha("c"),
+      conflictedFiles: ["a.txt", "b.txt"], changedFileCount: 3, messages: "CONFLICT (content): Merge conflict in a.txt\n",
+    };
+    expect(runnerMergeBaseResultV1Schema.parse(result)).toEqual(result);
+    expect(runnerMergeBaseResultV1Schema.safeParse({ ...result, status: "clean" }).success).toBe(false);
+    expect(runnerMergeBaseResultV1Schema.safeParse({ ...result, conflictedFiles: ["b.txt", "a.txt"] }).success).toBe(false);
+    expect(runnerMergeBaseResultV1Schema.safeParse({ ...result, messages: "é".repeat(MERGE_BASE_MESSAGES_MAX_BYTES / 2 + 1) }).success).toBe(false);
+    expect(runnerMergeBaseResultV1Schema.parse({ schemaVersion: "gardener.runner.merge-base-result/v1", status: "refused", reason: "No merge." }))
+      .toMatchObject({ status: "refused" });
   });
 });

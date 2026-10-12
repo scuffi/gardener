@@ -4,16 +4,20 @@ import path from "node:path";
 import {
   runnerActionV1Schema,
   runnerCaptureResultV1Schema,
+  runnerMergeBaseResultV1Schema,
   type RunnerActionResultV1,
   type RunnerActionV1,
   type RunnerCaptureActionV1,
   type RunnerCaptureResultV1,
   type RunnerGitHubReadActionV1,
+  type RunnerMergeBaseActionV1,
+  type RunnerMergeBaseResultV1,
   type RunnerShellActionV1,
 } from "@gardener/protocol";
 import type { TaskCaptureRefV1 } from "@gardener/contracts";
 import { WorkingTreeCapture, verifyCaptureArtifact } from "./capture";
 import type { GitHubReadClient } from "./github-read";
+import { MergeRefusal, applyPreparedMerge, mergeBaseResult, type MergePreparation, type PreparedMerge } from "./merge-base";
 
 interface LocalRecord {
   canonicalAction: string;
@@ -56,6 +60,11 @@ export interface PlanningExecutorOptions {
    * fails capture closed rather than capturing against an unknown baseline.
    */
   capture?: PlanningCaptureAvailability;
+  /**
+   * The merge the bridge prepared before the session, or why it could not.
+   * Absent when the workflow did not ask for one.
+   */
+  merge?: MergePreparation;
 }
 
 export interface CreatePlanningExecutorOptions extends PlanningExecutorOptions {
@@ -128,12 +137,18 @@ export class PlanningShellExecutor {
   /** Memoized so one run captures exactly once, whatever the runtime asks. */
   #capturePromise: Promise<RunnerCaptureResultV1> | undefined;
   #captureArtifact: LocalCaptureArtifact | undefined;
+  readonly #merge: MergePreparation | undefined;
+  /** Memoized so the merge is written at most once; cleared on a refusal so a fixed tree may retry. */
+  #mergePromise: Promise<RunnerMergeBaseResultV1> | undefined;
+  /** Set once the merge is in the working tree; every later capture is then a merge capture. */
+  #mergeApplied: PreparedMerge | undefined;
 
   constructor(workspace = requiredEnvironment("GITHUB_WORKSPACE"), options: PlanningExecutorOptions = {}) {
     this.#workspace = path.resolve(workspace);
     this.#createReadClient = options.createReadClient;
     this.#capture = options.capture
       ?? { status: "unavailable", reason: "This run took no pre-execution capture baseline" };
+    this.#merge = options.merge;
   }
 
   /**
@@ -220,7 +235,57 @@ export class PlanningShellExecutor {
   async #run(action: RunnerActionV1): Promise<RunnerActionResultV1> {
     if (action.kind === "github.read") return this.#runRead(action);
     if (action.kind === "repository.capture") return this.#runCapture(action);
+    if (action.kind === "repository.merge_base") return this.#runMergeBase(action);
     return this.#runShell(action);
+  }
+
+  /**
+   * Serves `repository.merge_base`: writes the merge the bridge prepared
+   * before the session into the working tree, once.
+   *
+   * The capture snapshot is re-verified before and after the write. The write
+   * runs the repository's filters, so it must run only the configuration the
+   * snapshot saw, and the index must still be exactly the snapshot's after
+   * it. A refusal is returned as a failed action carrying the reason, and is
+   * not remembered, so a model that changed files too early can restore them
+   * and call again. A merge that was written is remembered, and a later call
+   * returns the same result without writing anything.
+   */
+  async #runMergeBase(action: RunnerMergeBaseActionV1): Promise<RunnerActionResultV1> {
+    if (this.#capturePromise || this.#captureArtifact) {
+      return mergeBaseActionResult(action, refusal("The working tree capture has started; the merge can no longer be written"));
+    }
+    let result: RunnerMergeBaseResultV1;
+    try {
+      this.#mergePromise ??= this.#applyMerge();
+      result = await this.#mergePromise;
+    } catch (error) {
+      this.#mergePromise = undefined;
+      result = refusal(redactCaptureDiagnostic(error instanceof Error ? error.message : "The merge could not be written", this.#workspace));
+    }
+    if (result.status === "refused") this.#mergePromise = undefined;
+    return mergeBaseActionResult(action, result);
+  }
+
+  async #applyMerge(): Promise<RunnerMergeBaseResultV1> {
+    if (this.#merge === undefined) {
+      return refusal("This run did not prepare a merge: the task's workflow did not ask for one (the merge-base input).");
+    }
+    if (this.#merge.status !== "ready") return refusal(this.#merge.reason);
+    // Without a capture the merge could never become a commit.
+    if (this.#capture.status !== "ready") return refusal(`The merge cannot be committed in this run: ${this.#capture.reason}`);
+    const capture = this.#capture.capture;
+    const merge = this.#merge.merge;
+    try {
+      await capture.assertAuthorityUnchanged();
+      await applyPreparedMerge(this.#workspace, merge);
+      await capture.assertAuthorityUnchanged();
+    } catch (error) {
+      if (error instanceof MergeRefusal) return refusal(error.message);
+      throw error;
+    }
+    this.#mergeApplied = merge;
+    return mergeBaseResult(merge);
   }
 
   /**
@@ -280,7 +345,7 @@ export class PlanningShellExecutor {
 
   /** Captures once and proves the artifact before its reference leaves the runner. */
   async #performCapture(capture: WorkingTreeCapture): Promise<RunnerCaptureResultV1> {
-    const result = await capture.capture();
+    const result = await capture.capture(this.#mergeApplied === undefined ? {} : { merge: this.#mergeApplied });
     if (result.status === "unchanged") {
       return { schemaVersion: "gardener.runner.capture-result/v1", status: "unchanged" };
     }
@@ -480,6 +545,30 @@ function captureResult(
     stdout: boundedStdout,
     stderr: boundedStderr,
     outputTruncated: boundedStdout.length !== stdout.length || boundedStderr.length !== stderr.length,
+  };
+}
+
+function refusal(reason: string): RunnerMergeBaseResultV1 {
+  return { schemaVersion: "gardener.runner.merge-base-result/v1", status: "refused", reason: reason.slice(0, 2_000) || "The merge was refused" };
+}
+
+/**
+ * The merge result travels as JSON in `stdout`; a refusal is a failed action
+ * whose `stderr` also names the reason. Bounded by the protocol schema, so it
+ * fits the action result without truncation.
+ */
+function mergeBaseActionResult(action: RunnerMergeBaseActionV1, result: RunnerMergeBaseResultV1): RunnerActionResultV1 {
+  const stdout = JSON.stringify(runnerMergeBaseResultV1Schema.parse(result));
+  const refused = result.status === "refused";
+  return {
+    schemaVersion: "gardener.runner.action-result/v1",
+    sequence: action.sequence,
+    operationId: action.operationId,
+    status: refused ? "failed" : "completed",
+    exitCode: refused ? 1 : 0,
+    stdout,
+    stderr: refused ? result.reason : "",
+    outputTruncated: false,
   };
 }
 

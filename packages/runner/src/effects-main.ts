@@ -36,6 +36,7 @@ import {
 import { RpcTarget, newWebSocketRpcSession, type RpcStub } from "capnweb";
 import { verifyCaptureArtifact } from "./capture";
 import { helloFromOidcToken, sessionSocketUrl } from "./context";
+import { fetchCurrentPullRequest } from "./current-head";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
 import {
@@ -203,7 +204,7 @@ export async function applyOrderedPlan(input: {
       }
       completed.push(entry);
       outputs.set(entry.stepName, scalar);
-      recordPushedHead(heads, operation.kind, scalar);
+      recordPushedHead(heads, operation, scalar);
       resumeIndex = index + 1;
     }
     if (input.prior.status === "applied") {
@@ -290,7 +291,7 @@ export async function applyOrderedPlan(input: {
       return { receipt: stopped, outputs };
     }
     outputs.set(plan.operations[index]!.stepName, scalar);
-    recordPushedHead(heads, operation.kind, scalar);
+    recordPushedHead(heads, operation, scalar);
     const status = completed.length === plan.operations.length ? "applied" : "running";
     const progress = effectReceipt(plan, input.artifactSha256, completed, status, null);
     await input.record(progress);
@@ -319,14 +320,20 @@ function laterStepMayTarget(plan: TaskEffectPlanV1, index: number, resource: str
   }));
 }
 
-/** Notes the head a succeeded `commit.create` left its branch at, from its recorded outputs. */
+/**
+ * Notes the head a succeeded `commit.create` or `commit.merge_base` left its
+ * branch at, from its recorded outputs. A merge commit's outputs carry no
+ * single parent, so its starting head is the operation's own `expectedHeadSha`,
+ * which apply verified was the branch head before it pushed.
+ */
 function recordPushedHead(
   heads: ChainedHead[],
-  kind: OperationKind,
+  operation: Operation,
   scalar: Readonly<Record<string, string | number | boolean | null>>,
 ): void {
-  if (kind !== "commit.create") return;
-  const { branch, parentSha, commitSha } = scalar;
+  if (operation.kind !== "commit.create" && operation.kind !== "commit.merge_base") return;
+  const { branch, commitSha } = scalar;
+  const parentSha = operation.kind === "commit.merge_base" ? operation.expectedHeadSha : scalar.parentSha;
   if (typeof branch !== "string" || typeof parentSha !== "string" || typeof commitSha !== "string") return;
   if (parentSha !== commitSha) heads.push({ branch, from: parentSha, to: commitSha });
 }
@@ -423,15 +430,21 @@ function materializeOperation(
     if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);
     payload.body = bodyWithOperationMarker(payload.body, step.operationId);
   }
-  if (step.kind === "commit.create") {
-    if (!plan.capture) throw new Error("commit.create has no verified capture manifest");
-    if (Object.hasOwn(payload, "files")) throw new Error("commit.create files must come only from capture");
+  if (step.kind === "commit.create" || step.kind === "commit.merge_base") {
+    if (!plan.capture) throw new Error(`${step.kind} has no verified capture manifest`);
+    if (Object.hasOwn(payload, "files")) throw new Error(`${step.kind} files must come only from capture`);
     payload.files = plan.capture.files.map((file) => ({
       path: file.path,
       captured: file.status === "deleted"
         ? { status: "deleted" }
         : { status: file.status, mode: file.mode, sizeBytes: file.sizeBytes, sha256: file.sha256 },
     }));
+  }
+  if (step.kind === "commit.merge_base") {
+    // The conflicted paths are the merge capture's record, never the model's.
+    if (!plan.capture?.merge) throw new Error("commit.merge_base needs a merge capture");
+    if (Object.hasOwn(payload, "conflictedPaths")) throw new Error("commit.merge_base conflictedPaths must come only from capture");
+    payload.conflictedPaths = [...plan.capture.merge.conflictedPaths];
   }
   return operationSchema.parse({
     schemaVersion: "v2",
@@ -544,7 +557,9 @@ async function assertApplyBindings(plan: TaskEffectPlanV1, token: string): Promi
   const raw = JSON.parse(await readFile(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8")) as unknown;
   const rawRepository = raw && typeof raw === "object" ? (raw as Record<string, any>).repository : undefined;
   if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
-  if (!checkoutBindingHolds(plan, raw)) throw new Error("Effect checkout binding mismatch");
+  if (!(await checkoutBindingHolds(plan, raw, { repository: plan.repository.fullName, token }))) {
+    throw new Error("Effect checkout binding mismatch");
+  }
   const { defaultBranch, binding } = await applyEventBinding({
     eventName: requiredEnvironment("GITHUB_EVENT_NAME"),
     raw,
@@ -555,19 +570,64 @@ async function assertApplyBindings(plan: TaskEffectPlanV1, token: string): Promi
   if (canonicalJson(binding) !== canonicalJson(plan.event)) throw new Error("Effect event binding mismatch");
 }
 
+/** A comment or manual run's recorded checkout could not be confirmed; apply must not continue. */
+export class CheckoutBindingError extends Error {
+  constructor(reason: string) {
+    super(`Effect checkout binding mismatch: ${reason}`);
+    this.name = "CheckoutBindingError";
+  }
+}
+
 /**
- * Whether the plan's recorded checkout is the pull request head in this job's
- * own event payload, the same value the workflow checked out. Without a
- * recorded checkout the capture must sit on `GITHUB_SHA`, which is bound
- * separately, so every commit's parent is a value apply verified itself.
+ * Whether the plan's recorded checkout is the pull request head the workflow
+ * checked out. Without a recorded checkout the capture must sit on
+ * `GITHUB_SHA`, which is bound separately, so every commit's parent is a
+ * value apply verified itself.
+ *
+ * A pull request event's own payload names the head, which is compared
+ * directly. A comment on a pull request or a manual run naming one carries no
+ * head, so the pull request the plan is bound to is read now: it must be
+ * open, from this repository, with the recorded head. That path fails
+ * closed: an unreadable pull request, any other state, a fork or another head
+ * throws {@link CheckoutBindingError}; it never answers `true`.
  */
-export function checkoutBindingHolds(plan: Pick<TaskEffectPlanV1, "provenance">, raw: unknown): boolean {
+export async function checkoutBindingHolds(
+  plan: Pick<TaskEffectPlanV1, "provenance" | "event" | "repository">,
+  raw: unknown,
+  read: { repository: string; token: string; fetch?: typeof fetch },
+): Promise<boolean> {
   const checkoutSha = plan.provenance.checkoutSha;
   if (checkoutSha === undefined) return true;
   const pullRequest = raw && typeof raw === "object" ? (raw as Record<string, unknown>).pull_request : undefined;
-  const head = pullRequest && typeof pullRequest === "object" ? (pullRequest as Record<string, unknown>).head : undefined;
-  const sha = head && typeof head === "object" ? (head as Record<string, unknown>).sha : undefined;
-  return typeof sha === "string" && sha === checkoutSha;
+  if (pullRequest !== undefined) {
+    const head = pullRequest && typeof pullRequest === "object" ? (pullRequest as Record<string, unknown>).head : undefined;
+    const sha = head && typeof head === "object" ? (head as Record<string, unknown>).sha : undefined;
+    return typeof sha === "string" && sha === checkoutSha;
+  }
+  const resource = plan.event.resource;
+  if (resource === null || (resource.kind !== "issue" && resource.kind !== "pull_request")) {
+    throw new CheckoutBindingError("the plan records a checked-out head but its event names no pull request");
+  }
+  let current: Awaited<ReturnType<typeof fetchCurrentPullRequest>>;
+  try {
+    current = await fetchCurrentPullRequest({
+      repository: read.repository,
+      number: resource.number,
+      token: read.token,
+      ...(read.fetch ? { fetch: read.fetch } : {}),
+    });
+  } catch {
+    current = null;
+  }
+  if (current === null) throw new CheckoutBindingError(`pull request #${resource.number} could not be read`);
+  if (current.state !== "open") throw new CheckoutBindingError(`pull request #${resource.number} is ${current.state}`);
+  if (current.headRepoId === null || current.headRepoId !== current.baseRepoId || current.baseRepoId !== plan.repository.id) {
+    throw new CheckoutBindingError(`pull request #${resource.number} is not from this repository`);
+  }
+  if (current.headSha !== checkoutSha) {
+    throw new CheckoutBindingError(`pull request #${resource.number} is at ${current.headSha}, not the checked-out ${checkoutSha}`);
+  }
+  return true;
 }
 
 /**
@@ -614,6 +674,7 @@ async function prepareCapture(plan: TaskEffectPlanV1, directory: string): Promis
     changesSha256: plan.changesSha256,
     fileCount: plan.capture.files.length,
     sizeBytes: plan.capture.totalBytes,
+    ...(plan.capture.merge === undefined ? {} : { merge: plan.capture.merge }),
   });
   const verified = await verifyCaptureArtifact(directory, expected);
   if (taskCaptureManifestText(verified.manifest) !== manifestJson) throw new Error("Downloaded capture manifest does not match the exact plan");
