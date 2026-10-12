@@ -1072,14 +1072,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path4 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path5 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path4 && path4[0] !== "/") {
-          path4 = `/${path4}`;
+        if (path5 && path5[0] !== "/") {
+          path5 = `/${path5}`;
         }
-        return new URL(`${origin}${path4}`);
+        return new URL(`${origin}${path5}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1530,39 +1530,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin }
+          request: { method, path: path5, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path4);
+        debuglog("sending request to %s %s/%s", method, origin, path5);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin },
+          request: { method, path: path5, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path4,
+          path5,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin }
+          request: { method, path: path5, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path4);
+        debuglog("trailers received from %s %s/%s", method, origin, path5);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin },
+          request: { method, path: path5, origin },
           error: error63
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path4,
+          path5,
           error63.message
         );
       });
@@ -1611,9 +1611,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path4, origin }
+            request: { method, path: path5, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path4);
+          debuglog("sending request to %s %s/%s", method, origin, path5);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1676,7 +1676,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path: path4,
+        path: path5,
         method,
         body: body2,
         headers,
@@ -1691,11 +1691,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path4 !== "string") {
+        if (typeof path5 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path4[0] !== "/" && !(path4.startsWith("http://") || path4.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path5[0] !== "/" && !(path5.startsWith("http://") || path5.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path4)) {
+        } else if (invalidPathRegex.test(path5)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1761,7 +1761,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path4, query) : path4;
+        this.path = query ? buildURL(path5, query) : path5;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6390,7 +6390,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path4, host, upgrade, blocking, reset } = request;
+      const { method, path: path5, host, upgrade, blocking, reset } = request;
       let { body: body2, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body2)) {
@@ -6465,7 +6465,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path4} HTTP/1.1\r
+      let header = `${method} ${path5} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6991,7 +6991,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path4, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path5, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body: body2 } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -7058,7 +7058,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path4;
+      headers[HTTP2_HEADER_PATH] = path5;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
@@ -7411,9 +7411,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path4 = search ? `${pathname}${search}` : pathname;
+        const path5 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path4;
+        this.opts.path = path5;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8648,10 +8648,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path4 = "/",
+          path: path5 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path4;
+        opts.path = origin + path5;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -10623,20 +10623,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path4) {
-      if (typeof path4 !== "string") {
-        return path4;
+    function safeUrl(path5) {
+      if (typeof path5 !== "string") {
+        return path5;
       }
-      const pathSegments = path4.split("?");
+      const pathSegments = path5.split("?");
       if (pathSegments.length !== 2) {
-        return path4;
+        return path5;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path4, method, body: body2, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path4);
+    function matchKey(mockDispatch2, { path: path5, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path5);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10658,7 +10658,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path4 }) => matchValue(safeUrl(path4), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path5 }) => matchValue(safeUrl(path5), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10696,9 +10696,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path4, method, body: body2, headers, query } = opts;
+      const { path: path5, method, body: body2, headers, query } = opts;
       return {
-        path: path4,
+        path: path5,
         method,
         body: body2,
         headers,
@@ -11161,10 +11161,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path4, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path5, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path4,
+            Path: path5,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -16045,9 +16045,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path4) {
-      for (let i = 0; i < path4.length; ++i) {
-        const code2 = path4.charCodeAt(i);
+    function validateCookiePath(path5) {
+      for (let i = 0; i < path5.length; ++i) {
+        const code2 = path5.charCodeAt(i);
         if (code2 < 32 || // exclude CTLs (0-31)
         code2 > 126 || // exclude DEL and non-ascii
         code2 === 59) {
@@ -18195,7 +18195,7 @@ var require_eventsource_stream = __commonJS({
     var LF = 10;
     var CR = 13;
     var COLON = 58;
-    var SPACE = 32;
+    var SPACE2 = 32;
     var DATA = Buffer.from("data");
     var EVENT = Buffer.from("event");
     var ID = Buffer.from("id");
@@ -18348,7 +18348,7 @@ var require_eventsource_stream = __commonJS({
         if (colonPosition !== -1) {
           fieldLength = colonPosition;
           valueStart = colonPosition + 1;
-          if (line[valueStart] === SPACE) {
+          if (line[valueStart] === SPACE2) {
             ++valueStart;
           }
         }
@@ -18889,11 +18889,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path4 = opts.path;
+          let path5 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path4 = `/${path4}`;
+            path5 = `/${path5}`;
           }
-          url2 = new URL(util.parseOrigin(url2).origin + path4);
+          url2 = new URL(util.parseOrigin(url2).origin + path5);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -20291,8 +20291,8 @@ function getIDToken(aud) {
 
 // src/main.ts
 var import_node_crypto2 = require("node:crypto");
-var import_promises4 = require("node:fs/promises");
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_promises5 = require("node:fs/promises");
+var import_node_path4 = __toESM(require("node:path"), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -21110,10 +21110,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path4) {
-  if (!path4)
+function getElementAtPath(obj, path5) {
+  if (!path5)
     return obj;
-  return path4.reduce((acc, key) => acc?.[key], obj);
+  return path5.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -21453,11 +21453,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path4, issues) {
+function prefixIssues(path5, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path4);
+    iss.path.unshift(path5);
     return iss;
   });
 }
@@ -21907,16 +21907,16 @@ function flattenError(error63, mapper = (issue3) => issue3.message) {
 }
 function formatError(error63, mapper = (issue3) => issue3.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error64, path4 = []) => {
+  const processError = (error64, path5 = []) => {
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path4, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path5, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path5, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path5, ...issue3.path]);
       } else {
-        const fullpath = [...path4, ...issue3.path];
+        const fullpath = [...path5, ...issue3.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue3));
         } else {
@@ -21955,17 +21955,17 @@ function formatError(error63, mapper = (issue3) => issue3.message) {
 }
 function treeifyError(error63, mapper = (issue3) => issue3.message) {
   const result = { errors: [] };
-  const processError = (error64, path4 = []) => {
+  const processError = (error64, path5 = []) => {
     var _a3;
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path4, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path5, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path5, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path5, ...issue3.path]);
       } else {
-        const fullpath = [...path4, ...issue3.path];
+        const fullpath = [...path5, ...issue3.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue3));
           continue;
@@ -22004,8 +22004,8 @@ function treeifyError(error63, mapper = (issue3) => issue3.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path4 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path4) {
+  const path5 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path5) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -39107,13 +39107,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path4 = ref.slice(1).split("/").filter(Boolean);
-  if (path4.length === 0) {
+  const path5 = ref.slice(1).split("/").filter(Boolean);
+  if (path5.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path4[0] === defsKey) {
-    const key = path4[1] === void 0 ? void 0 : decodeJSONPointerSegment(path4[1]);
+  if (path5[0] === defsKey) {
+    const key = path5[1] === void 0 ? void 0 : decodeJSONPointerSegment(path5[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -39999,6 +39999,7 @@ var operationKindValues = [
   "pull_request.review_thread.resolve",
   "branch.create",
   "commit.create",
+  "commit.merge_base",
   "pull_request.open",
   "pull_request.open_draft",
   "pull_request.merge",
@@ -40019,7 +40020,7 @@ var operationFamilySchema = external_exports.enum(["issue", "pull_request", "git
 var operationCatalogEntrySchema = external_exports.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: external_exports.literal(true), highImpact: external_exports.boolean() }).strict();
 var operationCatalog = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
   kind,
-  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind === "commit.create" ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
+  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind.startsWith("commit.") ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
   persistent: true,
   highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete"
 })));
@@ -40032,7 +40033,7 @@ var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(i
 var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
 var COMMIT_FILE_LIMIT = 1e3;
 var commitFilePathSchema = external_exports.string().min(1).max(1024).refine(
-  (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  (path5) => !path5.startsWith("/") && !path5.endsWith("/") && !path5.includes("\\") && path5.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "invalid repository path"
 );
 var commitFileSchema = external_exports.object({
@@ -40128,6 +40129,30 @@ var operationOptions = [
       if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file2.path);
     });
+  }),
+  /**
+   * A merge commit on the triggering pull request's branch whose second parent
+   * is `baseSha`, the head of `baseBranch` when the merge was prepared. It
+   * brings the base branch in and never rewrites history. `files` and
+   * `conflictedPaths` come only from the merge capture, never from the model.
+   */
+  operationBase.extend({
+    kind: external_exports.literal("commit.merge_base"),
+    pullNumber: external_exports.number().int().positive(),
+    branch: branchNameSchema,
+    expectedHeadSha: shaSchema,
+    baseBranch: branchNameSchema,
+    baseSha: shaSchema,
+    message: external_exports.string().trim().min(1).max(1e3),
+    files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
+    conflictedPaths: external_exports.array(commitFilePathSchema).max(COMMIT_FILE_LIMIT)
+  }).strict().superRefine((value, context) => {
+    const paths = /* @__PURE__ */ new Set();
+    value.files.forEach((file2, index) => {
+      if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file2.path);
+    });
+    if (new Set(value.conflictedPaths).size !== value.conflictedPaths.length) context.addIssue({ code: "custom", path: ["conflictedPaths"], message: "conflicted paths must be unique" });
   }),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open"),
@@ -40304,6 +40329,15 @@ var operationOutputCatalog = {
     parentSha: "commitSha",
     commitUrl: "url"
   },
+  // `parentShas` is a list, so only the scalar receipt fields are outputs.
+  "commit.merge_base": {
+    ...pullOutputs,
+    branch: "branch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    baseSha: "commitSha",
+    commitUrl: "url"
+  },
   "pull_request.open": {
     ...pullOutputs,
     pullUrl: "url",
@@ -40378,6 +40412,7 @@ function operationOutputSentinel(type) {
 var branchWriteFields = {
   "branch.create": "branch",
   "commit.create": "branch",
+  "commit.merge_base": "branch",
   "pull_request.open": "head",
   "pull_request.open_draft": "head"
 };
@@ -40477,7 +40512,7 @@ var sha1 = external_exports.string().regex(/^[a-f0-9]{40}$/);
 var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var repositoryFullName = external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201);
 var relativePath = external_exports.string().min(1).max(1024).refine(
-  (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  (path5) => !path5.startsWith("/") && !path5.endsWith("/") && !path5.includes("\\") && path5.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "expected a normalized repository-relative POSIX path"
 );
 var taskLabelFilterV1Schema = external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([]);
@@ -40667,7 +40702,13 @@ var taskToolV1Schema = external_exports.enum([
   "repository.read_file",
   "repository.list_files",
   "repository.exec",
-  "provider.api.read"
+  "provider.api.read",
+  /**
+   * Writes the merge of the pull request's base branch, prepared by trusted
+   * code before the model ran, into the working tree for the model to finish.
+   * It never commits; `commit.merge_base` does.
+   */
+  "repository.merge_base"
 ]);
 var taskEffectKindValues = operationKindValues;
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
@@ -40709,12 +40750,14 @@ var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branch
 var taskEffectOptionsMapV1Schema = external_exports.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
+  "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
   "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
 });
 var taskBranchPatternsV1Schema = external_exports.strictObject({
   "branch.create": branchPatternsSchema.optional(),
   "commit.create": branchPatternsSchema.optional(),
+  "commit.merge_base": branchPatternsSchema.optional(),
   "pull_request.open": branchPatternsSchema.optional(),
   "pull_request.open_draft": branchPatternsSchema.optional()
 });
@@ -40732,7 +40775,8 @@ var taskBundleV1Schema = external_exports.strictObject({
   /**
    * Check out the triggering pull request's head instead of the commit GitHub
    * supplies (a merge preview), so commits build on the branch they push to.
-   * Opt-in, and only for tasks with a pull request trigger.
+   * Opt-in, and only for tasks with a pull request or issue comment trigger
+   * (a comment on a pull request's conversation).
    */
   checkout: external_exports.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
@@ -40756,8 +40800,17 @@ var taskBundleV1Schema = external_exports.strictObject({
    */
   reactions: external_exports.literal(false).optional()
 }).superRefine((bundle, context) => {
-  if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
-    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  const headTrigger = bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind) || eventNameByTriggerKind[trigger.kind] === "issue_comment");
+  if (bundle.checkout === "pull-request-head" && !headTrigger) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request or issue comment trigger" });
+  }
+  if (bundle.effects.includes("commit.merge_base")) {
+    if (!headTrigger) {
+      context.addIssue({ code: "custom", path: ["effects"], message: "commit.merge_base needs a pull request or issue comment trigger" });
+    }
+    if (!bundle.tools.includes("repository.merge_base")) {
+      context.addIssue({ code: "custom", path: ["tools"], message: "commit.merge_base needs the repository.merge_base tool, which prepares the merge it commits" });
+    }
   }
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
@@ -41033,11 +41086,23 @@ var normalizedPushV1Schema = external_exports.strictObject({
 });
 var changedLabel = external_exports.string().trim().min(1).max(100);
 function eventMember(kind, shape) {
-  return external_exports.strictObject({ ...normalizedEventBase, kind: external_exports.literal(kind), ...shape });
+  return external_exports.strictObject({
+    ...normalizedEventBase,
+    kind: external_exports.literal(kind),
+    ...shape,
+    /**
+     * The pull request head the planning job checked out, when it checked one
+     * out. Set by the bridge only after confirming it is `pullRequest`'s
+     * current head, so it is present only with `pullRequest` and equal to its
+     * head. Absent from older bridges, which `taskCheckoutSha` still handles.
+     */
+    checkoutSha: sha1.optional()
+  });
 }
 var issuePayload = { issue: normalizedIssueV1Schema };
 var editedPayload = { previousBody: external_exports.string().max(65536).optional() };
 var pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+var commentPullRequestPayload = { pullRequest: normalizedPullRequestV1Schema.optional() };
 var discussionPayload = { discussion: normalizedDiscussionV1Schema };
 var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.opened", issuePayload),
@@ -41045,8 +41110,8 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.reopened", issuePayload),
-  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
-  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload }),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema, ...commentPullRequestPayload }),
+  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload, ...commentPullRequestPayload }),
   eventMember("github.pull_request.opened", pullRequestPayload),
   eventMember("github.pull_request.reopened", pullRequestPayload),
   eventMember("github.pull_request.synchronize", pullRequestPayload),
@@ -41083,6 +41148,17 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   }
   if (event.kind === "github.workflow_dispatch" && event.issue !== void 0 && event.pullRequest !== void 0) {
     context.addIssue({ code: "custom", path: ["pullRequest"], message: "a manual run may target an issue or a pull request, not both" });
+  }
+  if (event.checkoutSha !== void 0) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+    if (pullRequest === void 0) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited") && event.pullRequest !== void 0 && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
   }
   if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
     context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
@@ -41293,8 +41369,8 @@ var taskStepReferencesV1Schema = external_exports.record(taskPayloadPointerV1Sch
 function decodeJsonPointer(pointer) {
   return pointer.split("/").slice(1).map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
 }
-function encodeJsonPointer(path4) {
-  return path4.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
+function encodeJsonPointer(path5) {
+  return path5.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
 }
 var taskEffectProposalV1Schema = external_exports.strictObject({
   stepName: taskStepNameV1Schema,
@@ -41462,27 +41538,35 @@ var protectedCapturePaths = [
   ".github/dependabot.yaml",
   "docs/CODEOWNERS"
 ];
-function isProtectedCapturePath(path4) {
-  const normalized = path4.toLowerCase();
+function isProtectedCapturePath(path5) {
+  const normalized = path5.toLowerCase();
   if (protectedCapturePaths.some((protectedPath) => normalized === protectedPath.toLowerCase())) return true;
   return protectedCapturePathPrefixes.some((prefix) => {
     const lowered = prefix.toLowerCase();
     return normalized === lowered.slice(0, -1) || normalized.startsWith(lowered);
   });
 }
+var baseIdentical = external_exports.literal(true).optional();
 var taskCaptureFileV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
     path: relativePath,
     status: external_exports.enum(["added", "modified"]),
     mode: taskCaptureFileModeV1Schema,
     sizeBytes: fileByteCount,
-    sha256
+    sha256,
+    baseIdentical
   }),
   external_exports.strictObject({
     path: relativePath,
-    status: external_exports.literal("deleted")
+    status: external_exports.literal("deleted"),
+    baseIdentical
   })
 ]);
+var taskCaptureMergeV1Schema = external_exports.strictObject({
+  baseSha: sha1,
+  /** Sorted and unique, so equal merges hash equally. May be empty: a clean merge. */
+  conflictedPaths: external_exports.array(relativePath).max(COMMIT_FILE_LIMIT).refine(sortedUnique, "conflicted paths must be sorted and unique")
+});
 var taskCaptureManifestV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-capture-manifest/v1"),
   captureId: boundIdentifier,
@@ -41500,14 +41584,20 @@ var taskCaptureManifestV1Schema = external_exports.strictObject({
    * `false`. Capture that hits a limit must fail the run, not ship a subset of
    * the change the model believed it was making.
    */
-  truncated: external_exports.literal(false)
+  truncated: external_exports.literal(false),
+  /** Present only on a merge capture; absent, the manifest is exactly as before. */
+  merge: taskCaptureMergeV1Schema.optional()
 }).superRefine((manifest, context) => {
   const paths = manifest.files.map((file2) => file2.path);
   if (new Set(paths).size !== paths.length) {
     context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
   }
   manifest.files.forEach((file2, index) => {
-    if (isProtectedCapturePath(file2.path)) {
+    const isProtected = isProtectedCapturePath(file2.path);
+    if (file2.baseIdentical !== void 0 && (manifest.merge === void 0 || !isProtected)) {
+      context.addIssue({ code: "custom", path: ["files", index, "baseIdentical"], message: "baseIdentical is recorded only for a protected path in a merge capture" });
+    }
+    if (isProtected && !(manifest.merge !== void 0 && file2.baseIdentical === true)) {
       context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file2.path}` });
     }
   });
@@ -41529,12 +41619,18 @@ function taskCaptureManifestText(value) {
 function taskCaptureChangesDigestInput(manifest) {
   const encoder = new TextEncoder();
   const chunks = [];
-  for (const file2 of manifest.files) {
-    const fields = file2.status === "deleted" ? ["delete", file2.path] : ["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256];
+  const push = (fields) => {
     for (const field of fields) {
       const bytes = encoder.encode(field);
       chunks.push(encoder.encode(`${bytes.byteLength}:`), bytes);
     }
+  };
+  for (const file2 of manifest.files) {
+    push(file2.status === "deleted" ? ["delete", file2.path] : ["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256]);
+    if (file2.baseIdentical === true) push(["base-identical"]);
+  }
+  if (manifest.merge !== void 0) {
+    push(["merge", manifest.merge.baseSha, String(manifest.merge.conflictedPaths.length), ...manifest.merge.conflictedPaths]);
   }
   const output2 = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
   let offset = 0;
@@ -41557,7 +41653,9 @@ var taskCaptureRefV1Schema = external_exports.strictObject({
    */
   changesSha256: sha256,
   fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  sizeBytes: captureByteCount
+  sizeBytes: captureByteCount,
+  /** The manifest's `merge`, present only on a merge capture. Covered by `changesSha256`. */
+  merge: taskCaptureMergeV1Schema.optional()
 });
 var taskEventResourceV1Schema = external_exports.discriminatedUnion("kind", [
   external_exports.strictObject({ kind: external_exports.literal("issue"), id: githubNumericId, number: external_exports.number().int().positive() }),
@@ -41586,7 +41684,10 @@ var taskEventBindingV1Schema = external_exports.strictObject({
 });
 var triggeringPullRequestKinds = [
   "pull_request.review_comment.reply",
-  "pull_request.review_thread.resolve"
+  "pull_request.review_thread.resolve",
+  // A merge commit pushes to a pull request's branch on a maintainer's request
+  // on that pull request, so it is confined to it too.
+  "commit.merge_base"
 ];
 function triggeringPullRequestRefusal(kind, payload, references, resource) {
   if (!triggeringPullRequestKinds.includes(kind)) return void 0;
@@ -41603,7 +41704,8 @@ function triggeringPullRequestRefusal(kind, payload, references, resource) {
   return void 0;
 }
 var captureMaterializedPointers = {
-  "commit.create": ["/files"]
+  "commit.create": ["/files"],
+  "commit.merge_base": ["/files", "/conflictedPaths"]
 };
 function captureDeferredPointers(kind) {
   return captureMaterializedPointers[kind] ?? [];
@@ -41638,15 +41740,15 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   rationale: external_exports.string().trim().min(1).max(5e3)
 });
 var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
-function referencedOutputType(reference, stepName2, context, path4, issues) {
+function referencedOutputType(reference, stepName2, context, path5, issues) {
   if (reference.step === stepName2) {
-    issues.push({ path: path4, message: "a step cannot reference its own output" });
+    issues.push({ path: path5, message: "a step cannot reference its own output" });
     return void 0;
   }
   const targetKind = context.earlier.get(reference.step);
   if (targetKind === void 0) {
     issues.push({
-      path: path4,
+      path: path5,
       message: context.later?.has(reference.step) ? `step "${reference.step}" does not run before this step` : `unknown step "${reference.step}"`
     });
     return void 0;
@@ -41654,7 +41756,7 @@ function referencedOutputType(reference, stepName2, context, path4, issues) {
   const outputType = operationOutputType(targetKind, reference.output);
   if (outputType === void 0) {
     issues.push({
-      path: path4,
+      path: path5,
       message: `${targetKind} does not publish a scalar output named "${reference.output}"; it publishes ${operationOutputNames(targetKind).map((name2) => `"${name2}"`).join(", ")}`
     });
   }
@@ -41666,11 +41768,11 @@ function taskStepIssues(step, context) {
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
     for (const { placeholder, output: reference_ } of referenceOutputs(reference)) {
-      const path4 = placeholder === void 0 ? ["references", pointer] : ["references", pointer, "placeholders", placeholder];
-      const outputType = referencedOutputType(reference_, step.stepName, context, path4, issues);
+      const path5 = placeholder === void 0 ? ["references", pointer] : ["references", pointer, "placeholders", placeholder];
+      const outputType = referencedOutputType(reference_, step.stepName, context, path5, issues);
       if (outputType === void 0) continue;
       if (placeholder !== void 0 && outputType === "nullableGithubId") {
-        issues.push({ path: path4, message: `"${reference_.output}" may be null and cannot fill a placeholder` });
+        issues.push({ path: path5, message: `"${reference_.output}" may be null and cannot fill a placeholder` });
         continue;
       }
       resolvedTypes.set(outputKey(reference_), outputType);
@@ -41819,23 +41921,53 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       const field = branchWriteFields[operation.kind];
       const branch = operation.payload[field];
       if (operation.references[`/${field}`] === void 0 && typeof branch === "string") {
-        const refusal = branchWriteRefusal(
+        const refusal2 = branchWriteRefusal(
           operation.kind,
           branch,
           plan.branchPatterns?.[operation.kind] ?? DEFAULT_WRITE_BRANCHES,
           plan.repository.defaultBranch
         );
-        if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal });
+        if (refusal2 !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", field], message: refusal2 });
       }
     }
     const pullRefusal = triggeringPullRequestRefusal(operation.kind, operation.payload, operation.references, plan.event.resource);
     if (pullRefusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "pullNumber"], message: pullRefusal });
     if (operation.kind === "commit.create" && plan.capture !== void 0) {
-      const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
-      if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
+      const refusal2 = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
+      if (refusal2 !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal2 });
+      if (plan.capture.merge !== void 0) {
+        context.addIssue({ code: "custom", path: ["operations", index, "kind"], message: "commit.create cannot commit a merge capture; use commit.merge_base" });
+      }
+    }
+    if (operation.kind === "commit.merge_base" && plan.capture !== void 0) {
+      for (const message3 of mergeBaseRefusals(operation, plan.capture)) {
+        context.addIssue({ code: "custom", path: ["operations", index, "payload"], message: message3 });
+      }
     }
   });
+  const kinds = plan.operations.map((operation) => operation.kind);
+  if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
+  }
+  if (kinds.includes("commit.merge_base") && kinds.includes("commit.create")) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may not hold both commit.create and commit.merge_base" });
+  }
 });
+function mergeBaseRefusals(operation, capture) {
+  if (capture.merge === void 0) return ["commit.merge_base needs a merge capture, taken after repository.merge_base applied the merge"];
+  const refusals = [];
+  for (const field of ["baseSha", "expectedHeadSha"]) {
+    if (operation.references[`/${field}`] !== void 0) refusals.push(`commit.merge_base ${field} must be written directly, not by reference`);
+  }
+  const { baseSha, expectedHeadSha } = operation.payload;
+  if (operation.references["/baseSha"] === void 0 && (typeof baseSha !== "string" || baseSha.toLowerCase() !== capture.merge.baseSha)) {
+    refusals.push(`commit.merge_base baseSha must be the merged base commit ${capture.merge.baseSha}`);
+  }
+  if (operation.references["/expectedHeadSha"] === void 0 && (typeof expectedHeadSha !== "string" || expectedHeadSha.toLowerCase() !== capture.baseSha)) {
+    refusals.push(`commit.merge_base must build on the captured commit ${capture.baseSha}: set expectedHeadSha to it`);
+  }
+  return refusals;
+}
 var taskObservationV1Schema = external_exports.strictObject({
   kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
   summary: external_exports.string().trim().min(1).max(8e3),
@@ -41992,6 +42124,52 @@ var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
     kind: external_exports.literal("repository.capture"),
     baseSha: sha12,
     maxOutputBytes: external_exports.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES2)
+  }),
+  /**
+   * Trusted merge of the pull request's base branch into the working tree.
+   *
+   * Like capture, there is deliberately no field a model could fill. The
+   * merge was computed by the bridge before the session connected, and this
+   * only asks the runner to write that recorded result into the working tree.
+   */
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("repository.merge_base")
+  })
+]);
+var MERGE_BASE_MESSAGES_MAX_BYTES = 8 * 1024;
+var MERGE_BASE_FILE_LIMIT = 1e3;
+var mergeBasePath = external_exports.string().min(1).max(1024);
+var runnerMergeBaseResultV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.merge-base-result/v1"),
+    status: external_exports.enum(["clean", "conflicted"]),
+    pullNumber: external_exports.number().int().positive(),
+    branch: external_exports.string().min(1).max(255),
+    expectedHeadSha: sha12,
+    baseBranch: external_exports.string().min(1).max(255),
+    baseSha: sha12,
+    mergeBaseSha: sha12,
+    /** Sorted and unique. Empty exactly when `status` is `clean`. */
+    conflictedFiles: external_exports.array(mergeBasePath).max(MERGE_BASE_FILE_LIMIT),
+    changedFileCount: external_exports.number().int().nonnegative().max(MERGE_BASE_FILE_LIMIT),
+    /** Git's merge messages, bounded to `MERGE_BASE_MESSAGES_MAX_BYTES`. */
+    messages: external_exports.string().max(MERGE_BASE_MESSAGES_MAX_BYTES).refine(
+      (value) => new TextEncoder().encode(value).byteLength <= MERGE_BASE_MESSAGES_MAX_BYTES,
+      `messages exceed ${MERGE_BASE_MESSAGES_MAX_BYTES} bytes`
+    )
+  }).superRefine((result, context) => {
+    if (result.status === "clean" !== (result.conflictedFiles.length === 0)) {
+      context.addIssue({ code: "custom", path: ["conflictedFiles"], message: "a clean merge has no conflicted files, a conflicted one has some" });
+    }
+    if (result.conflictedFiles.some((file2, index) => index > 0 && !(result.conflictedFiles[index - 1] < file2))) {
+      context.addIssue({ code: "custom", path: ["conflictedFiles"], message: "conflicted files must be sorted and unique" });
+    }
+  }),
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.merge-base-result/v1"),
+    status: external_exports.literal("refused"),
+    reason: external_exports.string().min(1).max(2e3)
   })
 ]);
 var runnerCaptureRefV1Schema = external_exports.strictObject({
@@ -42001,7 +42179,15 @@ var runnerCaptureRefV1Schema = external_exports.strictObject({
   manifestSha256: sha2562,
   changesSha256: sha2562,
   fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  /**
+   * Present only on a merge capture, taken after `repository.merge_base`
+   * applied a merge. Mirrors `taskCaptureMergeV1Schema`.
+   */
+  merge: external_exports.strictObject({
+    baseSha: sha12,
+    conflictedPaths: external_exports.array(mergeBasePath).max(MERGE_BASE_FILE_LIMIT)
+  }).optional()
 });
 var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
@@ -42149,11 +42335,18 @@ function runnerEventMember(kind, shape) {
     schemaVersion: external_exports.literal("gardener.runner.event/v1"),
     kind: external_exports.literal(kind),
     repository: eventRepository,
-    ...shape
+    ...shape,
+    /**
+     * The pull request head the planning job checked out, set by the bridge
+     * only after confirming it is `pullRequest`'s current head. Mirrors the
+     * contract: present only with `pullRequest`, and equal to its head sha.
+     */
+    checkoutSha: sha12.optional()
   });
 }
 var issuePayload2 = { issue: eventIssue };
 var pullRequestPayload2 = { pullRequest: eventPullRequest };
+var commentPullRequestPayload2 = { pullRequest: eventPullRequest.optional() };
 var discussionPayload2 = { discussion: eventDiscussion };
 var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.issue.opened", issuePayload2),
@@ -42161,8 +42354,8 @@ var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
   runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
   runnerEventMember("github.issue.reopened", issuePayload2),
-  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
-  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited }),
+  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment, ...commentPullRequestPayload2 }),
+  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited, ...commentPullRequestPayload2 }),
   runnerEventMember("github.pull_request.opened", pullRequestPayload2),
   runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
   runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
@@ -42193,7 +42386,19 @@ var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
   runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment }),
   runnerEventMember("github.discussion_comment.edited", { ...discussionPayload2, comment: eventDiscussionComment, ...eventEdited })
-]);
+]).superRefine((event, context) => {
+  if (event.checkoutSha !== void 0) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+    if (pullRequest === void 0) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited") && event.pullRequest !== void 0 && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
+  }
+});
 var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
 var githubUrl = external_exports.url().refine(
   (value) => new URL(value).origin === "https://github.com",
@@ -42978,6 +43183,9 @@ function pullRequestPayload3(raw) {
     head: { ref: head.ref, sha: head.sha, repo: repositoryRef(head.repo) }
   };
 }
+function normalizePullRequest(value) {
+  return pullRequestPayload3({ pull_request: value });
+}
 function commentPayload(raw) {
   const comment = object2(raw.comment, "a comment");
   return {
@@ -43246,11 +43454,33 @@ async function fetchCurrentPullRequest(input2) {
     return null;
   }
 }
+function withCheckoutSha(event, checkoutSha, commentPullRequest2) {
+  if (checkoutSha === void 0) return event;
+  const isComment = event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited";
+  const pullRequest = isComment ? commentPullRequest2 : "pullRequest" in event ? event.pullRequest : void 0;
+  if (pullRequest === void 0) return event;
+  const number4 = isComment ? event.issue.number : pullRequest?.number;
+  const confirm = isComment || event.kind === "github.workflow_dispatch";
+  const reason = !confirm ? null : pullRequest === null ? "it could not be read" : checkoutReason(pullRequest, checkoutSha);
+  const parsed = reason === null ? runnerEventV1Schema.safeParse({ ...event, ...isComment ? { pullRequest } : {}, checkoutSha }) : null;
+  if (parsed?.success) return parsed.data;
+  throw new UnconfirmedHeadError(
+    `Pull request #${String(number4)}: the workflow checked out ${checkoutSha}, but ${reason ?? "the pull request is not a valid event"}.`
+  );
+}
+function checkoutReason(value, checkoutSha) {
+  const pullRequest = value;
+  if (pullRequest.state !== "open") return "it is no longer open";
+  const headRepo = pullRequest.head?.repo?.id;
+  if (headRepo === void 0 || headRepo !== pullRequest.base?.repo?.id) return "only a same-repository pull request can be checked out";
+  if (pullRequest.head?.sha !== checkoutSha) return `its head is ${String(pullRequest.head?.sha)}`;
+  return null;
+}
 
 // src/executor.ts
-var import_node_child_process2 = require("node:child_process");
-var import_promises3 = require("node:fs/promises");
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_child_process3 = require("node:child_process");
+var import_promises4 = require("node:fs/promises");
+var import_node_path3 = __toESM(require("node:path"), 1);
 
 // src/capture.ts
 var import_node_child_process = require("node:child_process");
@@ -43260,6 +43490,54 @@ var import_promises = require("node:fs/promises");
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_stream = require("node:stream");
 var import_promises2 = require("node:stream/promises");
+
+// src/merge-markers.ts
+var LESS = 60;
+var GREATER = 62;
+var SPACE = 32;
+var CARRIAGE_RETURN = 13;
+var LINE_FEED = 10;
+var MARKER_LENGTH = 7;
+var ConflictMarkerScanner = class {
+  /** The first bytes of the current line; a marker is decided by at most nine. */
+  #head = [];
+  #length = 0;
+  #found = false;
+  push(chunk) {
+    if (this.#found) return;
+    let start = 0;
+    while (start <= chunk.length) {
+      const end = chunk.indexOf(LINE_FEED, start);
+      const stop = end < 0 ? chunk.length : end;
+      for (let index = start; index < stop && this.#head.length < MARKER_LENGTH + 2; index += 1) this.#head.push(chunk[index]);
+      this.#length += stop - start;
+      if (end < 0) return;
+      this.#endLine();
+      if (this.#found) return;
+      start = end + 1;
+    }
+  }
+  /** Ends the last line, which need not end with a newline, and reports the result. */
+  finish() {
+    if (!this.#found && this.#length > 0) this.#endLine();
+    return this.#found;
+  }
+  #endLine() {
+    if (isMarkerLine(this.#head, this.#length)) this.#found = true;
+    this.#head = [];
+    this.#length = 0;
+  }
+};
+function isMarkerLine(head, length) {
+  if (length < MARKER_LENGTH) return false;
+  const first = head[0];
+  if (first !== LESS && first !== GREATER) return false;
+  for (let index = 1; index < MARKER_LENGTH; index += 1) if (head[index] !== first) return false;
+  if (length === MARKER_LENGTH || head[MARKER_LENGTH] === SPACE) return true;
+  return length === MARKER_LENGTH + 1 && head[MARKER_LENGTH] === CARRIAGE_RETURN;
+}
+
+// src/capture.ts
 var GITLINK_MODE = "160000";
 var RUNNER_HOME_PATH = ".gardener/runner-home";
 var RUNNER_HOME_PREFIX = `${RUNNER_HOME_PATH}/`;
@@ -43312,6 +43590,15 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
     return this.#baseSha;
   }
   /**
+   * Refuses when the index, configuration, exclude rules or any attributes
+   * file moved since the pre-execution snapshot. `repository.merge_base`
+   * calls this before and after writing the merge, because that write runs
+   * the repository's filters and must run only the ones the snapshot saw.
+   */
+  async assertAuthorityUnchanged() {
+    await this.#assertFreshAuthority();
+  }
+  /**
    * Records the pre-execution snapshot. Run this before the model is allowed to
    * execute anything, and never afterwards.
    */
@@ -43359,7 +43646,9 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
     }
     const candidates = [.../* @__PURE__ */ new Set([...this.#authority.index.keys(), ...untracked])].filter((entry) => matchesFilters(entry, filters)).sort(byPath);
     const budget = captureBudget(maxBytes);
-    const { deletions, changed } = await this.#classify(candidates, walked, maxFiles, budget);
+    const merge2 = request.merge;
+    const { deletions, changed } = await this.#classify(candidates, walked, maxFiles, budget, merge2);
+    if (merge2 !== void 0) assertMergeMatches(merge2, deletions, changed);
     if (deletions.length + changed.length === 0) return { status: "unchanged" };
     await this.#assertChangeWithinBudget(changed, walked, budget);
     await this.#assertFreshAuthority();
@@ -43372,21 +43661,24 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
         await gitText(this.#workspace, ["hash-object", "-w", "--stdin-paths"], { input: `${blobPaths.join("\n")}
 ` });
       }
+      const conflicted = new Set(merge2?.conflictedPaths ?? []);
       for (const file2 of changed) {
-        const written = await this.#materialize(staging, file2, budget, totalBytes);
+        const written = await this.#materialize(staging, file2, budget, totalBytes, conflicted.has(file2.path));
         totalBytes += written.sizeBytes;
         materialized.push(written);
       }
       await this.#assertFreshAuthority();
       const files = [...deletions, ...materialized].sort((left, right) => byPath(left.path, right.path));
-      const captureId = `cap_${sha256Hex(identityStream(this.#baseSha, files))}`;
+      const mergeRecord = merge2 === void 0 ? void 0 : { baseSha: merge2.baseSha, conflictedPaths: [...merge2.conflictedPaths] };
+      const captureId = `cap_${sha256Hex(identityStream(this.#baseSha, { files, ...mergeRecord ? { merge: mergeRecord } : {} }))}`;
       const manifest = parseManifest({
         schemaVersion: "gardener.task-capture-manifest/v1",
         captureId,
         baseSha: this.#baseSha,
         files,
         totalBytes,
-        truncated: false
+        truncated: false,
+        ...mergeRecord ? { merge: mergeRecord } : {}
       });
       const manifestBytes = Buffer.from(taskCaptureManifestText(manifest), "utf8");
       const target = import_node_path.default.join(this.#artifactRoot, captureId);
@@ -43405,7 +43697,8 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
         manifestSha256: sha256Hex(manifestBytes),
         changesSha256: sha256Hex(changesStream(manifest)),
         fileCount: files.length,
-        sizeBytes: totalBytes
+        sizeBytes: totalBytes,
+        ...mergeRecord ? { merge: mergeRecord } : {}
       });
       return { status: "captured", ref, manifest, directory: target };
     } catch (error63) {
@@ -43534,7 +43827,7 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
    * `eol`, and clean-filter semantics decide equality. Comparing raw bytes
    * against the index would mark every normalized file modified.
    */
-  async #classify(candidates, walked, maxFiles, budget) {
+  async #classify(candidates, walked, maxFiles, budget, merge2) {
     const deletions = [];
     const present = [];
     for (const entry of candidates) {
@@ -43543,8 +43836,8 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
       const indexed = this.#authority.index.get(entry);
       if (walkedEntry === void 0) {
         if (indexed === void 0) continue;
-        assertCapturableTarget(entry);
-        deletions.push({ path: entry, status: "deleted" });
+        const baseIdentical2 = capturableTarget(entry, merge2, null);
+        deletions.push({ path: entry, status: "deleted", ...baseIdentical2 ? { baseIdentical: baseIdentical2 } : {} });
         continue;
       }
       if (walkedEntry.kind === "special") {
@@ -43567,8 +43860,15 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
         const target = Buffer.from(await (0, import_promises.readlink)(candidate.entry.absolute), "utf8");
         const blobSha2 = gitBlobSha1(target);
         if (indexed !== void 0 && indexed.mode === "120000" && indexed.blobSha === blobSha2) continue;
-        assertCapturableTarget(candidate.path);
-        changed.push({ path: candidate.path, status: indexed === void 0 ? "added" : "modified", mode: "120000", linkTarget: target });
+        const baseIdentical3 = capturableTarget(candidate.path, merge2, { mode: "120000", blobSha: blobSha2 });
+        changed.push({
+          path: candidate.path,
+          status: indexed === void 0 ? "added" : "modified",
+          mode: "120000",
+          blobSha: blobSha2,
+          linkTarget: target,
+          ...baseIdentical3 ? { baseIdentical: baseIdentical3 } : {}
+        });
         continue;
       }
       const blobSha = blobShas.get(candidate.path);
@@ -43580,8 +43880,14 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
           `Cannot capture ${candidate.path}: it uses the Git filter '${driver}', which is not available under Gardener's pinned Git configuration`
         );
       }
-      assertCapturableTarget(candidate.path);
-      changed.push({ path: candidate.path, status: indexed === void 0 ? "added" : "modified", mode: candidate.mode, blobSha });
+      const baseIdentical2 = capturableTarget(candidate.path, merge2, { mode: candidate.mode, blobSha });
+      changed.push({
+        path: candidate.path,
+        status: indexed === void 0 ? "added" : "modified",
+        mode: candidate.mode,
+        blobSha,
+        ...baseIdentical2 ? { baseIdentical: baseIdentical2 } : {}
+      });
     }
     const total = deletions.length + changed.length;
     if (maxFiles !== void 0 && total > maxFiles) throw new Error(`Capture exceeds maxFiles=${maxFiles}`);
@@ -43645,7 +43951,8 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
    * abandons the stream part-written, and the staging directory is removed by
    * the caller.
    */
-  async #materialize(directory, file2, budget, capturedBytes) {
+  async #materialize(directory, file2, budget, capturedBytes, scanMarkers = false) {
+    const markers = scanMarkers ? new ConflictMarkerScanner() : void 0;
     const temporary = import_node_path.default.join(directory, "content", `.tmp-${process.pid}-${uniqueSuffix()}`);
     const handle = await (0, import_promises.open)(temporary, import_node_fs.constants.O_WRONLY | import_node_fs.constants.O_CREAT | import_node_fs.constants.O_EXCL | import_node_fs.constants.O_NOFOLLOW, FILE_MODE);
     const hash2 = (0, import_node_crypto.createHash)("sha256");
@@ -43666,6 +43973,7 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
           return;
         }
         hash2.update(chunk);
+        markers?.push(chunk);
         callback(null, chunk);
       }
     });
@@ -43682,9 +43990,21 @@ var WorkingTreeCapture = class _WorkingTreeCapture {
     } finally {
       await handle.close();
     }
+    if (markers?.finish() === true) {
+      throw new Error(
+        `Cannot capture ${file2.path}: it still holds a conflict marker (a line starting <<<<<<< or >>>>>>>); resolve the conflict before proposing the merge commit`
+      );
+    }
     const sha2563 = hash2.digest("hex");
     await (0, import_promises.rename)(temporary, import_node_path.default.join(directory, "content", sha2563));
-    return { path: file2.path, status: file2.status, mode: file2.mode, sizeBytes, sha256: sha2563 };
+    return {
+      path: file2.path,
+      status: file2.status,
+      mode: file2.mode,
+      sizeBytes,
+      sha256: sha2563,
+      ...file2.baseIdentical ? { baseIdentical: file2.baseIdentical } : {}
+    };
   }
   async #walk(absolute, relative, output2) {
     const entries = (await (0, import_promises.readdir)(absolute, { withFileTypes: true })).sort((left, right) => byPath(left.name, right.name));
@@ -43746,7 +44066,9 @@ async function verifyCaptureArtifact(directory, expected) {
     ["file count", String(manifest.files.length), String(reference.fileCount)],
     ["size", String(totalBytes), String(reference.sizeBytes)],
     ["changes digest", sha256Hex(changesStream(manifest)), reference.changesSha256],
-    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest.files))}`, reference.captureId]
+    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest))}`, reference.captureId],
+    // A plan-bound reference must not claim a different merge than the manifest holds.
+    ["merge", JSON.stringify(manifest.merge ?? null), JSON.stringify(reference.merge ?? null)]
   ];
   for (const [label, actual, want] of expectations) {
     if (!equalsConstantTime(actual, want)) throw new Error(`Capture ${label} mismatch`);
@@ -43762,11 +44084,11 @@ async function verifyCaptureArtifact(directory, expected) {
 function changesStream(manifest) {
   return Buffer.from(taskCaptureChangesDigestInput(manifest));
 }
-function identityStream(baseSha, files) {
-  return Buffer.concat([framed(["gardener.task-capture/v1", baseSha]), ...files.map(fileRecord)]);
-}
-function fileRecord(file2) {
-  return file2.status === "deleted" ? framed(["delete", file2.path]) : framed(["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256]);
+function identityStream(baseSha, manifest) {
+  return Buffer.concat([
+    framed(["gardener.task-capture/v1", baseSha]),
+    Buffer.from(taskCaptureChangesDigestInput(manifest))
+  ]);
 }
 function framed(fields) {
   return Buffer.concat(fields.map((field) => {
@@ -44055,6 +44377,42 @@ function assertCapturablePath(entry) {
   }
   if (components[0] === ".git") throw new Error(`Cannot capture Git internals: ${entry}`);
 }
+function capturableTarget(entry, merge2, actual) {
+  const isRunnerHome = entry === RUNNER_HOME_PATH || entry.startsWith(RUNNER_HOME_PREFIX);
+  if (merge2 !== void 0 && !isRunnerHome && isProtectedCapturePath(entry)) {
+    const base = merge2.protectedBase.get(entry);
+    if (base !== void 0 && (base === null ? actual === null : actual !== null && actual.mode === base.mode && actual.blobSha === base.blobSha)) {
+      return true;
+    }
+    if (base !== void 0) throw new Error(
+      `The merge changes the protected path ${entry} to something other than the base branch's version; a merge commit may only take the base branch's version of a protected file, so a person must merge this pull request`
+    );
+  }
+  assertCapturableTarget(entry);
+  return false;
+}
+function assertMergeMatches(merge2, deletions, changed) {
+  const conflicted = new Set(merge2.conflictedPaths);
+  const captured = /* @__PURE__ */ new Map();
+  for (const file2 of deletions) captured.set(file2.path, { status: "deleted", mode: null, blobSha: null });
+  for (const file2 of changed) captured.set(file2.path, { status: file2.status, mode: file2.mode, blobSha: file2.blobSha ?? null });
+  const strict = "outside the conflicted files a merge commit must equal git's automatic merge exactly";
+  for (const [entry, actual] of captured) {
+    if (conflicted.has(entry)) continue;
+    const expected = merge2.differences.get(entry);
+    if (expected === void 0) {
+      throw new Error(`Cannot capture ${entry}: ${strict}, and the merge does not change this path`);
+    }
+    if (expected.status !== actual.status || actual.status !== "deleted" && (expected.mode !== actual.mode || expected.blobSha !== actual.blobSha)) {
+      throw new Error(`Cannot capture ${entry}: ${strict}, and this path differs from the merge`);
+    }
+  }
+  for (const entry of merge2.differences.keys()) {
+    if (!conflicted.has(entry) && !captured.has(entry)) {
+      throw new Error(`Cannot capture the merge: ${strict}, and ${entry}, which the merge changes, is no longer changed in the working tree`);
+    }
+  }
+}
 function assertCapturableTarget(entry) {
   if (entry === RUNNER_HOME_PATH || entry.startsWith(RUNNER_HOME_PREFIX)) {
     throw new Error(`Cannot capture ${entry}: it is Gardener runner state, not repository content`);
@@ -44072,7 +44430,322 @@ function byPath(left, right) {
   return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
 }
 
+// src/merge-base.ts
+var import_node_child_process2 = require("node:child_process");
+var import_promises3 = require("node:fs/promises");
+var import_node_path2 = __toESM(require("node:path"), 1);
+var MINIMUM_GIT = [2, 38];
+var GITLINK_MODE2 = "160000";
+var RUNNER_HOME_PREFIX2 = ".gardener/runner-home/";
+var GIT_MAX_OUTPUT2 = 64 * 1024 * 1024;
+var DEFAULT_INITIAL_DEPTH = 50;
+var DEEPEN_ROUNDS = 4;
+var API_TIMEOUT_MS = 15e3;
+var REPOSITORY4 = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+var SHA1 = /^[a-f0-9]{40}$/;
+var GIT_PINNED_ARGV2 = [
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "core.attributesFile=/dev/null",
+  "-c",
+  "core.excludesFile=/dev/null",
+  "-c",
+  "gc.auto=0",
+  "-c",
+  "maintenance.auto=false",
+  "-c",
+  "protocol.ext.allow=never"
+];
+async function prepareMerge(options) {
+  try {
+    return { status: "ready", merge: await prepare(options) };
+  } catch (error63) {
+    const message3 = error63 instanceof Error ? error63.message : "Merge preparation failed";
+    return { status: "unavailable", reason: redact(`Gardener could not prepare the merge: ${message3}`, options.token) };
+  }
+}
+async function prepare(options) {
+  const git = gitRunner(options.workspace, options.spawn ?? import_node_child_process2.spawn);
+  const version2 = (await git.text(["version"])).match(/git version (\d+)\.(\d+)/);
+  if (!version2 || Number(version2[1]) < MINIMUM_GIT[0] || Number(version2[1]) === MINIMUM_GIT[0] && Number(version2[2]) < MINIMUM_GIT[1]) {
+    throw new Error(`git ${version2 ? `${version2[1]}.${version2[2]}` : "of unknown version"} is older than 2.38, which merging needs (merge-tree --write-tree)`);
+  }
+  const head = await git.text(["rev-parse", "HEAD"]);
+  if (head !== options.checkoutSha) throw new Error(`HEAD is ${head}, not the checked-out pull request head ${options.checkoutSha}`);
+  const baseBranch = options.pullRequest.base.ref;
+  const baseSha = await readBranchHead(options, baseBranch);
+  const originUrl = await git.text(["config", "--get", "remote.origin.url"]).catch(() => "");
+  if (originUrl === "") throw new Error("the checkout has no origin remote to fetch the base branch from");
+  const fetchEnvironment = credentialEnvironment(originUrl, options.token);
+  const deepen = (args) => git.run(
+    ["fetch", "--no-tags", "--no-write-fetch-head", "--quiet", ...args, "origin", head, baseSha],
+    { env: fetchEnvironment }
+  );
+  if ((await git.run(["cat-file", "-e", `${baseSha}^{commit}`], { allowFailure: true })).code !== 0) {
+    await git.run(["fetch", "--no-tags", "--no-write-fetch-head", "--quiet", `--depth=${options.initialDepth ?? DEFAULT_INITIAL_DEPTH}`, "origin", baseSha], { env: fetchEnvironment });
+  }
+  const mergeBaseSha = await findMergeBase(git, head, baseSha, options.initialDepth ?? DEFAULT_INITIAL_DEPTH, deepen);
+  const merge2 = await git.run(["merge-tree", "--write-tree", "-z", "--name-only", "--messages", head, baseSha], { allowFailure: true });
+  if (merge2.code !== 0 && merge2.code !== 1) throw new Error(`git merge-tree failed (${merge2.code}): ${merge2.stderr}`);
+  const { treeSha: mergedTreeSha, conflictedPaths, messages } = parseMergeTree(merge2.stdout);
+  if (merge2.code === 1 !== conflictedPaths.length > 0) throw new Error("git merge-tree reported conflicts inconsistently");
+  const differences = parseDiffTree((await git.run(["diff-tree", "-r", "-z", "--no-renames", head, mergedTreeSha])).stdout);
+  if (differences.size > COMMIT_FILE_LIMIT) {
+    throw new Error(`the merge changes ${differences.size} files, more than one commit can carry (${COMMIT_FILE_LIMIT}); a person must merge`);
+  }
+  const protectedPaths = [.../* @__PURE__ */ new Set([...differences.keys(), ...conflictedPaths])].filter(isProtectedCapturePath);
+  const protectedBase = /* @__PURE__ */ new Map();
+  if (protectedPaths.length > 0) {
+    const entries = parseLsTree((await git.run(["ls-tree", "-r", "-z", "--full-tree", baseSha])).stdout);
+    for (const entry of protectedPaths) protectedBase.set(entry, entries.get(entry) ?? null);
+  }
+  return {
+    pullNumber: options.pullRequest.number,
+    branch: options.pullRequest.head.ref,
+    expectedHeadSha: head,
+    baseBranch,
+    baseSha,
+    mergeBaseSha,
+    mergedTreeSha,
+    conflictedPaths,
+    differences,
+    protectedBase,
+    messages: truncateUtf8(messages, MERGE_BASE_MESSAGES_MAX_BYTES)
+  };
+}
+async function findMergeBase(git, head, baseSha, initialDepth, deepen) {
+  const shallowFile = import_node_path2.default.resolve(git.workspace, await git.text(["rev-parse", "--git-path", "shallow"]));
+  for (let round = 0; ; round += 1) {
+    const found = await git.run(["merge-base", head, baseSha], { allowFailure: true });
+    if (found.code !== 0 && found.code !== 1) throw new Error(`git merge-base failed (${found.code}): ${found.stderr}`);
+    const shallow = await readShallow(shallowFile);
+    const candidate = found.code === 0 ? found.stdout.toString("utf8").trim() : "";
+    if (candidate !== "" && !shallow.has(candidate)) return normalizeSha(candidate, "merge base");
+    if (shallow.size === 0) throw new Error(`the pull request head and ${baseSha} share no history`);
+    if (round < DEEPEN_ROUNDS) await deepen([`--deepen=${initialDepth * 2 ** (round + 1)}`]);
+    else if (round === DEEPEN_ROUNDS) await deepen(["--unshallow"]);
+    else throw new Error(`no merge base of the pull request head and ${baseSha} was found in the full history`);
+  }
+}
+async function readShallow(file2) {
+  const text = await (0, import_promises3.readFile)(file2, "utf8").catch(() => "");
+  return new Set(text.split("\n").map((line) => line.trim()).filter((line) => line !== ""));
+}
+async function readBranchHead(options, branch) {
+  if (!REPOSITORY4.test(options.repository) || options.repository.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error("GITHUB_REPOSITORY is not an owner/name slug");
+  }
+  const ref = branch.split("/").map((segment) => {
+    if (segment === "" || segment === "." || segment === "..") throw new Error(`the base branch ${branch} is not a valid branch name`);
+    return encodeURIComponent(segment);
+  }).join("/");
+  const response = await (options.fetch ?? fetch)(`https://api.github.com/repos/${options.repository}/git/ref/heads/${ref}`, {
+    headers: {
+      accept: "application/vnd.github+json",
+      ...options.token ? { authorization: `Bearer ${options.token}` } : {},
+      "user-agent": "gardener-runner",
+      "x-github-api-version": "2022-11-28"
+    },
+    redirect: "error",
+    signal: AbortSignal.timeout(API_TIMEOUT_MS)
+  });
+  if (!response.ok) throw new Error(`reading the base branch ${branch} failed (${response.status})`);
+  const body2 = await readBoundedBody(response, 64 * 1024);
+  if (body2.truncated) throw new Error(`the base branch ${branch} response is too large`);
+  const value = JSON.parse(body2.text);
+  if (value.ref !== `refs/heads/${branch}` || typeof value.object?.sha !== "string") throw new Error(`the base branch ${branch} was not found`);
+  return normalizeSha(value.object.sha, "base branch head");
+}
+function credentialEnvironment(originUrl, token) {
+  if (!token) return { GIT_CONFIG_COUNT: "0" };
+  let scope = originUrl;
+  try {
+    const url2 = new URL(originUrl);
+    if (url2.protocol === "https:" || url2.protocol === "http:") scope = `${url2.origin}/`;
+  } catch {
+  }
+  return {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: `http.${scope}.extraheader`,
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`, "utf8").toString("base64")}`
+  };
+}
+function parseMergeTree(output2) {
+  const fields = output2.toString("utf8").split("\0");
+  const treeSha = normalizeSha(fields[0] ?? "", "merged tree");
+  let index = 1;
+  const conflicted = /* @__PURE__ */ new Set();
+  for (; index < fields.length && fields[index] !== ""; index += 1) conflicted.add(fields[index]);
+  index += 1;
+  const messages = [];
+  while (index < fields.length && fields[index] !== "") {
+    const count = Number(fields[index]);
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error("git merge-tree messages are unreadable");
+    index += 1 + count + 1;
+    const message3 = fields[index];
+    if (message3 === void 0) throw new Error("git merge-tree messages are unreadable");
+    messages.push(message3.endsWith("\n") ? message3 : `${message3}
+`);
+    index += 1;
+  }
+  return { treeSha, conflictedPaths: [...conflicted].sort(), messages: messages.join("") };
+}
+function parseDiffTree(output2) {
+  const fields = output2.toString("utf8").split("\0");
+  const differences = /* @__PURE__ */ new Map();
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const header = fields[index];
+    const entry = fields[index + 1];
+    if (header === "" && entry === "") break;
+    const match = /^:(\d{6}) (\d{6}) ([0-9a-f]{40}) ([0-9a-f]{40}) ([AMDT])$/.exec(header);
+    if (!match || entry === "") throw new Error("git diff-tree output is unreadable");
+    const [, fromMode, mode, , blobSha, status] = match;
+    differences.set(entry, {
+      status: status === "A" ? "added" : status === "D" ? "deleted" : "modified",
+      fromMode,
+      mode,
+      blobSha: status === "D" ? null : blobSha
+    });
+  }
+  return differences;
+}
+function parseLsTree(output2) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const record2 of output2.toString("utf8").split("\0")) {
+    if (record2 === "") continue;
+    const tab = record2.indexOf("	");
+    const [mode, , sha] = record2.slice(0, tab).split(" ");
+    if (tab < 0 || mode === void 0 || sha === void 0) throw new Error("git ls-tree output is unreadable");
+    entries.set(record2.slice(tab + 1), { mode, blobSha: normalizeSha(sha, "base blob") });
+  }
+  return entries;
+}
+function mergeBaseResult(merge2) {
+  return {
+    schemaVersion: "gardener.runner.merge-base-result/v1",
+    status: merge2.conflictedPaths.length === 0 ? "clean" : "conflicted",
+    pullNumber: merge2.pullNumber,
+    branch: merge2.branch,
+    expectedHeadSha: merge2.expectedHeadSha,
+    baseBranch: merge2.baseBranch,
+    baseSha: merge2.baseSha,
+    mergeBaseSha: merge2.mergeBaseSha,
+    conflictedFiles: [...merge2.conflictedPaths],
+    changedFileCount: merge2.differences.size,
+    messages: merge2.messages
+  };
+}
+var MergeRefusal = class extends Error {
+};
+async function applyPreparedMerge(workspace, merge2, spawn3 = import_node_child_process2.spawn, beforeWrite = () => {
+}) {
+  const touched = /* @__PURE__ */ new Set([...merge2.differences.keys(), ...merge2.conflictedPaths]);
+  const unsupported = [...touched].filter((entry) => {
+    const name2 = entry.split("/").at(-1).toLowerCase();
+    const difference = merge2.differences.get(entry);
+    return name2 === ".gitattributes" || name2 === ".gitmodules" || difference?.mode === GITLINK_MODE2 || difference?.fromMode === GITLINK_MODE2;
+  }).sort();
+  if (unsupported.length > 0) {
+    throw new MergeRefusal(
+      `This merge changes ${unsupported.slice(0, 5).join(", ")}${unsupported.length > 5 ? " and more" : ""}: .gitattributes, .gitmodules and submodules cannot be carried by a Gardener capture, so a person must merge this pull request.`
+    );
+  }
+  const git = gitRunner(workspace, spawn3);
+  const head = await git.text(["rev-parse", "HEAD"]);
+  if (head !== merge2.expectedHeadSha) throw new MergeRefusal(`HEAD moved to ${head}; the merge was prepared on ${merge2.expectedHeadSha}`);
+  const status = (await git.run(["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=none"])).stdout.toString("utf8").split("\0").filter((record2) => record2 !== "" && !record2.slice(3).startsWith(RUNNER_HOME_PREFIX2));
+  if (status.length > 0) {
+    throw new MergeRefusal(
+      `The working tree already differs from ${head} (${status.slice(0, 5).map((record2) => record2.slice(3)).join(", ")}${status.length > 5 ? ", ..." : ""}). Call repository.merge_base before changing any file: merge first, then resolve.`
+    );
+  }
+  if (merge2.differences.size === 0) return;
+  const index = (await git.run(["ls-files", "-s", "-z"])).stdout;
+  beforeWrite();
+  await git.run(
+    ["restore", `--source=${merge2.mergedTreeSha}`, "--worktree", "--no-overlay", "--pathspec-from-file=-", "--pathspec-file-nul"],
+    { input: `${[...merge2.differences.keys()].join("\0")}\0` }
+  );
+  if (!(await git.run(["ls-files", "-s", "-z"])).stdout.equals(index)) {
+    throw new Error("Writing the merge changed the Git index; refusing to continue");
+  }
+}
+function gitRunner(workspace, spawn3) {
+  const run = (args, options = {}) => new Promise((resolve, reject) => {
+    const child = spawn3("git", ["-C", workspace, ...GIT_PINNED_ARGV2, ...args], {
+      env: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_SYSTEM: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_COUNT: "0",
+        GIT_ATTR_NOSYSTEM: "1",
+        GIT_OPTIONAL_LOCKS: "0",
+        GIT_TERMINAL_PROMPT: "0",
+        GIT_ASKPASS: "",
+        GIT_LFS_SKIP_SMUDGE: "1",
+        GIT_LITERAL_PATHSPECS: "1",
+        ...options.env
+      },
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    const stdout = [];
+    let stdoutBytes = 0;
+    const stderr = [];
+    let failure2;
+    child.stdout.on("data", (chunk) => {
+      stdoutBytes += chunk.byteLength;
+      if (stdoutBytes > GIT_MAX_OUTPUT2) {
+        failure2 ??= new Error(`git ${args[0] ?? ""} produced more than ${GIT_MAX_OUTPUT2} bytes`);
+        child.kill("SIGKILL");
+        return;
+      }
+      stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      if (stderr.reduce((total, part) => total + part.byteLength, 0) < 4096) stderr.push(chunk);
+    });
+    child.on("error", (error63) => {
+      failure2 ??= error63;
+    });
+    child.on("close", (code2, signal) => {
+      if (failure2 !== void 0) return reject(failure2);
+      const result = { code: code2 ?? 128, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr).toString("utf8").trim().split("\n")[0] ?? "" };
+      if (result.code !== 0 && options.allowFailure !== true) {
+        return reject(new Error(`git ${args[0] ?? ""} failed (${code2 ?? signal}): ${result.stderr}`.trim()));
+      }
+      resolve(result);
+    });
+    child.stdin.on("error", () => void 0);
+    child.stdin.end(options.input ?? "");
+  });
+  return {
+    workspace,
+    run,
+    text: async (args) => (await run(args)).stdout.toString("utf8").trim()
+  };
+}
+function normalizeSha(value, label) {
+  const normalized = value.trim().toLowerCase();
+  if (!SHA1.test(normalized)) throw new Error(`git reported an invalid ${label}`);
+  return normalized;
+}
+function redact(message3, token) {
+  return (token ? message3.split(token).join("***") : message3).slice(0, 2e3);
+}
+function truncateUtf8(value, maxBytes) {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.byteLength <= maxBytes) return value;
+  let end = maxBytes;
+  while (end > 0 && (bytes[end] & 192) === 128) end -= 1;
+  return bytes.subarray(0, end).toString("utf8");
+}
+
 // src/executor.ts
+var PARTIAL_MERGE = "Writing the merge failed partway, so the working tree holds part of it; this run can neither merge nor capture. Start a new run.";
 function planningCaptureBase(checkoutRef2, githubSha) {
   const ref = checkoutRef2?.trim() ?? "";
   if (ref === "") return githubSha;
@@ -44107,10 +44780,23 @@ var PlanningShellExecutor = class {
   /** Memoized so one run captures exactly once, whatever the runtime asks. */
   #capturePromise;
   #captureArtifact;
+  #merge;
+  /** Memoized so the merge is written at most once; cleared on a refusal so a fixed tree may retry. */
+  #mergePromise;
+  /** Set once the merge is in the working tree; every later capture is then a merge capture. */
+  #mergeApplied;
+  /**
+   * Set as the merge write begins. A write that then fails can leave part of
+   * the base branch in the working tree; a plain capture of it would let
+   * commit.create push that as the task's own commit, so such a run can
+   * neither merge again nor capture.
+   */
+  #mergeWriteStarted = false;
   constructor(workspace = requiredEnvironment("GITHUB_WORKSPACE"), options = {}) {
-    this.#workspace = import_node_path2.default.resolve(workspace);
+    this.#workspace = import_node_path3.default.resolve(workspace);
     this.#createReadClient = options.createReadClient;
     this.#capture = options.capture ?? { status: "unavailable", reason: "This run took no pre-execution capture baseline" };
+    this.#merge = options.merge;
   }
   /**
    * The verified capture this run produced, if any.
@@ -44189,7 +44875,59 @@ var PlanningShellExecutor = class {
   async #run(action) {
     if (action.kind === "github.read") return this.#runRead(action);
     if (action.kind === "repository.capture") return this.#runCapture(action);
+    if (action.kind === "repository.merge_base") return this.#runMergeBase(action);
     return this.#runShell(action);
+  }
+  /**
+   * Serves `repository.merge_base`: writes the merge the bridge prepared
+   * before the session into the working tree, once.
+   *
+   * The capture snapshot is re-verified before and after the write. The write
+   * runs the repository's filters, so it must run only the configuration the
+   * snapshot saw, and the index must still be exactly the snapshot's after
+   * it. A refusal is returned as a failed action carrying the reason, and is
+   * not remembered, so a model that changed files too early can restore them
+   * and call again. A merge that was written is remembered, and a later call
+   * returns the same result without writing anything.
+   */
+  async #runMergeBase(action) {
+    if (this.#capturePromise || this.#captureArtifact) {
+      return mergeBaseActionResult(action, refusal("The working tree capture has started; the merge can no longer be written"));
+    }
+    if (this.#mergeWriteStarted && this.#mergeApplied === void 0) {
+      return mergeBaseActionResult(action, refusal(PARTIAL_MERGE));
+    }
+    let result;
+    try {
+      this.#mergePromise ??= this.#applyMerge();
+      result = await this.#mergePromise;
+    } catch (error63) {
+      this.#mergePromise = void 0;
+      result = refusal(redactCaptureDiagnostic(error63 instanceof Error ? error63.message : "The merge could not be written", this.#workspace));
+    }
+    if (result.status === "refused") this.#mergePromise = void 0;
+    return mergeBaseActionResult(action, result);
+  }
+  async #applyMerge() {
+    if (this.#merge === void 0) {
+      return refusal("This run did not prepare a merge: the task's workflow did not ask for one (the merge-base input).");
+    }
+    if (this.#merge.status !== "ready") return refusal(this.#merge.reason);
+    if (this.#capture.status !== "ready") return refusal(`The merge cannot be committed in this run: ${this.#capture.reason}`);
+    const capture = this.#capture.capture;
+    const merge2 = this.#merge.merge;
+    try {
+      await capture.assertAuthorityUnchanged();
+      await applyPreparedMerge(this.#workspace, merge2, void 0, () => {
+        this.#mergeWriteStarted = true;
+      });
+      await capture.assertAuthorityUnchanged();
+    } catch (error63) {
+      if (error63 instanceof MergeRefusal) return refusal(error63.message);
+      throw error63;
+    }
+    this.#mergeApplied = merge2;
+    return mergeBaseResult(merge2);
   }
   /**
    * Serves the trusted capture action.
@@ -44242,12 +44980,13 @@ var PlanningShellExecutor = class {
   }
   /** Captures once and proves the artifact before its reference leaves the runner. */
   async #performCapture(capture) {
-    const result = await capture.capture();
+    if (this.#mergeWriteStarted && this.#mergeApplied === void 0) throw new Error(PARTIAL_MERGE);
+    const result = await capture.capture(this.#mergeApplied === void 0 ? {} : { merge: this.#mergeApplied });
     if (result.status === "unchanged") {
       return { schemaVersion: "gardener.runner.capture-result/v1", status: "unchanged" };
     }
     const { ref, manifest } = await verifyCaptureArtifact(result.directory, result.ref);
-    const manifestJson = await (0, import_promises3.readFile)(import_node_path2.default.join(result.directory, "manifest.json"), "utf8");
+    const manifestJson = await (0, import_promises4.readFile)(import_node_path3.default.join(result.directory, "manifest.json"), "utf8");
     this.#captureArtifact = { directory: result.directory, ref };
     return runnerCaptureResultV1Schema.parse({
       schemaVersion: "gardener.runner.capture-result/v1",
@@ -44311,9 +45050,9 @@ var PlanningShellExecutor = class {
       };
     }
     const cwd = localWorkspacePath(this.#workspace, action.cwd);
-    const home = import_node_path2.default.join(this.#workspace, ".gardener", "runner-home");
-    await (0, import_promises3.mkdir)(home, { recursive: true, mode: 448 });
-    const child = (0, import_node_child_process2.spawn)("/bin/bash", ["--noprofile", "--norc", "-o", "pipefail", "-c", action.command], {
+    const home = import_node_path3.default.join(this.#workspace, ".gardener", "runner-home");
+    await (0, import_promises4.mkdir)(home, { recursive: true, mode: 448 });
+    const child = (0, import_node_child_process3.spawn)("/bin/bash", ["--noprofile", "--norc", "-o", "pipefail", "-c", action.command], {
       cwd,
       detached: true,
       env: safePlannerEnvironment(this.#workspace, home),
@@ -44373,8 +45112,8 @@ var PlanningShellExecutor = class {
   }
 };
 function readResult(action, status, exitCode, stdout, stderr, outputTruncated) {
-  const boundedStderr = truncateUtf8(stderr, action.maxOutputBytes);
-  const boundedStdout = truncateUtf8(stdout, action.maxOutputBytes - Buffer.byteLength(boundedStderr, "utf8"));
+  const boundedStderr = truncateUtf82(stderr, action.maxOutputBytes);
+  const boundedStdout = truncateUtf82(stdout, action.maxOutputBytes - Buffer.byteLength(boundedStderr, "utf8"));
   return {
     schemaVersion: "gardener.runner.action-result/v1",
     sequence: action.sequence,
@@ -44387,8 +45126,8 @@ function readResult(action, status, exitCode, stdout, stderr, outputTruncated) {
   };
 }
 function captureResult(action, status, exitCode, stdout, stderr) {
-  const boundedStderr = truncateUtf8(stderr, action.maxOutputBytes);
-  const boundedStdout = truncateUtf8(stdout, action.maxOutputBytes - Buffer.byteLength(boundedStderr, "utf8"));
+  const boundedStderr = truncateUtf82(stderr, action.maxOutputBytes);
+  const boundedStdout = truncateUtf82(stdout, action.maxOutputBytes - Buffer.byteLength(boundedStderr, "utf8"));
   return {
     schemaVersion: "gardener.runner.action-result/v1",
     sequence: action.sequence,
@@ -44400,17 +45139,34 @@ function captureResult(action, status, exitCode, stdout, stderr) {
     outputTruncated: boundedStdout.length !== stdout.length || boundedStderr.length !== stderr.length
   };
 }
+function refusal(reason) {
+  return { schemaVersion: "gardener.runner.merge-base-result/v1", status: "refused", reason: reason.slice(0, 2e3) || "The merge was refused" };
+}
+function mergeBaseActionResult(action, result) {
+  const stdout = JSON.stringify(runnerMergeBaseResultV1Schema.parse(result));
+  const refused = result.status === "refused";
+  return {
+    schemaVersion: "gardener.runner.action-result/v1",
+    sequence: action.sequence,
+    operationId: action.operationId,
+    status: refused ? "failed" : "completed",
+    exitCode: refused ? 1 : 0,
+    stdout,
+    stderr: refused ? result.reason : "",
+    outputTruncated: false
+  };
+}
 function redactCaptureDiagnostic(message3, ...roots) {
   let redacted = message3;
   for (const root of roots) {
-    if (root) redacted = redacted.split(import_node_path2.default.resolve(root)).join("<runner-path>");
+    if (root) redacted = redacted.split(import_node_path3.default.resolve(root)).join("<runner-path>");
   }
   return redacted.replace(/(?:\/home\/runner|\/Users\/runner|[A-Za-z]:\\)[^\s'\"`]*/g, "<runner-path>").slice(0, 2e3);
 }
 function captureMessage(error63) {
   return (error63 instanceof Error ? error63.message : "Repository capture failed").slice(0, 2e3);
 }
-function truncateUtf8(value, maxBytes) {
+function truncateUtf82(value, maxBytes) {
   if (maxBytes <= 0) return "";
   const bytes = Buffer.from(value, "utf8");
   if (bytes.byteLength <= maxBytes) return value;
@@ -44428,7 +45184,7 @@ function boundedReadPayload(result, maxOutputBytes) {
   const bodyBudget = (overhead) => {
     let candidate = Math.max(0, maxOutputBytes - overhead);
     while (candidate > 0) {
-      const text = truncateUtf8(result.body, candidate);
+      const text = truncateUtf82(result.body, candidate);
       const encoded = JSON.stringify(text);
       if (Buffer.byteLength(encoded, "utf8") + overhead <= maxOutputBytes) return text;
       candidate = Math.floor(candidate / 2);
@@ -44459,10 +45215,10 @@ function redactedReadError(error63) {
   return text.slice(0, 1e3);
 }
 function localWorkspacePath(workspace, virtualPath) {
-  const relative = import_node_path2.default.posix.relative("/workspace", import_node_path2.default.posix.normalize(virtualPath));
-  if (relative.startsWith("..") || import_node_path2.default.posix.isAbsolute(relative)) throw new Error("Shell cwd escapes /workspace");
-  const resolved = import_node_path2.default.resolve(workspace, relative);
-  if (resolved !== workspace && !resolved.startsWith(`${workspace}${import_node_path2.default.sep}`)) throw new Error("Shell cwd escapes the Actions workspace");
+  const relative = import_node_path3.default.posix.relative("/workspace", import_node_path3.default.posix.normalize(virtualPath));
+  if (relative.startsWith("..") || import_node_path3.default.posix.isAbsolute(relative)) throw new Error("Shell cwd escapes /workspace");
+  const resolved = import_node_path3.default.resolve(workspace, relative);
+  if (resolved !== workspace && !resolved.startsWith(`${workspace}${import_node_path3.default.sep}`)) throw new Error("Shell cwd escapes the Actions workspace");
   return resolved;
 }
 function safePlannerEnvironment(workspace, home) {
@@ -44806,8 +45562,8 @@ var streamImpl = {
   createReadableStreamHook: streamNotLoaded
 };
 var StubHook = class {
-  stream(path4, args) {
-    let hook = this.call(path4, args);
+  stream(path5, args) {
+    let hook = this.call(path5, args);
     let pulled;
     try {
       pulled = hook.pull();
@@ -44832,15 +45588,15 @@ var ErrorStubHook = class extends StubHook {
     super();
     this.error = error63;
   }
-  call(path4, args) {
+  call(path5, args) {
     args.dispose();
     return this;
   }
-  map(path4, captures, instructions) {
+  map(path5, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return this;
   }
-  get(path4) {
+  get(path5) {
     return this;
   }
   dup() {
@@ -44862,8 +45618,8 @@ var ErrorStubHook = class extends StubHook {
   }
 };
 var DISPOSED_HOOK = new ErrorStubHook(/* @__PURE__ */ new Error("Attempted to use RPC stub after it has been disposed."));
-var doCall = (hook, path4, params) => {
-  return hook.call(path4, params);
+var doCall = (hook, path5, params) => {
+  return hook.call(path5, params);
 };
 function withCallInterceptor(interceptor, callback) {
   let oldValue = doCall;
@@ -45458,10 +46214,10 @@ var RpcPayload = class RpcPayload2 {
     }
   }
 };
-function followPath(value, parent, path4, owner) {
-  for (let i = 0; i < path4.length; i++) {
+function followPath(value, parent, path5, owner) {
+  for (let i = 0; i < path5.length; i++) {
     parent = value;
-    let part = path4[i];
+    let part = path5[i];
     if (part in Object.prototype) {
       value = void 0;
       continue;
@@ -45487,7 +46243,7 @@ function followPath(value, parent, path4, owner) {
         let { hook, pathIfPromise } = unwrapStubAndPath(value);
         return {
           hook,
-          remainingPath: pathIfPromise ? pathIfPromise.concat(path4.slice(i)) : path4.slice(i)
+          remainingPath: pathIfPromise ? pathIfPromise.concat(path5.slice(i)) : path5.slice(i)
         };
       }
       case "writable":
@@ -45514,8 +46270,8 @@ function followPath(value, parent, path4, owner) {
       case "unsupported":
         if (i === 0) throw new TypeError(`RPC stub points at a non-serializable type.`);
         else {
-          let prefix = path4.slice(0, i).join(".");
-          let remainder = path4.slice(0, i).join(".");
+          let prefix = path5.slice(0, i).join(".");
+          let remainder = path5.slice(0, i).join(".");
           throw new TypeError(`'${prefix}' is not a serializable type, so property ${remainder} cannot be accessed.`);
         }
       default:
@@ -45536,11 +46292,11 @@ function followPath(value, parent, path4, owner) {
   };
 }
 var ValueStubHook = class extends StubHook {
-  call(path4, args) {
+  call(path5, args) {
     let followResult;
     try {
       let { value, owner } = this.getValue();
-      followResult = followPath(value, void 0, path4, owner);
+      followResult = followPath(value, void 0, path5, owner);
     } catch (err) {
       args.dispose();
       return new ErrorStubHook(err);
@@ -45548,18 +46304,18 @@ var ValueStubHook = class extends StubHook {
     if (followResult.hook) return followResult.hook.call(followResult.remainingPath, args);
     if (typeof followResult.value != "function") {
       args.dispose();
-      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path4.join(".")}' is not a function.`));
+      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path5.join(".")}' is not a function.`));
     }
     return new PromiseStubHook(args.deliverCall(followResult.value, followResult.parent).then((payload) => {
       return new PayloadStubHook(payload);
     }));
   }
-  map(path4, captures, instructions) {
+  map(path5, captures, instructions) {
     try {
       let followResult;
       try {
         let { value, owner } = this.getValue();
-        followResult = followPath(value, void 0, path4, owner);
+        followResult = followPath(value, void 0, path5, owner);
       } catch (err) {
         for (let cap of captures) cap.dispose();
         throw err;
@@ -45570,14 +46326,14 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  get(path4) {
+  get(path5) {
     try {
       let { value, owner } = this.getValue();
-      if (path4.length === 0 && owner === null) {
+      if (path5.length === 0 && owner === null) {
         if (value instanceof Object && "then" in value) return this.dup();
         throw new Error("Can't dup an RpcTarget stub as a promise.");
       }
-      let followResult = followPath(value, void 0, path4, owner);
+      let followResult = followPath(value, void 0, path5, owner);
       if (followResult.hook) return followResult.hook.get(followResult.remainingPath);
       return new PayloadStubHook(RpcPayload.deepCopyFrom(followResult.value, followResult.parent, followResult.owner));
     } catch (err) {
@@ -45696,28 +46452,28 @@ var PromiseStubHook = class PromiseStubHook2 extends StubHook {
       return res;
     });
   }
-  call(path4, args) {
+  call(path5, args) {
     args.ensureDeepCopied();
-    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path4, args), (err) => {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path5, args), (err) => {
       args.dispose();
       throw err;
     }));
   }
-  stream(path4, args) {
+  stream(path5, args) {
     args.ensureDeepCopied();
-    return { promise: this.promise.then((hook) => hook.stream(path4, args).promise, (err) => {
+    return { promise: this.promise.then((hook) => hook.stream(path5, args).promise, (err) => {
       args.dispose();
       throw err;
     }) };
   }
-  map(path4, captures, instructions) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path4, captures, instructions), (err) => {
+  map(path5, captures, instructions) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path5, captures, instructions), (err) => {
       for (let cap of captures) cap.dispose();
       throw err;
     }));
   }
-  get(path4) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path4)));
+  get(path5) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path5)));
   }
   dup() {
     if (this.resolution) return this.resolution.dup();
@@ -46357,23 +47113,23 @@ var Evaluator = class Evaluator2 {
           };
           if (value.length == 2) if (isPromise) return addStub(hook.get([]));
           else return addStub(hook.dup());
-          let path4 = value[2];
-          if (!(path4 instanceof Array)) break;
-          if (!path4.every((part) => {
+          let path5 = value[2];
+          if (!(path5 instanceof Array)) break;
+          if (!path5.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
-          if (value.length == 3) return addStub(hook.get(path4));
+          if (value.length == 3) return addStub(hook.get(path5));
           let args = value[3];
           if (!(args instanceof Array)) break;
           args = new Evaluator2(this.importer).evaluateWithDepth([args], depth);
-          return addStub(hook.call(path4, args));
+          return addStub(hook.call(path5, args));
         }
         case "remap": {
           if (value.length !== 5 || typeof value[1] !== "number" || !(value[2] instanceof Array) || !(value[3] instanceof Array) || !(value[4] instanceof Array)) break;
           let hook = this.importer.getExport(value[1]);
           if (!hook) throw new Error(`no such entry on exports table: ${value[1]}`);
-          let path4 = value[2];
-          if (!path4.every((part) => {
+          let path5 = value[2];
+          if (!path5.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
           let captures = value[3].map((cap) => {
@@ -46386,7 +47142,7 @@ var Evaluator = class Evaluator2 {
             }
           });
           let instructions = value[4];
-          let promise2 = new RpcPromise$1(hook.map(path4, captures, instructions), []);
+          let promise2 = new RpcPromise$1(hook.map(path5, captures, instructions), []);
           this.promises.push({
             promise: promise2,
             parent,
@@ -46570,7 +47326,7 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
     ++entry.localRefcount;
     this.entry = entry;
   }
-  collectPath(path4) {
+  collectPath(path5) {
     return this;
   }
   getEntry() {
@@ -46585,27 +47341,27 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
       throw err;
     }
   }
-  call(path4, args) {
+  call(path5, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.call(path4, args);
-    else return entry.session.sendCall(entry.importId, path4, args);
+    if (entry.resolution) return entry.resolution.call(path5, args);
+    else return entry.session.sendCall(entry.importId, path5, args);
   }
-  stream(path4, args) {
+  stream(path5, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.stream(path4, args);
-    else return entry.session.sendStream(entry.importId, path4, args);
+    if (entry.resolution) return entry.resolution.stream(path5, args);
+    else return entry.session.sendStream(entry.importId, path5, args);
   }
-  map(path4, captures, instructions) {
+  map(path5, captures, instructions) {
     let entry = this.getEntryTakingOwnership(() => {
       for (let cap of captures) cap.dispose();
     });
-    if (entry.resolution) return entry.resolution.map(path4, captures, instructions);
-    else return entry.session.sendMap(entry.importId, path4, captures, instructions);
+    if (entry.resolution) return entry.resolution.map(path5, captures, instructions);
+    else return entry.session.sendMap(entry.importId, path5, captures, instructions);
   }
-  get(path4) {
+  get(path5) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.get(path4);
-    else return entry.session.sendCall(entry.importId, path4);
+    if (entry.resolution) return entry.resolution.get(path5);
+    else return entry.session.sendCall(entry.importId, path5);
   }
   dup() {
     return new RpcImportHook2(false, this.getEntry());
@@ -46861,7 +47617,7 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id, path4, args) {
+  sendCall(id, path5, args) {
     if (this.abortReason) {
       args?.dispose();
       throw this.abortReason;
@@ -46869,7 +47625,7 @@ var RpcSessionImpl = class {
     let value = [
       "pipeline",
       id,
-      path4
+      path5
     ];
     if (args) {
       let devalue;
@@ -46886,7 +47642,7 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id, path4, args) {
+  sendStream(id, path5, args) {
     if (this.abortReason) {
       args.dispose();
       throw this.abortReason;
@@ -46894,7 +47650,7 @@ var RpcSessionImpl = class {
     let value = [
       "pipeline",
       id,
-      path4
+      path5
     ];
     let devalue;
     try {
@@ -46923,7 +47679,7 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id, path4, captures, instructions) {
+  sendMap(id, path5, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
@@ -46931,7 +47687,7 @@ var RpcSessionImpl = class {
     let value = [
       "remap",
       id,
-      path4,
+      path5,
       captures.map((hook) => {
         let importId = this.getImport(hook);
         if (importId !== void 0) return ["import", importId];
@@ -47201,18 +47957,18 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject, path4) {
+  constructor(subject, path5) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
       subject: currentMapBuilder.capture(subject),
-      path: path4
+      path: path5
     };
     else this.context = {
       parent: void 0,
       captures: [],
       subject,
-      path: path4
+      path: path5
     };
     currentMapBuilder = this;
   }
@@ -47241,24 +47997,24 @@ var MapBuilder = class {
       return new MapVariableHook(this.context.parent, this.context.parent.instructions.length);
     } else return this.context.subject.map(this.context.path, this.context.captures, this.instructions);
   }
-  pushCall(hook, path4, params) {
+  pushCall(hook, path5, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path4,
+      path5,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
-  pushGet(hook, path4) {
+  pushGet(hook, path5) {
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path4
+      path5
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
@@ -47292,8 +48048,8 @@ var MapBuilder = class {
   onSendError(error63) {
   }
 };
-mapImpl.sendMap = (hook, path4, func) => {
-  let builder = new MapBuilder(hook, path4);
+mapImpl.sendMap = (hook, path5, func) => {
+  let builder = new MapBuilder(hook, path5);
   let result;
   try {
     result = RpcPayload.fromAppReturn(withCallInterceptor(builder.pushCall.bind(builder), () => {
@@ -47325,16 +48081,16 @@ var MapVariableHook = class extends StubHook {
   }
   dispose() {
   }
-  get(path4) {
-    if (path4.length == 0) return this;
-    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path4);
+  get(path5) {
+    if (path5.length == 0) return this;
+    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path5);
     else throwMapperBuilderUseError();
   }
-  call(path4, args) {
+  call(path5, args) {
     args.dispose();
     throwMapperBuilderUseError();
   }
-  map(path4, captures, instructions) {
+  map(path5, captures, instructions) {
     for (let cap of captures) cap.dispose();
     throwMapperBuilderUseError();
   }
@@ -47439,11 +48195,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
     if (this.state) return this.state;
     else throw new Error("Attempted to use a WritableStreamStubHook after it was disposed.");
   }
-  call(path4, args) {
+  call(path5, args) {
     try {
       let state = this.getState();
-      if (path4.length !== 1 || typeof path4[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
-      const method = path4[0];
+      if (path5.length !== 1 || typeof path5[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
+      const method = path5[0];
       if (method !== "write" && method !== "close" && method !== "abort") throw new Error(`Unknown WritableStream method: ${method}`);
       if (method === "close" || method === "abort") state.closed = true;
       return new PromiseStubHook((method === "write" ? args.deliverStreamWrite(state.writer) : args.deliverCall(state.writer[method], state.writer)).then((payload) => new PayloadStubHook(payload)));
@@ -47452,11 +48208,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path4, captures, instructions) {
+  map(path5, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a WritableStream"));
   }
-  get(path4) {
+  get(path5) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a WritableStream stub"));
   }
   dup() {
@@ -47649,15 +48405,15 @@ var ReadableStreamStubHook = class ReadableStreamStubHook2 extends StubHook {
     this.state = state;
     if (dupFrom) ++state.refcount;
   }
-  call(path4, args) {
+  call(path5, args) {
     args.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot call methods on a ReadableStream stub"));
   }
-  map(path4, captures, instructions) {
+  map(path5, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a ReadableStream"));
   }
-  get(path4) {
+  get(path5) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a ReadableStream stub"));
   }
   dup() {
@@ -47858,19 +48614,9 @@ async function main() {
     if (!/^[a-f0-9]{64}$/.test(agentHash)) throw new Error("task-bundle-hash must be a lowercase SHA-256 digest");
     const maxReconnects = integerInput("max-reconnects", 5, 0, 20);
     const baseSha = planningCaptureBase(process.env["INPUT_CHECKOUT-REF"], process.env.GITHUB_SHA);
+    const mergeRequested = booleanInput("merge-base");
     if (providerReadToken) addSecret(providerReadToken);
-    const executor = await createPlanningExecutor({
-      workspace: requiredEnvironment2("GITHUB_WORKSPACE"),
-      runnerTemp: process.env.RUNNER_TEMP,
-      baseSha,
-      ...providerReadToken ? {
-        createReadClient: (signal, maxResponseBytes) => new GitHubReadClient({
-          token: providerReadToken,
-          signal,
-          limits: { maxResponseBytes }
-        })
-      } : {}
-    });
+    const workspace = requiredEnvironment2("GITHUB_WORKSPACE");
     let event;
     try {
       event = await githubEvent(checkoutRef(process.env["INPUT_CHECKOUT-REF"]));
@@ -47880,6 +48626,21 @@ async function main() {
       await writeJobSummary(() => renderPlanJobSummary({ skipped: error63.message, context: jobSummaryContext() }));
       return;
     }
+    const merge2 = mergeRequested ? await mergePreparation(workspace, event) : void 0;
+    if (merge2?.status === "unavailable") warning(merge2.reason);
+    const executor = await createPlanningExecutor({
+      workspace,
+      runnerTemp: process.env.RUNNER_TEMP,
+      baseSha,
+      ...merge2 === void 0 ? {} : { merge: merge2 },
+      ...providerReadToken ? {
+        createReadClient: (signal, maxResponseBytes) => new GitHubReadClient({
+          token: providerReadToken,
+          signal,
+          limits: { maxResponseBytes }
+        })
+      } : {}
+    });
     const cancellation = new AbortController();
     const cancel = () => cancellation.abort();
     process.once("SIGINT", cancel);
@@ -47912,11 +48673,11 @@ async function main() {
       const bytes = Buffer.from(terminal.effectArtifact.bytesBase64, "base64");
       const digest = (0, import_node_crypto2.createHash)("sha256").update(bytes).digest("hex");
       if (digest !== terminal.effectArtifact.sha256) throw new Error("Gardener effect artifact digest mismatch");
-      const directory = import_node_path3.default.join(requiredEnvironment2("RUNNER_TEMP"), "gardener-effect-plans");
-      await (0, import_promises4.mkdir)(directory, { recursive: true, mode: 448 });
+      const directory = import_node_path4.default.join(requiredEnvironment2("RUNNER_TEMP"), "gardener-effect-plans");
+      await (0, import_promises5.mkdir)(directory, { recursive: true, mode: 448 });
       plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
-      const artifactPath = import_node_path3.default.join(directory, `${digest}.json`);
-      await (0, import_promises4.writeFile)(artifactPath, bytes, { mode: 384 });
+      const artifactPath = import_node_path4.default.join(directory, `${digest}.json`);
+      await (0, import_promises5.writeFile)(artifactPath, bytes, { mode: 384 });
       outputs["effect-artifact-path"] = artifactPath;
       outputs["effect-artifact-sha256"] = digest;
       outputs["effect-operation-count"] = String(plan.operations.length);
@@ -47943,10 +48704,11 @@ async function main() {
 async function githubEvent(checkoutSha) {
   const eventName = process.env.GITHUB_EVENT_NAME;
   if (!eventName) return void 0;
-  const raw = JSON.parse(await (0, import_promises4.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
+  const raw = JSON.parse(await (0, import_promises5.readFile)(requiredEnvironment2("GITHUB_EVENT_PATH"), "utf8"));
   const target = dispatchTargetRequest(eventName, raw);
   const resolved = target === null ? void 0 : await fetchDispatchTarget({ target, repository: requiredEnvironment2("GITHUB_REPOSITORY"), token: providerReadToken });
-  const event = await onCheckedOutHead(normalizeGitHubEvent(eventName, raw, resolved), checkoutSha);
+  const normalized = await onCheckedOutHead(normalizeGitHubEvent(eventName, raw, resolved), checkoutSha);
+  const event = withCheckoutSha(normalized, checkoutSha, await commentPullRequest(eventName, raw, checkoutSha));
   const login = authorPermissionLogin(event);
   if (login === null) return event;
   const permission = await fetchAuthorPermission({
@@ -47967,6 +48729,37 @@ async function onCheckedOutHead(event, checkoutSha) {
   const moved = withCurrentPullRequestHead(event, checkoutSha, current);
   notice(`Pull request #${pullRequest.number} moved since this run was triggered; planning on its current head ${checkoutSha}.`);
   return moved;
+}
+async function commentPullRequest(eventName, raw, checkoutSha) {
+  if (eventName !== "issue_comment" || checkoutSha === void 0) return void 0;
+  const issue3 = raw !== null && typeof raw === "object" ? raw.issue : void 0;
+  if (issue3?.pull_request === void 0 || issue3.pull_request === null || typeof issue3.number !== "number") return void 0;
+  try {
+    const { pull_request: value } = await fetchDispatchTarget({
+      target: { kind: "pull_request", number: issue3.number },
+      repository: requiredEnvironment2("GITHUB_REPOSITORY"),
+      token: providerReadToken
+    });
+    return normalizePullRequest(value);
+  } catch {
+    return null;
+  }
+}
+async function mergePreparation(workspace, event) {
+  const pullRequest = event !== void 0 && "pullRequest" in event ? event.pullRequest : void 0;
+  if (event?.checkoutSha === void 0 || pullRequest === void 0) {
+    return {
+      status: "unavailable",
+      reason: "No merge was prepared: this run did not check out a pull request's head (the pull request is closed or from a fork, or the event names none)."
+    };
+  }
+  return prepareMerge({
+    workspace,
+    repository: requiredEnvironment2("GITHUB_REPOSITORY"),
+    token: providerReadToken,
+    pullRequest,
+    checkoutSha: event.checkoutSha
+  });
 }
 function checkoutRef(value) {
   const ref = value?.trim() ?? "";
@@ -47989,6 +48782,12 @@ function requiredInput(name2) {
   const value = getInput(name2, { required: true }).trim();
   if (!value) throw new Error(`${name2} is required`);
   return value;
+}
+function booleanInput(name2) {
+  const raw = getInput(name2).trim();
+  if (raw === "" || raw === "false") return false;
+  if (raw === "true") return true;
+  throw new Error(`${name2} must be true or false`);
 }
 function integerInput(name2, fallback, minimum, maximum) {
   const raw = getInput(name2).trim();

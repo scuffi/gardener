@@ -27082,6 +27082,7 @@ var operationKindValues = [
   "pull_request.review_thread.resolve",
   "branch.create",
   "commit.create",
+  "commit.merge_base",
   "pull_request.open",
   "pull_request.open_draft",
   "pull_request.merge",
@@ -27102,7 +27103,7 @@ var operationFamilySchema = external_exports.enum(["issue", "pull_request", "git
 var operationCatalogEntrySchema = external_exports.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: external_exports.literal(true), highImpact: external_exports.boolean() }).strict();
 var operationCatalog = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
   kind,
-  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind === "commit.create" ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
+  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind.startsWith("commit.") ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
   persistent: true,
   highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete"
 })));
@@ -27211,6 +27212,30 @@ var operationOptions = [
       if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file2.path);
     });
+  }),
+  /**
+   * A merge commit on the triggering pull request's branch whose second parent
+   * is `baseSha`, the head of `baseBranch` when the merge was prepared. It
+   * brings the base branch in and never rewrites history. `files` and
+   * `conflictedPaths` come only from the merge capture, never from the model.
+   */
+  operationBase.extend({
+    kind: external_exports.literal("commit.merge_base"),
+    pullNumber: external_exports.number().int().positive(),
+    branch: branchNameSchema,
+    expectedHeadSha: shaSchema,
+    baseBranch: branchNameSchema,
+    baseSha: shaSchema,
+    message: external_exports.string().trim().min(1).max(1e3),
+    files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
+    conflictedPaths: external_exports.array(commitFilePathSchema).max(COMMIT_FILE_LIMIT)
+  }).strict().superRefine((value, context) => {
+    const paths = /* @__PURE__ */ new Set();
+    value.files.forEach((file2, index) => {
+      if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file2.path);
+    });
+    if (new Set(value.conflictedPaths).size !== value.conflictedPaths.length) context.addIssue({ code: "custom", path: ["conflictedPaths"], message: "conflicted paths must be unique" });
   }),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open"),
@@ -27387,6 +27412,15 @@ var operationOutputCatalog = {
     parentSha: "commitSha",
     commitUrl: "url"
   },
+  // `parentShas` is a list, so only the scalar receipt fields are outputs.
+  "commit.merge_base": {
+    ...pullOutputs,
+    branch: "branch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    baseSha: "commitSha",
+    commitUrl: "url"
+  },
   "pull_request.open": {
     ...pullOutputs,
     pullUrl: "url",
@@ -27461,6 +27495,7 @@ function operationOutputSentinel(type) {
 var branchWriteFields = {
   "branch.create": "branch",
   "commit.create": "branch",
+  "commit.merge_base": "branch",
   "pull_request.open": "head",
   "pull_request.open_draft": "head"
 };
@@ -27746,18 +27781,26 @@ var triggerKindOrder = new Map(
 var pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
   (kind) => kind.startsWith("github.pull_request")
 );
-function dispatchTargetKinds(triggers) {
-  const kinds = new Set(triggers.map((trigger) => trigger.kind));
+function dispatchTargetKinds(triggers, options = {}) {
+  const kinds = [...new Set(triggers.map((trigger) => trigger.kind))];
   const targets = [];
-  if ([...kinds].some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
-  if ([...kinds].some((kind) => kind.startsWith("github.pull_request"))) targets.push("pull_request");
+  if (kinds.some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
+  if (kinds.some((kind) => kind.startsWith("github.pull_request")) || options.pullRequestHead === true && kinds.some((kind) => kind.startsWith("github.issue_comment"))) {
+    targets.push("pull_request");
+  }
   return targets;
 }
 var taskToolV1Schema = external_exports.enum([
   "repository.read_file",
   "repository.list_files",
   "repository.exec",
-  "provider.api.read"
+  "provider.api.read",
+  /**
+   * Writes the merge of the pull request's base branch, prepared by trusted
+   * code before the model ran, into the working tree for the model to finish.
+   * It never commits; `commit.merge_base` does.
+   */
+  "repository.merge_base"
 ]);
 var taskEffectKindValues = operationKindValues;
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
@@ -27799,12 +27842,14 @@ var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branch
 var taskEffectOptionsMapV1Schema = external_exports.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
+  "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
   "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
 });
 var taskBranchPatternsV1Schema = external_exports.strictObject({
   "branch.create": branchPatternsSchema.optional(),
   "commit.create": branchPatternsSchema.optional(),
+  "commit.merge_base": branchPatternsSchema.optional(),
   "pull_request.open": branchPatternsSchema.optional(),
   "pull_request.open_draft": branchPatternsSchema.optional()
 });
@@ -27822,7 +27867,8 @@ var taskBundleV1Schema = external_exports.strictObject({
   /**
    * Check out the triggering pull request's head instead of the commit GitHub
    * supplies (a merge preview), so commits build on the branch they push to.
-   * Opt-in, and only for tasks with a pull request trigger.
+   * Opt-in, and only for tasks with a pull request or issue comment trigger
+   * (a comment on a pull request's conversation).
    */
   checkout: external_exports.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
@@ -27846,8 +27892,17 @@ var taskBundleV1Schema = external_exports.strictObject({
    */
   reactions: external_exports.literal(false).optional()
 }).superRefine((bundle, context) => {
-  if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
-    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  const headTrigger = bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind) || eventNameByTriggerKind[trigger.kind] === "issue_comment");
+  if (bundle.checkout === "pull-request-head" && !headTrigger) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request or issue comment trigger" });
+  }
+  if (bundle.effects.includes("commit.merge_base")) {
+    if (!headTrigger) {
+      context.addIssue({ code: "custom", path: ["effects"], message: "commit.merge_base needs a pull request or issue comment trigger" });
+    }
+    if (!bundle.tools.includes("repository.merge_base")) {
+      context.addIssue({ code: "custom", path: ["tools"], message: "commit.merge_base needs the repository.merge_base tool, which prepares the merge it commits" });
+    }
   }
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
@@ -28141,11 +28196,23 @@ var normalizedPushV1Schema = external_exports.strictObject({
 });
 var changedLabel = external_exports.string().trim().min(1).max(100);
 function eventMember(kind, shape) {
-  return external_exports.strictObject({ ...normalizedEventBase, kind: external_exports.literal(kind), ...shape });
+  return external_exports.strictObject({
+    ...normalizedEventBase,
+    kind: external_exports.literal(kind),
+    ...shape,
+    /**
+     * The pull request head the planning job checked out, when it checked one
+     * out. Set by the bridge only after confirming it is `pullRequest`'s
+     * current head, so it is present only with `pullRequest` and equal to its
+     * head. Absent from older bridges, which `taskCheckoutSha` still handles.
+     */
+    checkoutSha: sha1.optional()
+  });
 }
 var issuePayload = { issue: normalizedIssueV1Schema };
 var editedPayload = { previousBody: external_exports.string().max(65536).optional() };
 var pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+var commentPullRequestPayload = { pullRequest: normalizedPullRequestV1Schema.optional() };
 var discussionPayload = { discussion: normalizedDiscussionV1Schema };
 var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.opened", issuePayload),
@@ -28153,8 +28220,8 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.reopened", issuePayload),
-  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
-  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload }),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema, ...commentPullRequestPayload }),
+  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload, ...commentPullRequestPayload }),
   eventMember("github.pull_request.opened", pullRequestPayload),
   eventMember("github.pull_request.reopened", pullRequestPayload),
   eventMember("github.pull_request.synchronize", pullRequestPayload),
@@ -28192,12 +28259,24 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   if (event.kind === "github.workflow_dispatch" && event.issue !== void 0 && event.pullRequest !== void 0) {
     context.addIssue({ code: "custom", path: ["pullRequest"], message: "a manual run may target an issue or a pull request, not both" });
   }
+  if (event.checkoutSha !== void 0) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+    if (pullRequest === void 0) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited") && event.pullRequest !== void 0 && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
+  }
   if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
     context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
   }
 });
 function checksOutPullRequestHead(bundle) {
   if (bundle.checkout === "pull-request-head") return true;
+  if (bundle.effects?.includes("commit.merge_base")) return true;
   const patterns = bundle.effectOptions?.["commit.create"]?.branches;
   if (patterns === void 0) return false;
   return !(patterns.length === DEFAULT_WRITE_BRANCHES.length && patterns.every((pattern, index) => pattern === DEFAULT_WRITE_BRANCHES[index]));
@@ -28584,19 +28663,27 @@ function isProtectedCapturePath(path) {
     return normalized === lowered.slice(0, -1) || normalized.startsWith(lowered);
   });
 }
+var baseIdentical = external_exports.literal(true).optional();
 var taskCaptureFileV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
     path: relativePath,
     status: external_exports.enum(["added", "modified"]),
     mode: taskCaptureFileModeV1Schema,
     sizeBytes: fileByteCount,
-    sha256
+    sha256,
+    baseIdentical
   }),
   external_exports.strictObject({
     path: relativePath,
-    status: external_exports.literal("deleted")
+    status: external_exports.literal("deleted"),
+    baseIdentical
   })
 ]);
+var taskCaptureMergeV1Schema = external_exports.strictObject({
+  baseSha: sha1,
+  /** Sorted and unique, so equal merges hash equally. May be empty: a clean merge. */
+  conflictedPaths: external_exports.array(relativePath).max(COMMIT_FILE_LIMIT).refine(sortedUnique, "conflicted paths must be sorted and unique")
+});
 var taskCaptureManifestV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-capture-manifest/v1"),
   captureId: boundIdentifier,
@@ -28614,14 +28701,20 @@ var taskCaptureManifestV1Schema = external_exports.strictObject({
    * `false`. Capture that hits a limit must fail the run, not ship a subset of
    * the change the model believed it was making.
    */
-  truncated: external_exports.literal(false)
+  truncated: external_exports.literal(false),
+  /** Present only on a merge capture; absent, the manifest is exactly as before. */
+  merge: taskCaptureMergeV1Schema.optional()
 }).superRefine((manifest, context) => {
   const paths = manifest.files.map((file2) => file2.path);
   if (new Set(paths).size !== paths.length) {
     context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
   }
   manifest.files.forEach((file2, index) => {
-    if (isProtectedCapturePath(file2.path)) {
+    const isProtected = isProtectedCapturePath(file2.path);
+    if (file2.baseIdentical !== void 0 && (manifest.merge === void 0 || !isProtected)) {
+      context.addIssue({ code: "custom", path: ["files", index, "baseIdentical"], message: "baseIdentical is recorded only for a protected path in a merge capture" });
+    }
+    if (isProtected && !(manifest.merge !== void 0 && file2.baseIdentical === true)) {
       context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file2.path}` });
     }
   });
@@ -28643,7 +28736,9 @@ var taskCaptureRefV1Schema = external_exports.strictObject({
    */
   changesSha256: sha256,
   fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  sizeBytes: captureByteCount
+  sizeBytes: captureByteCount,
+  /** The manifest's `merge`, present only on a merge capture. Covered by `changesSha256`. */
+  merge: taskCaptureMergeV1Schema.optional()
 });
 var taskEventResourceV1Schema = external_exports.discriminatedUnion("kind", [
   external_exports.strictObject({ kind: external_exports.literal("issue"), id: githubNumericId, number: external_exports.number().int().positive() }),
@@ -28672,7 +28767,10 @@ var taskEventBindingV1Schema = external_exports.strictObject({
 });
 var triggeringPullRequestKinds = [
   "pull_request.review_comment.reply",
-  "pull_request.review_thread.resolve"
+  "pull_request.review_thread.resolve",
+  // A merge commit pushes to a pull request's branch on a maintainer's request
+  // on that pull request, so it is confined to it too.
+  "commit.merge_base"
 ];
 function triggeringPullRequestRefusal(kind, payload, references, resource) {
   if (!triggeringPullRequestKinds.includes(kind)) return void 0;
@@ -28689,7 +28787,8 @@ function triggeringPullRequestRefusal(kind, payload, references, resource) {
   return void 0;
 }
 var captureMaterializedPointers = {
-  "commit.create": ["/files"]
+  "commit.create": ["/files"],
+  "commit.merge_base": ["/files", "/conflictedPaths"]
 };
 function captureDeferredPointers(kind) {
   return captureMaterializedPointers[kind] ?? [];
@@ -28919,9 +29018,39 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
     if (operation.kind === "commit.create" && plan.capture !== void 0) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
+      if (plan.capture.merge !== void 0) {
+        context.addIssue({ code: "custom", path: ["operations", index, "kind"], message: "commit.create cannot commit a merge capture; use commit.merge_base" });
+      }
+    }
+    if (operation.kind === "commit.merge_base" && plan.capture !== void 0) {
+      for (const message of mergeBaseRefusals(operation, plan.capture)) {
+        context.addIssue({ code: "custom", path: ["operations", index, "payload"], message });
+      }
     }
   });
+  const kinds = plan.operations.map((operation) => operation.kind);
+  if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
+  }
+  if (kinds.includes("commit.merge_base") && kinds.includes("commit.create")) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may not hold both commit.create and commit.merge_base" });
+  }
 });
+function mergeBaseRefusals(operation, capture) {
+  if (capture.merge === void 0) return ["commit.merge_base needs a merge capture, taken after repository.merge_base applied the merge"];
+  const refusals = [];
+  for (const field of ["baseSha", "expectedHeadSha"]) {
+    if (operation.references[`/${field}`] !== void 0) refusals.push(`commit.merge_base ${field} must be written directly, not by reference`);
+  }
+  const { baseSha, expectedHeadSha } = operation.payload;
+  if (operation.references["/baseSha"] === void 0 && (typeof baseSha !== "string" || baseSha.toLowerCase() !== capture.merge.baseSha)) {
+    refusals.push(`commit.merge_base baseSha must be the merged base commit ${capture.merge.baseSha}`);
+  }
+  if (operation.references["/expectedHeadSha"] === void 0 && (typeof expectedHeadSha !== "string" || expectedHeadSha.toLowerCase() !== capture.baseSha)) {
+    refusals.push(`commit.merge_base must build on the captured commit ${capture.baseSha}: set expectedHeadSha to it`);
+  }
+  return refusals;
+}
 var taskObservationV1Schema = external_exports.strictObject({
   kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
   summary: external_exports.string().trim().min(1).max(8e3),
@@ -29017,6 +29146,8 @@ var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
   "pull_request.review_thread.resolve": ["pull-requests:write"],
   "branch.create": ["contents:write"],
   "commit.create": ["contents:write"],
+  // Apply reads the pull request again to confirm its head and base.
+  "commit.merge_base": ["contents:write", "pull-requests:read"],
   "pull_request.open": ["contents:read", "pull-requests:write"],
   "pull_request.update_branch": ["contents:write", "pull-requests:write"],
   "pull_request.open_draft": ["contents:read", "pull-requests:write"],
@@ -29185,7 +29316,7 @@ function compileGitHubActionsTask(bundle) {
   if (bundle.limits.maxEffectOperations !== void 0 && bundle.effects.length === 0) {
     throw new Error(`Task ${bundle.taskId} sets max-effect-operations without declaring any effect`);
   }
-  const targetReadPermissions = dispatchTargetKinds(bundle.triggers).map((target) => target === "issue" ? { issues: "read" } : { "pull-requests": "read" });
+  const targetReadPermissions = dispatchTargetKinds(bundle.triggers, { pullRequestHead: checksOutPullRequestHead(bundle) }).map((target) => target === "issue" ? { issues: "read" } : { "pull-requests": "read" });
   const effectsPermissions = bundle.effects.length === 0 ? orderPermissions({ "id-token": "write" }) : mergePermissions({ "id-token": "write" }, ...targetReadPermissions, ...bundle.effects.map(effectPermissions));
   const reactionPermissions = bundle.reactions === false ? {} : mergePermissions(...triggers.flatMap((trigger) => REACTION_PERMISSIONS[trigger.event] ?? []));
   return {
@@ -29375,16 +29506,21 @@ function effectOptionsOf(entries) {
   const optioned = entries.flatMap((entry) => typeof entry === "string" ? [] : [[entry.kind, { branches: [...entry.branches].sort() }]]);
   return optioned.length === 0 ? {} : { effectOptions: Object.fromEntries(optioned) };
 }
-function expandEffectSelectors(selectors) {
+var GLOB_KINDS_NEEDING_TOOL = /* @__PURE__ */ new Map([
+  ["commit.merge_base", "repository.merge_base"]
+]);
+function expandEffectSelectors(selectors, tools = []) {
   const exact = /* @__PURE__ */ new Set();
   const families = /* @__PURE__ */ new Set();
   for (const selector of selectors) {
     if (selector.endsWith(".*")) families.add(selector.slice(0, -".*".length));
     else exact.add(selector);
   }
-  return operationKindValues.filter(
-    (kind) => exact.has(kind) || families.has(OPERATION_FAMILY_BY_KIND.get(kind))
-  );
+  const globbed = (kind) => {
+    const tool = GLOB_KINDS_NEEDING_TOOL.get(kind);
+    return families.has(OPERATION_FAMILY_BY_KIND.get(kind)) && (tool === void 0 || tools.includes(tool));
+  };
+  return operationKindValues.filter((kind) => exact.has(kind) || globbed(kind));
 }
 function toContractTrigger(authored, options, sourceName) {
   const kind = authored.event;
@@ -29454,7 +29590,7 @@ async function compileTaskSource(source, sourceName = "TASK.md", options = {}) {
     instructions,
     triggers: authoredTriggers.map((trigger) => toContractTrigger(trigger, options, sourceName)),
     tools: authoring.tools,
-    effects: expandEffectSelectors(authoring.effects.map(effectSelector)),
+    effects: expandEffectSelectors(authoring.effects.map(effectSelector), authoring.tools),
     ...effectOptionsOf(authoring.effects),
     network: authoring.network,
     limits: {
@@ -29556,6 +29692,10 @@ async function planProject(input2) {
     });
   }
   tasks.sort((left, right) => left.bundle.taskId.localeCompare(right.bundle.taskId));
+  for (const task of tasks) {
+    const refusal = pinnedWorkflowRefusal(task, project.release.workflowRef);
+    if (refusal !== void 0) throw new Error(refusal);
+  }
   const lock = {
     schemaVersion: "gardener.lock/v1",
     target: {
@@ -29659,7 +29799,7 @@ function renderWorkflowTriggers(task) {
       lines.push("        description: Extra instructions for this run. Optional, up to 20000 characters.");
       lines.push("        required: false");
       lines.push("        type: string");
-      for (const target of dispatchTargetKinds(task.bundle.triggers)) {
+      for (const target of dispatchTargetKinds(task.bundle.triggers, { pullRequestHead: checksOutPullRequestHead(task.bundle) })) {
         lines.push(`      ${target}:`);
         lines.push(`        description: ${target === "issue" ? "Issue" : "Pull request"} number to run against. Optional.`);
         lines.push("        required: false");
@@ -29765,6 +29905,21 @@ var TASK_WORKFLOWS_WITHOUT_REACTIONS = /* @__PURE__ */ new Set([
   "8e5fa4f844bfe26ff1d152757caf4ac0110ff6ef",
   "868542c32a2a0684ded8cc1be3d6b2cfa1b0d62d"
 ]);
+var TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD = /* @__PURE__ */ new Set([
+  ...TASK_WORKFLOWS_WITHOUT_REACTIONS,
+  "8aa3054967ee696be08ff61936c72e199c750ba7"
+]);
+function definesPullRequestHead(workflowRef) {
+  return !TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+function pinnedWorkflowRefusal(task, workflowRef) {
+  if (definesPullRequestHead(workflowRef)) return void 0;
+  const needs = [
+    ...task.bundle.tools.includes("repository.merge_base") ? ["repository.merge_base"] : [],
+    ...task.bundle.effects.includes("commit.merge_base") ? ["commit.merge_base"] : []
+  ];
+  return needs.length === 0 ? void 0 : `Task ${task.bundle.taskId} declares ${needs.join(" and ")}, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
+}
 function definesReactions(workflowRef) {
   return !TASK_WORKFLOWS_WITHOUT_REACTIONS.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
 }
@@ -29775,6 +29930,7 @@ var LEGACY_PLAN_TIMEOUT_MINUTES = 10;
 var LEGACY_MAX_RUNTIME_SECONDS = 480;
 function renderTaskWorkflow(task, workflowRef, setsPlanTimeout) {
   const reactions = definesReactions(workflowRef) ? renderReactionCondition(task) : void 0;
+  const pullRequestHead = definesPullRequestHead(workflowRef);
   return `${GENERATED_MARKER}
 #
 # Source: .gardener/${task.source}
@@ -29796,7 +29952,7 @@ jobs:
         ${renderJobCondition(task)}
       }}
 ${checksOutPullRequestHead(task.bundle) ? `    concurrency:
-      group: gardener-${task.bundle.taskId}-\${{ github.event.pull_request.number || github.run_id }}
+      group: gardener-${task.bundle.taskId}-\${{ ${pullRequestHead ? "github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || github.run_id" : "github.event.pull_request.number || github.run_id"} }}
       cancel-in-progress: false
 ` : ""}    permissions:
 ${renderPermissions(task)}
@@ -29808,7 +29964,7 @@ ${renderPermissions(task)}
       task-source: ${yamlString(`.gardener/${task.source}`)}
       task-bundle-hash: ${task.bundleHash}
 ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundle.limits.runtimeSeconds)}
-` : ""}${checksOutPullRequestHead(task.bundle) ? "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n" : ""}${reactions === void 0 ? "" : `      reactions: >-
+` : ""}${checksOutPullRequestHead(task.bundle) ? pullRequestHead ? "      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}\n" + (task.bundle.tools.includes("repository.merge_base") ? "      merge-base: true\n" : "") : "      checkout-ref: ${{ github.event.pull_request.head.sha }}\n" : ""}${reactions === void 0 ? "" : `      reactions: >-
         \${{
         ${reactions}
         }}

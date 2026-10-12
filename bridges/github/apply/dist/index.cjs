@@ -18196,7 +18196,7 @@ var require_eventsource_stream = __commonJS({
     var LF = 10;
     var CR = 13;
     var COLON = 58;
-    var SPACE = 32;
+    var SPACE2 = 32;
     var DATA = Buffer.from("data");
     var EVENT = Buffer.from("event");
     var ID = Buffer.from("id");
@@ -18349,7 +18349,7 @@ var require_eventsource_stream = __commonJS({
         if (colonPosition !== -1) {
           fieldLength = colonPosition;
           valueStart = colonPosition + 1;
-          if (line[valueStart] === SPACE) {
+          if (line[valueStart] === SPACE2) {
             ++valueStart;
           }
         }
@@ -18968,6 +18968,7 @@ var require_undici = __commonJS({
 // src/effects-main.ts
 var effects_main_exports = {};
 __export(effects_main_exports, {
+  CheckoutBindingError: () => CheckoutBindingError,
   applyEventBinding: () => applyEventBinding,
   applyOrderedPlan: () => applyOrderedPlan,
   checkoutBindingHolds: () => checkoutBindingHolds,
@@ -40007,6 +40008,7 @@ var operationKindValues = [
   "pull_request.review_thread.resolve",
   "branch.create",
   "commit.create",
+  "commit.merge_base",
   "pull_request.open",
   "pull_request.open_draft",
   "pull_request.merge",
@@ -40027,7 +40029,7 @@ var operationFamilySchema = external_exports.enum(["issue", "pull_request", "git
 var operationCatalogEntrySchema = external_exports.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: external_exports.literal(true), highImpact: external_exports.boolean() }).strict();
 var operationCatalog = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
   kind,
-  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind === "commit.create" ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
+  family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind.startsWith("commit.") ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
   persistent: true,
   highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete"
 })));
@@ -40136,6 +40138,30 @@ var operationOptions = [
       if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
       paths.add(file2.path);
     });
+  }),
+  /**
+   * A merge commit on the triggering pull request's branch whose second parent
+   * is `baseSha`, the head of `baseBranch` when the merge was prepared. It
+   * brings the base branch in and never rewrites history. `files` and
+   * `conflictedPaths` come only from the merge capture, never from the model.
+   */
+  operationBase.extend({
+    kind: external_exports.literal("commit.merge_base"),
+    pullNumber: external_exports.number().int().positive(),
+    branch: branchNameSchema,
+    expectedHeadSha: shaSchema,
+    baseBranch: branchNameSchema,
+    baseSha: shaSchema,
+    message: external_exports.string().trim().min(1).max(1e3),
+    files: external_exports.array(commitFileSchema).min(1).max(COMMIT_FILE_LIMIT),
+    conflictedPaths: external_exports.array(commitFilePathSchema).max(COMMIT_FILE_LIMIT)
+  }).strict().superRefine((value, context) => {
+    const paths = /* @__PURE__ */ new Set();
+    value.files.forEach((file2, index) => {
+      if (paths.has(file2.path)) context.addIssue({ code: "custom", path: ["files", index, "path"], message: "commit file paths must be unique" });
+      paths.add(file2.path);
+    });
+    if (new Set(value.conflictedPaths).size !== value.conflictedPaths.length) context.addIssue({ code: "custom", path: ["conflictedPaths"], message: "conflicted paths must be unique" });
   }),
   operationBase.extend({
     kind: external_exports.literal("pull_request.open"),
@@ -40312,6 +40338,15 @@ var operationOutputCatalog = {
     parentSha: "commitSha",
     commitUrl: "url"
   },
+  // `parentShas` is a list, so only the scalar receipt fields are outputs.
+  "commit.merge_base": {
+    ...pullOutputs,
+    branch: "branch",
+    commitSha: "commitSha",
+    treeSha: "commitSha",
+    baseSha: "commitSha",
+    commitUrl: "url"
+  },
   "pull_request.open": {
     ...pullOutputs,
     pullUrl: "url",
@@ -40386,6 +40421,7 @@ function operationOutputSentinel(type) {
 var branchWriteFields = {
   "branch.create": "branch",
   "commit.create": "branch",
+  "commit.merge_base": "branch",
   "pull_request.open": "head",
   "pull_request.open_draft": "head"
 };
@@ -40674,7 +40710,13 @@ var taskToolV1Schema = external_exports.enum([
   "repository.read_file",
   "repository.list_files",
   "repository.exec",
-  "provider.api.read"
+  "provider.api.read",
+  /**
+   * Writes the merge of the pull request's base branch, prepared by trusted
+   * code before the model ran, into the working tree for the model to finish.
+   * It never commits; `commit.merge_base` does.
+   */
+  "repository.merge_base"
 ]);
 var taskEffectKindValues = operationKindValues;
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
@@ -40716,12 +40758,14 @@ var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branch
 var taskEffectOptionsMapV1Schema = external_exports.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
+  "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
   "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
 });
 var taskBranchPatternsV1Schema = external_exports.strictObject({
   "branch.create": branchPatternsSchema.optional(),
   "commit.create": branchPatternsSchema.optional(),
+  "commit.merge_base": branchPatternsSchema.optional(),
   "pull_request.open": branchPatternsSchema.optional(),
   "pull_request.open_draft": branchPatternsSchema.optional()
 });
@@ -40739,7 +40783,8 @@ var taskBundleV1Schema = external_exports.strictObject({
   /**
    * Check out the triggering pull request's head instead of the commit GitHub
    * supplies (a merge preview), so commits build on the branch they push to.
-   * Opt-in, and only for tasks with a pull request trigger.
+   * Opt-in, and only for tasks with a pull request or issue comment trigger
+   * (a comment on a pull request's conversation).
    */
   checkout: external_exports.literal("pull-request-head").optional(),
   network: taskNetworkPolicyV1Schema,
@@ -40763,8 +40808,17 @@ var taskBundleV1Schema = external_exports.strictObject({
    */
   reactions: external_exports.literal(false).optional()
 }).superRefine((bundle, context) => {
-  if (bundle.checkout === "pull-request-head" && !bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind))) {
-    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request trigger" });
+  const headTrigger = bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind) || eventNameByTriggerKind[trigger.kind] === "issue_comment");
+  if (bundle.checkout === "pull-request-head" && !headTrigger) {
+    context.addIssue({ code: "custom", path: ["checkout"], message: "checkout: pull-request-head needs a pull request or issue comment trigger" });
+  }
+  if (bundle.effects.includes("commit.merge_base")) {
+    if (!headTrigger) {
+      context.addIssue({ code: "custom", path: ["effects"], message: "commit.merge_base needs a pull request or issue comment trigger" });
+    }
+    if (!bundle.tools.includes("repository.merge_base")) {
+      context.addIssue({ code: "custom", path: ["tools"], message: "commit.merge_base needs the repository.merge_base tool, which prepares the merge it commits" });
+    }
   }
   for (const key of ["tools", "effects"]) {
     if (new Set(bundle[key]).size !== bundle[key].length) {
@@ -41025,11 +41079,23 @@ var normalizedPushV1Schema = external_exports.strictObject({
 });
 var changedLabel = external_exports.string().trim().min(1).max(100);
 function eventMember(kind, shape) {
-  return external_exports.strictObject({ ...normalizedEventBase, kind: external_exports.literal(kind), ...shape });
+  return external_exports.strictObject({
+    ...normalizedEventBase,
+    kind: external_exports.literal(kind),
+    ...shape,
+    /**
+     * The pull request head the planning job checked out, when it checked one
+     * out. Set by the bridge only after confirming it is `pullRequest`'s
+     * current head, so it is present only with `pullRequest` and equal to its
+     * head. Absent from older bridges, which `taskCheckoutSha` still handles.
+     */
+    checkoutSha: sha1.optional()
+  });
 }
 var issuePayload = { issue: normalizedIssueV1Schema };
 var editedPayload = { previousBody: external_exports.string().max(65536).optional() };
 var pullRequestPayload = { pullRequest: normalizedPullRequestV1Schema };
+var commentPullRequestPayload = { pullRequest: normalizedPullRequestV1Schema.optional() };
 var discussionPayload = { discussion: normalizedDiscussionV1Schema };
 var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.opened", issuePayload),
@@ -41037,8 +41103,8 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   eventMember("github.issue.labeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.unlabeled", { ...issuePayload, label: changedLabel }),
   eventMember("github.issue.reopened", issuePayload),
-  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema }),
-  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload }),
+  eventMember("github.issue_comment.created", { ...issuePayload, comment: normalizedCommentV1Schema, ...commentPullRequestPayload }),
+  eventMember("github.issue_comment.edited", { ...issuePayload, comment: normalizedCommentV1Schema, ...editedPayload, ...commentPullRequestPayload }),
   eventMember("github.pull_request.opened", pullRequestPayload),
   eventMember("github.pull_request.reopened", pullRequestPayload),
   eventMember("github.pull_request.synchronize", pullRequestPayload),
@@ -41075,6 +41141,17 @@ var normalizedEventV1Schema = external_exports.discriminatedUnion("kind", [
   }
   if (event.kind === "github.workflow_dispatch" && event.issue !== void 0 && event.pullRequest !== void 0) {
     context.addIssue({ code: "custom", path: ["pullRequest"], message: "a manual run may target an issue or a pull request, not both" });
+  }
+  if (event.checkoutSha !== void 0) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+    if (pullRequest === void 0) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited") && event.pullRequest !== void 0 && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
   }
   if (event.kind === "github.push" && event.push.ref !== event.repository.ref) {
     context.addIssue({ code: "custom", path: ["push", "ref"], message: "push ref must match the bound repository ref" });
@@ -41462,19 +41539,27 @@ function isProtectedCapturePath(path3) {
     return normalized === lowered.slice(0, -1) || normalized.startsWith(lowered);
   });
 }
+var baseIdentical = external_exports.literal(true).optional();
 var taskCaptureFileV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
     path: relativePath,
     status: external_exports.enum(["added", "modified"]),
     mode: taskCaptureFileModeV1Schema,
     sizeBytes: fileByteCount,
-    sha256
+    sha256,
+    baseIdentical
   }),
   external_exports.strictObject({
     path: relativePath,
-    status: external_exports.literal("deleted")
+    status: external_exports.literal("deleted"),
+    baseIdentical
   })
 ]);
+var taskCaptureMergeV1Schema = external_exports.strictObject({
+  baseSha: sha1,
+  /** Sorted and unique, so equal merges hash equally. May be empty: a clean merge. */
+  conflictedPaths: external_exports.array(relativePath).max(COMMIT_FILE_LIMIT).refine(sortedUnique, "conflicted paths must be sorted and unique")
+});
 var taskCaptureManifestV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-capture-manifest/v1"),
   captureId: boundIdentifier,
@@ -41492,14 +41577,20 @@ var taskCaptureManifestV1Schema = external_exports.strictObject({
    * `false`. Capture that hits a limit must fail the run, not ship a subset of
    * the change the model believed it was making.
    */
-  truncated: external_exports.literal(false)
+  truncated: external_exports.literal(false),
+  /** Present only on a merge capture; absent, the manifest is exactly as before. */
+  merge: taskCaptureMergeV1Schema.optional()
 }).superRefine((manifest, context) => {
   const paths = manifest.files.map((file2) => file2.path);
   if (new Set(paths).size !== paths.length) {
     context.addIssue({ code: "custom", path: ["files"], message: "captured paths must be unique" });
   }
   manifest.files.forEach((file2, index) => {
-    if (isProtectedCapturePath(file2.path)) {
+    const isProtected = isProtectedCapturePath(file2.path);
+    if (file2.baseIdentical !== void 0 && (manifest.merge === void 0 || !isProtected)) {
+      context.addIssue({ code: "custom", path: ["files", index, "baseIdentical"], message: "baseIdentical is recorded only for a protected path in a merge capture" });
+    }
+    if (isProtected && !(manifest.merge !== void 0 && file2.baseIdentical === true)) {
       context.addIssue({ code: "custom", path: ["files", index, "path"], message: `captured change may not write the protected path ${file2.path}` });
     }
   });
@@ -41521,12 +41612,18 @@ function taskCaptureManifestText(value) {
 function taskCaptureChangesDigestInput(manifest) {
   const encoder = new TextEncoder();
   const chunks = [];
-  for (const file2 of manifest.files) {
-    const fields = file2.status === "deleted" ? ["delete", file2.path] : ["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256];
+  const push = (fields) => {
     for (const field of fields) {
       const bytes = encoder.encode(field);
       chunks.push(encoder.encode(`${bytes.byteLength}:`), bytes);
     }
+  };
+  for (const file2 of manifest.files) {
+    push(file2.status === "deleted" ? ["delete", file2.path] : ["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256]);
+    if (file2.baseIdentical === true) push(["base-identical"]);
+  }
+  if (manifest.merge !== void 0) {
+    push(["merge", manifest.merge.baseSha, String(manifest.merge.conflictedPaths.length), ...manifest.merge.conflictedPaths]);
   }
   const output2 = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
   let offset = 0;
@@ -41549,7 +41646,9 @@ var taskCaptureRefV1Schema = external_exports.strictObject({
    */
   changesSha256: sha256,
   fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  sizeBytes: captureByteCount
+  sizeBytes: captureByteCount,
+  /** The manifest's `merge`, present only on a merge capture. Covered by `changesSha256`. */
+  merge: taskCaptureMergeV1Schema.optional()
 });
 var taskEventResourceV1Schema = external_exports.discriminatedUnion("kind", [
   external_exports.strictObject({ kind: external_exports.literal("issue"), id: githubNumericId, number: external_exports.number().int().positive() }),
@@ -41578,7 +41677,10 @@ var taskEventBindingV1Schema = external_exports.strictObject({
 });
 var triggeringPullRequestKinds = [
   "pull_request.review_comment.reply",
-  "pull_request.review_thread.resolve"
+  "pull_request.review_thread.resolve",
+  // A merge commit pushes to a pull request's branch on a maintainer's request
+  // on that pull request, so it is confined to it too.
+  "commit.merge_base"
 ];
 function triggeringPullRequestRefusal(kind, payload, references, resource) {
   if (!triggeringPullRequestKinds.includes(kind)) return void 0;
@@ -41631,7 +41733,8 @@ function taskEventBindingFromNormalizedEvent(event) {
   return { ...base, resource: null, commentId: null };
 }
 var captureMaterializedPointers = {
-  "commit.create": ["/files"]
+  "commit.create": ["/files"],
+  "commit.merge_base": ["/files", "/conflictedPaths"]
 };
 function captureDeferredPointers(kind) {
   return captureMaterializedPointers[kind] ?? [];
@@ -41861,9 +41964,39 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
     if (operation.kind === "commit.create" && plan.capture !== void 0) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
+      if (plan.capture.merge !== void 0) {
+        context.addIssue({ code: "custom", path: ["operations", index, "kind"], message: "commit.create cannot commit a merge capture; use commit.merge_base" });
+      }
+    }
+    if (operation.kind === "commit.merge_base" && plan.capture !== void 0) {
+      for (const message of mergeBaseRefusals(operation, plan.capture)) {
+        context.addIssue({ code: "custom", path: ["operations", index, "payload"], message });
+      }
     }
   });
+  const kinds = plan.operations.map((operation) => operation.kind);
+  if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
+  }
+  if (kinds.includes("commit.merge_base") && kinds.includes("commit.create")) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a plan may not hold both commit.create and commit.merge_base" });
+  }
 });
+function mergeBaseRefusals(operation, capture) {
+  if (capture.merge === void 0) return ["commit.merge_base needs a merge capture, taken after repository.merge_base applied the merge"];
+  const refusals = [];
+  for (const field of ["baseSha", "expectedHeadSha"]) {
+    if (operation.references[`/${field}`] !== void 0) refusals.push(`commit.merge_base ${field} must be written directly, not by reference`);
+  }
+  const { baseSha, expectedHeadSha } = operation.payload;
+  if (operation.references["/baseSha"] === void 0 && (typeof baseSha !== "string" || baseSha.toLowerCase() !== capture.merge.baseSha)) {
+    refusals.push(`commit.merge_base baseSha must be the merged base commit ${capture.merge.baseSha}`);
+  }
+  if (operation.references["/expectedHeadSha"] === void 0 && (typeof expectedHeadSha !== "string" || expectedHeadSha.toLowerCase() !== capture.baseSha)) {
+    refusals.push(`commit.merge_base must build on the captured commit ${capture.baseSha}: set expectedHeadSha to it`);
+  }
+  return refusals;
+}
 var taskObservationV1Schema = external_exports.strictObject({
   kind: external_exports.enum(["repository", "event", "test", "diagnostic"]),
   summary: external_exports.string().trim().min(1).max(8e3),
@@ -42020,6 +42153,52 @@ var runnerActionV1Schema = external_exports.discriminatedUnion("kind", [
     kind: external_exports.literal("repository.capture"),
     baseSha: sha12,
     maxOutputBytes: external_exports.number().int().positive().max(EFFECT_TRANSPORT_MAX_BYTES2)
+  }),
+  /**
+   * Trusted merge of the pull request's base branch into the working tree.
+   *
+   * Like capture, there is deliberately no field a model could fill. The
+   * merge was computed by the bridge before the session connected, and this
+   * only asks the runner to write that recorded result into the working tree.
+   */
+  external_exports.strictObject({
+    ...runnerActionBaseFields,
+    kind: external_exports.literal("repository.merge_base")
+  })
+]);
+var MERGE_BASE_MESSAGES_MAX_BYTES = 8 * 1024;
+var MERGE_BASE_FILE_LIMIT = 1e3;
+var mergeBasePath = external_exports.string().min(1).max(1024);
+var runnerMergeBaseResultV1Schema = external_exports.discriminatedUnion("status", [
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.merge-base-result/v1"),
+    status: external_exports.enum(["clean", "conflicted"]),
+    pullNumber: external_exports.number().int().positive(),
+    branch: external_exports.string().min(1).max(255),
+    expectedHeadSha: sha12,
+    baseBranch: external_exports.string().min(1).max(255),
+    baseSha: sha12,
+    mergeBaseSha: sha12,
+    /** Sorted and unique. Empty exactly when `status` is `clean`. */
+    conflictedFiles: external_exports.array(mergeBasePath).max(MERGE_BASE_FILE_LIMIT),
+    changedFileCount: external_exports.number().int().nonnegative().max(MERGE_BASE_FILE_LIMIT),
+    /** Git's merge messages, bounded to `MERGE_BASE_MESSAGES_MAX_BYTES`. */
+    messages: external_exports.string().max(MERGE_BASE_MESSAGES_MAX_BYTES).refine(
+      (value) => new TextEncoder().encode(value).byteLength <= MERGE_BASE_MESSAGES_MAX_BYTES,
+      `messages exceed ${MERGE_BASE_MESSAGES_MAX_BYTES} bytes`
+    )
+  }).superRefine((result, context) => {
+    if (result.status === "clean" !== (result.conflictedFiles.length === 0)) {
+      context.addIssue({ code: "custom", path: ["conflictedFiles"], message: "a clean merge has no conflicted files, a conflicted one has some" });
+    }
+    if (result.conflictedFiles.some((file2, index) => index > 0 && !(result.conflictedFiles[index - 1] < file2))) {
+      context.addIssue({ code: "custom", path: ["conflictedFiles"], message: "conflicted files must be sorted and unique" });
+    }
+  }),
+  external_exports.strictObject({
+    schemaVersion: external_exports.literal("gardener.runner.merge-base-result/v1"),
+    status: external_exports.literal("refused"),
+    reason: external_exports.string().min(1).max(2e3)
   })
 ]);
 var runnerCaptureRefV1Schema = external_exports.strictObject({
@@ -42029,7 +42208,15 @@ var runnerCaptureRefV1Schema = external_exports.strictObject({
   manifestSha256: sha2562,
   changesSha256: sha2562,
   fileCount: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+  sizeBytes: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  /**
+   * Present only on a merge capture, taken after `repository.merge_base`
+   * applied a merge. Mirrors `taskCaptureMergeV1Schema`.
+   */
+  merge: external_exports.strictObject({
+    baseSha: sha12,
+    conflictedPaths: external_exports.array(mergeBasePath).max(MERGE_BASE_FILE_LIMIT)
+  }).optional()
 });
 var runnerCaptureResultV1Schema = external_exports.discriminatedUnion("status", [
   external_exports.strictObject({
@@ -42177,11 +42364,18 @@ function runnerEventMember(kind, shape) {
     schemaVersion: external_exports.literal("gardener.runner.event/v1"),
     kind: external_exports.literal(kind),
     repository: eventRepository,
-    ...shape
+    ...shape,
+    /**
+     * The pull request head the planning job checked out, set by the bridge
+     * only after confirming it is `pullRequest`'s current head. Mirrors the
+     * contract: present only with `pullRequest`, and equal to its head sha.
+     */
+    checkoutSha: sha12.optional()
   });
 }
 var issuePayload2 = { issue: eventIssue };
 var pullRequestPayload2 = { pullRequest: eventPullRequest };
+var commentPullRequestPayload2 = { pullRequest: eventPullRequest.optional() };
 var discussionPayload2 = { discussion: eventDiscussion };
 var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.issue.opened", issuePayload2),
@@ -42189,8 +42383,8 @@ var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.issue.labeled", { ...issuePayload2, label: eventChangedLabel }),
   runnerEventMember("github.issue.unlabeled", { ...issuePayload2, label: eventChangedLabel }),
   runnerEventMember("github.issue.reopened", issuePayload2),
-  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment }),
-  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited }),
+  runnerEventMember("github.issue_comment.created", { ...issuePayload2, comment: eventComment, ...commentPullRequestPayload2 }),
+  runnerEventMember("github.issue_comment.edited", { ...issuePayload2, comment: eventComment, ...eventEdited, ...commentPullRequestPayload2 }),
   runnerEventMember("github.pull_request.opened", pullRequestPayload2),
   runnerEventMember("github.pull_request.reopened", pullRequestPayload2),
   runnerEventMember("github.pull_request.synchronize", pullRequestPayload2),
@@ -42221,7 +42415,19 @@ var runnerEventV1Schema = external_exports.discriminatedUnion("kind", [
   runnerEventMember("github.discussion.unlabeled", { ...discussionPayload2, label: eventChangedLabel }),
   runnerEventMember("github.discussion_comment.created", { ...discussionPayload2, comment: eventDiscussionComment }),
   runnerEventMember("github.discussion_comment.edited", { ...discussionPayload2, comment: eventDiscussionComment, ...eventEdited })
-]);
+]).superRefine((event, context) => {
+  if (event.checkoutSha !== void 0) {
+    const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;
+    if (pullRequest === void 0) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha is given only with the pull request it checked out" });
+    } else if (event.checkoutSha !== pullRequest.head.sha) {
+      context.addIssue({ code: "custom", path: ["checkoutSha"], message: "checkoutSha must equal the pull request's head sha" });
+    }
+  }
+  if ((event.kind === "github.issue_comment.created" || event.kind === "github.issue_comment.edited") && event.pullRequest !== void 0 && event.pullRequest.number !== event.issue.number) {
+    context.addIssue({ code: "custom", path: ["pullRequest", "number"], message: "a comment's pull request must be the issue it was written on" });
+  }
+});
 var stepName = external_exports.string().regex(/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/).max(63);
 var githubUrl = external_exports.url().refine(
   (value) => new URL(value).origin === "https://github.com",
@@ -45404,6 +45610,59 @@ var import_promises = require("node:fs/promises");
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_stream = require("node:stream");
 var import_promises2 = require("node:stream/promises");
+
+// src/merge-markers.ts
+var LESS = 60;
+var GREATER = 62;
+var SPACE = 32;
+var CARRIAGE_RETURN = 13;
+var LINE_FEED = 10;
+var MARKER_LENGTH = 7;
+var ConflictMarkerScanner = class {
+  /** The first bytes of the current line; a marker is decided by at most nine. */
+  #head = [];
+  #length = 0;
+  #found = false;
+  push(chunk) {
+    if (this.#found) return;
+    let start = 0;
+    while (start <= chunk.length) {
+      const end = chunk.indexOf(LINE_FEED, start);
+      const stop = end < 0 ? chunk.length : end;
+      for (let index = start; index < stop && this.#head.length < MARKER_LENGTH + 2; index += 1) this.#head.push(chunk[index]);
+      this.#length += stop - start;
+      if (end < 0) return;
+      this.#endLine();
+      if (this.#found) return;
+      start = end + 1;
+    }
+  }
+  /** Ends the last line, which need not end with a newline, and reports the result. */
+  finish() {
+    if (!this.#found && this.#length > 0) this.#endLine();
+    return this.#found;
+  }
+  #endLine() {
+    if (isMarkerLine(this.#head, this.#length)) this.#found = true;
+    this.#head = [];
+    this.#length = 0;
+  }
+};
+function isMarkerLine(head, length) {
+  if (length < MARKER_LENGTH) return false;
+  const first = head[0];
+  if (first !== LESS && first !== GREATER) return false;
+  for (let index = 1; index < MARKER_LENGTH; index += 1) if (head[index] !== first) return false;
+  if (length === MARKER_LENGTH || head[MARKER_LENGTH] === SPACE) return true;
+  return length === MARKER_LENGTH + 1 && head[MARKER_LENGTH] === CARRIAGE_RETURN;
+}
+function hasConflictMarkerLine(bytes) {
+  const scanner = new ConflictMarkerScanner();
+  scanner.push(bytes);
+  return scanner.finish();
+}
+
+// src/capture.ts
 var RUNNER_HOME_PATH = ".gardener/runner-home";
 var RUNNER_HOME_PREFIX = `${RUNNER_HOME_PATH}/`;
 var GIT_MAX_OUTPUT = 64 * 1024 * 1024;
@@ -45423,7 +45682,9 @@ async function verifyCaptureArtifact(directory, expected) {
     ["file count", String(manifest.files.length), String(reference.fileCount)],
     ["size", String(totalBytes), String(reference.sizeBytes)],
     ["changes digest", sha256Hex(changesStream(manifest)), reference.changesSha256],
-    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest.files))}`, reference.captureId]
+    ["capture id derivation", `cap_${sha256Hex(identityStream(manifest.baseSha, manifest))}`, reference.captureId],
+    // A plan-bound reference must not claim a different merge than the manifest holds.
+    ["merge", JSON.stringify(manifest.merge ?? null), JSON.stringify(reference.merge ?? null)]
   ];
   for (const [label, actual, want] of expectations) {
     if (!equalsConstantTime(actual, want)) throw new Error(`Capture ${label} mismatch`);
@@ -45439,11 +45700,11 @@ async function verifyCaptureArtifact(directory, expected) {
 function changesStream(manifest) {
   return Buffer.from(taskCaptureChangesDigestInput(manifest));
 }
-function identityStream(baseSha, files) {
-  return Buffer.concat([framed(["gardener.task-capture/v1", baseSha]), ...files.map(fileRecord)]);
-}
-function fileRecord(file2) {
-  return file2.status === "deleted" ? framed(["delete", file2.path]) : framed(["upsert", file2.path, file2.mode, String(file2.sizeBytes), file2.sha256]);
+function identityStream(baseSha, manifest) {
+  return Buffer.concat([
+    framed(["gardener.task-capture/v1", baseSha]),
+    Buffer.from(taskCaptureChangesDigestInput(manifest))
+  ]);
 }
 function framed(fields) {
   return Buffer.concat(fields.map((field) => {
@@ -45611,12 +45872,55 @@ async function readBoundedBody(response, maxBytes) {
   return { text: bounded2.toString("utf8"), truncated };
 }
 
-// src/dispatch-target.ts
+// src/current-head.ts
 var REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-var MAX_RESPONSE_BYTES = 1024 * 1024;
-var TIMEOUT_MS = 15e3;
+var MAX_RESPONSE_BYTES = 512 * 1024;
+var TIMEOUT_MS = 5e3;
+async function fetchCurrentPullRequest(input2) {
+  if (!input2.token || !Number.isSafeInteger(input2.number) || input2.number < 1) return null;
+  if (!REPOSITORY.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) return null;
+  try {
+    const response = await (input2.fetch ?? fetch)(
+      `https://api.github.com/repos/${input2.repository.split("/").map(encodeURIComponent).join("/")}/pulls/${input2.number}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${input2.token}`,
+          "user-agent": "gardener-runner",
+          "x-github-api-version": "2022-11-28"
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS)
+      }
+    );
+    if (!response.ok) return null;
+    const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+    if (body2.truncated) return null;
+    const value = JSON.parse(body2.text);
+    const headRepoId = value.head?.repo?.id;
+    const baseRepoId = value.base?.repo?.id;
+    if (typeof value.state !== "string" || typeof value.updated_at !== "string" || typeof value.head?.sha !== "string" || typeof value.head.ref !== "string" || typeof baseRepoId !== "number" || headRepoId !== void 0 && typeof headRepoId !== "number") {
+      return null;
+    }
+    return {
+      state: value.state,
+      updatedAt: value.updated_at,
+      headSha: value.head.sha,
+      headRef: value.head.ref,
+      headRepoId: typeof headRepoId === "number" ? String(headRepoId) : null,
+      baseRepoId: String(baseRepoId)
+    };
+  } catch {
+    return null;
+  }
+}
+
+// src/dispatch-target.ts
+var REPOSITORY2 = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+var MAX_RESPONSE_BYTES2 = 1024 * 1024;
+var TIMEOUT_MS2 = 15e3;
 async function fetchDispatchTarget(input2) {
-  if (!REPOSITORY.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) {
+  if (!REPOSITORY2.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) {
     throw new Error("GITHUB_REPOSITORY is not an owner/name slug");
   }
   if (!input2.token) throw new Error("A GitHub token is required to read the manual run's target");
@@ -45632,12 +45936,12 @@ async function fetchDispatchTarget(input2) {
         "x-github-api-version": "2022-11-28"
       },
       redirect: "error",
-      signal: input2.signal ? AbortSignal.any([input2.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS)
+      signal: input2.signal ? AbortSignal.any([input2.signal, AbortSignal.timeout(TIMEOUT_MS2)]) : AbortSignal.timeout(TIMEOUT_MS2)
     }
   );
   if (response.status === 404) throw new Error(`${noun} #${input2.target.number} was not found in ${input2.repository}`);
   if (!response.ok) throw new Error(`Reading ${noun} #${input2.target.number} failed (${response.status})`);
-  const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+  const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES2);
   if (body2.truncated) throw new Error(`${noun} #${input2.target.number} response is too large`);
   const value = JSON.parse(body2.text);
   return input2.target.kind === "issue" ? { issue: value } : { pull_request: value };
@@ -45949,6 +46253,8 @@ var OPERATION_TOKEN_PERMISSIONS = Object.freeze({
   "pull_request.review_thread.resolve": ["pull-requests:write"],
   "branch.create": ["contents:write"],
   "commit.create": ["contents:write"],
+  // Apply reads the pull request again to confirm its head and base.
+  "commit.merge_base": ["contents:write", "pull-requests:read"],
   "pull_request.open": ["contents:read", "pull-requests:write"],
   "pull_request.update_branch": ["contents:write", "pull-requests:write"],
   "pull_request.open_draft": ["contents:read", "pull-requests:write"],
@@ -46883,6 +47189,9 @@ async function executeBranchCreate(scope, operation) {
   };
 }
 async function readVerifiedCapturedContent(scope, file2) {
+  return Buffer.from(await readVerifiedCapturedBytes(scope, file2)).toString("base64");
+}
+async function readVerifiedCapturedBytes(scope, file2) {
   if (file2.captured.status === "deleted") throw new Error("A deleted capture entry has no content to read");
   const reader = scope.readCapturedFile;
   if (reader === void 0) throw new Error("No capture reader was provided");
@@ -46900,7 +47209,7 @@ async function readVerifiedCapturedContent(scope, file2) {
   if (digest !== sha2563) {
     throw failure2("capture_content_mismatch", `Captured content for ${file2.path} does not match its recorded digest`);
   }
-  return Buffer.from(bytes).toString("base64");
+  return bytes;
 }
 async function executeCommitCreate(scope, operation) {
   if (scope.captureBaseSha === void 0) {
@@ -46931,20 +47240,20 @@ async function executeCommitCreate(scope, operation) {
       "Commit idempotency lookup",
       (candidate) => {
         const message = record2(candidate.commit) ? candidate.commit.message : void 0;
-        const parent2 = Array.isArray(candidate.parents) && record2(candidate.parents[0]) ? candidate.parents[0].sha : void 0;
-        return typeof candidate.sha === "string" && typeof message === "string" && message.split(/\r?\n/).includes(marker) && parent2 === operation.expectedHeadSha;
+        const parent = Array.isArray(candidate.parents) && record2(candidate.parents[0]) ? candidate.parents[0].sha : void 0;
+        return typeof candidate.sha === "string" && typeof message === "string" && message.split(/\r?\n/).includes(marker) && parent === operation.expectedHeadSha;
       }
     );
     if (matched && typeof matched.sha === "string") {
       if (!record2(matched.commit) || !record2(matched.commit.tree) || typeof matched.commit.tree.sha !== "string") {
         throw failure2("github_response_invalid", "Reconciled commit response omitted its tree sha");
       }
-      const treeSha = matched.commit.tree.sha;
+      const treeSha2 = matched.commit.tree.sha;
       return {
         kind: operation.kind,
         branch: operation.branch,
         commitSha: matched.sha,
-        treeSha,
+        treeSha: treeSha2,
         parentSha: operation.expectedHeadSha,
         commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${matched.sha}`
       };
@@ -46952,8 +47261,167 @@ async function executeCommitCreate(scope, operation) {
     throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
   }
   await confirmDefaultBranch(scope);
+  const treeSha = await createCommitTree(scope, operation.expectedHeadSha, operation.files);
+  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
+    method: "POST",
+    body: JSON.stringify({
+      message: `${operation.message}
+
+${marker}`,
+      tree: treeSha,
+      parents: [operation.expectedHeadSha]
+    })
+  });
+  if (!record2(createdCommit) || typeof createdCommit.sha !== "string") {
+    throw failure2("github_response_invalid", "Git commit response was invalid");
+  }
+  await scope.api.rest(
+    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
+    "Branch fast-forward",
+    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) }
+  );
+  return {
+    kind: operation.kind,
+    branch: operation.branch,
+    commitSha: createdCommit.sha,
+    treeSha,
+    parentSha: operation.expectedHeadSha,
+    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${createdCommit.sha}`
+  };
+}
+async function executeCommitMergeBase(scope, operation) {
+  if (scope.captureBaseSha === void 0) {
+    throw failure2("capture_base_missing", "commit.merge_base requires the plan's capture base commit");
+  }
+  if (operation.expectedHeadSha.toLowerCase() !== scope.captureBaseSha.toLowerCase()) {
+    throw failure2(
+      "commit_base_mismatch",
+      `commit.merge_base must build on the captured commit ${scope.captureBaseSha}, not ${operation.expectedHeadSha}`
+    );
+  }
+  if (operation.files.some((file2) => !isSafeFilePath(file2.path))) {
+    throw failure2("invalid_commit_path", "Commit contains an invalid file path");
+  }
+  if (operation.files.some((file2) => file2.captured.status !== "deleted") && scope.readCapturedFile === void 0) {
+    throw new Error("commit.merge_base requires capture-backed content but no capture reader was provided");
+  }
+  assertBranchWrite(scope, operation.kind, operation.branch);
+  const parents = [operation.expectedHeadSha.toLowerCase(), operation.baseSha.toLowerCase()];
+  const outputs = (commitSha, treeSha2) => ({
+    kind: operation.kind,
+    pullNumber: operation.pullNumber,
+    branch: operation.branch,
+    commitSha,
+    treeSha: treeSha2,
+    parentShas: parents,
+    baseSha: parents[1],
+    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${commitSha}`
+  });
+  const marker = commitMarker(operation.id, scope.operationHash);
+  const head = await loadRef(scope, `heads/${encodeRefPath(operation.branch)}`);
+  if (head === null) throw conflict("branch_missing", "Target branch does not exist");
+  if (head !== operation.expectedHeadSha) {
+    const matched = await scope.api.findPaginated(
+      `${scope.repoPath}/commits?sha=${encodeURIComponent(operation.branch)}`,
+      "Commit idempotency lookup",
+      (candidate) => {
+        const message = record2(candidate.commit) ? candidate.commit.message : void 0;
+        const found = Array.isArray(candidate.parents) ? candidate.parents.map((parent) => record2(parent) && typeof parent.sha === "string" ? parent.sha.toLowerCase() : null) : [];
+        return typeof candidate.sha === "string" && typeof message === "string" && message.split(/\r?\n/).includes(marker) && found.length === 2 && found[0] === parents[0] && found[1] === parents[1];
+      }
+    );
+    if (matched && typeof matched.sha === "string") {
+      if (!record2(matched.commit) || !record2(matched.commit.tree) || typeof matched.commit.tree.sha !== "string") {
+        throw failure2("github_response_invalid", "Reconciled commit response omitted its tree sha");
+      }
+      return outputs(matched.sha, matched.commit.tree.sha);
+    }
+    throw conflict("branch_head_changed", `Precondition failed: branch head is ${head}`);
+  }
+  const pull = await loadPull(scope, operation.pullNumber);
+  const pullHead = pull.head;
+  const pullBase2 = pull.base;
+  const headRepo = record2(pullHead.repo) ? pullHead.repo.id : void 0;
+  const baseRepo = record2(pullBase2.repo) ? pullBase2.repo.id : void 0;
+  if (pull.state !== "open") throw conflict("pull_state_changed", `Precondition failed: pull request state is ${String(pull.state)}`);
+  if (headRepo === void 0 || headRepo === null || headRepo !== baseRepo) {
+    throw conflict("pull_head_repository", "Precondition failed: only a same-repository pull request's branch can be merged into");
+  }
+  if (pullHead.ref !== operation.branch) throw conflict("pull_head_ref_changed", `Precondition failed: pull request head branch is ${String(pullHead.ref)}`);
+  if (pullHead.sha !== operation.expectedHeadSha) throw conflict("pull_head_changed", `Precondition failed: pull request head is ${String(pullHead.sha)}`);
+  if (pullBase2.ref !== operation.baseBranch) throw conflict("pull_base_changed", `Precondition failed: pull request base is ${String(pullBase2.ref)}`);
+  const { data: comparison } = await scope.api.rest(
+    `${scope.repoPath}/compare/${encodeURIComponent(operation.baseSha)}...${encodeRefPath(operation.baseBranch)}?per_page=1`,
+    "Base branch ancestry lookup"
+  );
+  const ancestry = record2(comparison) ? comparison.status : void 0;
+  if (ancestry !== "identical" && ancestry !== "ahead") {
+    throw conflict(
+      "base_branch_rewritten",
+      `Precondition failed: ${operation.baseBranch} no longer contains the planned base ${operation.baseSha} (${String(ancestry)})`
+    );
+  }
+  const protectedFiles = operation.files.filter((file2) => isProtectedCapturePath(file2.path));
+  if (protectedFiles.length > 0) {
+    const { data: baseCommit } = await scope.api.rest(`${scope.repoPath}/git/commits/${encodeURIComponent(operation.baseSha)}`, "Base commit lookup");
+    if (!record2(baseCommit) || !record2(baseCommit.tree) || typeof baseCommit.tree.sha !== "string") {
+      throw failure2("github_response_invalid", "Base commit response was invalid");
+    }
+    for (const file2 of protectedFiles) {
+      const entry = await treeEntry(scope, baseCommit.tree.sha, file2.path);
+      const identical = file2.captured.status === "deleted" ? entry === null : entry !== null && entry.type === "blob" && entry.mode === file2.captured.mode && entry.sha === gitBlobSha(await readVerifiedCapturedBytes(scope, file2));
+      if (!identical) {
+        throw failure2("protected_commit_path", `Commit touches the protected path ${file2.path}, which differs from the merged base commit`);
+      }
+    }
+  }
+  const conflicted = new Set(operation.conflictedPaths);
+  for (const file2 of operation.files) {
+    if (!conflicted.has(file2.path) || file2.captured.status === "deleted") continue;
+    if (hasConflictMarkerLine(await readVerifiedCapturedBytes(scope, file2))) {
+      throw failure2("conflict_markers", `${file2.path} still holds a conflict marker (a line starting <<<<<<< or >>>>>>>)`);
+    }
+  }
+  await confirmDefaultBranch(scope);
+  const treeSha = await createCommitTree(scope, operation.expectedHeadSha, operation.files);
+  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
+    method: "POST",
+    body: JSON.stringify({ message: `${operation.message}
+
+${marker}`, tree: treeSha, parents })
+  });
+  if (!record2(createdCommit) || typeof createdCommit.sha !== "string") {
+    throw failure2("github_response_invalid", "Git commit response was invalid");
+  }
+  await scope.api.rest(
+    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
+    "Branch fast-forward",
+    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) }
+  );
+  return outputs(createdCommit.sha, treeSha);
+}
+async function treeEntry(scope, rootTreeSha, filePath) {
+  const segments = filePath.split("/");
+  let treeSha = rootTreeSha;
+  for (const [index, segment] of segments.entries()) {
+    const { data } = await scope.api.rest(`${scope.repoPath}/git/trees/${encodeURIComponent(treeSha)}`, "Base tree lookup");
+    if (!record2(data) || !Array.isArray(data.tree) || data.truncated === true) {
+      throw failure2("github_tree_truncated", "Base tree response was invalid or truncated");
+    }
+    const entry = data.tree.find((candidate) => record2(candidate) && candidate.path === segment);
+    if (!record2(entry) || typeof entry.mode !== "string" || typeof entry.type !== "string" || typeof entry.sha !== "string") return null;
+    if (index === segments.length - 1) return { mode: entry.mode, type: entry.type, sha: entry.sha.toLowerCase() };
+    if (entry.type !== "tree") return null;
+    treeSha = entry.sha;
+  }
+  return null;
+}
+function gitBlobSha(bytes) {
+  return (0, import_node_crypto2.createHash)("sha1").update(`blob ${bytes.byteLength}\0`, "utf8").update(bytes).digest("hex");
+}
+async function createCommitTree(scope, parentSha, files) {
   const { data: parent } = await scope.api.rest(
-    `${scope.repoPath}/git/commits/${encodeURIComponent(operation.expectedHeadSha)}`,
+    `${scope.repoPath}/git/commits/${encodeURIComponent(parentSha)}`,
     "Parent commit lookup"
   );
   if (!record2(parent) || !record2(parent.tree) || typeof parent.tree.sha !== "string") {
@@ -46970,7 +47438,7 @@ async function executeCommitCreate(scope, operation) {
     (entry) => record2(entry) && typeof entry.path === "string" ? [[entry.path, entry]] : []
   ));
   const tree = [];
-  for (const file2 of operation.files) {
+  for (const file2 of files) {
     const existing = existingEntries.get(file2.path);
     const existingMode = existing?.mode;
     const supportedModes = ["100644", "100755", "120000"];
@@ -46998,32 +47466,7 @@ async function executeCommitCreate(scope, operation) {
   if (!record2(createdTree) || typeof createdTree.sha !== "string") {
     throw failure2("github_response_invalid", "Git tree response was invalid");
   }
-  const { data: createdCommit } = await scope.api.rest(`${scope.repoPath}/git/commits`, "Git commit creation", {
-    method: "POST",
-    body: JSON.stringify({
-      message: `${operation.message}
-
-${marker}`,
-      tree: createdTree.sha,
-      parents: [operation.expectedHeadSha]
-    })
-  });
-  if (!record2(createdCommit) || typeof createdCommit.sha !== "string") {
-    throw failure2("github_response_invalid", "Git commit response was invalid");
-  }
-  await scope.api.rest(
-    `${scope.repoPath}/git/refs/heads/${encodeRefPath(operation.branch)}`,
-    "Branch fast-forward",
-    { method: "PATCH", body: JSON.stringify({ sha: createdCommit.sha, force: false }) }
-  );
-  return {
-    kind: operation.kind,
-    branch: operation.branch,
-    commitSha: createdCommit.sha,
-    treeSha: createdTree.sha,
-    parentSha: operation.expectedHeadSha,
-    commitUrl: `https://github.com/${scope.owner}/${scope.name}/commit/${createdCommit.sha}`
-  };
+  return createdTree.sha;
 }
 function draftPullOutputs(operation, pull) {
   if (!positiveInteger(pull.number)) {
@@ -47709,6 +48152,8 @@ async function dispatch(scope, operation) {
       return executeBranchCreate(scope, operation);
     case "commit.create":
       return executeCommitCreate(scope, operation);
+    case "commit.merge_base":
+      return executeCommitMergeBase(scope, operation);
     case "pull_request.open":
     case "pull_request.open_draft":
       return executePullOpenDraft(scope, operation);
@@ -48199,7 +48644,7 @@ async function applyOrderedPlan(input2) {
       }
       completed.push(entry);
       outputs.set(entry.stepName, scalar);
-      recordPushedHead(heads, operation.kind, scalar);
+      recordPushedHead(heads, operation, scalar);
       resumeIndex = index + 1;
     }
     if (input2.prior.status === "applied") {
@@ -48278,7 +48723,7 @@ async function applyOrderedPlan(input2) {
       return { receipt: stopped, outputs };
     }
     outputs.set(plan.operations[index].stepName, scalar);
-    recordPushedHead(heads, operation.kind, scalar);
+    recordPushedHead(heads, operation, scalar);
     const status = completed.length === plan.operations.length ? "applied" : "running";
     const progress = effectReceipt(plan, input2.artifactSha256, completed, status, null);
     await input2.record(progress);
@@ -48299,9 +48744,10 @@ function laterStepMayTarget(plan, index, resource) {
     return value !== void 0 && `${family}:${String(value)}` === resource;
   }));
 }
-function recordPushedHead(heads, kind, scalar) {
-  if (kind !== "commit.create") return;
-  const { branch, parentSha, commitSha } = scalar;
+function recordPushedHead(heads, operation, scalar) {
+  if (operation.kind !== "commit.create" && operation.kind !== "commit.merge_base") return;
+  const { branch, commitSha } = scalar;
+  const parentSha = operation.kind === "commit.merge_base" ? operation.expectedHeadSha : scalar.parentSha;
   if (typeof branch !== "string" || typeof parentSha !== "string" || typeof commitSha !== "string") return;
   if (parentSha !== commitSha) heads.push({ branch, from: parentSha, to: commitSha });
 }
@@ -48369,13 +48815,18 @@ function materializeOperation(plan, index, outputs, owner, name2) {
     if (typeof payload.body !== "string") throw new Error(`${step.kind} body is missing before marker derivation`);
     payload.body = bodyWithOperationMarker(payload.body, step.operationId);
   }
-  if (step.kind === "commit.create") {
-    if (!plan.capture) throw new Error("commit.create has no verified capture manifest");
-    if (Object.hasOwn(payload, "files")) throw new Error("commit.create files must come only from capture");
+  if (step.kind === "commit.create" || step.kind === "commit.merge_base") {
+    if (!plan.capture) throw new Error(`${step.kind} has no verified capture manifest`);
+    if (Object.hasOwn(payload, "files")) throw new Error(`${step.kind} files must come only from capture`);
     payload.files = plan.capture.files.map((file2) => ({
       path: file2.path,
       captured: file2.status === "deleted" ? { status: "deleted" } : { status: file2.status, mode: file2.mode, sizeBytes: file2.sizeBytes, sha256: file2.sha256 }
     }));
+  }
+  if (step.kind === "commit.merge_base") {
+    if (!plan.capture?.merge) throw new Error("commit.merge_base needs a merge capture");
+    if (Object.hasOwn(payload, "conflictedPaths")) throw new Error("commit.merge_base conflictedPaths must come only from capture");
+    payload.conflictedPaths = [...plan.capture.merge.conflictedPaths];
   }
   return operationSchema.parse({
     schemaVersion: "v2",
@@ -48468,7 +48919,9 @@ async function assertApplyBindings(plan, token) {
   const raw = JSON.parse(await (0, import_promises3.readFile)(requiredEnvironment("GITHUB_EVENT_PATH"), "utf8"));
   const rawRepository = raw && typeof raw === "object" ? raw.repository : void 0;
   if (String(rawRepository?.id ?? "") !== plan.repository.id) throw new Error("Effect event repository identity mismatch");
-  if (!checkoutBindingHolds(plan, raw)) throw new Error("Effect checkout binding mismatch");
+  if (!await checkoutBindingHolds(plan, raw, { repository: plan.repository.fullName, token })) {
+    throw new Error("Effect checkout binding mismatch");
+  }
   const { defaultBranch, binding } = await applyEventBinding({
     eventName: requiredEnvironment("GITHUB_EVENT_NAME"),
     raw,
@@ -48478,13 +48931,45 @@ async function assertApplyBindings(plan, token) {
   if (defaultBranch !== plan.repository.defaultBranch) throw new Error("Effect default branch binding mismatch");
   if (canonicalJson2(binding) !== canonicalJson2(plan.event)) throw new Error("Effect event binding mismatch");
 }
-function checkoutBindingHolds(plan, raw) {
+var CheckoutBindingError = class extends Error {
+  constructor(reason) {
+    super(`Effect checkout binding mismatch: ${reason}`);
+    this.name = "CheckoutBindingError";
+  }
+};
+async function checkoutBindingHolds(plan, raw, read) {
   const checkoutSha = plan.provenance.checkoutSha;
   if (checkoutSha === void 0) return true;
   const pullRequest = raw && typeof raw === "object" ? raw.pull_request : void 0;
-  const head = pullRequest && typeof pullRequest === "object" ? pullRequest.head : void 0;
-  const sha = head && typeof head === "object" ? head.sha : void 0;
-  return typeof sha === "string" && sha === checkoutSha;
+  if (pullRequest !== void 0) {
+    const head = pullRequest && typeof pullRequest === "object" ? pullRequest.head : void 0;
+    const sha = head && typeof head === "object" ? head.sha : void 0;
+    return typeof sha === "string" && sha === checkoutSha;
+  }
+  const resource = plan.event.resource;
+  if (resource === null || resource.kind !== "issue" && resource.kind !== "pull_request") {
+    throw new CheckoutBindingError("the plan records a checked-out head but its event names no pull request");
+  }
+  let current;
+  try {
+    current = await fetchCurrentPullRequest({
+      repository: read.repository,
+      number: resource.number,
+      token: read.token,
+      ...read.fetch ? { fetch: read.fetch } : {}
+    });
+  } catch {
+    current = null;
+  }
+  if (current === null) throw new CheckoutBindingError(`pull request #${resource.number} could not be read`);
+  if (current.state !== "open") throw new CheckoutBindingError(`pull request #${resource.number} is ${current.state}`);
+  if (current.headRepoId === null || current.headRepoId !== current.baseRepoId || current.baseRepoId !== plan.repository.id) {
+    throw new CheckoutBindingError(`pull request #${resource.number} is not from this repository`);
+  }
+  if (current.headSha !== checkoutSha) {
+    throw new CheckoutBindingError(`pull request #${resource.number} is at ${current.headSha}, not the checked-out ${checkoutSha}`);
+  }
+  return true;
 }
 async function applyEventBinding(input2) {
   const target = dispatchTargetRequest(input2.eventName, input2.raw);
@@ -48515,7 +49000,8 @@ async function prepareCapture(plan, directory) {
     manifestSha256: (0, import_node_crypto3.createHash)("sha256").update(manifestJson).digest("hex"),
     changesSha256: plan.changesSha256,
     fileCount: plan.capture.files.length,
-    sizeBytes: plan.capture.totalBytes
+    sizeBytes: plan.capture.totalBytes,
+    ...plan.capture.merge === void 0 ? {} : { merge: plan.capture.merge }
   });
   const verified = await verifyCaptureArtifact(directory, expected);
   if (taskCaptureManifestText(verified.manifest) !== manifestJson) throw new Error("Downloaded capture manifest does not match the exact plan");
@@ -48573,6 +49059,7 @@ function requiredEnvironment(name2) {
 void runEffectsMain();
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  CheckoutBindingError,
   applyEventBinding,
   applyOrderedPlan,
   checkoutBindingHolds,
