@@ -1443,7 +1443,11 @@ function toolAction(sequence: number, operationId: string, invocation: HarnessTo
     // No field at all: the runner writes the merge it prepared before the
     // session, so there is nothing for the model to choose.
     exactKeys(value, taskToolInputKeys("repository_merge_base"));
-    return runnerActionV1Schema.parse({ schemaVersion: "gardener.runner.action/v1", sequence, operationId, kind: "repository.merge_base" });
+    // Writing a large merge runs the repository's filters over every changed
+    // file, so it gets more time than a default command.
+    return runnerActionV1Schema.parse({
+      schemaVersion: "gardener.runner.action/v1", sequence, operationId, kind: "repository.merge_base", timeoutMs: 5 * 60_000,
+    });
   }
   let command: string;
   let cwd = "/workspace";
