@@ -1,0 +1,35 @@
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_b721544a075f2c::t_4b7d8cac7c1147 31,356-363,433-458,533-534
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_b721544a075f2c::t_11fdf0c9d8861d 147,290,562,567-572
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_b721544a075f2c::t_dfaae702b3bc09 29,67-68,71,436,483,497-523
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_b721544a075f2c::t_0ddf803cd1e029 9,17-26,38-39,69-91,96-133
+apps/gardener/src/task-runtime/run-trail.ts
+  s_b721544a075f2c::t_2b912822be29d5 23
+apps/gardener/src/task-runtime/session.ts
+  s_b721544a075f2c::t_efaab2194e680d 12,24,97,138-144,160-165,419,485-501,552-554,794,848-857,1442-1447,1545-1559
+apps/gardener/src/task-runtime/tool-authority.ts
+  s_b721544a075f2c::t_6065343cddc04a 1,14,34-37,48,62-88
+apps/gardener/src/task-runtime/tool-input-schemas.ts
+  s_b721544a075f2c::t_a6a5a35042b079 44-45
+apps/gardener/test/task-tool-input-schemas.test.ts
+  s_b721544a075f2c::t_b2fa03abe3cf68 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "05b7b28061fbe13e109c3f719cf8106517daaea5",
+  "prompts": {},
+  "sessions": {
+    "s_b721544a075f2c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1304c-37b0-7bb0-ac67-29dc14c5512c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
