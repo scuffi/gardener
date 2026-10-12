@@ -700,11 +700,17 @@ function headChainedByThisPlan(pull: JsonRecord, head: string | null, planned: s
   const baseRepo = record(pull.base.repo) ? pull.base.repo.id : undefined;
   // The plan only ever pushes to the base repository.
   if (headRepo === undefined || headRepo !== baseRepo) return false;
-  let at = planned;
+  // The heads this plan's own commits put on the branch, in order. GitHub's
+  // pull request API can report the previous one for a moment after a push,
+  // so a step planned against a pushed head (by referencing the commit's
+  // output) accepts any of them, as does a step planned against the start.
+  const path: string[] = [];
   for (const chained of chainedHeads) {
-    if (chained.branch === pull.head.ref && chained.from === at) at = chained.to;
+    if (chained.branch !== pull.head.ref) continue;
+    if (path.length === 0) path.push(chained.from, chained.to);
+    else if (chained.from === path.at(-1)) path.push(chained.to);
   }
-  return at !== planned && head === at;
+  return head !== planned && path.includes(head) && path.includes(planned);
 }
 
 interface PullStateExpectation {

@@ -2613,6 +2613,22 @@ describe("review thread replies and resolves", () => {
     expect((await run(comment, routes)).receipt.error?.code).toBe("pull_head_changed");
   });
 
+  it("lets a comment that names this plan's pushed commit run while GitHub still reports the previous head", async () => {
+    const comment = operationSchema.parse({ ...pullBase, id: "op-comment-lag", kind: "pull_request.comment.create", expectedHeadSha: PUSHED, body: "Merged." });
+    const lagging = { ...pushedPull, head: { ...pushedPull.head, sha: HEAD } };
+    const routes = [
+      get(`${REPO}/issues/7/comments`, []),
+      get(`${REPO}/pulls/7`, lagging),
+      send("POST", `${REPO}/issues/7/comments`, issueComment("Merged.", COMMENT_UPDATED, 7)),
+    ];
+    expect((await run(comment, routes, { chainedHeads: [{ branch: "gardener/feature", from: HEAD, to: PUSHED }] })).receipt.status).toBe("succeeded");
+    // Only heads this plan pushed: without the chain, or from an older head, it conflicts.
+    expect((await run(comment, routes)).receipt.error?.code).toBe("pull_head_changed");
+    const older = { ...pushedPull, head: { ...pushedPull.head, sha: "9".repeat(40) } };
+    expect((await run(comment, [routes[0]!, get(`${REPO}/pulls/7`, older), routes[2]!], { chainedHeads: [{ branch: "gardener/feature", from: HEAD, to: PUSHED }] }))
+      .receipt.error?.code).toBe("pull_head_changed");
+  });
+
   it("accepts a head this plan pushed from the planned head, and no other", async () => {
     const chained = { chainedHeads: [{ branch: "gardener/feature", from: HEAD, to: PUSHED }] };
     expect((await run(reply, replyRoutes(pushedPull), chained)).receipt.status).toBe("succeeded");

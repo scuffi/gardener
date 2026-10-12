@@ -46594,11 +46594,13 @@ function headChainedByThisPlan(pull, head, planned, chainedHeads) {
   const headRepo = record2(pull.head.repo) ? pull.head.repo.id : void 0;
   const baseRepo = record2(pull.base.repo) ? pull.base.repo.id : void 0;
   if (headRepo === void 0 || headRepo !== baseRepo) return false;
-  let at = planned;
+  const path3 = [];
   for (const chained of chainedHeads) {
-    if (chained.branch === pull.head.ref && chained.from === at) at = chained.to;
+    if (chained.branch !== pull.head.ref) continue;
+    if (path3.length === 0) path3.push(chained.from, chained.to);
+    else if (chained.from === path3.at(-1)) path3.push(chained.to);
   }
-  return at !== planned && head === at;
+  return head !== planned && path3.includes(head) && path3.includes(planned);
 }
 function assertPullState(scope, pull, expected, check2 = "exact") {
   if (pull.state !== expected.expectedState) {
