@@ -1,0 +1,51 @@
+apps/gardener/src/task-runtime/session.ts
+  s_eef040a70d8adc::t_e2715f4de041c5 812-813
+apps/gardener/src/task-runtime/tool-authority.ts
+  s_eef040a70d8adc::t_cfc8bd4ee0a3b7 42-45
+apps/gardener/test/task-session-event.test.ts
+  s_eef040a70d8adc::t_8dab3cce71432e 1-59
+packages/protocol/src/schema.ts
+  s_eef040a70d8adc::t_8f1e4b5f8dcd17 136-146,149-197,211-218,419-424,430-434,443-444,475-488,735
+packages/protocol/test/runner-action.test.ts
+  s_eef040a70d8adc::t_50bff1a6590500 7-8,164,168-220
+packages/runner/src/capture.ts
+  s_eef040a70d8adc::t_216e3b3cdcb157 65,154-177,254-258,262-263,307-316,379-383,401,403,414-415,423,444,599,610-611,636-640,657-661,736-737,739,760,779-785,788-791,894-896,925-929,931-935,1349-1412
+packages/runner/src/current-head.ts
+  s_eef040a70d8adc::t_8d3ff13299fc57 123-177
+packages/runner/src/effects-main.ts
+  s_eef040a70d8adc::t_1c622dc4e22d31 39,207,294,323-328,331,334-336,433-435,443-448,560-562,573-580,582-592,594-598,602-630,677
+packages/runner/src/event.ts
+  s_eef040a70d8adc::t_96ddf3c740d932 100-108
+packages/runner/src/executor.ts
+  s_eef040a70d8adc::t_b1d1bd7932a283 7,13-14,20,63-67,140-144,151,238,242-290,348,551-574
+packages/runner/src/github-effects.ts
+  s_eef040a70d8adc::t_b31bab40d15a99 13,90-100,1504-1510,1528,1595-1800,1802,1819,1853,2764
+packages/runner/src/main.ts
+  s_eef040a70d8adc::t_b4923da78d17e7 9-10,14,41,43-63,65,68,153-154,182-220,247-253
+packages/runner/src/merge-base.ts
+  s_eef040a70d8adc::t_c94403130a77d9 1-475
+packages/runner/test/current-head.test.ts
+  s_eef040a70d8adc::t_0ecfed798058a6 3-4,115-170
+packages/runner/test/effects-main.test.ts
+  s_eef040a70d8adc::t_a0ca6d13fdb4d0 2,7-8,11,274,276-282,284-334,888-941,1109,1217-1373
+packages/runner/test/github-effects.test.ts
+  s_eef040a70d8adc::t_f880631a027e23 326-360,627-642,1008,2630-2780
+packages/runner/test/merge-base.test.ts
+  s_eef040a70d8adc::t_d61ce860410a68 1-383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e7e22fb865991ae8d7b7a0787401e9f22ab6c4fe",
+  "prompts": {},
+  "sessions": {
+    "s_eef040a70d8adc": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1302a-e58a-74c6-902a-34276423d23c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
