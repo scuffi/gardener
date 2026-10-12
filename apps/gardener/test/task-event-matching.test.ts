@@ -93,7 +93,7 @@ function withManual(triggers: TaskBundleV1["triggers"]): TaskBundleV1["triggers"
 
 async function request(
   event: NormalizedEventV1,
-  overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools" | "effects" | "effectOptions">> = {},
+  overrides: Partial<Pick<TaskBundleV1, "triggers" | "tools" | "effects" | "effectOptions" | "checkout">> = {},
 ): Promise<TaskRunRequestV1> {
   const bundle = {
     ...structuredClone(inspectRepositoryFixtureBundle()),
@@ -280,6 +280,13 @@ describe("trigger matching", () => {
       .rejects.toThrow(/no pull request trigger, so a manual run of it cannot target a pull request/);
     await expect(createTaskHarnessRequest(await request(event, { triggers: [] })))
       .rejects.toThrow(/cannot target a pull request/);
+    // A comment task that checks out the pull request head is asked about
+    // pull requests, so a manual run of it may name one.
+    const comment = [{ kind: "github.issue_comment.created" as const, labelsAll: [], mentions: [], authors: "any" as const }];
+    await expect(createTaskHarnessRequest(await request(event, { triggers: comment })))
+      .rejects.toThrow(/cannot target a pull request/);
+    await expect(createTaskHarnessRequest(await request(event, { triggers: comment, checkout: "pull-request-head" })))
+      .resolves.toBeDefined();
     const issueEvent: NormalizedEventV1 = {
       schemaVersion: "gardener.normalized-event/v1",
       kind: "github.workflow_dispatch",

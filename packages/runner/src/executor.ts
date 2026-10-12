@@ -25,6 +25,9 @@ interface LocalRecord {
   promise?: Promise<RunnerActionResultV1>;
 }
 
+/** Why a run whose merge write failed partway can neither merge nor capture. */
+const PARTIAL_MERGE = "Writing the merge failed partway, so the working tree holds part of it; this run can neither merge nor capture. Start a new run.";
+
 /**
  * Whether this run can capture a working tree, decided *before* the executor
  * exists.
@@ -35,6 +38,7 @@ interface LocalRecord {
  * command would be a baseline the model helped choose, so the only way to get
  * a capture-capable executor is to hand one to the constructor.
  */
+
 export type PlanningCaptureAvailability =
   | { status: "ready"; capture: WorkingTreeCapture }
   | { status: "unavailable"; reason: string };
@@ -142,6 +146,13 @@ export class PlanningShellExecutor {
   #mergePromise: Promise<RunnerMergeBaseResultV1> | undefined;
   /** Set once the merge is in the working tree; every later capture is then a merge capture. */
   #mergeApplied: PreparedMerge | undefined;
+  /**
+   * Set as the merge write begins. A write that then fails can leave part of
+   * the base branch in the working tree; a plain capture of it would let
+   * commit.create push that as the task's own commit, so such a run can
+   * neither merge again nor capture.
+   */
+  #mergeWriteStarted = false;
 
   constructor(workspace = requiredEnvironment("GITHUB_WORKSPACE"), options: PlanningExecutorOptions = {}) {
     this.#workspace = path.resolve(workspace);
@@ -255,6 +266,9 @@ export class PlanningShellExecutor {
     if (this.#capturePromise || this.#captureArtifact) {
       return mergeBaseActionResult(action, refusal("The working tree capture has started; the merge can no longer be written"));
     }
+    if (this.#mergeWriteStarted && this.#mergeApplied === undefined) {
+      return mergeBaseActionResult(action, refusal(PARTIAL_MERGE));
+    }
     let result: RunnerMergeBaseResultV1;
     try {
       this.#mergePromise ??= this.#applyMerge();
@@ -278,7 +292,9 @@ export class PlanningShellExecutor {
     const merge = this.#merge.merge;
     try {
       await capture.assertAuthorityUnchanged();
-      await applyPreparedMerge(this.#workspace, merge);
+      await applyPreparedMerge(this.#workspace, merge, undefined, () => {
+        this.#mergeWriteStarted = true;
+      });
       await capture.assertAuthorityUnchanged();
     } catch (error) {
       if (error instanceof MergeRefusal) return refusal(error.message);
@@ -345,6 +361,7 @@ export class PlanningShellExecutor {
 
   /** Captures once and proves the artifact before its reference leaves the runner. */
   async #performCapture(capture: WorkingTreeCapture): Promise<RunnerCaptureResultV1> {
+    if (this.#mergeWriteStarted && this.#mergeApplied === undefined) throw new Error(PARTIAL_MERGE);
     const result = await capture.capture(this.#mergeApplied === undefined ? {} : { merge: this.#mergeApplied });
     if (result.status === "unchanged") {
       return { schemaVersion: "gardener.runner.capture-result/v1", status: "unchanged" };

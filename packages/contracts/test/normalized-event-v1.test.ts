@@ -188,6 +188,11 @@ describe("manual run events", () => {
     expect(dispatchTargetKinds([{ kind: "github.push" }, { kind: "github.discussion.created" }])).toEqual([]);
   });
 
+  it("offer a pull request to a comment task that checks out the pull request head", () => {
+    expect(dispatchTargetKinds([{ kind: "github.issue_comment.created" }], { pullRequestHead: true })).toEqual(["issue", "pull_request"]);
+    expect(dispatchTargetKinds([{ kind: "github.issue.opened" }], { pullRequestHead: true })).toEqual(["issue"]);
+  });
+
   it("allow an optional prompt and at most one target, which binds the run", () => {
     const parse = (payload: Record<string, unknown>) => normalizedEventV1Schema.parse(event("github.workflow_dispatch", payload));
     expect(taskEventBindingFromNormalizedEvent(parse({}))).toMatchObject({ resource: null });

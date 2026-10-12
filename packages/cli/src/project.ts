@@ -524,7 +524,7 @@ function renderWorkflowTriggers(task: BuiltTask): string {
       lines.push("        description: Extra instructions for this run. Optional, up to 20000 characters.");
       lines.push("        required: false");
       lines.push("        type: string");
-      for (const target of dispatchTargetKinds(task.bundle.triggers)) {
+      for (const target of dispatchTargetKinds(task.bundle.triggers, { pullRequestHead: checksOutPullRequestHead(task.bundle) })) {
         lines.push(`      ${target}:`);
         lines.push(`        description: ${target === "issue" ? "Issue" : "Pull request"} number to run against. Optional.`);
         lines.push("        required: false");
@@ -762,10 +762,10 @@ ${checksOutPullRequestHead(task.bundle)
   // One round per pull request at a time: two at once would build on the same
   // head, and the second push would be refused. Events without a pull request
   // fall back to their own run id, so they are never serialised. Comments
-  // and manual runs naming a pull request plan on its head too, so they share
-  // its key (an issue's number is its pull request's).
+  // on a pull request and manual runs naming one plan on its head too, so
+  // they share its key (the same expression as pull-request-head below).
   ? `    concurrency:\n      group: gardener-${task.bundle.taskId}-\${{ ${pullRequestHead
-    ? "github.event.pull_request.number || github.event.issue.number || github.event.inputs.pull_request || github.run_id"
+    ? "github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || github.run_id"
     : "github.event.pull_request.number || github.run_id"} }}\n      cancel-in-progress: false\n`
   : ""}    permissions:
 ${renderPermissions(task)}

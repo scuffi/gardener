@@ -1366,6 +1366,13 @@ function capturableTarget(
       : actual !== null && actual.mode === base.mode && actual.blobSha === base.blobSha)) {
       return true;
     }
+    // A protected file the merge touched, not as the base has it: usually
+    // git merged changes from both sides into it. Say so, since the generic
+    // refusal below would not explain why the merge was refused.
+    if (base !== undefined) throw new Error(
+      `The merge changes the protected path ${entry} to something other than the base branch's version; `
+        + "a merge commit may only take the base branch's version of a protected file, so a person must merge this pull request",
+    );
   }
   assertCapturableTarget(entry);
   return false;

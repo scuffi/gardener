@@ -325,13 +325,21 @@ export type DispatchTargetKindV1 = typeof dispatchTargetKindValues[number];
 /**
  * Resources a manual run of this bundle may target: those its other triggers
  * act on. An issue-triggered task can be run by hand against an issue, a pull
- * request task against a pull request.
+ * request task against a pull request. A comment task that checks out the
+ * pull request head (`pullRequestHead`) also acts on the pull requests it is
+ * asked about, so it can be run by hand against one too.
  */
-export function dispatchTargetKinds(triggers: readonly { kind: TaskTriggerKindV1 }[]): DispatchTargetKindV1[] {
-  const kinds = new Set(triggers.map((trigger) => trigger.kind));
+export function dispatchTargetKinds(
+  triggers: readonly { kind: TaskTriggerKindV1 }[],
+  options: { readonly pullRequestHead?: boolean } = {},
+): DispatchTargetKindV1[] {
+  const kinds = [...new Set(triggers.map((trigger) => trigger.kind))];
   const targets: DispatchTargetKindV1[] = [];
-  if ([...kinds].some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
-  if ([...kinds].some((kind) => kind.startsWith("github.pull_request"))) targets.push("pull_request");
+  if (kinds.some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
+  if (kinds.some((kind) => kind.startsWith("github.pull_request"))
+    || (options.pullRequestHead === true && kinds.some((kind) => kind.startsWith("github.issue_comment")))) {
+    targets.push("pull_request");
+  }
   return targets;
 }
 

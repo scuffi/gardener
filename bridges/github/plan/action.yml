@@ -22,7 +22,8 @@ inputs:
     description: >-
       "true" to prepare the merge of the checked-out pull request's base branch
       before the task runs, for tasks that declare the repository.merge_base
-      tool. Needs checkout-ref to be a pull request head. Not yet acted on.
+      tool. Needs checkout-ref to be a pull request head. The bridge fetches the base branch with
+      github-token and records the merge in memory before any task command runs.
     required: false
     default: "false"
   max-reconnects:

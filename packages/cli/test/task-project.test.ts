@@ -982,7 +982,7 @@ describe("pull request head callers", () => {
     .replace("  - repository.read_file\n", "  - repository.read_file\n  - repository.merge_base\n")
     .replace("effects:\n  - issue.comment.create", "effects:\n  - issue.comment.create\n  - kind: commit.merge_base\n    branches: [\"**\"]");
   const PULL_REQUEST_HEAD = "      pull-request-head: ${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || '' }}\n";
-  const NEW_GROUP = "    concurrency:\n      group: gardener-head-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pull_request || github.run_id }}\n      cancel-in-progress: false\n";
+  const NEW_GROUP = "    concurrency:\n      group: gardener-head-${{ github.event.pull_request.number || (github.event.issue.pull_request && github.event.issue.number) || github.event.inputs.pull_request || github.run_id }}\n      cancel-in-progress: false\n";
 
   async function build(task: string, workflowRef: string) {
     const root = await mkdtemp(join(tmpdir(), "gardener-pull-request-head-"));
@@ -1002,6 +1002,13 @@ describe("pull request head callers", () => {
     expect(workflow).not.toContain("checkout-ref");
     expect(workflow).not.toContain("merge-base");
     expect(() => parseYaml(workflow)).not.toThrow();
+  });
+
+  it("offers a comment task that checks out the head a pull request to run against by hand", async () => {
+    const parsed = parseYaml(await build(HEAD_TASK, NEW_REF)) as { on: { workflow_dispatch: { inputs: Record<string, unknown> } } };
+    expect(Object.keys(parsed.on.workflow_dispatch.inputs)).toEqual(["prompt", "issue", "pull_request"]);
+    const plain = parseYaml(await build(HEAD_TASK.replace("checkout: pull-request-head\n", ""), NEW_REF)) as typeof parsed;
+    expect(Object.keys(plain.on.workflow_dispatch.inputs)).toEqual(["prompt", "issue"]);
   });
 
   it("asks for the merge only for tasks with repository.merge_base, which may push it", async () => {

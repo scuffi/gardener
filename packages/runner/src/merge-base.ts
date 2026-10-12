@@ -354,11 +354,21 @@ export class MergeRefusal extends Error {}
  * The caller must have verified capture's authority snapshot (configuration,
  * attributes, index) first: the restore below runs the repository's filters.
  */
-export async function applyPreparedMerge(workspace: string, merge: PreparedMerge, spawn: Spawn = nodeSpawn): Promise<void> {
-  const unsupported = [...merge.differences].filter(([entry, difference]) => {
+export async function applyPreparedMerge(
+  workspace: string,
+  merge: PreparedMerge,
+  spawn: Spawn = nodeSpawn,
+  beforeWrite: () => void = () => {},
+): Promise<void> {
+  // Conflicted paths too: a conflicted .gitattributes need not be a recorded
+  // difference, and would otherwise fail later on capture's attributes digest.
+  const touched = new Set([...merge.differences.keys(), ...merge.conflictedPaths]);
+  const unsupported = [...touched].filter((entry) => {
     const name = entry.split("/").at(-1)!.toLowerCase();
-    return name === ".gitattributes" || name === ".gitmodules" || difference.mode === GITLINK_MODE || difference.fromMode === GITLINK_MODE;
-  }).map(([entry]) => entry);
+    const difference = merge.differences.get(entry);
+    return name === ".gitattributes" || name === ".gitmodules"
+      || difference?.mode === GITLINK_MODE || difference?.fromMode === GITLINK_MODE;
+  }).sort();
   if (unsupported.length > 0) {
     throw new MergeRefusal(
       `This merge changes ${unsupported.slice(0, 5).join(", ")}${unsupported.length > 5 ? " and more" : ""}: `
@@ -378,6 +388,9 @@ export async function applyPreparedMerge(workspace: string, merge: PreparedMerge
   }
   if (merge.differences.size === 0) return;
   const index = (await git.run(["ls-files", "-s", "-z"])).stdout;
+  // From here a failure can leave part of the merge in the working tree, so
+  // the caller must stop treating the tree as unmerged (see the executor).
+  beforeWrite();
   // --no-overlay removes the paths the merged tree no longer has.
   await git.run(
     ["restore", `--source=${merge.mergedTreeSha}`, "--worktree", "--no-overlay", "--pathspec-from-file=-", "--pathspec-file-nul"],

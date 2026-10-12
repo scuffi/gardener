@@ -1,5 +1,5 @@
 import { execFile, spawn as nodeSpawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -282,6 +282,28 @@ describe("repository.merge_base", () => {
     await expect(stat(path.join(value.workspace, "docs/.gitattributes"))).rejects.toMatchObject({ code: "ENOENT" });
   }, GIT_TEST_TIMEOUT);
 
+  it("stops the run when the write fails partway, so a half-merged tree is never captured", async () => {
+    // A read-only directory keeps git status clean but makes the restore fail
+    // after it has already written a.txt.
+    const value = await fixture({
+      base: { "a.txt": "a\n", "z/b.txt": "b\n", "x.txt": "x\n" },
+      feature: { "x.txt": "X\n" },
+      main: { "a.txt": "A\n", "z/b.txt": "B\n" },
+    });
+    const { executor } = await planning(value);
+    await chmod(path.join(value.workspace, "z"), 0o555);
+    try {
+      const failed = await executor.execute(mergeAction(1, "op_merge"));
+      expect(JSON.parse(failed.stdout)).toMatchObject({ status: "refused" });
+      expect(await readFile(path.join(value.workspace, "a.txt"), "utf8")).toBe("A\n");
+      await chmod(path.join(value.workspace, "z"), 0o755);
+      expect((await executor.execute(mergeAction(2, "op_merge_retry"))).stderr).toMatch(/failed partway/);
+      expect(await captured(executor, value)).toEqual({ error: expect.stringMatching(/failed partway/) });
+    } finally {
+      await chmod(path.join(value.workspace, "z"), 0o755);
+    }
+  }, GIT_TEST_TIMEOUT);
+
   it("refuses once the capture has started", async () => {
     const value = await fixture(CONFLICTING);
     const { executor } = await planning(value);
@@ -355,10 +377,17 @@ describe("merge capture", () => {
       expect(result.manifest.files).toEqual([expect.objectContaining({ path: workflow, status: "modified", baseIdentical: true })]);
     }, GIT_TEST_TIMEOUT);
 
-    it("refuses any other version, as a plain capture does", async () => {
+    it("refuses any other version of a protected file the merge touched, and says why", async () => {
       const { value, executor } = await merged(files);
       await writeFile(path.join(value.workspace, workflow), "on: [push, workflow_dispatch]\n");
-      expect(await captured(executor, value)).toEqual({ error: expect.stringMatching(/Cannot capture \.github\/workflows\/ci\.yml: a run may not rewrite workflows/) });
+      expect(await captured(executor, value)).toEqual({ error: expect.stringMatching(/protected path \.github\/workflows\/ci\.yml to something other than the base branch's version/) });
+    }, GIT_TEST_TIMEOUT);
+
+    it("refuses a protected file the merge did not touch, as a plain capture does", async () => {
+      const { value, executor } = await merged(files);
+      await writeFile(path.join(value.workspace, workflow), "on: [push, pull_request]\n");
+      await writeFile(path.join(value.workspace, ".github/workflows/other.yml"), "on: [push]\n");
+      expect(await captured(executor, value)).toEqual({ error: expect.stringMatching(/Cannot capture \.github\/workflows\/other\.yml: a run may not rewrite workflows/) });
     }, GIT_TEST_TIMEOUT);
 
     it("accepts a clean merge's protected change, which is the base commit's", async () => {

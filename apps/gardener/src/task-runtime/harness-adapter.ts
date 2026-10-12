@@ -81,7 +81,7 @@ export async function createTaskHarnessRequest(input: unknown, repositoryObserva
   const request = taskRunRequestV1Schema.parse(input);
   const actualBundleHash = await canonicalSha256(request.bundle);
   if (actualBundleHash !== request.bundleHash) throw new Error("Task bundle hash does not match canonical bundle bytes");
-  assertTriggerMatches(request.event, request.bundle.triggers);
+  assertTriggerMatches(request.event, request.bundle.triggers, checksOutPullRequestHead(request.bundle));
   assertSameRepositoryHead(request.event, request.bundle);
   const admittedAt = Date.parse(request.admittedAt);
   const deadlineAt = Date.parse(request.deadlineAt);
@@ -245,9 +245,10 @@ function branchMatches(patterns: readonly string[], ref: string): boolean {
 function assertDispatchTargetOffered(
   event: NormalizedEventV1,
   triggers: TaskRunRequestV1["bundle"]["triggers"],
+  pullRequestHead: boolean,
 ): void {
   if (event.kind !== "github.workflow_dispatch") return;
-  const offered = dispatchTargetKinds(triggers);
+  const offered = dispatchTargetKinds(triggers, { pullRequestHead });
   if (event.issue !== undefined && !offered.includes("issue")) {
     throw new Error("Task has no issue trigger, so a manual run of it cannot target an issue");
   }
@@ -264,10 +265,11 @@ function assertDispatchTargetOffered(
 function assertTriggerMatches(
   event: NormalizedEventV1,
   triggers: TaskRunRequestV1["bundle"]["triggers"],
+  pullRequestHead: boolean,
 ): void {
   const matches = triggers.some((trigger) => triggerSelects(trigger, event) && authoredFiltersPass(trigger, event));
   if (!matches) throw new Error(`Task does not declare trigger ${event.kind}`);
-  assertDispatchTargetOffered(event, triggers);
+  assertDispatchTargetOffered(event, triggers, pullRequestHead);
 }
 
 type TaskTrigger = TaskRunRequestV1["bundle"]["triggers"][number];

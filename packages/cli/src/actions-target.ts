@@ -1,4 +1,5 @@
 import {
+  checksOutPullRequestHead,
   dispatchTargetKinds,
   pullRequestFamilyTriggerKindValues,
   triggerKindOrder,
@@ -219,7 +220,7 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
 
   // Apply reads a manual run's target again to check the plan's binding, so it
   // needs read access to every kind of target the workflow form offers.
-  const targetReadPermissions: GitHubPermissions[] = dispatchTargetKinds(bundle.triggers)
+  const targetReadPermissions: GitHubPermissions[] = dispatchTargetKinds(bundle.triggers, { pullRequestHead: checksOutPullRequestHead(bundle) })
     .map((target) => (target === "issue" ? { issues: "read" } : { "pull-requests": "read" }));
   const effectsPermissions = bundle.effects.length === 0
     ? orderPermissions({ "id-token": "write" })
