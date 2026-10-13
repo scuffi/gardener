@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +39,9 @@ import {
   actionsResourceNames,
   cliVersion,
   compareVersions,
+  connectActions,
   deployActions,
+  doctorActions,
   ensurePublicRuntime,
   installationFactsSql,
   parseAiGateway,
@@ -49,7 +51,9 @@ import {
   resolveInstallation,
   upgradeActions,
 } from "../src/actions-installation";
-import { DEFAULT_WORKFLOW_REF } from "../src/project";
+import { executeD1, queryD1 } from "../src/actions-d1";
+import { runCommand } from "../src/commands";
+import { buildProject, DEFAULT_WORKFLOW_REF, initializeProject } from "../src/project";
 
 const originalToken = process.env.CLOUDFLARE_API_TOKEN;
 afterEach(() => {
@@ -329,6 +333,204 @@ describe("Actions-native installation topology", () => {
     expect(JSON.stringify(runtime)).not.toMatch(/Gateway|ComputerWorkspace|GardenerGitHubEntrypoint|FlueGardenerHarnessAgent/);
 
     expect(runtime).not.toHaveProperty("services");
+  });
+});
+
+describe("connectActions refusals", () => {
+  const RUNTIME_ORIGIN = "https://gardener-demo-team.example.workers.dev";
+  type Lock = {
+    release: { workflowRef: string };
+    tasks: Record<string, { bundleHash: string; deployment: Record<string, unknown>; [key: string]: unknown }>;
+  };
+
+  async function connectWith(tamper?: (lock: Lock) => void) {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = [{ key: "runtime_origin", value: RUNTIME_ORIGIN }];
+    vi.mocked(runCommand).mockImplementation((command, args) => ({
+      status: 0,
+      stderr: "",
+      stdout: command === "gh" && args[0] === "api"
+        ? JSON.stringify({ repositoryId: "101", ownerId: "202", ownerLogin: "acme", repositoryName: "widgets", visibility: "public" })
+        : "",
+    }));
+    const root = await mkdtemp(join(tmpdir(), "gardener-connect-"));
+    await initializeProject({ repositoryRoot: root, demos: true });
+    await buildProject({ repositoryRoot: root });
+    if (tamper) {
+      const lockPath = join(root, ".gardener/gardener.lock.json");
+      const lock = JSON.parse(await readFile(lockPath, "utf8")) as Lock;
+      tamper(lock);
+      await writeFile(lockPath, JSON.stringify(lock));
+    }
+    return connectActions({ workspace: "demo-team", repository: "acme/widgets", repositoryRoot: root, sourceRoot: "." });
+  }
+
+  afterEach(() => {
+    vi.mocked(runCommand).mockImplementation(() => ({ status: 0, stdout: "", stderr: "" }));
+  });
+
+  it("writes the checkout's bundles and disables the rest for an untampered lock", async () => {
+    const result = await connectWith();
+    expect(result).toMatchObject({ repositoryId: "101", runtimeOrigin: RUNTIME_ORIGIN });
+    expect(result.bundles).toHaveLength(2);
+    expect(executeD1).toHaveBeenCalledTimes(1);
+    const [database, statements] = vi.mocked(executeD1).mock.calls[0]!;
+    expect(database).toBe(PROD_DATABASE.name);
+    expect(statements).toContain(`bundle_hash NOT IN (${result.bundles.map((hash) => `'${hash}'`).join(",")})`);
+  });
+
+  it("refuses a lock pinning another repository's workflows", async () => {
+    const foreign = `evil/gardener/.github/workflows/gardener-task.yml@${"f".repeat(40)}`;
+    await expect(connectWith((lock) => { lock.release.workflowRef = foreign; }))
+      .rejects.toThrow(`The lock pins ${foreign}, which is not a scuffi/gardener release; run gardener upgrade`);
+    expect(executeD1).not.toHaveBeenCalled();
+  });
+
+  it("refuses a deployment plan that does not recompile identically", async () => {
+    await expect(connectWith((lock) => { lock.tasks["bug-intake"]!.deployment.extra = true; }))
+      .rejects.toThrow("Lock task bug-intake does not match its github-actions/v1 deployment plan");
+    expect(executeD1).not.toHaveBeenCalled();
+  });
+
+  it("refuses a lock task keyed under another id than its bundle", async () => {
+    await expect(connectWith((lock) => {
+      lock.tasks["a-renamed"] = lock.tasks["bug-intake"]!;
+      delete lock.tasks["bug-intake"];
+    })).rejects.toThrow("Lock task a-renamed does not match its compiled bundle identity");
+    expect(executeD1).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bundle hash that does not match the bundle", async () => {
+    await expect(connectWith((lock) => { lock.tasks["docs-helper"]!.bundleHash = "0".repeat(64); }))
+      .rejects.toThrow("Lock task docs-helper does not match its bundle hash");
+    expect(executeD1).not.toHaveBeenCalled();
+  });
+});
+
+describe("ensurePublicRuntime refusals", () => {
+  const RUNTIME = "https://runner.example.workers.dev";
+  const originalCfToken = process.env.CF_API_TOKEN;
+  afterEach(() => {
+    if (originalCfToken === undefined) delete process.env.CF_API_TOKEN;
+    else process.env.CF_API_TOKEN = originalCfToken;
+  });
+
+  /** The runtime answers with an Access login redirect; `api` answers the Cloudflare API. */
+  function interceptedRuntime(api: (url: string, init?: RequestInit) => Response) {
+    const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.endsWith("/health")) {
+        return new Response(null, { status: 302, headers: { location: "https://team.cloudflareaccess.com/cdn-cgi/access/login" } });
+      }
+      return api(url, init);
+    });
+    vi.stubGlobal("fetch", fetch);
+    return fetch;
+  }
+
+  const ensure = (existingAppId: string | null) => ensurePublicRuntime({
+    accountId: "account-1",
+    workspace: "demo-team",
+    runtimeOrigin: RUNTIME,
+    existingAppId,
+  }, 0);
+
+  it("refuses an unmanaged Access application on the runtime hostname", async () => {
+    process.env.CLOUDFLARE_API_TOKEN = "test-token";
+    const fetch = interceptedRuntime((url) => {
+      if (url.includes("/access/apps?")) {
+        return Response.json({ success: true, result: [{ id: "other-app", domain: "runner.example.workers.dev", name: "Someone's app" }] });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    await expect(ensure(null)).rejects.toThrow("An unmanaged Cloudflare Access application already owns the runtime hostname");
+    expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("refuses a recorded Access bypass that no longer matches the Worker", async () => {
+    process.env.CLOUDFLARE_API_TOKEN = "test-token";
+    for (const record of [
+      { domain: "elsewhere.example.workers.dev", name: "Gardener demo-team runtime" },
+      { domain: "runner.example.workers.dev", name: "Renamed app" },
+    ]) {
+      interceptedRuntime((url) => {
+        if (url.endsWith("/access/apps/app-1")) return Response.json({ success: true, result: { id: "app-1", ...record } });
+        throw new Error(`Unexpected fetch ${url}`);
+      });
+      await expect(ensure("app-1")).rejects.toThrow("Recorded runtime Access bypass does not match the deployed Worker");
+    }
+    // The control: the recorded app is kept when it still matches.
+    interceptedRuntime((url) => Response.json({
+      success: true,
+      result: { id: "app-1", domain: "runner.example.workers.dev", name: "Gardener demo-team runtime" },
+    }));
+    await expect(ensure("app-1")).resolves.toBe("app-1");
+  });
+
+  it("asks for a scoped API token before calling the Access API", async () => {
+    delete process.env.CLOUDFLARE_API_TOKEN;
+    delete process.env.CF_API_TOKEN;
+    const fetch = interceptedRuntime((url) => { throw new Error(`Unexpected fetch ${url}`); });
+    await expect(ensure(null)).rejects.toThrow(
+      "Cloudflare Access protects the runtime hostname. Set a scoped CLOUDFLARE_API_TOKEN with Access Apps and Policies edit permission, then rerun deploy.",
+    );
+    expect(fetch.mock.calls.map(([input]) => String(input))).toEqual([`${RUNTIME}/health`]);
+  });
+});
+
+describe("doctorActions", () => {
+  const RUNTIME_ORIGIN = "https://gardener-demo-team.example.workers.dev";
+  const REQUIRED_TABLES = [
+    "actions_control_audit",
+    "actions_installation",
+    "actions_repository_enrollments",
+    "actions_repository_syncs",
+    "actions_repository_tasks",
+    "actions_task_audit",
+    "actions_task_bundles",
+    "actions_task_runs",
+  ];
+
+  function installed() {
+    cloudflare.databases = [PROD_DATABASE];
+    cloudflare.facts = [{ key: "runtime_origin", value: RUNTIME_ORIGIN }];
+  }
+
+  afterEach(() => {
+    vi.mocked(queryD1).mockImplementation(() => cloudflare.tables.map((name) => ({ name })));
+  });
+
+  it("names the missing tables when the D1 schema is incomplete", async () => {
+    installed();
+    cloudflare.tables = REQUIRED_TABLES.filter((name) => name !== "actions_task_runs" && name !== "actions_control_audit");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await expect(doctorActions("demo-team", ".")).rejects.toThrow(
+      "Gardener D1 schema is incomplete (actions_control_audit, actions_task_runs); run gardener deploy --workspace demo-team to apply migrations",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("fails when the runtime health check is not ok", async () => {
+    installed();
+    vi.mocked(queryD1).mockImplementation((_database, statement) => {
+      if (statement.includes("sqlite_master")) return REQUIRED_TABLES.map((name) => ({ name }));
+      if (statement.includes("AS repositories")) {
+        return [{ repositories: 1, enabled_repositories: 1, enabled_tasks: 2, stale_bridge_repositories: 0 }];
+      }
+      return [];
+    });
+    for (const response of [
+      () => Response.json({ ok: false }),
+      () => Response.json({ ok: true }, { status: 503 }),
+      () => new Response("not json"),
+    ]) {
+      vi.stubGlobal("fetch", vi.fn(async () => response()));
+      await expect(doctorActions("demo-team", ".")).rejects.toThrow("Gardener runtime is unhealthy");
+    }
+    // The control: a healthy runtime passes with the counts D1 returned.
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: true })));
+    await expect(doctorActions("demo-team", ".")).resolves.toMatchObject({ ok: true, repositories: 1, enabledTasks: 2 });
   });
 });
 

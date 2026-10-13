@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -616,6 +616,69 @@ describe("local Gardener project", () => {
     await writeFile(join(collisionRoot, ".gardener/tasks/example/TASK.md"), TASK);
     await expect(buildProject({ repositoryRoot: collisionRoot }))
       .rejects.toThrow(/Refusing to overwrite non-Gardener workflow/);
+  });
+
+  it("refuses a TASK.md that is a symlink or not a file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-symlink-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await mkdir(join(root, "elsewhere"), { recursive: true });
+    await writeFile(join(root, "elsewhere/TASK.md"), TASK);
+    await mkdir(join(root, ".gardener/tasks/linked"), { recursive: true });
+    await symlink(join(root, "elsewhere/TASK.md"), join(root, ".gardener/tasks/linked/TASK.md"));
+    await expect(planProject({ repositoryRoot: root }))
+      .rejects.toThrow(".gardener/tasks/linked/TASK.md is not a regular file");
+
+    const directoryRoot = await mkdtemp(join(tmpdir(), "gardener-project-task-dir-"));
+    await initializeProject({ repositoryRoot: directoryRoot, demos: false });
+    await mkdir(join(directoryRoot, ".gardener/tasks/nested/TASK.md"), { recursive: true });
+    await expect(planProject({ repositoryRoot: directoryRoot }))
+      .rejects.toThrow(".gardener/tasks/nested/TASK.md is not a regular file");
+  });
+
+  it("refuses two tasks with the same id", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-duplicate-id-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    for (const directory of ["first", "second"]) {
+      await mkdir(join(root, `.gardener/tasks/${directory}`), { recursive: true });
+      await writeFile(join(root, `.gardener/tasks/${directory}/TASK.md`), TASK);
+    }
+    await expect(planProject({ repositoryRoot: root })).rejects.toThrow("Duplicate task id: example-task");
+  });
+
+  it("refuses distinct task ids that generate the same workflow file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-slug-clash-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    // `_` and `.` are valid in a task id but slug to `-` in the workflow name.
+    for (const id of ["a_b", "a-b"]) {
+      await mkdir(join(root, `.gardener/tasks/${id}`), { recursive: true });
+      await writeFile(join(root, `.gardener/tasks/${id}/TASK.md`), TASK.replace(/^id: .*$/m, `id: ${id}`));
+    }
+    await expect(planProject({ repositoryRoot: root }))
+      .rejects.toThrow("Multiple tasks generate .github/workflows/gardener-a-b.yml");
+  });
+
+  it("refuses a corrupt lock before changing any workflow", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-corrupt-lock-"));
+    await initializeProject({ repositoryRoot: root, demos: true });
+    await buildProject({ repositoryRoot: root });
+    const workflows = join(root, ".github/workflows");
+    const snapshot = async () => {
+      const names = (await readdir(workflows)).sort();
+      return Promise.all(names.map(async (name) => [name, await readFile(join(workflows, name), "utf8")]));
+    };
+    const before = await snapshot();
+    expect(before.map(([name]) => name)).toContain("gardener-bug-intake.yml");
+    // Without the lock check, generate would delete the removed task's
+    // workflow and rewrite the other one.
+    await rm(join(root, ".gardener/tasks/bug-intake"), { recursive: true });
+    const docsPath = join(root, ".gardener/tasks/docs-helper/TASK.md");
+    await writeFile(docsPath, `${await readFile(docsPath, "utf8")}\nChanged.\n`);
+    const lockPath = join(root, ".gardener/gardener.lock.json");
+    await writeFile(lockPath, "{");
+    await expect(buildProject({ repositoryRoot: root }))
+      .rejects.toThrow("Existing .gardener/gardener.lock.json is invalid");
+    expect(await snapshot()).toEqual(before);
+    expect(await readFile(lockPath, "utf8")).toBe("{");
   });
 });
 

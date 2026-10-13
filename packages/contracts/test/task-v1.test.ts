@@ -3,6 +3,7 @@ import { operationKindValues } from "../src/operations";
 import {
   normalizedEventV1Schema,
   pullRequestFamilyTriggerKindValues,
+  TASK_RUNTIME_SECONDS_MAX,
   taskBundleV1Schema,
   taskEffectKindV1Schema,
   taskOutcomeV1Schema,
@@ -240,6 +241,19 @@ describe("Actions-native task v1 contracts", () => {
       ...fixtureBundle(),
       limits: { ...fixtureBundle().limits, maxEffectBytes: 512 },
     })).toThrow();
+  });
+
+  it("requires at least 16 output tokens per model turn", () => {
+    const limits = (outputTokens: number) => ({ ...fixtureBundle(), limits: { ...fixtureBundle().limits, maxTurns: 10, outputTokens } });
+    expect(() => taskBundleV1Schema.parse(limits(159))).toThrow(/16 tokens per model turn/);
+    expect(taskBundleV1Schema.parse(limits(160)).limits).toMatchObject({ maxTurns: 10, outputTokens: 160 });
+  });
+
+  it("caps runtimeSeconds at TASK_RUNTIME_SECONDS_MAX", () => {
+    const limits = (runtimeSeconds: number) => ({ ...fixtureBundle(), limits: { ...fixtureBundle().limits, runtimeSeconds } });
+    expect(TASK_RUNTIME_SECONDS_MAX).toBe(21_600);
+    expect(taskBundleV1Schema.parse(limits(21_600)).limits.runtimeSeconds).toBe(21_600);
+    expect(() => taskBundleV1Schema.parse(limits(21_601))).toThrow();
   });
 
   it("binds normalized events to numeric GitHub identity and hosted workflow context", () => {
