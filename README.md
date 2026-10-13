@@ -1,4 +1,7 @@
-# Gardener
+<p align="center">
+   <img width="600" height="210" alt="gardener-background" src="https://github.com/user-attachments/assets/d310ae94-fa13-42cb-a9e1-6e59fcc2c3a8" />
+</p>
+
 
 Gardener runs AI maintenance tasks on your GitHub repositories from GitHub Actions. You describe a
 task in a Markdown file: when it runs, what it may read, and exactly which changes it may make. A
