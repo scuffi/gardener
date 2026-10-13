@@ -72,7 +72,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # The branch was just pushed, so allow the refs API a moment to see it.
         run: |
-          for attempt in 1 2 3; do
+          for _ in 1 2 3; do
             gh workflow run check.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main && exit 0
             sleep 10
           done

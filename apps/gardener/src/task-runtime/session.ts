@@ -89,7 +89,7 @@ import {
 import { UntrustedWorkflowError, verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
 import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
 import { proposalAuthorityRefusal } from "./proposal-authority";
-import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
+import { assertRunnerToolBudget, remainingTaskRuntime, RUNNER_TOOL_BUDGET_EXHAUSTED } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
 import {
   assertCaptureAdmissible,
@@ -156,6 +156,10 @@ const COMPLETION_PEEKS_PER_WAIT = 8;
 const MERGE_BASE_RESULT_MAX_BYTES = EFFECT_TRANSPORT_MAX_BYTES;
 /** Per-tool counts of the model's tool calls, for the run trail. */
 const TOOL_CALL_COUNTS_KEY = "run-trail-tool-calls";
+/** Tool calls refused because the tool-call limit was reached; they never ran. */
+const TOOL_CALL_REFUSED_KEY = "run-trail-tool-calls-refused";
+/** One marker per refused operation, so a replayed call is counted once. */
+const TOOL_CALL_REFUSED_PREFIX = "run-trail-tool-call-refused:";
 /** The trail as it stood at the first settle, so every later read agrees. */
 const SETTLED_TRAIL_KEY = "run-trail-settled";
 /**
@@ -412,7 +416,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     await this.assertCaptureNotSettled();
     await this.assertToolDeclared(invocation.runId, invocation.toolName);
     if (invocation.toolName === "repository_merge_base") await this.assertMergeBaseAllowed(invocation.runId);
-    await this.reserveRunnerToolBudget(invocation.runId, operationId);
+    await this.reserveRunnerToolBudgetCountingRefusal(invocation.runId, operationId);
     await this.settleUnresolvedBeforeNewAction(invocation.runId);
     const sequence = await this.nextSequence();
     const action = toolAction(sequence, operationId, invocation);
@@ -439,12 +443,13 @@ export class TaskRunnerSession extends DurableObject<Env> {
    * counts on a reconnect could change a failed run's error line; the audit
    * row, the first terminal and every replay all read this one snapshot.
    */
-  async #trail(): Promise<{ toolCalls: ToolCallCounts; proposals: number }> {
-    const settled = await this.ctx.storage.get<{ toolCalls: ToolCallCounts; proposals: number }>(SETTLED_TRAIL_KEY);
+  async #trail(): Promise<{ toolCalls: ToolCallCounts; proposals: number; refused?: number }> {
+    const settled = await this.ctx.storage.get<{ toolCalls: ToolCallCounts; proposals: number; refused?: number }>(SETTLED_TRAIL_KEY);
     if (settled) return settled;
     const trail = {
       toolCalls: await this.ctx.storage.get<ToolCallCounts>(TOOL_CALL_COUNTS_KEY) ?? {},
       proposals: await this.ctx.storage.get<number>(PROPOSAL_COUNT_KEY) ?? 0,
+      refused: await this.ctx.storage.get<number>(TOOL_CALL_REFUSED_KEY) ?? 0,
     };
     await this.ctx.storage.put(SETTLED_TRAIL_KEY, trail);
     return trail;
@@ -453,7 +458,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
   /** The one-line trail a failed run's Actions error carries. */
   async #trailDigest(): Promise<string> {
     const trail = await this.#trail();
-    return trailDigest(trail.toolCalls, trail.proposals);
+    return trailDigest(trail.toolCalls, trail.proposals, trail.refused ?? 0);
   }
 
   /**
@@ -776,7 +781,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
       // requests, so this path cannot be used to bypass either.
       await this.assertToolDeclared(identity.sessionId, ...actionToolAuthority(action.kind));
       if (action.kind === "repository.merge_base") await this.assertMergeBaseAllowed(identity.sessionId);
-      await this.reserveRunnerToolBudget(identity.sessionId, action.operationId);
+      await this.reserveRunnerToolBudgetCountingRefusal(identity.sessionId, action.operationId);
     }
     return this.invoke(action);
   }
@@ -942,7 +947,15 @@ export class TaskRunnerSession extends DurableObject<Env> {
     if (identity.hello.phase !== "plan") {
       throw new Error("The task runtime admits only planning runs");
     }
-    const runnerEvent = runnerEventV1Schema.parse(eventInput);
+    const parsedEvent = runnerEventV1Schema.safeParse(eventInput);
+    if (!parsedEvent.success) {
+      // The field path only: issue messages can quote the caller's input. An
+      // unknown key, the usual sign of a newer release, has an empty path, so
+      // this says "event"; its name is left out because it is the caller's.
+      const field = parsedEvent.error.issues[0]?.path.join(".") || "event";
+      throw new Error(`This runtime does not accept the runner's event (${field}), so the workflow is probably on a newer release than the runtime. ${releaseMismatchAdvice(this.env.GARDENER_RELEASE_WORKFLOW_REF)}`);
+    }
+    const runnerEvent = parsedEvent.data;
     // The payload is untrusted; its kind must agree with the signed OIDC event name.
     assertReportedEventMatchesOidc(runnerEvent.kind, identity.hello.eventName);
     const { bundle, bundleHash, sourcePath, manualOnly } = await loadEnabledTaskBundle(
@@ -1282,6 +1295,27 @@ export class TaskRunnerSession extends DurableObject<Env> {
       ).bind(request.runId, JSON.stringify({ reason }), request.runId),
     ]);
     return terminalFromOutcome(outcome, await this.completedSequence(), request);
+  }
+
+  /**
+   * Reserves the budget, and counts a call refused at the limit so the trail
+   * explains a run that stopped there. A refusal writes no reservation, so a
+   * replay of the same operation is refused again; its marker counts it once.
+   */
+  private async reserveRunnerToolBudgetCountingRefusal(runId: string, operationId: string): Promise<void> {
+    try {
+      await this.reserveRunnerToolBudget(runId, operationId);
+    } catch (error) {
+      if (error instanceof Error && error.message === RUNNER_TOOL_BUDGET_EXHAUSTED) {
+        await this.ctx.storage.transaction(async (transaction) => {
+          const marker = `${TOOL_CALL_REFUSED_PREFIX}${operationId}`;
+          if (await transaction.get(marker)) return;
+          await transaction.put(marker, true);
+          await transaction.put(TOOL_CALL_REFUSED_KEY, (await transaction.get<number>(TOOL_CALL_REFUSED_KEY) ?? 0) + 1);
+        });
+      }
+      throw error;
+    }
   }
 
   private async reserveRunnerToolBudget(runId: string, operationId: string): Promise<void> {

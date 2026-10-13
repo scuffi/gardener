@@ -57,3 +57,21 @@ describe("runner event conversion", () => {
     expect(taskCheckoutSha({ checkout: "pull-request-head" }, event)).toBe(sha("d"));
   });
 });
+
+describe("runner input from a newer release", () => {
+  it("says the workflow is probably newer than the runtime, without quoting the input", () => {
+    // A strict-schema refusal of the hello or the event usually means the
+    // repository's workflows moved to a newer release before the runtime did.
+    for (const part of ["hello", "event"]) {
+      expect(source).toContain(`This runtime does not accept the runner's ${part} (\${field}), so the workflow is probably on a newer release than the runtime. \${releaseMismatchAdvice(this.env.GARDENER_RELEASE_WORKFLOW_REF)}`);
+    }
+    expect(source).not.toMatch(/runnerEventV1Schema\.parse\(/);
+    expect(source).not.toMatch(/runnerHelloV1Schema\.parse\(/);
+  });
+
+  it("refuses an event field this release does not know", () => {
+    // The refusal the runtime turns into that message: a strict schema rejects unknown fields.
+    const result = runnerEventV1Schema.safeParse({ ...runnerComment, addedByANewerRelease: true });
+    expect(result.success).toBe(false);
+  });
+});

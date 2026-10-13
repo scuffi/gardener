@@ -269,14 +269,9 @@ describe("github-actions/v1 target adapter", () => {
       draft: true,
     }));
     expect(plan.triggers.map((trigger) => trigger.kind)).toEqual(["github.workflow_dispatch"]);
-    expect(plan.requiresSameRepositoryGuard).toBe(true);
   });
 
-  it("flags pull-request tasks for the same-repository guard with no opt-in", () => {
-    expect(compileGitHubActionsTask(bundle()).requiresSameRepositoryGuard).toBe(false);
-    expect(compileGitHubActionsTask(bundle({
-      triggers: [{ kind: "github.pull_request.opened", labelsAll: [], mentions: [], authors: "any" }],
-    })).requiresSameRepositoryGuard).toBe(true);
+  it("offers no opt-in to run on fork pull requests", () => {
     expect("allowForkExecution" in compileGitHubActionsTask(bundle())).toBe(false);
   });
 

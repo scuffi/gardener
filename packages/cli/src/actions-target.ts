@@ -1,7 +1,6 @@
 import {
   checksOutPullRequestHead,
   dispatchTargetKinds,
-  pullRequestFamilyTriggerKindValues,
   triggerKindOrder,
   type TaskBundleV1,
   type TaskTriggerKindV1,
@@ -49,12 +48,6 @@ export interface GitHubActionsTaskPlanV1 {
   /** Union the generated caller job must grant so every called job can run. */
   callerPermissions: GitHubPermissions;
   triggers: GitHubActionsTriggerBindingV1[];
-  /**
-   * True when any declared trigger can carry a fork-owned head revision, so the
-   * generated workflow must gate the job on same-repository equality. Gardener
-   * V1 offers no opt-in; fork pull requests are always skipped.
-   */
-  requiresSameRepositoryGuard: boolean;
   /**
    * Compiled network posture. `allow` means the task runs commands with the
    * GitHub-hosted runner's unrestricted egress; `deny` means no task-controlled
@@ -239,11 +232,6 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
     reactionPermissions,
     callerPermissions: mergePermissions(planningPermissions, effectsPermissions, reactionPermissions),
     triggers,
-    // Describes the bundle, not the rendered triggers: a draft still acts on
-    // pull requests when run by hand.
-    requiresSameRepositoryGuard: bundle.triggers.some(
-      (trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind),
-    ),
     network: { default: expectedDefault, allow: [], deny: [] },
     effectLimits: {
       ...(bundle.limits.maxEffectOperations === undefined ? {} : { maxOperations: bundle.limits.maxEffectOperations }),

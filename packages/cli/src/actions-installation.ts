@@ -472,6 +472,12 @@ export async function doctorActions(workspace: string, sourceRoot: string): Prom
   if (!workerExists(isolatedWranglerDirectory(), installation.cloudflare.runtimeWorker)) {
     throw new Error(`Gardener Worker ${installation.cloudflare.runtimeWorker} does not exist; run gardener deploy --workspace ${workspace}`);
   }
+  // Without its token every model sent to the gateway fails at run time, so
+  // this is as broken as a missing Worker, not a warning.
+  if (installation.aiGateway
+    && !workerSecretNames(isolatedWranglerDirectory(), installation.cloudflare.runtimeWorker).includes(AI_GATEWAY_TOKEN)) {
+    throw new Error(`Gardener's AI Gateway has no token: set ${AI_GATEWAY_TOKEN} and run gardener deploy --workspace ${workspace}`);
+  }
   const requiredTables = [
     "actions_control_audit",
     "actions_installation",

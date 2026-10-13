@@ -1,3 +1,5 @@
+export const RUNNER_TOOL_BUDGET_EXHAUSTED = "Task runner tool-call budget is exhausted";
+
 export function assertRunnerToolBudget(maxToolCalls: number, completedOrPendingActions: number): void {
   if (!Number.isSafeInteger(maxToolCalls) || maxToolCalls < 1) {
     throw new Error("Task tool-call limit is invalid");
@@ -9,7 +11,7 @@ export function assertRunnerToolBudget(maxToolCalls: number, completedOrPendingA
   // which executes inside Flue and never reaches the runner action journal.
   const runnerToolLimit = Math.max(0, maxToolCalls - 1);
   if (completedOrPendingActions >= runnerToolLimit) {
-    throw new Error("Task runner tool-call budget is exhausted");
+    throw new Error(RUNNER_TOOL_BUDGET_EXHAUSTED);
   }
 }
 

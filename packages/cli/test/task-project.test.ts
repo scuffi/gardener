@@ -8,6 +8,8 @@ import {
   buildProject,
   DEFAULT_WORKFLOW_REF,
   initializeProject,
+  MAX_PROJECT_TASKS,
+  MAX_TASK_FILE_BYTES,
   pinCliScripts,
   planProject,
   staleProjectFiles,
@@ -633,6 +635,34 @@ describe("local Gardener project", () => {
     await mkdir(join(directoryRoot, ".gardener/tasks/nested/TASK.md"), { recursive: true });
     await expect(planProject({ repositoryRoot: directoryRoot }))
       .rejects.toThrow(".gardener/tasks/nested/TASK.md is not a regular file");
+  });
+
+  it("bounds a project before compiling any task", async () => {
+    // Too many task directories: refused before any TASK.md is read, so empty directories suffice.
+    const manyRoot = await mkdtemp(join(tmpdir(), "gardener-project-many-"));
+    await initializeProject({ repositoryRoot: manyRoot, demos: false });
+    for (let index = 0; index <= MAX_PROJECT_TASKS; index += 1) {
+      await mkdir(join(manyRoot, `.gardener/tasks/t${index}`), { recursive: true });
+    }
+    await expect(planProject({ repositoryRoot: manyRoot }))
+      .rejects.toThrow(`.gardener/tasks has ${MAX_PROJECT_TASKS + 1} task directories; Gardener syncs at most ${MAX_PROJECT_TASKS}`);
+
+    // An oversized TASK.md: refused by size, not by the compiler.
+    const largeRoot = await mkdtemp(join(tmpdir(), "gardener-project-large-"));
+    await initializeProject({ repositoryRoot: largeRoot, demos: false });
+    await mkdir(join(largeRoot, ".gardener/tasks/large"), { recursive: true });
+    await writeFile(join(largeRoot, ".gardener/tasks/large/TASK.md"), `${TASK}${"x".repeat(MAX_TASK_FILE_BYTES)}`);
+    await expect(planProject({ repositoryRoot: largeRoot }))
+      .rejects.toThrow(/^\.gardener\/tasks\/large\/TASK\.md is \d+ bytes; a TASK\.md may be at most 524288$/);
+
+    // At the limits, the bounds let the project through to the compiler.
+    const atLimitRoot = await mkdtemp(join(tmpdir(), "gardener-project-at-limit-"));
+    await initializeProject({ repositoryRoot: atLimitRoot, demos: false });
+    await mkdir(join(atLimitRoot, ".gardener/tasks/padded"), { recursive: true });
+    const padded = TASK.padEnd(MAX_TASK_FILE_BYTES, " ");
+    expect(Buffer.byteLength(padded)).toBe(MAX_TASK_FILE_BYTES);
+    await writeFile(join(atLimitRoot, ".gardener/tasks/padded/TASK.md"), padded);
+    await expect(planProject({ repositoryRoot: atLimitRoot })).resolves.toMatchObject({ tasks: [expect.anything()] });
   });
 
   it("refuses two tasks with the same id", async () => {

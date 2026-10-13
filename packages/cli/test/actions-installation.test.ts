@@ -511,6 +511,23 @@ describe("doctorActions", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("fails when the AI Gateway is configured but its token secret is missing", async () => {
+    installed();
+    cloudflare.facts = [...(cloudflare.facts ?? []), { key: "ai_gateway", value: "0123456789abcdef0123456789abcdef/team-gateway" }];
+    cloudflare.secrets = [];
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await expect(doctorActions("demo-team", ".")).rejects.toThrow(
+      "Gardener's AI Gateway has no token: set GARDENER_AI_GATEWAY_TOKEN and run gardener deploy --workspace demo-team",
+    );
+    expect(queryD1).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining("sqlite_master"));
+    expect(fetch).not.toHaveBeenCalled();
+    // With the secret present the check passes and doctor carries on to the schema.
+    cloudflare.secrets = ["GARDENER_AI_GATEWAY_TOKEN"];
+    cloudflare.tables = [];
+    await expect(doctorActions("demo-team", ".")).rejects.toThrow("Gardener D1 schema is incomplete");
+  });
+
   it("fails when the runtime health check is not ok", async () => {
     installed();
     vi.mocked(queryD1).mockImplementation((_database, statement) => {

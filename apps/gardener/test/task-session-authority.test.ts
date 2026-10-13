@@ -234,7 +234,7 @@ describe("session wiring", () => {
     // The runtime's own capture is exempt from the action barrier; every other action is held by it.
     expect(source).toMatch(/if \(action\.kind !== "repository\.capture"\) \{\n        await assertCaptureNotStarted\(transaction, "The working tree capture has started; no further repository action may run"\);\n      \}/);
     // toolAction, the gate between model JSON and the runner's shell, runs only after the session-state checks.
-    const reserve = source.indexOf("await this.reserveRunnerToolBudget(invocation.runId, operationId);");
+    const reserve = source.indexOf("await this.reserveRunnerToolBudgetCountingRefusal(invocation.runId, operationId);");
     const build = source.indexOf("const action = toolAction(sequence, operationId, invocation);");
     expect(reserve).toBeGreaterThan(-1);
     expect(build).toBeGreaterThan(reserve);

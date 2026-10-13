@@ -37,8 +37,10 @@ export function countToolCall(counts: ToolCallCounts | undefined, tool: string):
 /**
  * One line for a failed run's Actions error, for example
  * "16 tool calls: 9 repository.read_file, 7 provider.api.read; no effects proposed".
+ * Calls refused at the tool-call limit never ran, so they are listed apart:
+ * "2 tool calls: 2 repository.read_file; 1 refused at the tool-call limit; no effects proposed".
  */
-export function trailDigest(counts: ToolCallCounts | undefined, proposals: number): string {
+export function trailDigest(counts: ToolCallCounts | undefined, proposals: number, refused = 0): string {
   const entries = Object.entries(counts ?? {}).filter(([, count]) => count > 0)
     .sort(([leftTool, left], [rightTool, right]) => right - left || leftTool.localeCompare(rightTool));
   const total = entries.reduce((sum, [, count]) => sum + count, 0);
@@ -46,5 +48,6 @@ export function trailDigest(counts: ToolCallCounts | undefined, proposals: numbe
     ? "no tool calls"
     : `${total} tool call${total === 1 ? "" : "s"}: ${entries.map(([tool, count]) => `${count} ${tool}`).join(", ")}`;
   const effects = proposals === 0 ? "no effects proposed" : `${proposals} effect${proposals === 1 ? "" : "s"} proposed`;
-  return `${tools}; ${effects}`;
+  const limit = refused > 0 ? `; ${refused} refused at the tool-call limit` : "";
+  return `${tools}${limit}; ${effects}`;
 }

@@ -126,6 +126,11 @@ enrolls exactly those:
 - `draft: true` tasks run only by hand;
 - reverting a task brings its earlier version back.
 
+Pull request events run the workflows in the pull request's merge commit, which GitHub does not
+always rebuild when the base branch moves. A pull request opened before a task was added may
+therefore not run that task, for example a review task, until its branch is updated or it gets a
+new commit.
+
 The sync is refused unless it is Gardener's pinned sync workflow, at the repository's enrolled
 release or the release the Worker was deployed from, running on the default branch of a connected
 repository. A sync from the Worker's release moves the repository to that release. `deploy`
@@ -135,9 +140,10 @@ If the committed lock or workflows don't match the tasks (someone edited a `TASK
 rerunning `generate`), the sync run fails, and the previously enrolled tasks keep running. Rerun
 `generate` and commit. Pull requests that touch Gardener's files get a **Check tasks** check that
 reports the same problem before merge. It runs read-only, with no token and no call to the
-runtime, so it is safe on pull requests from forks. It only runs on pull requests that touch
-those files, so don't make it a required status check: other pull requests would wait for it
-forever. A pull request can edit its own checks anyway, so the sync after merge remains the
+runtime, so it is safe on pull requests from forks. Before compiling anything it refuses more
+than 100 tasks, the most one sync carries, and any `TASK.md` over 512 KiB. It only runs on pull
+requests that touch those files, so don't make it a required status check: other pull requests
+would wait for it forever. A pull request can edit its own checks anyway, so the sync after merge remains the
 enforcement. To resync by hand, run the **Gardener · Sync tasks** workflow from the
 Actions tab, or run `connect` from an up-to-date checkout of the default branch. `connect` also
 starts a sync from the default branch, which replaces the bundles it enrolled from your checkout.
