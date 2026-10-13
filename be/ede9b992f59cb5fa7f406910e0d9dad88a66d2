@@ -1,0 +1,35 @@
+packages/cli/test/actions-installation.test.ts
+  s_1a59c3fef0d6eb::t_674e4982ab1fad 2,42,44,54-56,339-536
+packages/cli/test/actions-qualify.test.ts
+  s_1a59c3fef0d6eb::t_84e77ae3c1ac64 1-405
+packages/cli/test/provision.test.ts
+  s_1a59c3fef0d6eb::t_68f38fa6eef566 1-158
+packages/cli/test/task-project.test.ts
+  s_c216197eb3adea::t_2138491685b622 2,620-682
+packages/contracts/test/task-v1.test.ts
+  s_c216197eb3adea::t_374d2db67f3f3e 6,246-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "beede9b992f59cb5fa7f406910e0d9dad88a66d2",
+  "prompts": {},
+  "sessions": {
+    "s_1a59c3fef0d6eb": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a134e9-6518-7901-80dd-ed309930e3b3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_c216197eb3adea": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a134e9-64a7-7a83-8b3a-79fae78666cf",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
