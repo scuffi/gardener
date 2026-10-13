@@ -1,0 +1,31 @@
+packages/runner/test/effects-main.test.ts
+  s_c216197eb3adea::t_7b544de8744d50 1218-1325,1426-1431,1444-1445,1487-1506
+packages/runner/test/github-effects.test.ts
+  s_fabec1e2684592::t_997b050a94510e 2797-2901
+packages/runner/test/merge-markers.test.ts
+  s_c216197eb3adea::t_e5be5555bcf9e7 1-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "449ca3bd680e54888a04ab5941a916cb3137c736",
+  "prompts": {},
+  "sessions": {
+    "s_c216197eb3adea": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a134e9-64a7-7a83-8b3a-79fae78666cf",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_fabec1e2684592": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a134e9-6493-7bd1-bfb4-522216febc9f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
