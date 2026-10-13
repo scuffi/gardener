@@ -1,0 +1,21 @@
+.github/workflows/gardener-task.yml
+  s_de0b486c128948::t_a9a304b7aad93c 108,111,113,145,153
+docs/task-authoring.md
+  s_de0b486c128948::t_8259a026710daa 339-341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3a6448b44cbba86f4f2f7673fd241fdb44af8678",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
