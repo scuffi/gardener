@@ -1,0 +1,33 @@
+.changeset/doctor-help.md
+  s_de0b486c128948::t_aec5859d5d6dab 1-5
+docs/architecture.md
+  s_de0b486c128948::t_f31fabb2cdc0c7 121-124,139,150,171-172
+docs/cli.md
+  s_de0b486c128948::t_5c65d46184259f 17-18,133,136,138-140,143
+docs/onboarding.md
+  s_de0b486c128948::t_1071d36371ca29 122
+docs/operations.md
+  s_de0b486c128948::t_43b6085da381c6 114-116
+docs/task-authoring.md
+  s_de0b486c128948::t_83fe3ac8893fe1 536-539
+docs/task-reference.md
+  s_de0b486c128948::t_62b8b85780aad5 105
+packages/cli/src/cli.ts
+  s_de0b486c128948::t_6e0c952d57097d 97-107,186-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "066c5e4b008e3f41a88d4c0c86f247e8aa61bb32",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
