@@ -1215,6 +1215,114 @@ describe("resuming from a prior receipt", () => {
   });
 });
 
+describe("reading captured content at apply time", () => {
+  const content = Buffer.from("changed\n");
+  const digest = createHash("sha256").update(content).digest("hex");
+  const capture = {
+    schemaVersion: "gardener.task-capture-manifest/v1" as const,
+    captureId: `cap_${"4".repeat(64)}`,
+    baseSha: SHA,
+    files: [{ path: "src/a.txt", status: "modified" as const, mode: "100644" as const, sizeBytes: content.length, sha256: digest }],
+    totalBytes: content.length,
+    truncated: false as const,
+  };
+  const value = plan([
+    step("commit", "op_commit", "commit.create", { branch: "gardener/fix-1", expectedHeadSha: SHA, message: "Apply capture." }),
+  ], { capture, changesSha256: "e".repeat(64) });
+
+  /** Applies the plan with a capture directory holding `stored` under the file's digest, and reads it back through the executor's reader. */
+  async function readBack(stored: Buffer, requested: { sha256: string; sizeBytes: number } = { sha256: digest, sizeBytes: content.length }) {
+    const directory = await mkdtemp(path.join(tmpdir(), "gardener-capture-reader-"));
+    await mkdir(path.join(directory, "content"));
+    await writeFile(path.join(directory, "content", digest), stored);
+    let read: Promise<Uint8Array> | undefined;
+    await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      captureDirectory: directory,
+      execute: async (operation, context) => {
+        read = context.readCapturedFile!({ path: "src/a.txt", ...requested });
+        await read.catch(() => undefined);
+        return { receipt: receipt(operation, "failed") };
+      },
+      record: async () => undefined,
+    });
+    return read!;
+  }
+
+  it("returns the verified bytes unchanged", async () => {
+    await expect(readBack(content)).resolves.toEqual(content);
+  });
+
+  it("re-verifies size and digest, so a file changed after verification is refused", async () => {
+    const tampered = Buffer.from("CHANGED\n");
+    expect(tampered.length).toBe(content.length);
+    await expect(readBack(tampered)).rejects.toThrow("Captured content changed after verification");
+    await expect(readBack(Buffer.from("changed\n!"))).rejects.toThrow("Captured content size changed after verification");
+    await expect(readBack(content, { sha256: digest, sizeBytes: content.length + 1 })).rejects.toThrow("Captured content size changed after verification");
+  });
+
+  it("refuses a digest that is not a SHA-256 before touching the file system", async () => {
+    await expect(readBack(content, { sha256: "../manifest.json", sizeBytes: content.length })).rejects.toThrow("Captured content digest is invalid");
+  });
+});
+
+describe("reference pointers", () => {
+  const output = {
+    kind: "issue.comment.create" as const,
+    issueNumber: 7,
+    commentId: "101",
+    commentUrl: "https://github.com/owner/repo/issues/7#issuecomment-101",
+  };
+  const review = step("review", "op_review", "pull_request.review.submit", {
+    pullNumber: 8, expectedHeadSha: SHA, expectedBaseRef: "main", expectedBaseSha: SHA, expectedState: "open",
+    expectedDraft: false, expectedPullUpdatedAt: NOW, event: "comment", body: "Review note.", comments: [],
+  });
+
+  /** Runs a plan whose second step fills `pointer` from the first step's comment id; returns the second step's receipt. */
+  async function fill(pointer: string, target = review) {
+    const value = plan([commentStep("first", "op_first"), target]);
+    // Set after parsing so the executor's own guard is what refuses the pointer.
+    (value.operations[1] as { references: unknown }).references = { [pointer]: { step: "first", output: "commentId" } };
+    const execute = vi.fn(async (operation: Operation) => success(operation, output));
+    const result = await effects.applyOrderedPlan({
+      plan: value,
+      artifactSha256: ARTIFACT_HASH,
+      token: "token",
+      deadlineAt: Date.now() + 60_000,
+      prior: null,
+      execute,
+      record: async () => undefined,
+    });
+    expect(execute, pointer).toHaveBeenCalledTimes(1);
+    expect(result.receipt.status, pointer).toBe("stopped");
+    const halted = result.receipt.operations[1]?.receipt;
+    expect(halted, pointer).toMatchObject({ status: "conflicted", error: { code: "effect_materialization_failed" } });
+    return halted?.error?.message;
+  }
+
+  it("refuses prototype-polluting segments anywhere in the pointer", async () => {
+    for (const pointer of ["/__proto__", "/__proto__/polluted", "/comments/0/constructor", "/prototype/x"]) {
+      expect(await fill(pointer), pointer).toBe("Step could not be materialized: Unsafe reference pointer");
+    }
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it("refuses array indices that are not 0-99 in canonical form", async () => {
+    for (const pointer of ["/comments/-", "/comments/x", "/comments/01", "/comments/100", "/comments/1e1"]) {
+      expect(await fill(pointer), pointer).toBe("Step could not be materialized: Reference array index is invalid");
+    }
+  });
+
+  it("refuses the payload root and a pointer through a scalar", async () => {
+    expect(await fill("")).toBe("Step could not be materialized: References may not replace the payload root");
+    expect(await fill("/body/x")).toBe("Step could not be materialized: Reference pointer /body/x does not address a payload field");
+  });
+});
+
 describe("applying a merge commit end to end", () => {
   const HEAD = "1".repeat(40);
   const BASE_TIP = "2".repeat(40);
@@ -1315,7 +1423,12 @@ describe("applying a merge commit end to end", () => {
     return calls;
   }
 
-  async function applyMerge(files: Record<string, string>, conflictedPaths: string[], options: Parameters<typeof github>[0] = {}) {
+  async function applyMerge(
+    files: Record<string, string>,
+    conflictedPaths: string[],
+    options: Parameters<typeof github>[0] = {},
+    setup: { omitCaptureInput?: boolean; alter?: (directory: string, manifest: TaskCaptureManifestV1) => Promise<void> } = {},
+  ) {
     const capture = await artifact(files, conflictedPaths);
     const value = mergePlan(capture.manifest, capture.changesSha256);
     const directory = await mkdtemp(path.join(tmpdir(), "gardener-merge-apply-"));
@@ -1328,7 +1441,8 @@ describe("applying a merge commit end to end", () => {
     core.inputs.set("github-token", "token");
     core.inputs.set("runtime-url", "https://gardener.example");
     core.inputs.set("deadline-at", new Date(Date.now() + 60_000).toISOString());
-    core.inputs.set("capture-artifact-path", capture.directory);
+    if (!setup.omitCaptureInput) core.inputs.set("capture-artifact-path", capture.directory);
+    await setup.alter?.(capture.directory, capture.manifest);
     const calls = github(options);
     core.setFailed.mockClear();
     core.recordEffect.mockClear();
@@ -1368,6 +1482,26 @@ describe("applying a merge commit end to end", () => {
   it("stops at the merge when a conflicted file the capture names still holds markers", async () => {
     const { calls, failure } = await applyMerge({ "src/a.ts": "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n" }, ["src/a.ts"]);
     expect(failure).toMatch(/src\/a\.ts still holds a conflict marker/);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+
+  it("refuses a capture-bound plan run without its capture artifact", async () => {
+    const { calls, failure, receipts } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"], {}, { omitCaptureInput: true });
+    expect(failure).toBe("capture-artifact-path is required for a capture-bound plan");
+    expect(receipts).toEqual([]);
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+
+  it("refuses a downloaded manifest that differs from the plan's", async () => {
+    // A different file list, written canonically, as another capture would be.
+    const { calls, failure, receipts } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"], {}, {
+      alter: async (directory, manifest) => {
+        const other = { ...manifest, files: manifest.files.map((file) => ({ ...file, path: "src/b.ts" })) };
+        await writeFile(path.join(directory, "manifest.json"), taskCaptureManifestText(other));
+      },
+    });
+    expect(failure).toBe("Capture manifest digest mismatch");
+    expect(receipts).toEqual([]);
     expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 });

@@ -2794,3 +2794,108 @@ describe("commit.merge_base", () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe("commit.create defence in depth", () => {
+  const writes = (calls: Call[]) => calls.filter((call) => call.method !== "GET");
+  const commitApply = (entry: Record<string, unknown> = { path: "src/a.ts", type: "blob", mode: "100644" }) => [
+    get(`${REPO}/git/ref/heads/gardener/feature`, { object: { sha: HEAD } }),
+    get(`${REPO}/git/commits/${HEAD}`, { tree: { sha: PARENT_TREE } }),
+    get(`${REPO}/git/trees/${PARENT_TREE}`, { tree: [entry], truncated: false }),
+    send("POST", `${REPO}/git/blobs`, { sha: BLOB }),
+    send("POST", `${REPO}/git/trees`, { sha: NEW_TREE }),
+    send("POST", `${REPO}/git/commits`, { sha: NEW_COMMIT }),
+    send("PATCH", `${REPO}/git/refs/heads/gardener/feature`, { object: { sha: NEW_COMMIT } }),
+  ];
+
+  it("refuses captured content of the wrong length or digest before any blob or tree is written", async () => {
+    const sameLength = new TextEncoder().encode("const b = 2;");
+    expect(sameLength.byteLength).toBe(CAPTURED_CONTENT.byteLength);
+    for (const [label, bytes, message] of [
+      ["truncated", CAPTURED_CONTENT.slice(0, 5), `is 5 bytes, not the recorded ${CAPTURED_CONTENT.byteLength}`],
+      ["longer", new TextEncoder().encode("const a = 1;\n"), `is 13 bytes, not the recorded ${CAPTURED_CONTENT.byteLength}`],
+      ["other bytes", sameLength, "does not match its recorded digest"],
+    ] as const) {
+      const { receipt, calls } = await run(COMMIT_OPERATION, commitApply(), { readCapturedFile: async () => bytes });
+      expect(receipt.status, label).toBe("failed");
+      expect(receipt.error?.code, label).toBe("capture_content_mismatch");
+      expect(receipt.error?.message, label).toContain(message);
+      expect(writes(calls), label).toEqual([]);
+    }
+  });
+
+  it("reports an unreadable capture file without writing anything", async () => {
+    const { receipt, calls } = await run(COMMIT_OPERATION, commitApply(), {
+      readCapturedFile: async () => { throw new Error("ENOENT: content missing"); },
+    });
+    expect(receipt.status).toBe("failed");
+    expect(receipt.error?.code).toBe("capture_content_unreadable");
+    expect(receipt.error?.message).toBe("Captured content for src/a.ts could not be read: ENOENT: content missing");
+    expect(writes(calls)).toEqual([]);
+  });
+
+  it("refuses a path into .git or carrying a NUL byte before reading anything", async () => {
+    for (const unsafe of [".git", ".git/config", ".GIT/hooks/pre-commit", "src/a\u0000b.ts"]) {
+      const operation = operationSchema.parse({ ...COMMIT_OPERATION, files: [{ path: unsafe, captured: CAPTURED_FILE }] });
+      const { receipt, calls, repositoryReads } = await run(operation, commitApply());
+      expect(receipt.status, unsafe).toBe("failed");
+      expect(receipt.error?.code, unsafe).toBe("invalid_commit_path");
+      expect(calls, unsafe).toEqual([]);
+      expect(repositoryReads, unsafe).toBe(0);
+    }
+  });
+
+  it("rejects a traversal path at the operation contract, before the executor's own path check", async () => {
+    // `a/../b` never reaches isSafeFilePath: operationSchema refuses it first.
+    const operation = { ...COMMIT_OPERATION, files: [{ path: "a/../b", captured: CAPTURED_FILE }] } as Operation;
+    const { fetchImpl, calls } = harness(commitApply());
+    await expect(executeActionsOperation(operation, context(fetchImpl, operation))).rejects.toThrow(/invalid repository path/);
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses to replace a directory or submodule entry with a file", async () => {
+    for (const [label, entry] of [
+      ["directory", { path: "src/a.ts", type: "tree", mode: "040000", sha: BLOB }],
+      ["submodule", { path: "src/a.ts", type: "commit", mode: "160000", sha: BLOB }],
+      ["blob with an unsupported mode", { path: "src/a.ts", type: "blob", mode: "100664", sha: BLOB }],
+      // GitHub pairs these modes with blobs; the type is checked on its own anyway.
+      ["tree carrying a file mode", { path: "src/a.ts", type: "tree", mode: "100644", sha: BLOB }],
+    ] as const) {
+      const { receipt, calls } = await run(COMMIT_OPERATION, commitApply(entry));
+      expect(receipt.status, label).toBe("conflicted");
+      expect(receipt.error?.code, label).toBe("unsupported_git_object");
+      expect(receipt.error?.message, label).toBe("Commit cannot replace unsupported Git object: src/a.ts");
+      expect(writes(calls), label).toEqual([]);
+    }
+  });
+
+  it("refuses a commit with no capture base before reading anything", async () => {
+    const { fetchImpl, calls } = harness(commitApply());
+    const withoutBase = context(fetchImpl, COMMIT_OPERATION);
+    delete withoutBase.captureBaseSha;
+    const { receipt } = await executeActionsOperation(COMMIT_OPERATION, withoutBase);
+    expect(receipt.status).toBe("failed");
+    expect(receipt.error?.code).toBe("capture_base_missing");
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("pull_request.merge read-back", () => {
+  it("flags a head or base that changed during the merge as a security incident", async () => {
+    const scenario = scenarioFor("pull_request.merge");
+    for (const [label, after] of [
+      ["moved head", { ...OPEN_PULL, merged: true, head: { ...OPEN_PULL.head, sha: NEW_COMMIT } }],
+      ["retargeted base", { ...OPEN_PULL, merged: true, base: { ...OPEN_PULL.base, ref: "release" } }],
+    ] as const) {
+      let pullReads = 0;
+      const isPullRead = (call: Call) => call.method === "GET" && matches(call.path, `${REPO}/pulls/7`);
+      // The two reads before the merge see the planned pull request; the read-back after it does not.
+      const beforeMerge: Handler = { when: (call) => isPullRead(call) && ++pullReads <= 2, json: OPEN_PULL };
+      const { receipt, calls } = await run(scenario.operation, [beforeMerge, get(`${REPO}/pulls/7`, after), ...scenario.apply]);
+      expect(calls.filter((call) => call.method === "PUT"), label).toHaveLength(1);
+      expect(pullReads, label).toBe(3);
+      expect(receipt.status, label).toBe("failed");
+      expect(receipt.error?.code, label).toBe("merge_target_changed");
+      expect(receipt.error?.message, label).toBe("Security incident: pull request target changed during merge");
+    }
+  });
+});
