@@ -25,7 +25,6 @@ import {
   type RunnerTerminalV1,
 } from "@gardener/protocol";
 import {
-  eventNameByTriggerKind,
   taskCheckoutSha,
   taskEffectProposalV1Schema,
   taskOutcomeV1Schema,
@@ -92,8 +91,21 @@ import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundl
 import { proposalAuthorityRefusal } from "./proposal-authority";
 import { assertRunnerToolBudget, remainingTaskRuntime } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
-import { taskToolInputKeys } from "./tool-input-schemas";
-import { listFilesPath, repositoryPath } from "./repository-paths";
+import {
+  assertCaptureAdmissible,
+  assertCaptureNotStarted,
+  assertEffectPlanBoundToHello,
+  assertReportedEventMatchesOidc,
+  assertRunnerMayRequest,
+  assertSingleCaptureConsumer,
+  CAPTURE_GENERATION_KEY,
+  CAPTURE_KEY,
+  CAPTURE_PENDING_KEY,
+  consumeOidcTokenIn,
+  toolAction,
+  type CapturePending,
+  type JsonValue,
+} from "./session-checks";
 import { actionToolAuthority, mergeBaseToolRefusal, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 import { releaseMismatchAdvice, trustedTaskWorkflowRefs } from "./workflow-refs";
 import { countToolCall, toolTarget, trailDigest, type ToolCallCounts } from "./run-trail";
@@ -142,33 +154,16 @@ const COMPLETION_PEEKS_PER_WAIT = 8;
  * of messages); this keeps the stored result inside the transport ceiling.
  */
 const MERGE_BASE_RESULT_MAX_BYTES = EFFECT_TRANSPORT_MAX_BYTES;
-const OIDC_PREFIX = "oidc:";
-/**
- * Trusted repository capture admitted for this run.
- *
- * No planning path writes it, so a step that defers its contents to a capture
- * fails closed. Capture admission supplies it; planning never invents one.
- */
-const CAPTURE_KEY = "effect-capture";
 /** Per-tool counts of the model's tool calls, for the run trail. */
 const TOOL_CALL_COUNTS_KEY = "run-trail-tool-calls";
 /** The trail as it stood at the first settle, so every later read agrees. */
 const SETTLED_TRAIL_KEY = "run-trail-settled";
-const CAPTURE_PENDING_KEY = "effect-capture-pending";
-/** Incremented only after a terminal, non-captured attempt is released. */
-const CAPTURE_GENERATION_KEY = "effect-capture-generation";
 /**
  * The merge `repository.merge_base` wrote into the working tree, once the
  * runner reports one. The runner remembers it too, and captures in merge mode
  * from then on, so proposals are checked against it as they arrive.
  */
 const WRITTEN_MERGE_KEY = "merge-base-written";
-
-interface CapturePending {
-  operationId: string;
-  runId: string;
-  generation: number;
-}
 
 export class TaskRunnerSession extends DurableObject<Env> {
   #runner: RpcStub<RunnerCapability> | undefined;
@@ -559,9 +554,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     // proposal behind it, or a proposal recorded without being charged, would
     // both be observable to a concurrent call.
     return this.ctx.storage.transaction(async (transaction) => {
-      if (await transaction.get(CAPTURE_PENDING_KEY) || await transaction.get(CAPTURE_KEY)) {
-        throw new Error("The working tree capture has started; no further effect proposal may be admitted");
-      }
+      await assertCaptureNotStarted(transaction, "The working tree capture has started; no further effect proposal may be admitted");
       await assertProposalFitsLedger(transaction, proposal);
       return admitProposal(transaction, {
         proposal,
@@ -638,10 +631,14 @@ export class TaskRunnerSession extends DurableObject<Env> {
     await this.ctx.storage.transaction(async (transaction) => {
       const current = await transaction.get<AdmittedTaskCaptureV1>(CAPTURE_KEY);
       if (current) return;
-      const currentGeneration = await transaction.get<number>(CAPTURE_GENERATION_KEY) ?? 0;
-      if (currentGeneration !== generation) throw new Error("Repository capture generation changed; retry capture admission");
-      const pending = await transaction.get<CapturePending>(CAPTURE_PENDING_KEY);
-      if (pending && pending.operationId !== operationId) throw new Error("Repository capture admission conflict");
+      // Both keys are read before the comparison. That is harmless: the reads
+      // change nothing and a Durable Object transaction is serialised.
+      assertCaptureAdmissible(
+        await transaction.get<number>(CAPTURE_GENERATION_KEY) ?? 0,
+        generation,
+        await transaction.get<CapturePending>(CAPTURE_PENDING_KEY),
+        operationId,
+      );
       await transaction.put<CapturePending>(CAPTURE_PENDING_KEY, { operationId, runId: input.runId, generation });
     });
 
@@ -649,15 +646,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     try {
       const proposals = await readProposalLedger(this.ctx.storage);
       const consumers = captureMaterializingSteps(proposals);
-      if (consumers.length === 0) {
-        throw new Error("No proposed step materializes repository changes, so there is nothing to capture");
-      }
-      if (consumers.length > 1) {
-        throw new Error(
-          `Steps ${consumers.map((step) => step.stepName).join(", ")} each materialize repository changes, `
-          + "but a run captures the working tree once",
-        );
-      }
+      assertSingleCaptureConsumer(consumers);
       // Commit the barrier before draining. Calls that were already running may
       // settle; every later action/proposal loses its transactional admission.
       await this.settleUnresolvedBeforeNewAction(input.runId);
@@ -776,13 +765,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const identity = this.#identity;
     if (!identity || identity.hello.phase !== "plan") throw new Error("Runner action requires an authenticated planning session");
     const action = runnerActionV1Schema.parse(input);
-    // The capture is issued by the runtime, never requested. Accepting one
-    // here would let a runner decide when the working tree is photographed,
-    // which is the single decision this whole boundary exists to keep away
-    // from anything the task can influence.
-    if (action.kind === "repository.capture") {
-      throw new Error("Repository capture cannot be requested by the runner");
-    }
+    // The capture is issued by the runtime, never requested (see assertRunnerMayRequest).
+    assertRunnerMayRequest(action);
     const existing = await this.ctx.storage.get<StoredAction>(`${ACTION_PREFIX}${action.operationId}`);
     if (!existing) {
       await this.assertRunActive(identity.sessionId);
@@ -817,10 +801,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const raced = await transaction.get<StoredAction>(key);
       if (raced) return false;
-      if (action.kind !== "repository.capture" && (
-        await transaction.get(CAPTURE_PENDING_KEY) || await transaction.get(CAPTURE_KEY)
-      )) {
-        throw new Error("The working tree capture has started; no further repository action may run");
+      if (action.kind !== "repository.capture") {
+        await assertCaptureNotStarted(transaction, "The working tree capture has started; no further repository action may run");
       }
       await indexIfFirstAction(transaction);
       await transaction.put(actionEntries<StoredAction>({ canonicalAction, state: "running", action }));
@@ -940,16 +922,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const request = taskRunRequestV1Schema.parse(JSON.parse(row.request_json));
     const outcome = taskOutcomeV1Schema.parse(JSON.parse(row.outcome_json));
     if (outcome.status !== "completed") throw new Error("Effect plan answers a planning run that produced no plan");
-    const original = request.event;
-    if (original.workflow.runId !== identity.hello.runId
-      || original.workflow.runAttempt > identity.hello.runAttempt
-      || original.repository.id !== identity.hello.repositoryId
-      || original.repository.commitSha !== identity.hello.commitSha
-      || original.workflow.workflowRef !== identity.hello.workflowRef
-      || original.workflow.eventName !== identity.hello.eventName
-      || request.bundleHash !== identity.hello.agentHash) {
-      throw new Error("Effect plan is not bound to this repository workflow run and attempt");
-    }
+    assertEffectPlanBoundToHello(request, identity.hello);
     const planStub = this.env.RUNNER_SESSIONS.get(this.env.RUNNER_SESSIONS.idFromName(planRunId));
     const capture = await planStub.effectPlanCaptureForRuntime(planRunId);
     const plan = await buildTaskEffectPlan({ request, outcome, ...(capture ? { capture } : {}) });
@@ -970,14 +943,8 @@ export class TaskRunnerSession extends DurableObject<Env> {
       throw new Error("The task runtime admits only planning runs");
     }
     const runnerEvent = runnerEventV1Schema.parse(eventInput);
-    // The payload is untrusted. Its kind must agree with the event name GitHub
-    // signed into the OIDC claims, so a caller cannot present a discussion
-    // payload for an issues run and reach a trigger it was not granted.
-    if (eventNameByTriggerKind[runnerEvent.kind] !== identity.hello.eventName) {
-      throw new Error(
-        `Reported event ${runnerEvent.kind} does not match the ${identity.hello.eventName} event in the verified OIDC claims`,
-      );
-    }
+    // The payload is untrusted; its kind must agree with the signed OIDC event name.
+    assertReportedEventMatchesOidc(runnerEvent.kind, identity.hello.eventName);
     const { bundle, bundleHash, sourcePath, manualOnly } = await loadEnabledTaskBundle(
       this.#db(),
       identity.enrollment.repository_id,
@@ -1320,9 +1287,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
   private async reserveRunnerToolBudget(runId: string, operationId: string): Promise<void> {
     const request = await this.loadRunRequest(runId, "tool budget enforcement");
     await this.ctx.storage.transaction(async (transaction) => {
-      if (await transaction.get(CAPTURE_PENDING_KEY) || await transaction.get(CAPTURE_KEY)) {
-        throw new Error("The working tree capture has started; no further repository action may run");
-      }
+      await assertCaptureNotStarted(transaction, "The working tree capture has started; no further repository action may run");
       const reservationKey = `${RUNNER_TOOL_RESERVATION_PREFIX}${operationId}`;
       if (await transaction.get(reservationKey)) return;
       const reserved = await transaction.get<number>(RUNNER_TOOL_COUNT_KEY) ?? (await listActionSummaries(transaction)).length;
@@ -1380,11 +1345,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
   }
 
   private async consumeOidcToken(jti: string, expiresAt: number): Promise<void> {
-    const key = `${OIDC_PREFIX}${jti}`;
-    await this.ctx.storage.transaction(async (transaction) => {
-      if (await transaction.get(key)) throw new Error("OIDC token was already used");
-      await transaction.put(key, expiresAt);
-    });
+    await this.ctx.storage.transaction((transaction) => consumeOidcTokenIn(transaction, jti, expiresAt));
   }
 
   private async nextSequence(): Promise<number> {
@@ -1434,118 +1395,6 @@ function eventPayload(event: RunnerEventV1): Omit<RunnerEventV1, "schemaVersion"
   return payload;
 }
 
-function toolAction(sequence: number, operationId: string, invocation: HarnessToolInvocation): RunnerActionV1 {
-  const input = invocation.input;
-  if (input === null || typeof input !== "object" || Array.isArray(input)) throw new Error("Repository tool input must be an object");
-  const value = input as Record<string, JsonValue>;
-  if (invocation.toolName === "provider_api_read") return providerReadAction(sequence, operationId, value);
-  if (invocation.toolName === "repository_merge_base") {
-    // No field at all: the runner writes the merge it prepared before the
-    // session, so there is nothing for the model to choose.
-    exactKeys(value, taskToolInputKeys("repository_merge_base"));
-    // Writing a large merge runs the repository's filters over every changed
-    // file, so it gets more time than a default command.
-    return runnerActionV1Schema.parse({
-      schemaVersion: "gardener.runner.action/v1", sequence, operationId, kind: "repository.merge_base", timeoutMs: 5 * 60_000,
-    });
-  }
-  let command: string;
-  let cwd = "/workspace";
-  let timeoutMs = 30_000;
-  let maxOutputBytes = 256 * 1_024;
-  if (invocation.toolName === "repository_read_file") {
-    exactKeys(value, taskToolInputKeys("repository_read_file"));
-    const path = repositoryPath(value.path);
-    command = `python3 -c 'import pathlib,sys; root=pathlib.Path.cwd().resolve(); target=pathlib.Path(sys.argv[1]).resolve(); target.relative_to(root); print(target.read_text(encoding="utf-8"), end="")' ${shellQuote(path)}`;
-  } else if (invocation.toolName === "repository_list_files") {
-    exactKeys(value, taskToolInputKeys("repository_list_files"), true);
-    const path = listFilesPath(value.path);
-    const maxEntries = integer(value.maxEntries ?? 1_000, 1, 10_000, "maxEntries");
-    command = `git ls-files --cached --others --exclude-standard -- ${shellQuote(path)} | sed -n '1,${maxEntries}p'`;
-  } else if (invocation.toolName === "repository_exec") {
-    exactKeys(value, taskToolInputKeys("repository_exec"), true);
-    if (typeof value.command !== "string" || value.command.length < 1 || value.command.length > 64 * 1_024) throw new Error("Invalid repository command");
-    command = value.command;
-    if (value.cwd !== undefined) cwd = `/workspace/${repositoryPath(value.cwd)}`.replace(/\/$/, "");
-    if (value.timeoutMs !== undefined) timeoutMs = integer(value.timeoutMs, 1, 10 * 60_000, "timeoutMs");
-    if (value.maxOutputBytes !== undefined) maxOutputBytes = integer(value.maxOutputBytes, 1, 4 * 1_024 * 1_024, "maxOutputBytes");
-  } else {
-    throw new Error("Unknown repository tool");
-  }
-  return runnerActionV1Schema.parse({ schemaVersion: "gardener.runner.action/v1", sequence, operationId, kind: "shell.exec", command, cwd, timeoutMs, maxOutputBytes });
-}
-
-/** Matches the bridge-side `maxVariablesBytes` limit in `github-read.ts`. */
-const MAX_GRAPHQL_VARIABLES_BYTES = 32 * 1_024;
-const MAX_GRAPHQL_VARIABLES = 64;
-
-/**
- * Builds the read-only provider action. Only GET/HEAD REST reads and GraphQL
- * query documents are representable; the bridge enforces the same rules again
- * before any request leaves the runner.
- */
-function providerReadAction(sequence: number, operationId: string, value: Record<string, JsonValue>): RunnerActionV1 {
-  exactKeys(value, taskToolInputKeys("provider_api_read"), true);
-  const timeoutMs = value.timeoutMs === undefined ? 30_000 : integer(value.timeoutMs, 1, 10 * 60_000, "timeoutMs");
-  const maxOutputBytes = value.maxOutputBytes === undefined
-    ? 256 * 1_024
-    : integer(value.maxOutputBytes, 1, 1_024 * 1_024, "maxOutputBytes");
-  const transport = value.transport ?? "rest";
-  let request: JsonValue;
-  if (transport === "rest") {
-    if (value.query !== undefined || value.variables !== undefined || value.operationName !== undefined) {
-      throw new Error("REST provider reads cannot carry GraphQL fields");
-    }
-    const method = value.method === undefined ? "GET" : value.method;
-    if (method !== "GET" && method !== "HEAD") throw new Error("The provider read tool permits only GET and HEAD");
-    if (typeof value.path !== "string" || value.path.length < 1 || value.path.length > 2_048) {
-      throw new Error("Invalid provider read path");
-    }
-    request = { transport: "rest", method, path: value.path };
-  } else if (transport === "graphql") {
-    if (value.method !== undefined || value.path !== undefined) {
-      throw new Error("GraphQL provider reads cannot carry REST fields");
-    }
-    if (typeof value.query !== "string" || value.query.length < 1 || value.query.length > 32 * 1_024) {
-      throw new Error("Invalid provider read query");
-    }
-    const graphql: Record<string, JsonValue> = { transport: "graphql", query: value.query };
-    if (value.variables !== undefined) {
-      if (value.variables === null || typeof value.variables !== "object" || Array.isArray(value.variables)) {
-        throw new Error("Provider read variables must be an object");
-      }
-      // Bound before the action is canonicalized into durable storage, so a
-      // model cannot grow the Durable Object record with arbitrary payloads.
-      const serialized = JSON.stringify(value.variables);
-      if (serialized === undefined || new TextEncoder().encode(serialized).byteLength > MAX_GRAPHQL_VARIABLES_BYTES) {
-        throw new Error("Provider read variables exceed the size limit");
-      }
-      if (Object.keys(value.variables).length > MAX_GRAPHQL_VARIABLES) {
-        throw new Error("Provider read variables exceed the count limit");
-      }
-      graphql.variables = value.variables;
-    }
-    if (value.operationName !== undefined) {
-      if (typeof value.operationName !== "string") throw new Error("Invalid provider read operationName");
-      graphql.operationName = value.operationName;
-    }
-    request = graphql;
-  } else {
-    throw new Error("Provider read transport must be rest or graphql");
-  }
-  return runnerActionV1Schema.parse({
-    schemaVersion: "gardener.runner.action/v1",
-    sequence,
-    operationId,
-    kind: "github.read",
-    request,
-    timeoutMs,
-    maxOutputBytes,
-  });
-}
-
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
 /** A merge result must be the protocol's, whether it reports a merge or a refusal. */
 function mergeBaseResult(result: RunnerActionResultV1): RunnerMergeBaseResultV1 {
   let parsed: unknown;
@@ -1560,18 +1409,6 @@ function mergeBaseResult(result: RunnerActionResultV1): RunnerMergeBaseResultV1 
   }
   return merge;
 }
-
-function exactKeys(value: Record<string, JsonValue>, allowed: readonly string[], optional = false): void {
-  for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Error(`Unknown repository tool input ${key}`);
-  if (!optional) for (const key of allowed) if (!(key in value)) throw new Error(`Missing repository tool input ${key}`);
-}
-
-function integer(value: JsonValue, min: number, max: number, name: string): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) throw new Error(`Invalid ${name}`);
-  return value;
-}
-
-function shellQuote(value: string): string { return `'${value.replaceAll("'", `'"'"'`)}'`; }
 
 /**
  * Renders the terminal the planning runner returns.
