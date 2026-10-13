@@ -18,11 +18,6 @@ on:
       task-bundle-hash:
         required: true
         type: string
-      checkout-ref:
-        description: Commit to check out instead of the event's, for tasks that commit to pull request branches. Callers for releases before pull-request-head pass this.
-        required: false
-        type: string
-        default: ""
       pull-request-head:
         description: Number of a pull request whose current head to plan on, from a pull request event, a comment on one, or a manual run naming one. Empty for none.
         required: false
@@ -110,12 +105,12 @@ jobs:
       # otherwise keeps the default checkout.
       - name: Resolve current pull request head
         id: head
-        if: ${{ inputs.pull-request-head != '' || (inputs.checkout-ref != '' && github.event.pull_request.number) }}
+        if: ${{ inputs.pull-request-head != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_SHA: ${{ inputs.checkout-ref || github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.event.pull_request.head.sha }}
           EVENT_REF: ${{ github.event.pull_request.head.ref }}
-          PULL_NUMBER: ${{ inputs.pull-request-head || github.event.pull_request.number }}
+          PULL_NUMBER: ${{ inputs.pull-request-head }}
         run: |
           if [[ ! "$PULL_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]]; then
             echo "::warning::pull-request-head is not a pull request number; planning on the default checkout"
@@ -147,7 +142,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-          ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
+          ref: ${{ steps.head.outputs.sha }}
       - name: Run Gardener task
         id: gardener
         uses: scuffi/gardener/bridges/github/plan@033ab18e620d11aa4d2e42035c561fe7b1d296dd
@@ -155,7 +150,7 @@ jobs:
           runtime-url: ${{ inputs.runtime-url }}
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
           task-name: ${{ inputs.task-name }}
-          checkout-ref: ${{ steps.head.outputs.sha || inputs.checkout-ref }}
+          checkout-ref: ${{ steps.head.outputs.sha }}
           merge-base: ${{ inputs.merge-base }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload exact effect plan

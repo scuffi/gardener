@@ -336,9 +336,9 @@ and apply both refuse it.
 
 To push to an existing pull request branch, the task must build on that branch's head, not on the
 merge preview GitHub checks out by default. Set `checkout: pull-request-head` at the top level of
-the task. It needs a pull request trigger, and pull request, review and review comment events then
-check out the pull request's head. A task that only pushes to Gardener's own `gardener/**` pull
-requests keeps the default `branches`:
+the task. It needs a pull request or issue comment trigger, and pull request, review and review
+comment events then check out the pull request's head. A task that only pushes to Gardener's own
+`gardener/**` pull requests keeps the default `branches`:
 
 ```yaml
 checkout: pull-request-head
