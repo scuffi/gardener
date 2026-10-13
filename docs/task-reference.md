@@ -102,7 +102,7 @@ declared. Using a filter a kind does not accept is a compile error.
 | `authors` | Who may have written the text: `maintainers`, `any`, or a list of logins that may include `maintainers`. `maintainers` is the owner, organization members and collaborators, or anyone with write or admin access. The default is `maintainers` for comment triggers, `pull_request_review.submitted`, and any trigger with `mentions`; otherwise `any`. |
 | `opened-by` | Exact logins that opened the thread the event belongs to, such as `["dependabot[bot]"]`. |
 | `branches` | Branch patterns a push must match. Required on `github.push`. |
-| `cron` | A five-field cron expression. Required on `github.schedule`. A task has at most one. |
+| `cron` | A five-field cron expression separated by single spaces, using only numbers, `*`, ranges, lists and steps: no names such as `MON`, and no `?`, `L`, `W`, `#` or `@daily`. Required on `github.schedule`. A task has at most one. |
 
 Pull request events from forks never run, and `pull_request_target` cannot be declared. Manual runs
 ignore `labels-all`, `mentions` and `authors`.

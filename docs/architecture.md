@@ -118,9 +118,10 @@ whenever a later step may target it, and records the new `updated_at` in the ste
 step on that resource accepts either value. Releases and comments are not chained, so a second write
 to one of them in the same plan conflicts.
 
-Creating a comment on an issue, pull request or discussion is the one exception to an exact
-`updated_at`. Every comment on a thread moves that timestamp, so on an active thread the check would
-refuse most replies. A new comment only adds to the thread, so apply accepts a moved `updated_at`
+Steps that only add to a thread are the exception to an exact `updated_at`: creating a comment on
+an issue, pull request or discussion, replying to or resolving a review thread, and
+`pull_request.update_branch`. Every comment on a thread moves that timestamp, so on an active thread
+the check would refuse most replies. These steps only add to the thread, so apply accepts a moved `updated_at`
 while still requiring the open/closed state, and for a pull request the head, base and draft state,
 seen at planning, and refuses a locked conversation. A moved version is not read back into the chain,
 so a later exact step on the same resource still refuses. On an active thread, a plan such as comment
@@ -135,7 +136,7 @@ planning, is terminal.
 
 ## Data
 
-D1 is the only store. It holds seven tables:
+D1 is the only store. It holds eight tables:
 
 | Table | Contents |
 | --- | --- |
@@ -146,6 +147,7 @@ D1 is the only store. It holds seven tables:
 | `actions_task_audit` | Append-only run events (update and delete are blocked by triggers) |
 | `actions_control_audit` | Record of repository and task enable/disable changes, written by triggers |
 | `actions_repository_syncs` | One immutable row per accepted sync from the default branch, which also orders syncs |
+| `actions_installation` | Installation facts the CLI reads back: runtime origin, CLI version, deployment hash, deploy time and gateway settings. The runtime never reads them |
 
 The schema comes from the migrations in `apps/gardener/migrations/`, `0001` to `0004`.
 
@@ -166,7 +168,8 @@ source.
 
 ## Runtime dependencies
 
-The model runtime is Flue `2.0.3`, with `@earendil-works/pi-ai` `0.83.0`. Every model call goes
+The model runtime is Flue, with `@earendil-works/pi-ai`, at the versions pinned in
+`apps/gardener/package.json`. Every model call goes
 through AI Gateway: by default through the Workers AI binding to the account's gateway named
 `default`, or, for non-Workers-AI models when the operator configures one, over HTTPS to any gateway
 (`harness/flue/gateway-binding.ts`). Each bundle names its

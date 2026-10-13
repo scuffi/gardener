@@ -111,8 +111,9 @@ Task limits bound each run, not how many runs there are: a task runs once for ev
 matches it. Keep tasks with public triggers on `authors: maintainers`, and cap total model use with
 AI Gateway [rate limiting](https://developers.cloudflare.com/ai-gateway/features/rate-limiting/).
 Set it on the account's `default` gateway, which `@cf/…` models always use, and on the gateway
-passed to `--ai-gateway` if there is one. A request over the limit fails with HTTP 429; Gardener
-retries it twice with backoff, then fails the run without changing anything.
+passed to `--ai-gateway` if there is one. A request over the limit fails with HTTP 429. Gardener
+retries a request to the `--ai-gateway` gateway twice with backoff, then fails the run without
+changing anything. Gardener does not retry `@cf/…` models' requests through the `default` gateway.
 
 ## Changing tasks
 

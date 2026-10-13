@@ -94,6 +94,17 @@ Options:
   --ai-gateway-project <name>  Project sent as cf-aig-metadata on every gateway request
 `;
 
+const DOCTOR_HELP = `gardener doctor
+
+Check an existing installation: the runtime Worker exists and is healthy, the D1 schema is
+complete, and repositories whose tasks open or approve pull requests let Actions do so. Reports
+repository and enabled-task counts. Changes nothing.
+
+Options:
+  --workspace <name>           Existing Gardener installation
+  --source-root <path>         Trusted source checkout override (packaged runtime by default)
+`;
+
 const UPGRADE_HELP = `gardener upgrade
 
 Upgrade an existing runtime, move one repository's files to this release's pinned workflows,
@@ -172,7 +183,8 @@ async function main(argv: string[]): Promise<void> {
   if (rest[0] === "help" || rest[0] === "--help") {
     const help = command === "init" ? INIT_HELP
       : command === "generate" ? GENERATE_HELP
-      : command === "deploy" || command === "doctor" ? DEPLOY_HELP
+      : command === "deploy" ? DEPLOY_HELP
+      : command === "doctor" ? DOCTOR_HELP
       : command === "upgrade" ? UPGRADE_HELP
       : command === "connect" ? CONNECT_HELP
       : command === "debug" ? DEBUG_HELP

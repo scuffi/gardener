@@ -119,7 +119,7 @@ All of these take `--workspace my-gardener`:
 | Resume | `$GARDENER repository enable --repository my-org/my-repo` |
 | Recent runs | `$GARDENER runs --repository my-org/my-repo` |
 | One run in detail | `$GARDENER runs view --run <run-id>` |
-| Check the installation | `$GARDENER doctor --repository my-org/my-repo`, from the repository's root |
+| Check the installation | `$GARDENER doctor --workspace my-gardener` |
 
 `runs view` includes the audit trail. `tool.called` rows show each tool call the model made, with
 its status and a short target (a file path or provider route, never command text), in order.

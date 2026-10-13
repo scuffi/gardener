@@ -14,8 +14,8 @@ access to the account can run any command. One installation can serve many repos
 | Variable | Used by | Meaning |
 | --- | --- | --- |
 | `CLOUDFLARE_ACCOUNT_ID` | `deploy`, `yolo`, `upgrade` | The account to deploy to, when your Wrangler login can see several. |
-| `CLOUDFLARE_API_TOKEN` | `deploy`, `yolo`, `upgrade` | Needed only if Cloudflare Access protects every `workers.dev` hostname on the account: a token with **Access: Apps and Policies Edit**, so `deploy` can let GitHub Actions reach the runtime. |
-| `GARDENER_AI_GATEWAY_TOKEN` | `deploy --ai-gateway` | Token for an AI Gateway in another account. Stored as a Worker secret, never on disk. |
+| `CLOUDFLARE_API_TOKEN` | `deploy`, `yolo`, `upgrade` | Needed only if Cloudflare Access protects every `workers.dev` hostname on the account: a token with **Access: Apps and Policies Edit**, so `deploy` can let GitHub Actions reach the runtime. `CF_API_TOKEN` is read if it is unset. |
+| `GARDENER_AI_GATEWAY_TOKEN` | `deploy --ai-gateway`, `upgrade`, `yolo` | Token for an AI Gateway in another account. Stored as a Worker secret, never on disk. Exported during `upgrade` or a redeploy of an installation with a gateway, it replaces the stored token. |
 
 ## Commands
 
@@ -130,21 +130,18 @@ Options:
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
 ```
 
-### `deploy`
+### `doctor`
 
 ```text
-gardener deploy
+gardener doctor
 
-Deploy or update the Gardener runtime on Cloudflare. Existing gardener-<workspace>
-resources on the account are adopted; a runtime from a newer CLI is never replaced.
+Check an existing installation: the runtime Worker exists and is healthy, the D1 schema is
+complete, and repositories whose tasks open or approve pull requests let Actions do so. Reports
+repository and enabled-task counts. Changes nothing.
 
 Options:
-  --workspace <name>           Stable installation name
+  --workspace <name>           Existing Gardener installation
   --source-root <path>         Trusted source checkout override (packaged runtime by default)
-  --ai-gateway <account>/<id>  Send non-Workers-AI models to this AI Gateway, which may be in
-                               another account; its token comes from GARDENER_AI_GATEWAY_TOKEN.
-                               "off" removes it. Omitted keeps the current gateway
-  --ai-gateway-project <name>  Project sent as cf-aig-metadata on every gateway request
 ```
 
 ### `debug`

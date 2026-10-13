@@ -533,8 +533,10 @@ the [limits table](task-reference.md#limits).
 The plan job's timeout is `runtime-seconds` plus 10 minutes for checkout and setup, and a
 GitHub-hosted job runs for at most 6 hours, hence 21,000 seconds. Each model request asks for no more
 output than its model produces (the catalog's figure, or 32,000 for models it does not list), however
-large `output-tokens` is. Gateway requests that fail with a network error, HTTP 429 or a 5xx are
-retried twice, with backoff, before the run fails; nothing is retried once a response has started.
+large `output-tokens` is. Requests to a gateway set with `--ai-gateway` that fail with a network
+error or HTTP 429, 500, 502, 503, 504 or 529 are retried twice, with backoff (honouring a
+`Retry-After` of up to 30 seconds), before the run fails; nothing is retried once a response has
+started. Gardener does not retry requests for `@cf/…` models, which go through the Workers AI binding.
 
 Read scopes are fixed; write scopes come from the task:
 
