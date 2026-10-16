@@ -3,6 +3,17 @@
 Each release is a git tag (`vX.Y.Z`) and the matching `@scuffi/gardener` version on npm. To move a
 connected repository to a release, follow [Upgrading](../../docs/onboarding.md#upgrading).
 
+## 0.1.16 (2026-10-16)
+
+### Patch Changes
+
+- 066c5e4: `gardener doctor --help` describes `doctor` instead of printing `deploy`'s options.
+- 1d8ce47: - `gardener doctor` fails when the installation uses an AI Gateway but the runtime has no gateway token.
+  - A failed run's summary counts tool calls refused at the tool-call limit, which never ran, apart from the calls that did.
+  - A runtime older than the repository's workflows says to run `gardener upgrade` when it can't read the runner's event, instead of a schema error.
+  - `generate` and the pull request check refuse more than 100 tasks, the most one sync carries, and any `TASK.md` over 512 KiB, before compiling anything.
+  - The sync waits for a rate-limited runtime's `Retry-After`, up to 30 seconds, before retrying.
+
 ## 0.1.15 (2026-10-12)
 
 ### Patch Changes
