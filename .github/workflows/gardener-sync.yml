@@ -14,7 +14,9 @@ jobs:
   sync:
     name: Sync tasks
     runs-on: ubuntu-24.04
-    # Each request retries for up to about two minutes.
+    # Two requests, the OIDC token then the sync, run one after the other. Each
+    # makes up to four 30-second attempts with up to three waits of at most 30
+    # seconds (Retry-After), so at most about 3.5 minutes each.
     timeout-minutes: 10
     permissions:
       contents: read

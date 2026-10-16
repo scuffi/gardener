@@ -12,6 +12,8 @@ import { planProject, staleProjectFiles } from "./project.js";
 const TIMEOUT_MS = 30_000;
 /** Delays before each retry. Runners occasionally fail to connect at all. */
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+/** The longest `Retry-After` worth waiting for inside a five-minute job. */
+const MAX_RETRY_AFTER_MS = 30_000;
 
 async function main(): Promise<void> {
   // No default: an omitted mode fails, rather than silently syncing or not.
@@ -139,26 +141,56 @@ async function oidcToken(audience: string): Promise<string> {
 /**
  * Retries a request that failed to connect, timed out, or got a 5xx or 429,
  * logging the underlying cause each time. Other responses are returned as is.
+ * A `Retry-After` longer than the planned delay is waited for, up to 30
+ * seconds; a longer one returns the response rather than outlast the job.
  */
 export async function withRetries(
   label: string,
   request: () => Promise<Response>,
   delays: readonly number[] = RETRY_DELAYS_MS,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<{ response: Response; attempt: number }> {
   for (let attempt = 1; ; attempt += 1) {
     let failure: string;
+    let delay = delays[attempt - 1] ?? 0;
     try {
       const response = await request();
       if (response.status < 500 && response.status !== 429) return { response, attempt };
       if (attempt > delays.length) return { response, attempt };
+      const asked = retryAfterMs(response.headers.get("retry-after"));
+      if (asked !== undefined && asked > MAX_RETRY_AFTER_MS) {
+        console.log(`${label} failed (attempt ${attempt}): HTTP ${response.status}, and it asks to retry after ${Math.ceil(asked / 1_000)} s, longer than this job waits; not retrying`);
+        return { response, attempt };
+      }
+      if (asked !== undefined) delay = Math.max(delay, asked);
+      // The body is never read; release the connection before retrying.
+      await response.body?.cancel().catch(() => {});
       failure = `HTTP ${response.status}`;
     } catch (error) {
       failure = describeError(error);
       if (attempt > delays.length) throw new Error(`${label} failed: ${failure}`, { cause: error });
     }
     console.log(`${label} failed (attempt ${attempt}): ${failure}; retrying`);
-    await new Promise((resolve) => setTimeout(resolve, delays[attempt - 1]));
+    await wait(delay);
   }
+}
+
+/** A `Retry-After` header in milliseconds: delay seconds or an HTTP date. Undefined when absent or unreadable. */
+export function retryAfterMs(header: string | null, now = Date.now()): number | undefined {
+  if (header === null || header.trim() === "") return undefined;
+  const text = header.trim();
+  if (/^\d+$/.test(text)) return Number(text) * 1_000;
+  // Only the three HTTP-date forms (RFC 9110 5.6.7): Date.parse alone reads
+  // "-5" or "1.5" as dates.
+  const httpDate = [
+    /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/, // IMF-fixdate
+    /^[A-Z][a-z]+, \d{2}-[A-Z][a-z]{2}-\d{2} \d{2}:\d{2}:\d{2} GMT$/, // RFC 850
+    /^[A-Z][a-z]{2} [A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} \d{4}$/, // asctime, in GMT
+  ];
+  if (!httpDate.some((form) => form.test(text))) return undefined;
+  if (httpDate[2]!.test(text)) return Math.max(0, Date.parse(`${text} GMT`) - now);
+  const date = Date.parse(text);
+  return Number.isFinite(date) ? Math.max(0, date - now) : undefined;
 }
 
 /** A fetch error with its cause, which Node otherwise hides behind "fetch failed". */

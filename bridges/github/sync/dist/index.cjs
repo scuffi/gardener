@@ -7368,6 +7368,7 @@ var require_dist = __commonJS({
 var sync_main_exports = {};
 __export(sync_main_exports, {
   describeError: () => describeError,
+  retryAfterMs: () => retryAfterMs,
   withRetries: () => withRetries
 });
 module.exports = __toCommonJS(sync_main_exports);
@@ -30085,6 +30086,7 @@ function workflowSlug(taskId) {
 // src/sync-main.ts
 var TIMEOUT_MS = 3e4;
 var RETRY_DELAYS_MS = [1e3, 2e3, 4e3];
+var MAX_RETRY_AFTER_MS = 3e4;
 async function main() {
   const mode = process.env.INPUT_MODE?.trim();
   if (mode !== "sync" && mode !== "check") {
@@ -30190,21 +30192,47 @@ async function oidcToken(audience) {
   console.log(`::add-mask::${value}`);
   return value;
 }
-async function withRetries(label, request, delays = RETRY_DELAYS_MS) {
+async function withRetries(label, request, delays = RETRY_DELAYS_MS, wait = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms))) {
   for (let attempt = 1; ; attempt += 1) {
     let failure2;
+    let delay = delays[attempt - 1] ?? 0;
     try {
       const response = await request();
       if (response.status < 500 && response.status !== 429) return { response, attempt };
       if (attempt > delays.length) return { response, attempt };
+      const asked = retryAfterMs(response.headers.get("retry-after"));
+      if (asked !== void 0 && asked > MAX_RETRY_AFTER_MS) {
+        console.log(`${label} failed (attempt ${attempt}): HTTP ${response.status}, and it asks to retry after ${Math.ceil(asked / 1e3)} s, longer than this job waits; not retrying`);
+        return { response, attempt };
+      }
+      if (asked !== void 0) delay = Math.max(delay, asked);
+      await response.body?.cancel().catch(() => {
+      });
       failure2 = `HTTP ${response.status}`;
     } catch (error62) {
       failure2 = describeError(error62);
       if (attempt > delays.length) throw new Error(`${label} failed: ${failure2}`, { cause: error62 });
     }
     console.log(`${label} failed (attempt ${attempt}): ${failure2}; retrying`);
-    await new Promise((resolve2) => setTimeout(resolve2, delays[attempt - 1]));
+    await wait(delay);
   }
+}
+function retryAfterMs(header, now = Date.now()) {
+  if (header === null || header.trim() === "") return void 0;
+  const text = header.trim();
+  if (/^\d+$/.test(text)) return Number(text) * 1e3;
+  const httpDate = [
+    /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/,
+    // IMF-fixdate
+    /^[A-Z][a-z]+, \d{2}-[A-Z][a-z]{2}-\d{2} \d{2}:\d{2}:\d{2} GMT$/,
+    // RFC 850
+    /^[A-Z][a-z]{2} [A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} \d{4}$/
+    // asctime, in GMT
+  ];
+  if (!httpDate.some((form) => form.test(text))) return void 0;
+  if (httpDate[2].test(text)) return Math.max(0, Date.parse(`${text} GMT`) - now);
+  const date5 = Date.parse(text);
+  return Number.isFinite(date5) ? Math.max(0, date5 - now) : void 0;
 }
 function describeError(error62) {
   if (!(error62 instanceof Error)) return String(error62);
@@ -30227,5 +30255,6 @@ if (typeof require !== "undefined" && require.main === module) {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   describeError,
+  retryAfterMs,
   withRetries
 });
