@@ -1,0 +1,19 @@
+scripts/check-versions.mjs
+  s_de0b486c128948::t_8abec262ae12e2 13,21-23,34-36,58-59,62,73,75-78,85,89-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7d1b9fd45981f8574099b564959f1cec3bf7340e",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
