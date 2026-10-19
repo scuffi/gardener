@@ -9,7 +9,7 @@
     "changeset": "changeset",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "check": "pnpm versions:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:actions-runtime && pnpm check:cli-package && pnpm check:bridge-dist && pnpm build:deploy",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:actions-runtime && pnpm check:cli-package && pnpm check:bridge-dist && pnpm build:deploy && pnpm versions:check",
     "versions:check": "node scripts/check-versions.mjs",
     "check:actions-runtime": "node scripts/check-actions-runtime.mjs",
     "check:bridge-dist": "node scripts/check-bridge-dist.mjs",

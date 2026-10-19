@@ -2,9 +2,10 @@
 
 Every dependency is pinned to an exact version.
 
-- `pnpm versions:check` compares each pin with the latest npm release. It fails on version ranges,
-  on disagreements between workspace packages, and on outdated packages that are not deliberately
-  held. It runs as part of `pnpm check`.
+- `pnpm versions:check` compares each pin with the latest npm release. It fails on version ranges
+  and on disagreements between workspace packages. An outdated package that isn't deliberately held
+  is a warning (an annotation in CI), not a failure, so a new npm release never stops the other
+  checks. It runs last in `pnpm check`.
 - Deliberately held packages are listed with a reason in `scripts/check-versions.mjs`. These are
   the Flue runtime and its model-provider peers, the Cloudflare build and deploy tooling, and pnpm.
   A newer release of one of them is a prompt to re-qualify, not an automatic upgrade.

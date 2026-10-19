@@ -40,9 +40,9 @@ git add -A
 pnpm check
 ```
 
-`pnpm check` runs the version checks, typecheck, every test suite, every build, the CLI package and
-bridge bundle checks, and a deploy dry run. It must pass before you push. Stage your changes first:
-some checks compare generated files against git.
+`pnpm check` runs typecheck, every test suite, every build, the CLI package and bridge bundle checks,
+a deploy dry run, and the version checks (an outdated package only warns). It must pass before you
+push. Stage your changes first: some checks compare generated files against git.
 
 Run one package's tests with `pnpm --filter <package> test`, and one file with
 `pnpm --filter <package> exec vitest run <file>`.

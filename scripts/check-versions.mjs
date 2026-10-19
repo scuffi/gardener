@@ -46,29 +46,42 @@ const qualificationPins = new Map([
   ["valibot", "qualified Flue runtime peer"],
 ]);
 
+// Ranges and disagreements between packages fail. A newer npm release only
+// warns: it is a prompt to upgrade (Dependabot opens the PR), and failing on it
+// would stop every other check from running the moment anything is published.
+const annotate = process.env.GITHUB_ACTIONS === "true";
+const warn = (line) => {
+  console.error(line);
+  if (annotate) console.log(`::warning title=Dependency drift::${line}`);
+};
+
 const exactVersion = (range) => range.match(/^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/)?.[1];
 const results = await Promise.all(
   [...configured].sort(([a], [b]) => a.localeCompare(b)).map(async ([name, detail]) => {
-    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`, {
-      headers: { accept: "application/json", "user-agent": "gardener-version-check/1" },
-    });
-    if (!response.ok) throw new Error(`Registry lookup failed for ${name}: HTTP ${response.status}`);
-    const latest = (await response.json()).version;
     const current = exactVersion(detail.range);
-    return { name, current, latest, detail };
+    try {
+      const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`, {
+        headers: { accept: "application/json", "user-agent": "gardener-version-check/1" },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return { name, current, latest: (await response.json()).version, detail };
+    } catch (error) {
+      return { name, current, latest: undefined, lookupError: error instanceof Error ? error.message : String(error), detail };
+    }
   }),
 );
 
 let failed = false;
-for (const { name, current, latest, detail } of results) {
+for (const { name, current, latest, lookupError, detail } of results) {
   if (!current) {
     failed = true;
     console.error(`INVALID  ${name}@${detail.range} must be pinned to an exact version`);
+  } else if (latest === undefined) {
+    warn(`UNKNOWN  ${name}@${current}; the npm registry lookup failed (${lookupError})`);
   } else if (current !== latest && qualificationPins.has(name)) {
     console.log(`PINNED   ${name}@${current}; latest is ${latest} (${qualificationPins.get(name)})`);
   } else if (current !== latest) {
-    failed = true;
-    console.error(`OUTDATED ${name}@${current}; latest is ${latest} (${detail.manifests.join(", ")})`);
+    warn(`OUTDATED ${name}@${current}; latest is ${latest} (${detail.manifests.join(", ")})`);
   } else {
     console.log(`CURRENT  ${name}@${current}`);
   }

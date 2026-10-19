@@ -166,7 +166,7 @@ Gardener is pre-release.
 
 ```bash
 pnpm install
-pnpm check   # versions, typecheck, tests, builds, package and bridge checks, deploy dry run
+pnpm check   # typecheck, tests, builds, package and bridge checks, deploy dry run, versions
 ```
 
 | Path | Contents |
