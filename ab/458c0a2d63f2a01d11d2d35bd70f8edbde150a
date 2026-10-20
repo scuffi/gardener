@@ -1,0 +1,61 @@
+SECURITY.md
+  s_afec0ff6bc51f3::t_3e577a68bf7a7d 92-94
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_afec0ff6bc51f3::t_f6681d6fc45bdb 22-24,517-530
+apps/gardener/src/task-runtime/run-admissions.ts
+  s_afec0ff6bc51f3::t_ab55584dbb7ccb 62-63,67-68,84-88
+apps/gardener/src/task-runtime/session-checks.ts
+  s_afec0ff6bc51f3::t_ab2112a6a70e40 132-137,188-190
+apps/gardener/test/task-effect-scope.test.ts
+  s_afec0ff6bc51f3::t_311bcd19a77183 177-185,187,189-196
+apps/gardener/test/task-run-admissions.test.ts
+  s_afec0ff6bc51f3::t_2ebb855c5ff720 85-104
+apps/gardener/test/task-session-admission.test.ts
+  s_afec0ff6bc51f3::t_4d4e422b3a6c1c 33-40
+apps/gardener/test/task-session-event.test.ts
+  s_afec0ff6bc51f3::t_ec60c7594b1c86 76
+apps/gardener/test/task-trusted-starter.test.ts
+  s_afec0ff6bc51f3::t_d4c20d81f97e89 56-57,59,140-142
+docs/operations.md
+  s_afec0ff6bc51f3::t_31ecec1a5dfe0b 230-234
+docs/task-authoring.md
+  s_afec0ff6bc51f3::t_126cbfb8d6fd1e 321-322,333-335,360-362
+packages/cli/src/task-authoring.ts
+  s_afec0ff6bc51f3::t_200ebc241f2f09 168-173,178-181
+packages/cli/src/task-guide.md
+  s_afec0ff6bc51f3::t_06432cc9a400de 243-247
+packages/cli/test/task-project.test.ts
+  s_afec0ff6bc51f3::t_b2622a104fbce8 586,591-592,595-599
+packages/contracts/src/task.ts
+  s_afec0ff6bc51f3::t_3a028cacdf4c42 2257-2270,2303-2305
+packages/contracts/test/effect-plan-v1.test.ts
+  s_afec0ff6bc51f3::t_3f4b5386bd6343 880-890
+packages/contracts/test/trigger-scope-v1.test.ts
+  s_afec0ff6bc51f3::t_cf2ccbd0facc8e 4,137-152,160
+packages/protocol/src/schema.ts
+  s_afec0ff6bc51f3::t_746c73fa01a042 430-431,433-436
+packages/protocol/test/runner-action.test.ts
+  s_afec0ff6bc51f3::t_906a988a6e9cea 51,60-75
+packages/runner/src/author-permission.ts
+  s_afec0ff6bc51f3::t_078cb95cc9f244 59,68,74,76,80-81,84-85
+packages/runner/src/main.ts
+  s_afec0ff6bc51f3::t_b01715ca70d87f 8,174-176,178,181
+packages/runner/test/author-permission.test.ts
+  s_afec0ff6bc51f3::t_9a370a3c9a937c 3,101-104,108,112-119,122-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ab458c0a2d63f2a01d11d2d35bd70f8edbde150a",
+  "prompts": {},
+  "sessions": {
+    "s_afec0ff6bc51f3": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1594c-92a4-7449-928a-d960abe78431",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
