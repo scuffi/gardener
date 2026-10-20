@@ -227,6 +227,11 @@ To go back to an earlier release, deploy or upgrade from that release's CLI. `de
 replace a newer runtime, so this needs a newer release that reverts the change. Migrations are
 forward-only.
 
+Going back below 0.1.17 fails any run that 0.1.17 admitted and that is still in flight: its stored
+request records who started it, which an older runtime refuses to read. Let in-flight runs finish,
+or rerun them afterwards. Migration 0005, which holds run admissions for the run limits, only adds a
+table, so it is safe to leave in place; older runtimes ignore it.
+
 Gardener has no teardown command. To remove an installation, delete its `gardener-<workspace>`
 Worker and D1 database, and any Access application for its hostname, in the Cloudflare dashboard.
 

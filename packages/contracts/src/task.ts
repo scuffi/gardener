@@ -2255,6 +2255,20 @@ function resourceLabel(resource: TaskEventResourceV1): string {
 const CONFINED = "this run is confined to what triggered it";
 
 /**
+ * Kinds that, under trigger scope, must name their pull request directly and
+ * may not use the created-resource exemption. A confined run that opens a
+ * pull request and then merges or approves it would carry its own changes
+ * into the default branch past the trigger, which is no different from
+ * committing there directly. Without trigger scope they may still reference a
+ * pull request the plan opened. Apart from `triggeringPullRequestKinds`,
+ * which confine a kind to the triggering pull request in every scope.
+ */
+export const directTriggerScopeKinds = [
+  "pull_request.merge",
+  "pull_request.review.submit",
+] as const satisfies readonly OperationKind[];
+
+/**
  * Why this step may not run when the run is confined to its trigger, or
  * `undefined` when it may. Default-deny: only the kinds classified above are
  * ever allowed. Text is never inspected; only the resource a step acts on.
@@ -2285,6 +2299,9 @@ export function triggerScopeRefusal(
   if (reference !== undefined) {
     if ((triggeringPullRequestKinds as readonly string[]).includes(kind)) {
       return `${kind} must name the pull request that triggered this run directly, not by reference`;
+    }
+    if ((directTriggerScopeKinds as readonly string[]).includes(kind)) {
+      return `${kind} must name the pull request that triggered this run directly, not by reference: ${CONFINED}, so it may not ${kind === "pull_request.merge" ? "merge" : "review"} a pull request the run opened`;
     }
     const ref = reference !== null && typeof reference === "object" && !Object.hasOwn(reference, "placeholders")
       ? reference as { step?: unknown; output?: unknown }

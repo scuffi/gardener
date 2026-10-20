@@ -877,6 +877,17 @@ describe("effect scope in the plan", () => {
     ]);
   });
 
+  it("refuses merging a pull request the run opened only in trigger scope", () => {
+    const { pullNumber: _, ...merge } = proposablePayloadFor("pull_request.merge");
+    const operations = [
+      planOperation("pull_request.open", "open", 1),
+      planOperation("pull_request.merge", "merge", 2, { payload: merge, references: { "/pullNumber": { step: "open", output: "pullNumber" } } }),
+    ];
+    expect(messages(parse("trigger", operations))).toEqual([expect.stringMatching(/may not merge a pull request the run opened/)]);
+    expect(parse("repository", operations).success).toBe(true);
+    expect(parse(undefined, operations).success).toBe(true);
+  });
+
   it("refuses targeted steps when nothing triggered the run, but lets it create", () => {
     const push = { kind: "github.push", eventName: "push", action: null, resource: null, commentId: null };
     expect(messages(taskEffectPlanV1Schema.safeParse(plan({ effectScope: "trigger", event: push }))))

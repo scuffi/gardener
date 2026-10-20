@@ -318,7 +318,8 @@ A run's starter is **trusted** when the run is:
   label but can't write code.
 
 Everyone else is untrusted: outsiders, bots, pull request heads in another repository, and anyone
-whose access couldn't be checked. A bot's push is untrusted on purpose: Dependabot's commit messages
+whose access couldn't be checked. That includes logins named in `authors` who aren't maintainers,
+and every bot named there: the trigger admits them, and their runs get trigger scope. A bot's push is untrusted on purpose: Dependabot's commit messages
 carry upstream release notes, which anyone upstream can write. Opening or reviewing a pull request
 doesn't count as a push, because anyone can open a pull request from a branch that already exists.
 
@@ -329,6 +330,9 @@ triggered them, which Gardener calls **trigger scope**:
   an earlier step of the same plan created with `issue.create`, `pull_request.open` or
   `pull_request.open_draft`. A comment on a pull request's conversation counts as that pull request.
   Discussion #5 and issue #5 are different things, and only the one that triggered the run counts.
+  `pull_request.merge` and `pull_request.review.submit` must name the triggering pull request
+  itself: a confined run may not merge or approve a pull request it opened, which would carry its
+  own changes into the default branch.
 - Steps that create something new are allowed: `issue.create`, `pull_request.open`,
   `pull_request.open_draft`, `branch.create` and `release.create`. So is `commit.create`, which
   always builds on the run's own checkout.
@@ -353,8 +357,9 @@ that declares `pull_request.merge` can still merge the outsider's own pull reque
 persuades the model. `generate` warns when a task that admits non-maintainers declares a high-impact
 effect: `pull_request.merge`, `pull_request.review.submit` (an approval can satisfy branch
 protection) or a `release.*` kind. A task admits non-maintainers unless every trigger is a schedule,
-a manual run, a push, or an authored trigger limited by `authors` to maintainers or named logins.
-`issue.reopened`, the `labeled` triggers and `pull_request.synchronize` all admit them.
+a manual run, or an authored trigger limited to `authors: maintainers`. A push (a bot can push),
+named logins in `authors`, `issue.reopened`, the `labeled` triggers and `pull_request.synchronize`
+all admit them.
 
 A `branch.create` entry with wide `branches` patterns lets a confined run create branches anywhere
 those patterns allow. The [run limits](#run-limits) bound how many.

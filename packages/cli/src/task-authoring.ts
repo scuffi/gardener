@@ -165,16 +165,20 @@ function authoredRunLimit(field: "runs" | "runsPerAuthor", label: string) {
 }
 
 /**
- * Whether anyone but a maintainer can start this task. Only schedules,
- * manual runs, pushes (each needs write access) and authored triggers whose
- * `authors` names maintainers or exact logins keep outsiders out. Everything
- * else admits them: a reopened issue can be its author's doing, triage can
+ * Whether anyone but a maintainer can start this task, judged the way the
+ * runtime judges who started a run. Only schedules and manual runs (both need
+ * write access) and authored triggers limited to `authors: maintainers` keep
+ * everyone else out. Everything else admits them: a push can be a bot's
+ * (Dependabot's commits carry upstream release notes), a named login needn't
+ * be a maintainer, a reopened issue can be its author's doing, triage can
  * label but reads as `read`, and a bot can move a pull request's head.
  */
 export function admitsNonMaintainers(bundle: Pick<TaskBundleV1, "triggers">): boolean {
   return bundle.triggers.some((trigger) => {
-    if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER || trigger.kind === PUSH_TRIGGER) return false;
-    return !("authors" in trigger) || trigger.authors === "any";
+    if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER) return false;
+    if (!("authors" in trigger)) return true;
+    const authors: unknown = trigger.authors;
+    return !(authors === "maintainers" || (Array.isArray(authors) && authors.every((entry) => entry === "maintainers")));
   });
 }
 

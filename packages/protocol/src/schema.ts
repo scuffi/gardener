@@ -427,8 +427,13 @@ function runnerEventMember<Kind extends string, Shape extends z.ZodRawShape>(kin
      * say), when it is not the subject's author. Looked up by the bridge only
      * when nothing else decides whether the run's starter is trusted; an old
      * bridge never sends it, which only narrows the run's effect scope.
+     * `actorId` names whose permission it is, so the Worker uses it only for
+     * the actor its signed token names, never for someone else.
      */
-    actorPermission: eventAuthorPermission,
+    actorPermission: z.strictObject({
+      actorId: githubNumericId,
+      permission: eventAuthorPermission.unwrap(),
+    }).optional(),
   });
 }
 

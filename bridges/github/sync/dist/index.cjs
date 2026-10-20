@@ -28997,6 +28997,10 @@ function resourceLabel(resource) {
   return `${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}`;
 }
 var CONFINED = "this run is confined to what triggered it";
+var directTriggerScopeKinds = [
+  "pull_request.merge",
+  "pull_request.review.submit"
+];
 function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   const scope = Object.hasOwn(triggerScopeClassification, kind) ? triggerScopeClassification[kind] : void 0;
   if (scope === void 0 || scope.allow === "never") {
@@ -29007,6 +29011,9 @@ function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   if (reference !== void 0) {
     if (triggeringPullRequestKinds.includes(kind)) {
       return `${kind} must name the pull request that triggered this run directly, not by reference`;
+    }
+    if (directTriggerScopeKinds.includes(kind)) {
+      return `${kind} must name the pull request that triggered this run directly, not by reference: ${CONFINED}, so it may not ${kind === "pull_request.merge" ? "merge" : "review"} a pull request the run opened`;
     }
     const ref = reference !== null && typeof reference === "object" && !Object.hasOwn(reference, "placeholders") ? reference : {};
     const createdBy = typeof ref.step === "string" ? earlier.get(ref.step) : void 0;
@@ -29714,8 +29721,10 @@ function authoredRunLimit(field, label) {
 }
 function admitsNonMaintainers(bundle) {
   return bundle.triggers.some((trigger) => {
-    if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER || trigger.kind === PUSH_TRIGGER) return false;
-    return !("authors" in trigger) || trigger.authors === "any";
+    if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER) return false;
+    if (!("authors" in trigger)) return true;
+    const authors = trigger.authors;
+    return !(authors === "maintainers" || Array.isArray(authors) && authors.every((entry) => entry === "maintainers"));
   });
 }
 function highImpactWarning(bundle) {

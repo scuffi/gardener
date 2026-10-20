@@ -41913,6 +41913,10 @@ function resourceLabel(resource) {
   return `${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}`;
 }
 var CONFINED = "this run is confined to what triggered it";
+var directTriggerScopeKinds = [
+  "pull_request.merge",
+  "pull_request.review.submit"
+];
 function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   const scope = Object.hasOwn(triggerScopeClassification, kind) ? triggerScopeClassification[kind] : void 0;
   if (scope === void 0 || scope.allow === "never") {
@@ -41923,6 +41927,9 @@ function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   if (reference !== void 0) {
     if (triggeringPullRequestKinds.includes(kind)) {
       return `${kind} must name the pull request that triggered this run directly, not by reference`;
+    }
+    if (directTriggerScopeKinds.includes(kind)) {
+      return `${kind} must name the pull request that triggered this run directly, not by reference: ${CONFINED}, so it may not ${kind === "pull_request.merge" ? "merge" : "review"} a pull request the run opened`;
     }
     const ref = reference !== null && typeof reference === "object" && !Object.hasOwn(reference, "placeholders") ? reference : {};
     const createdBy = typeof ref.step === "string" ? earlier.get(ref.step) : void 0;
@@ -42597,8 +42604,13 @@ function runnerEventMember(kind, shape) {
      * say), when it is not the subject's author. Looked up by the bridge only
      * when nothing else decides whether the run's starter is trusted; an old
      * bridge never sends it, which only narrows the run's effect scope.
+     * `actorId` names whose permission it is, so the Worker uses it only for
+     * the actor its signed token names, never for someone else.
      */
-    actorPermission: eventAuthorPermission
+    actorPermission: external_exports.strictObject({
+      actorId: githubNumericId2,
+      permission: eventAuthorPermission.unwrap()
+    }).optional()
   });
 }
 var issuePayload2 = { issue: eventIssue };
@@ -43300,17 +43312,17 @@ function withAuthorPermission(event, permission) {
   const parsed = runnerEventV1Schema.safeParse({ ...event, [found.key]: { ...found.subject, authorPermission: permission } });
   return parsed.success ? parsed.data : event;
 }
-function actorPermissionLogin(event, actor2) {
+function actorPermissionTarget(event, actor2) {
   const key = starterSubject[event.kind];
   if (key === void 0) return null;
   const subject = event[key];
   if (subject === null || typeof subject !== "object") return null;
-  if (actor2.login === void 0 || !LOGIN.test(actor2.login)) return null;
+  if (actor2.login === void 0 || actor2.login.endsWith("[bot]") || !LOGIN.test(actor2.login)) return null;
   if (actor2.id === void 0 || !/^[1-9][0-9]{0,19}$/.test(actor2.id)) return null;
-  return subject.author?.id === actor2.id ? null : actor2.login;
+  return subject.author?.id === actor2.id ? null : { login: actor2.login, id: actor2.id };
 }
-function withActorPermission(event, permission) {
-  const parsed = runnerEventV1Schema.safeParse({ ...event, actorPermission: permission });
+function withActorPermission(event, actorId, permission) {
+  const parsed = runnerEventV1Schema.safeParse({ ...event, actorPermission: { actorId, permission } });
   return parsed.success ? parsed.data : event;
 }
 async function fetchAuthorPermission(input2) {
@@ -48986,14 +48998,14 @@ async function githubEvent(checkoutSha) {
     token: providerReadToken
   });
   const withAuthor = authored === null ? event : withAuthorPermission(event, authored);
-  const actorLogin = actorPermissionLogin(withAuthor, { login: process.env.GITHUB_ACTOR, id: process.env.GITHUB_ACTOR_ID });
-  if (actorLogin === null) return withAuthor;
-  const actor2 = await fetchAuthorPermission({
+  const actor2 = actorPermissionTarget(withAuthor, { login: process.env.GITHUB_ACTOR, id: process.env.GITHUB_ACTOR_ID });
+  if (actor2 === null) return withAuthor;
+  const permission = await fetchAuthorPermission({
     repository: requiredEnvironment2("GITHUB_REPOSITORY"),
-    login: actorLogin,
+    login: actor2.login,
     token: providerReadToken
   });
-  return actor2 === null ? withAuthor : withActorPermission(withAuthor, actor2);
+  return permission === null ? withAuthor : withActorPermission(withAuthor, actor2.id, permission);
 }
 async function onCheckedOutHead(event, checkoutSha) {
   const pullRequest = "pullRequest" in event ? event.pullRequest : void 0;

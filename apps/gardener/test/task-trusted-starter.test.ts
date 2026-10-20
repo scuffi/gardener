@@ -53,8 +53,10 @@ const push = { ref: "refs/heads/main", before: "a".repeat(40), after: "b".repeat
 function decide(
   normalized: NormalizedEventV1,
   actor: { id: string; login: string },
-  actorPermission?: AuthorPermissionV1,
+  permission?: AuthorPermissionV1,
+  actorId: string = actor.id,
 ) {
+  const actorPermission = permission === undefined ? undefined : { actorId, permission };
   const starter = trustedStarter({ eventName: normalized.workflow.eventName, actor, event: normalized, actorPermission });
   // Every decision must be one the strict request schema accepts.
   expect(taskRunStarterV1Schema.parse(starter)).toEqual(starter);
@@ -135,6 +137,9 @@ describe("trusted starter", () => {
     expect(decide(labeled, labeller, "none")).toEqual({ trusted: false, reason: "actor_not_maintainer" });
     // A failed lookup, or an old bridge that never looks, fails closed.
     expect(decide(labeled, labeller)).toEqual({ trusted: false, reason: "actor_unknown" });
+    // A permission looked up for anyone but the signed actor is someone else's, so it counts as no lookup.
+    expect(decide(labeled, labeller, "admin", outsider.id)).toEqual({ trusted: false, reason: "actor_unknown" });
+    expect(decide(labeled, labeller, "write", maintainer.id)).toEqual({ trusted: false, reason: "actor_unknown" });
     // A bot is never trusted, whatever a lookup says.
     expect(decide(labeled, dependabot, "write")).toEqual({ trusted: false, reason: "bot" });
   });

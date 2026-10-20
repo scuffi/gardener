@@ -5,7 +5,7 @@ import path from "node:path";
 import { taskEffectPlanV1Schema, type TaskEffectPlanV1 } from "@gardener/contracts";
 import { type RunnerEventV1 } from "@gardener/protocol";
 import {
-  actorPermissionLogin,
+  actorPermissionTarget,
   authorPermissionLogin,
   fetchAuthorPermission,
   withActorPermission,
@@ -171,14 +171,14 @@ async function githubEvent(checkoutSha: string | undefined): Promise<RunnerEvent
   // Whoever acted on someone else's issue or pull request (the labeller, say)
   // is trusted only with write access, looked up the same way. The Worker
   // decides from it; without it the run is confined to what triggered it.
-  const actorLogin = actorPermissionLogin(withAuthor, { login: process.env.GITHUB_ACTOR, id: process.env.GITHUB_ACTOR_ID });
-  if (actorLogin === null) return withAuthor;
-  const actor = await fetchAuthorPermission({
+  const actor = actorPermissionTarget(withAuthor, { login: process.env.GITHUB_ACTOR, id: process.env.GITHUB_ACTOR_ID });
+  if (actor === null) return withAuthor;
+  const permission = await fetchAuthorPermission({
     repository: requiredEnvironment("GITHUB_REPOSITORY"),
-    login: actorLogin,
+    login: actor.login,
     token: providerReadToken,
   });
-  return actor === null ? withAuthor : withActorPermission(withAuthor, actor);
+  return permission === null ? withAuthor : withActorPermission(withAuthor, actor.id, permission);
 }
 
 /** Moves a queued run's event to the pull request head the workflow checked out. */

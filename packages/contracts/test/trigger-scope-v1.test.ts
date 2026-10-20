@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { operationCatalog, operationKindValues, type OperationKind } from "../src/operations";
 import {
+  directTriggerScopeKinds,
   triggeringPullRequestKinds,
   triggeringPullRequestRefusal,
   triggerScopeClassification,
@@ -130,9 +131,23 @@ describe("triggerScopeRefusal", () => {
           .toBeUndefined();
         expect(triggerScopeRefusal("pull_request.label.add", { pullNumber: 1 }, { "/pullNumber": { step: "open", output: "pullNumber" } }, resource, earlier))
           .toBeUndefined();
-        expect(triggerScopeRefusal("pull_request.merge", { pullNumber: 1 }, { "/pullNumber": { step: "draft", output: "pullNumber" } }, resource, earlier))
-          .toBeUndefined();
       }
+    });
+
+    it("never lets a confined run merge or review a pull request it opened", () => {
+      for (const kind of directTriggerScopeKinds) {
+        for (const resource of [pull5, issue5, null]) {
+          for (const step of ["open", "draft"]) {
+            expect(triggerScopeRefusal(kind, { pullNumber: 1 }, { "/pullNumber": { step, output: "pullNumber" } }, resource, earlier), kind)
+              .toMatch(/directly, not by reference: this run is confined to what triggered it, so it may not (merge|review) a pull request the run opened/);
+          }
+        }
+        // The triggering pull request, named directly, is still fine.
+        expect(triggerScopeRefusal(kind, { pullNumber: 5 }, {}, pull5, earlier), kind).toBeUndefined();
+        // These are not triggeringPullRequestKinds: outside trigger scope a reference stands.
+        expect(triggeringPullRequestRefusal(kind, { pullNumber: 1 }, { "/pullNumber": { step: "open", output: "pullNumber" } }, pull5)).toBeUndefined();
+      }
+      expect([...directTriggerScopeKinds].sort()).toEqual(["pull_request.merge", "pull_request.review.submit"]);
     });
 
     it("refuses a reference to anything else", () => {
@@ -142,7 +157,7 @@ describe("triggerScopeRefusal", () => {
         triggerScopeRefusal("issue.close", { issueNumber: 1 }, { "/issueNumber": { step: "foreign", output: "issueNumber" } }, issue5, earlier),
         // A created pull request is not a created issue for this field, and vice versa.
         triggerScopeRefusal("issue.close", { issueNumber: 1 }, { "/issueNumber": { step: "open", output: "pullNumber" } }, issue5, earlier),
-        triggerScopeRefusal("pull_request.merge", { pullNumber: 1 }, { "/pullNumber": { step: "file", output: "issueNumber" } }, pull5, earlier),
+        triggerScopeRefusal("pull_request.label.add", { pullNumber: 1 }, { "/pullNumber": { step: "file", output: "issueNumber" } }, pull5, earlier),
         // The right step, the wrong output.
         triggerScopeRefusal("issue.close", { issueNumber: 1 }, { "/issueNumber": { step: "file", output: "issueUrl" } }, issue5, earlier),
         // A step that does not run earlier.

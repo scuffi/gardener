@@ -30,6 +30,14 @@ describe("runTask admission wiring", () => {
     expect([...order].sort((left, right) => left - right)).toEqual(order);
   });
 
+  it("takes the request's actor from the signed OIDC identity, after the runner's payload, so the per-author count can't be spoofed", () => {
+    const event = runTask.slice(runTask.indexOf("      event: {\n        ...eventPayload(runnerEvent),"), runTask.indexOf("      model: { id: bundle.model },"));
+    expect(event.length).toBeGreaterThan(0);
+    const actor = "        actor: { id: identity.actor.actorId, login: identity.actor.actorLogin },\n      },\n";
+    expect(event).toContain(actor);
+    expect(event.indexOf(actor)).toBeGreaterThan(event.indexOf("...eventPayload(runnerEvent),"));
+  });
+
   it("counts the OIDC actor, exempts trusted starters from the per-author limit, and never stops a started run", () => {
     expect(runTask).toContain("if (!existing?.harness_submission_json) {");
     expect(runTask).toContain("authorId: request.event.actor.id,");

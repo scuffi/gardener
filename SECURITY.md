@@ -89,7 +89,9 @@ heads and failed lookups are untrusted; every doubt narrows. See
 An untrusted starter's run is confined to its trigger. What that guarantees:
 
 - every step that targets an issue, pull request or discussion targets the one that triggered the
-  run, matched by kind and number, or one an earlier step of the same plan created;
+  run, matched by kind and number, or one an earlier step of the same plan created, except that a
+  merge or review must name the triggering pull request itself, so a run can't merge or approve a
+  pull request it opened;
 - no step edits, publishes or deletes an existing release, or re-runs a check;
 - the same pure check runs when each step is proposed, when the Worker builds the plan, and when
   apply re-parses the digest-bound plan, so the three cannot disagree. Plans for runs pinned to

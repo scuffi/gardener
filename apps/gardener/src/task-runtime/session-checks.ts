@@ -129,8 +129,12 @@ export interface StarterEvidence {
   readonly actor: { readonly id: string; readonly login: string };
   /** The normalized event, whose kind already agrees with `eventName`. */
   readonly event: NormalizedEventV1;
-  /** The actor's permission, when the bridge looked it up; absent fails closed. */
-  readonly actorPermission?: AuthorPermissionV1 | undefined;
+  /**
+   * The actor's permission, when the bridge looked it up, with the id of the
+   * actor it describes. Absent fails closed, and so does an id that is not
+   * the signed actor's: it would be someone else's permission.
+   */
+  readonly actorPermission?: { readonly actorId: string; readonly permission: AuthorPermissionV1 } | undefined;
 }
 
 const isBot = (login: string): boolean => login.endsWith("[bot]");
@@ -181,8 +185,9 @@ export function trustedStarter(evidence: StarterEvidence): TaskRunStarterV1 {
         && (maintainerPermissions as readonly string[]).includes(subject.authorPermission));
     return maintainer ? { trusted: true, reason: "maintainer_author" } : { trusted: false, reason: "author_not_maintainer" };
   }
-  if (evidence.actorPermission === undefined) return { trusted: false, reason: "actor_unknown" };
-  return (maintainerPermissions as readonly string[]).includes(evidence.actorPermission)
+  const looked = evidence.actorPermission;
+  if (looked === undefined || looked.actorId !== actor.id) return { trusted: false, reason: "actor_unknown" };
+  return (maintainerPermissions as readonly string[]).includes(looked.permission)
     ? { trusted: true, reason: "maintainer_actor" }
     : { trusted: false, reason: "actor_not_maintainer" };
 }

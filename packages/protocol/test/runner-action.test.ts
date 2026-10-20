@@ -48,7 +48,7 @@ describe("runner action contract", () => {
     expect(runnerEventV1Schema.parse(legacy)).toEqual(legacy);
   });
 
-  it("carries the actor's permission only as an optional value of the author-permission enum", () => {
+  it("carries the actor's permission only bound to the actor's id, as an optional value of the author-permission enum", () => {
     const labeled = {
       schemaVersion: "gardener.runner.event/v1",
       kind: "github.issue.labeled",
@@ -57,11 +57,23 @@ describe("runner action contract", () => {
       label: "bug",
     };
     expect(runnerEventV1Schema.parse(labeled)).toEqual(labeled);
-    for (const actorPermission of ["admin", "write", "read", "none"]) {
-      expect(runnerEventV1Schema.parse({ ...labeled, actorPermission })).toEqual({ ...labeled, actorPermission });
+    for (const permission of ["admin", "write", "read", "none"]) {
+      const event = { ...labeled, actorPermission: { actorId: "45369682", permission } };
+      expect(runnerEventV1Schema.parse(event)).toEqual(event);
     }
-    expect(runnerEventV1Schema.safeParse({ ...labeled, actorPermission: "maintain" }).success).toBe(false);
-    expect(runnerEventV1Schema.safeParse({ ...labeled, actorPermission: null }).success).toBe(false);
+    const refused = [
+      "write",
+      null,
+      { actorId: "45369682", permission: "maintain" },
+      { actorId: "45369682" },
+      { permission: "write" },
+      { actorId: "0123", permission: "write" },
+      { actorId: 45369682, permission: "write" },
+      { actorId: "45369682", permission: "write", login: "octo" },
+    ];
+    for (const actorPermission of refused) {
+      expect(runnerEventV1Schema.safeParse({ ...labeled, actorPermission }).success, JSON.stringify(actorPermission)).toBe(false);
+    }
   });
 
   it("keeps the qualified shell action shape byte-compatible", () => {

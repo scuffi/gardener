@@ -174,11 +174,26 @@ describe("effect scope", () => {
     expect(await plan({})).not.toHaveProperty("effectScope");
   });
 
-  it("tells the model its scope in the prompt", async () => {
-    const prompt = async (options: Parameters<typeof runRequest>[0]) => (await createTaskHarnessRequest(await runRequest(options))).prompt;
+  it("tells the model its scope in the prompt, naming only refused kinds the task declares", async () => {
+    const prompt = async (options: Parameters<typeof runRequest>[0], effects?: TaskBundleV1["effects"]) => {
+      const request = await runRequest(options);
+      if (effects !== undefined) {
+        request.bundle.effects = effects;
+        request.bundleHash = await canonicalSha256(request.bundle);
+      }
+      return (await createTaskHarnessRequest(request)).prompt;
+    };
     expect(await prompt({ starter: OUTSIDER })).toContain(
-      "Scope: this run is confined to what triggered it because the author who started it is not a maintainer; steps may act only on issue #1, or on something an earlier step of this run creates. release.update, release.publish, release.delete and check.rerun are refused.",
+      "Scope: this run is confined to what triggered it because the author who started it is not a maintainer; steps may act only on issue #1, or on something an earlier step of this run creates. check.rerun is refused.\n",
     );
+    // A triage task hears nothing about kinds it can't propose anyway.
+    const triage = await prompt({ starter: OUTSIDER }, ["issue.label.add", "issue.comment.create"]);
+    expect(triage).toContain("or on something an earlier step of this run creates.\n");
+    expect(triage).not.toMatch(/refused|release\.|check\.rerun/);
+    expect(await prompt({ starter: OUTSIDER }, ["issue.comment.create", "release.update", "release.delete", "check.rerun"]))
+      .toContain("creates. release.update, release.delete and check.rerun are refused.\n");
+    expect(await prompt({ starter: OUTSIDER }, ["issue.comment.create", "pull_request.merge", "pull_request.review.submit"]))
+      .toContain("creates. pull_request.merge and pull_request.review.submit must name the triggering pull request itself, never one this run opens.\n");
     expect(await prompt({ starter: TRUSTED })).toContain(
       "Scope: this run may act on any issue, pull request or discussion in the repository, within the effects above.",
     );

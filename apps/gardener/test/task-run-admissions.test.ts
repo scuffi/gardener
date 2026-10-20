@@ -82,7 +82,26 @@ describe("run admissions", () => {
     const statements: string[] = [];
     const watched = { ...db, prepare: (sql: string) => (statements.push(sql), db.prepare(sql)) } as D1Database;
     await expect(admitRun(watched, { ...first, now: new Date(NOW.getTime() + 2 * HOUR) })).resolves.toEqual({ admitted: true });
-    expect(statements.filter((sql) => sql.startsWith("INSERT"))).toEqual([]);
+    expect(statements.filter((sql) => sql.startsWith("INSERT") || sql.startsWith("DELETE"))).toEqual([]);
+  });
+
+  it("treats its own row written just before the insert as admitted, not as over the limit", async () => {
+    const { db, sqlite } = database();
+    const racing = run();
+    // Writes the run's row as the insert is prepared, as a racing connect of
+    // the same run would; the Durable Object makes this unreachable today.
+    const raced = {
+      ...db,
+      prepare: (sql: string) => {
+        if (sql.startsWith("INSERT")) {
+          sqlite.prepare("INSERT INTO actions_task_run_admissions (run_id,repository_id,task_id,author_id,trusted,admitted_at) VALUES (?,?,?,?,0,?)")
+            .run(racing.runId, racing.repositoryId, racing.taskId, racing.authorId, NOW.getTime());
+        }
+        return db.prepare(sql);
+      },
+    } as D1Database;
+    await expect(admitRun(raced, racing)).resolves.toEqual({ admitted: true });
+    expect(rows(sqlite)).toBe(1);
   });
 
   it("keeps refusing a run that was over the limit when it reconnects", async () => {

@@ -59,13 +59,15 @@ function limitOf(value: string | undefined, field: "runs" | "runsPerAuthor"): Li
  * the row only while every applicable count in its window is below its limit,
  * so two runs racing for the last slot cannot both get it. `runs` counts every
  * run of the task; `runs-per-author` counts and limits only untrusted starters.
- * Rows past the retention window are pruned on the same path.
+ * Rows past the retention window are pruned on the same path, after the
+ * reconnect check, so a reconnect writes nothing.
  */
 export async function admitRun(db: D1Database, input: RunAdmissionInput): Promise<RunAdmission> {
   const now = input.now.getTime();
+  if (await admittedEarlier(db, input.runId)) return { admitted: true };
+  // Pruned only on the path that may insert, so a reconnect writes nothing.
   await db.prepare("DELETE FROM actions_task_run_admissions WHERE repository_id=? AND admitted_at<?")
     .bind(input.repositoryId, now - ADMISSION_RETENTION_MS).run();
-  if (await admittedEarlier(db, input.runId)) return { admitted: true };
 
   const perAuthor = input.trusted ? undefined : limitOf(input.limits.runsPerAuthor ?? DEFAULT_RUNS_PER_AUTHOR, "runsPerAuthor");
   const total = limitOf(input.limits.runs ?? DEFAULT_RUNS, "runs");
@@ -79,8 +81,11 @@ export async function admitRun(db: D1Database, input: RunAdmissionInput): Promis
     conditions.push(`(${TASK_COUNT})<?`);
     values.push(input.repositoryId, input.taskId, now - total.windowSeconds * 1_000, total.count);
   }
-  // OR IGNORE: a reconnect racing this one may have written the row first,
-  // which the re-read below tells apart from a run over its limit.
+  // OR IGNORE and the re-read below are defensive: the Durable Object
+  // serialises one run's connects, so nothing should write this run's row
+  // between the read above and this insert. If something ever did, the
+  // insert is ignored rather than failing, and the re-read tells that apart
+  // from a run over its limit.
   const inserted = await db.prepare(
     "INSERT OR IGNORE INTO actions_task_run_admissions (run_id,repository_id,task_id,author_id,trusted,admitted_at) SELECT ?,?,?,?,?,?"
     + (conditions.length === 0 ? "" : ` WHERE ${conditions.join(" AND ")}`),

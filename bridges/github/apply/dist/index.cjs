@@ -41921,6 +41921,10 @@ function resourceLabel(resource) {
   return `${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}`;
 }
 var CONFINED = "this run is confined to what triggered it";
+var directTriggerScopeKinds = [
+  "pull_request.merge",
+  "pull_request.review.submit"
+];
 function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   const scope = Object.hasOwn(triggerScopeClassification, kind) ? triggerScopeClassification[kind] : void 0;
   if (scope === void 0 || scope.allow === "never") {
@@ -41931,6 +41935,9 @@ function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   if (reference !== void 0) {
     if (triggeringPullRequestKinds.includes(kind)) {
       return `${kind} must name the pull request that triggered this run directly, not by reference`;
+    }
+    if (directTriggerScopeKinds.includes(kind)) {
+      return `${kind} must name the pull request that triggered this run directly, not by reference: ${CONFINED}, so it may not ${kind === "pull_request.merge" ? "merge" : "review"} a pull request the run opened`;
     }
     const ref = reference !== null && typeof reference === "object" && !Object.hasOwn(reference, "placeholders") ? reference : {};
     const createdBy = typeof ref.step === "string" ? earlier.get(ref.step) : void 0;
@@ -42641,8 +42648,13 @@ function runnerEventMember(kind, shape) {
      * say), when it is not the subject's author. Looked up by the bridge only
      * when nothing else decides whether the run's starter is trusted; an old
      * bridge never sends it, which only narrows the run's effect scope.
+     * `actorId` names whose permission it is, so the Worker uses it only for
+     * the actor its signed token names, never for someone else.
      */
-    actorPermission: eventAuthorPermission
+    actorPermission: external_exports.strictObject({
+      actorId: githubNumericId2,
+      permission: eventAuthorPermission.unwrap()
+    }).optional()
   });
 }
 var issuePayload2 = { issue: eventIssue };

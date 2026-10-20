@@ -240,9 +240,11 @@ A run that runs out of any budget fails with `budget-exceeded` and changes nothi
 
 Runs started by a maintainer, a schedule, a manual run or a push may act anywhere the task's effects
 allow. Runs started by anyone else, including bots, may only act on the issue or pull request that
-triggered them, or on what the run itself creates; they can't change releases or re-run checks.
-Mentioning other issues in text is always fine. What
-Gardener's starter tasks use:
+triggered them, or on what the run itself creates; they can't merge or approve a pull request they
+opened, change releases or re-run checks. That includes logins named in `authors` who aren't
+maintainers, and every bot. Mentioning other issues in text is always fine.
+
+What Gardener's starter tasks use:
 
 | Task | runtime-seconds | max-turns | max-tool-calls | input-tokens | output-tokens |
 | --- | --- | --- | --- | --- | --- |

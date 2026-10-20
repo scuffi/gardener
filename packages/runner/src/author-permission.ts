@@ -56,7 +56,7 @@ export interface RunActor {
 }
 
 /**
- * The login whose repository permission decides whether the run's starter is
+ * The actor whose repository permission decides whether the run's starter is
  * trusted: the actor, when it is someone other than the subject's author (the
  * labeller of an issue, say). Null whenever the Worker can decide without it:
  * schedules, manual runs, pushes and `synchronize` decide from the event, and
@@ -65,23 +65,24 @@ export interface RunActor {
  * them. An actor the environment does not name fully is not looked up either,
  * which fails closed, because the Worker then treats the starter as untrusted.
  */
-export function actorPermissionLogin(event: RunnerEventV1, actor: RunActor): string | null {
+export function actorPermissionTarget(event: RunnerEventV1, actor: RunActor): { login: string; id: string } | null {
   // Kinds in `starterDecidingKinds` have no entry, so they are never looked up.
   const key = (starterSubject as Record<string, string | undefined>)[event.kind];
   if (key === undefined) return null;
   const subject = (event as Record<string, unknown>)[key] as { author?: { id?: unknown } } | undefined;
   if (subject === null || typeof subject !== "object") return null;
-  if (actor.login === undefined || !LOGIN.test(actor.login)) return null;
+  if (actor.login === undefined || actor.login.endsWith("[bot]") || !LOGIN.test(actor.login)) return null;
   if (actor.id === undefined || !/^[1-9][0-9]{0,19}$/.test(actor.id)) return null;
-  return subject.author?.id === actor.id ? null : actor.login;
+  return subject.author?.id === actor.id ? null : { login: actor.login, id: actor.id };
 }
 
 /**
- * The event with the actor's looked-up permission. Fails closed like
+ * The event with the actor's looked-up permission, bound to the actor's id so
+ * the Worker can tell whose permission it is. Fails closed like
  * `withAuthorPermission`: the event comes back unchanged if it would not parse.
  */
-export function withActorPermission(event: RunnerEventV1, permission: AuthorPermissionV1): RunnerEventV1 {
-  const parsed = runnerEventV1Schema.safeParse({ ...event, actorPermission: permission });
+export function withActorPermission(event: RunnerEventV1, actorId: string, permission: AuthorPermissionV1): RunnerEventV1 {
+  const parsed = runnerEventV1Schema.safeParse({ ...event, actorPermission: { actorId, permission } });
   return parsed.success ? parsed.data : event;
 }
 

@@ -19,6 +19,9 @@ import {
   taskRunRequestV1Schema,
   threadOpenerLogin,
   taskEventBindingFromNormalizedEvent,
+  triggerScopeClassification,
+  directTriggerScopeKinds,
+  type OperationKind,
   type NormalizedEventV1,
   type TaskAuthorsFilterV1,
   type TaskOutcomeV1,
@@ -511,7 +514,20 @@ function scopeNote(request: TaskRunRequestV1): string {
   const trigger = resource === null
     ? "nothing triggered it, so it may only create new things (and commit to its checkout)"
     : `steps may act only on ${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}, or on something an earlier step of this run creates`;
-  return `Scope: this run is confined to what triggered it because ${triggerScopeReason(request)}; ${trigger}. release.update, release.publish, release.delete and check.rerun are refused.`;
+  const declared: readonly string[] = request.bundle.effects;
+  // Only what this task could otherwise propose, so a triage task hears nothing about releases.
+  const refused = declared.filter((kind) => triggerScopeClassification[kind as OperationKind]?.allow === "never");
+  const direct = declared.filter((kind) => (directTriggerScopeKinds as readonly string[]).includes(kind));
+  return [
+    `Scope: this run is confined to what triggered it because ${triggerScopeReason(request)}; ${trigger}.`,
+    ...(direct.length === 0 || resource === null ? [] : [`${listed(direct)} must name the triggering pull request itself, never one this run opens.`]),
+    ...(refused.length === 0 ? [] : [`${listed(refused)} ${refused.length === 1 ? "is" : "are"} refused.`]),
+  ].join(" ");
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function listed(items: readonly string[]): string {
+  return items.length === 1 ? items[0]! : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /**

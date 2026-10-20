@@ -583,16 +583,20 @@ describe("local Gardener project", () => {
     expect((await buildProject({ repositoryRoot: root })).warnings).toEqual([]);
   });
 
-  it("counts a task as admitting outsiders unless every trigger needs write access or names who may start it", async () => {
+  it("counts a task as admitting outsiders unless every trigger needs write access or is limited to maintainers", async () => {
     const triggers = (...list: unknown[]) => ({ triggers: list as never, effects: ["pull_request.review.submit" as const] });
     const dispatch = { kind: "github.workflow_dispatch" };
     expect(admitsNonMaintainers(triggers(dispatch))).toBe(false);
     expect(admitsNonMaintainers(triggers({ kind: "github.schedule", cron: "0 3 * * 1" }, dispatch))).toBe(false);
-    expect(admitsNonMaintainers(triggers({ kind: "github.push", branches: ["main"] }, dispatch))).toBe(false);
+    // A bot can push, and its runs are untrusted.
+    expect(admitsNonMaintainers(triggers({ kind: "github.push", branches: ["main"] }, dispatch))).toBe(true);
     const authored = (authors: unknown) => ({ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors });
     expect(admitsNonMaintainers(triggers(authored("maintainers"), dispatch))).toBe(false);
-    expect(admitsNonMaintainers(triggers(authored(["maintainers", "octo"]), dispatch))).toBe(false);
-    expect(admitsNonMaintainers(triggers(authored(["octo"]), dispatch))).toBe(false);
+    expect(admitsNonMaintainers(triggers(authored(["maintainers"]), dispatch))).toBe(false);
+    // Named logins needn't be maintainers, and their runs are confined unless they are.
+    expect(admitsNonMaintainers(triggers(authored(["maintainers", "octo"]), dispatch))).toBe(true);
+    expect(admitsNonMaintainers(triggers(authored(["octo"]), dispatch))).toBe(true);
+    expect(admitsNonMaintainers(triggers(authored(["devin-ai-integration[bot]"]), dispatch))).toBe(true);
     expect(admitsNonMaintainers(triggers(authored("any"), dispatch))).toBe(true);
     // Triggers without authors: a reopened issue, a label (triage reads as read), a moved head (bots).
     for (const kind of ["github.issue.reopened", "github.issue.labeled", "github.pull_request.synchronize"]) {

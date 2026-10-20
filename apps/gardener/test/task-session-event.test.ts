@@ -73,7 +73,7 @@ describe("runner event conversion", () => {
       },
       actor,
     });
-    const { schemaVersion: _schemaVersion, ...payload } = runnerEventV1Schema.parse({ ...runnerComment, actorPermission: "write" });
+    const { schemaVersion: _schemaVersion, ...payload } = runnerEventV1Schema.parse({ ...runnerComment, actorPermission: { actorId: "45369682", permission: "write" } });
     expect(normalized(payload).success).toBe(false);
     const { actorPermission: _actorPermission, ...stripped } = payload;
     expect(normalized(stripped).success).toBe(true);

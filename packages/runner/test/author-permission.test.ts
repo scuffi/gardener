@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  actorPermissionLogin,
+  actorPermissionTarget,
   authorPermissionLogin,
   fetchAuthorPermission,
   withActorPermission,
@@ -98,28 +98,31 @@ describe("actor permission lookup", () => {
   const labeller = { login: "labeller", id: "1000" };
 
   it("looks up the actor only when it is someone other than the subject's author", () => {
-    expect(actorPermissionLogin(labeled(), labeller)).toBe("labeller");
-    expect(actorPermissionLogin(labeled(), { login: "reporter", id: "7" })).toBeNull();
-    expect(actorPermissionLogin(commentEvent("commenter", "NONE"), labeller)).toBe("labeller");
-    expect(actorPermissionLogin(pullRequest("labeled"), labeller)).toBe("labeller");
+    expect(actorPermissionTarget(labeled(), labeller)).toEqual({ login: "labeller", id: "1000" });
+    expect(actorPermissionTarget(labeled(), { login: "reporter", id: "7" })).toBeNull();
+    expect(actorPermissionTarget(commentEvent("commenter", "NONE"), labeller)).toEqual(labeller);
+    expect(actorPermissionTarget(pullRequest("labeled"), labeller)).toEqual(labeller);
   });
 
   it("never looks up for events that decide their starter, bots, or an actor the environment does not name", () => {
-    expect(actorPermissionLogin(pullRequest("synchronize"), labeller)).toBeNull();
+    expect(actorPermissionTarget(pullRequest("synchronize"), labeller)).toBeNull();
     const pushed = normalizeGitHubEvent("push", {
       ref: "refs/heads/main", before: "a".repeat(40), after: "b".repeat(40), forced: false, commits: [], repository,
     });
-    expect(actorPermissionLogin(pushed, labeller)).toBeNull();
-    expect(actorPermissionLogin(labeled(), { login: "dependabot[bot]", id: "49699333" })).toBeNull();
-    expect(actorPermissionLogin(labeled(), { login: undefined, id: "1000" })).toBeNull();
-    expect(actorPermissionLogin(labeled(), { login: "labeller", id: undefined })).toBeNull();
-    expect(actorPermissionLogin(labeled(), { login: "labeller", id: "not-a-number" })).toBeNull();
+    expect(actorPermissionTarget(pushed, labeller)).toBeNull();
+    expect(actorPermissionTarget(labeled(), { login: "dependabot[bot]", id: "49699333" })).toBeNull();
+    // Any `[bot]` suffix, whatever the rest of the login looks like.
+    expect(actorPermissionTarget(labeled(), { login: "a[bot]", id: "49699333" })).toBeNull();
+    expect(actorPermissionTarget(labeled(), { login: "github-actions[bot]", id: "41898282" })).toBeNull();
+    expect(actorPermissionTarget(labeled(), { login: undefined, id: "1000" })).toBeNull();
+    expect(actorPermissionTarget(labeled(), { login: "labeller", id: undefined })).toBeNull();
+    expect(actorPermissionTarget(labeled(), { login: "labeller", id: "not-a-number" })).toBeNull();
   });
 
-  it("attaches the permission at the top level, and leaves the event alone if it would not parse", () => {
-    expect(withActorPermission(labeled(), "write")).toMatchObject({ actorPermission: "write" });
-    expect((withActorPermission(labeled(), "write") as Record<string, any>).issue).not.toHaveProperty("authorPermission");
-    const invalid = withActorPermission(labeled(), "maintain" as never);
-    expect(invalid).not.toHaveProperty("actorPermission");
+  it("attaches the permission at the top level, bound to the actor's id, and leaves the event alone if it would not parse", () => {
+    expect(withActorPermission(labeled(), "1000", "write")).toMatchObject({ actorPermission: { actorId: "1000", permission: "write" } });
+    expect((withActorPermission(labeled(), "1000", "write") as Record<string, any>).issue).not.toHaveProperty("authorPermission");
+    expect(withActorPermission(labeled(), "1000", "maintain" as never)).not.toHaveProperty("actorPermission");
+    expect(withActorPermission(labeled(), "labeller", "write")).not.toHaveProperty("actorPermission");
   });
 });
