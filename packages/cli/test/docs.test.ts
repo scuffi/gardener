@@ -191,7 +191,8 @@ describe("reference docs", () => {
     syncBlock("docs/task-reference.md", "effects", renderEffects());
   });
 
+  // Spawns the CLI once per command, which takes about five seconds on a CI runner.
   it("has an up-to-date CLI reference", () => {
     syncBlock("docs/cli.md", "commands", renderCli());
-  });
+  }, 30_000);
 });
