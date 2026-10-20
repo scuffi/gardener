@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { authorPermissionLogin, fetchAuthorPermission, withAuthorPermission } from "../src/author-permission";
+import {
+  actorPermissionLogin,
+  authorPermissionLogin,
+  fetchAuthorPermission,
+  withActorPermission,
+  withAuthorPermission,
+} from "../src/author-permission";
 import { normalizeGitHubEvent } from "../src/event";
 
 const repository = { id: 1374842705, full_name: "scuffi/gardener", default_branch: "main" };
@@ -71,5 +77,49 @@ describe("author permission lookup", () => {
     await expect(lookup(untouched, { login: "../../orgs/x" })).resolves.toBeNull();
     await expect(lookup(untouched, { repository: "o/.." })).resolves.toBeNull();
     expect(untouched).not.toHaveBeenCalled();
+  });
+});
+
+describe("actor permission lookup", () => {
+  const labeled = (author = "reporter") => normalizeGitHubEvent("issues", {
+    action: "labeled", repository, issue: { ...issue(author, "NONE"), user: { id: 7, login: author } }, label: { name: "bug" },
+  });
+  const pullRequest = (action: string) => normalizeGitHubEvent("pull_request", {
+    action,
+    repository,
+    label: { name: "bug" },
+    pull_request: {
+      id: 5, number: 2, title: "t", body: "b", state: "open", draft: false, merged: false, labels: [],
+      updated_at: "2026-09-22T12:00:00.000Z", user: { id: 7, login: "reporter" }, author_association: "NONE",
+      base: { ref: "main", sha: "a".repeat(40), repo: repository },
+      head: { ref: "feature", sha: "b".repeat(40), repo: repository },
+    },
+  });
+  const labeller = { login: "labeller", id: "1000" };
+
+  it("looks up the actor only when it is someone other than the subject's author", () => {
+    expect(actorPermissionLogin(labeled(), labeller)).toBe("labeller");
+    expect(actorPermissionLogin(labeled(), { login: "reporter", id: "7" })).toBeNull();
+    expect(actorPermissionLogin(commentEvent("commenter", "NONE"), labeller)).toBe("labeller");
+    expect(actorPermissionLogin(pullRequest("labeled"), labeller)).toBe("labeller");
+  });
+
+  it("never looks up for events that decide their starter, bots, or an actor the environment does not name", () => {
+    expect(actorPermissionLogin(pullRequest("synchronize"), labeller)).toBeNull();
+    const pushed = normalizeGitHubEvent("push", {
+      ref: "refs/heads/main", before: "a".repeat(40), after: "b".repeat(40), forced: false, commits: [], repository,
+    });
+    expect(actorPermissionLogin(pushed, labeller)).toBeNull();
+    expect(actorPermissionLogin(labeled(), { login: "dependabot[bot]", id: "49699333" })).toBeNull();
+    expect(actorPermissionLogin(labeled(), { login: undefined, id: "1000" })).toBeNull();
+    expect(actorPermissionLogin(labeled(), { login: "labeller", id: undefined })).toBeNull();
+    expect(actorPermissionLogin(labeled(), { login: "labeller", id: "not-a-number" })).toBeNull();
+  });
+
+  it("attaches the permission at the top level, and leaves the event alone if it would not parse", () => {
+    expect(withActorPermission(labeled(), "write")).toMatchObject({ actorPermission: "write" });
+    expect((withActorPermission(labeled(), "write") as Record<string, any>).issue).not.toHaveProperty("authorPermission");
+    const invalid = withActorPermission(labeled(), "maintain" as never);
+    expect(invalid).not.toHaveProperty("actorPermission");
   });
 });

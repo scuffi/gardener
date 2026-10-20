@@ -10,9 +10,55 @@ import {
   taskCheckoutSha,
   taskEventBindingFromNormalizedEvent,
   triggeringPullRequestRefusal,
+  triggerScopeRefusal,
+  type OperationKind,
   type TaskEffectProposalV1,
+  type TaskEventResourceV1,
   type TaskRunRequestV1,
 } from "@gardener/contracts";
+
+/** Where a run's steps may act: anywhere the task allows, or only on what triggered it. */
+export type RunEffectScope = "trigger" | "repository";
+
+/**
+ * The run's effect scope. Trigger scope when the task asks for it, or when
+ * the starter is not known to be trusted: a request admitted before starters
+ * existed has none, and absent means untrusted, which only narrows.
+ */
+export function runEffectScope(request: Pick<TaskRunRequestV1, "bundle" | "starter">): RunEffectScope {
+  return request.bundle.effectScope === "trigger" || request.starter?.trusted !== true ? "trigger" : "repository";
+}
+
+/** Why the run is confined, in words that end a refusal. */
+export function triggerScopeReason(request: Pick<TaskRunRequestV1, "bundle" | "starter">): string {
+  if (request.bundle.effectScope === "trigger") return "the task sets effect-scope: trigger";
+  switch (request.starter?.reason) {
+    case "bot": return "a bot started it";
+    case "fork_head": return "its pull request head is in another repository";
+    case "author_not_maintainer": return "the author who started it is not a maintainer";
+    case "actor_not_maintainer": return "whoever started it does not have write access";
+    case undefined: return "it was admitted before Gardener recorded who started runs";
+    default: return "Gardener could not confirm that whoever started it has write access";
+  }
+}
+
+/**
+ * Why this step may not run under trigger scope, or `undefined`. `earlier`
+ * are the plan's steps before it. Every layer (proposal, plan build, plan
+ * schema at apply) calls the same pure `triggerScopeRefusal`, so they cannot
+ * disagree; this adds only the reason the run is confined.
+ */
+export function runTriggerScopeRefusal(
+  request: Pick<TaskRunRequestV1, "bundle" | "starter">,
+  step: Pick<TaskEffectProposalV1, "kind" | "payload" | "references">,
+  earlier: readonly Pick<TaskEffectProposalV1, "stepName" | "kind">[],
+  resource: TaskEventResourceV1 | null,
+): string | undefined {
+  if (runEffectScope(request) !== "trigger") return undefined;
+  const kinds = new Map(earlier.map((candidate) => [candidate.stepName, candidate.kind as OperationKind] as const));
+  const refusal = triggerScopeRefusal(step.kind, step.payload, step.references, resource, kinds);
+  return refusal === undefined ? undefined : `${refusal} (confined because ${triggerScopeReason(request)})`;
+}
 
 /**
  * What the session knows about the run's working tree when a proposal
@@ -32,7 +78,7 @@ export interface ProposalWorkspaceState {
  * apply check the same rules again; this is only the earliest of the three.
  */
 export function proposalAuthorityRefusal(
-  request: Pick<TaskRunRequestV1, "bundle" | "event">,
+  request: Pick<TaskRunRequestV1, "bundle" | "event" | "starter">,
   proposal: TaskEffectProposalV1,
   earlier: readonly TaskEffectProposalV1[],
   /** Omitted only by callers that check no working-tree state (the plan rechecks it). */
@@ -59,13 +105,12 @@ export function proposalAuthorityRefusal(
       if (refusal !== undefined) return refusal;
     }
   }
-  const pullRefusal = triggeringPullRequestRefusal(
-    proposal.kind,
-    proposal.payload,
-    proposal.references,
-    taskEventBindingFromNormalizedEvent(request.event).resource,
-  );
+  const resource = taskEventBindingFromNormalizedEvent(request.event).resource;
+  const pullRefusal = triggeringPullRequestRefusal(proposal.kind, proposal.payload, proposal.references, resource);
   if (pullRefusal !== undefined) return pullRefusal;
+  // Beside the check above, never instead of it: both apply, so the stricter wins.
+  const scopeRefusal = runTriggerScopeRefusal(request, proposal, earlier, resource);
+  if (scopeRefusal !== undefined) return scopeRefusal;
   // One capture serves one commit, and a merge capture can only become a
   // merge commit, so a run merges or makes ordinary commits, never both.
   const other = proposal.kind === "commit.create" ? "commit.merge_base" : proposal.kind === "commit.merge_base" ? "commit.create" : undefined;

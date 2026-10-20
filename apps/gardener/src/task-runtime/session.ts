@@ -103,12 +103,14 @@ import {
   CAPTURE_PENDING_KEY,
   consumeOidcTokenIn,
   toolAction,
+  trustedStarter,
   type CapturePending,
   type JsonValue,
 } from "./session-checks";
 import { actionToolAuthority, mergeBaseToolRefusal, TASK_TOOL_BY_HARNESS_NAME } from "./tool-authority";
 import { releaseMismatchAdvice, trustedTaskWorkflowRefs } from "./workflow-refs";
 import { countToolCall, toolTarget, trailDigest, type ToolCallCounts } from "./run-trail";
+import { admitRun } from "./run-admissions";
 
 interface Enrollment {
   repository_id: string;
@@ -1007,9 +1009,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
     const existing = await this.#db().prepare(
       "SELECT status,request_json,harness_submission_json,outcome_json FROM actions_task_runs WHERE id=?",
     ).bind(identity.sessionId).first<{ status: string; request_json: string; harness_submission_json: string | null; outcome_json: string | null }>();
+    // Who started the run is decided once, here, from the signed identity and
+    // the event, and frozen in the request. A persisted request keeps what it
+    // has; one admitted before starters existed has none, which means untrusted.
     const request = existing
       ? taskRunRequestV1Schema.parse(JSON.parse(existing.request_json))
-      : taskRunRequestV1Schema.parse(freshRequest);
+      : withStarter(taskRunRequestV1Schema.parse(freshRequest), identity, runnerEvent);
     if (request.runId !== identity.sessionId || request.bundleHash !== bundleHash) {
       throw new Error("Persisted task request does not match the authenticated run");
     }
@@ -1039,6 +1044,34 @@ export class TaskRunnerSession extends DurableObject<Env> {
         observations: [],
         proposedEffects: [],
       }), bundleHash, { skipped: "trigger_filters", ...(associationMissing ? { associationMissing: true } : {}) });
+    }
+    // Run limits count runs that are about to start the model. A run whose
+    // submission already exists started it before (perhaps before limits
+    // existed), so a reconnect never stops a run midway.
+    if (!existing?.harness_submission_json) {
+      const admission = await admitRun(this.#db(), {
+        runId: request.runId,
+        repositoryId: request.event.repository.id,
+        taskId: request.bundle.taskId,
+        authorId: request.event.actor.id,
+        trusted: request.starter?.trusted === true,
+        limits: request.bundle.limits,
+        now: new Date(),
+      });
+      if (!admission.admitted) {
+        // Settled like a filtered run: no model, no proposals, so the settle
+        // job clears 👀 and adds no result reaction.
+        return this.#settleAndPersist(request, taskOutcomeV1Schema.parse({
+          schemaVersion: "gardener.task-outcome/v1",
+          runId: request.runId,
+          taskId: request.bundle.taskId,
+          bundleHash: request.bundleHash,
+          status: "completed",
+          summary: admission.summary,
+          observations: [],
+          proposedEffects: [],
+        }), bundleHash, { skipped: "rate_limit" });
+      }
     }
     const harnessRequest = await createTaskHarnessRequest(request);
     const harness = new FlueTaskHarness();
@@ -1424,9 +1457,24 @@ class AuthenticatedApi extends RpcTarget implements AuthenticatedSessionCapabili
  * supplied separately from the verified OIDC hello and enrollment, so they can
  * never be overridden by the runner.
  */
-function eventPayload(event: RunnerEventV1): Omit<RunnerEventV1, "schemaVersion"> {
-  const { schemaVersion: _schemaVersion, ...payload } = event;
+function eventPayload(event: RunnerEventV1): Omit<RunnerEventV1, "schemaVersion" | "actorPermission"> {
+  // `actorPermission` only feeds the starter decision (see `withStarter`); the
+  // decision, not the input, is what the request keeps.
+  const { schemaVersion: _schemaVersion, actorPermission: _actorPermission, ...payload } = event;
   return payload;
+}
+
+/** The fresh request with its starter decided from the signed identity and the event. */
+function withStarter(request: TaskRunRequestV1, identity: AuthenticatedIdentity, event: RunnerEventV1): TaskRunRequestV1 {
+  return taskRunRequestV1Schema.parse({
+    ...request,
+    starter: trustedStarter({
+      eventName: identity.hello.eventName,
+      actor: { id: identity.actor.actorId, login: identity.actor.actorLogin },
+      event: request.event,
+      actorPermission: event.actorPermission,
+    }),
+  });
 }
 
 /** A merge result must be the protocol's, whether it reports a merge or a refusal. */

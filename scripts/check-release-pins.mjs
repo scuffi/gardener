@@ -139,6 +139,23 @@ for (const [path, content] of reusable) {
   if (bridges === 0) problems.push(`${path} at ${sha} pins no Gardener bridge`);
 }
 
+// The runtime leaves `effectScope` out of plans for runs of older releases,
+// whose apply bridge parses plans strictly. A release missing from that list
+// breaks every run of it, and this release's own ref being on it drops apply's
+// scope check, so both directions are checked here, where the tags exist.
+const withoutScope = new Set(
+  /TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE[^[]*\[([^\]]*)\]/.exec(readFileSync("apps/gardener/src/task-runtime/workflow-refs.ts", "utf8"))?.[1]
+    .match(/[0-9a-f]{40}/g) ?? [],
+);
+if (withoutScope.size === 0) problems.push("TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE could not be read from workflow-refs.ts");
+if (withoutScope.has(sha)) problems.push(`DEFAULT_WORKFLOW_REF ${sha} is in TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE; pin this release's own gardener-task.yml`);
+for (const tag of git("tag", "--list", "v*").split("\n").filter((name) => /^v\d+\.\d+\.\d+$/.test(name))) {
+  const released = /DEFAULT_WORKFLOW_REF =\s*"[^"]*@([0-9a-f]{40})"/.exec(at(tag, "packages/cli/src/project.ts") ?? "")?.[1];
+  if (released !== undefined && released !== sha && !withoutScope.has(released)) {
+    problems.push(`${tag}'s task workflow ${released} is missing from TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE in workflow-refs.ts`);
+  }
+}
+
 if (problems.length > 0) {
   console.error(problems.map((problem) => `- ${problem}`).join("\n"));
   process.exit(1);

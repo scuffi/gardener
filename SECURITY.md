@@ -76,6 +76,29 @@ phase.
 - Fork pull requests are rejected twice: in the generated workflow, and by a runtime head-repository
   check. `pull_request_target` cannot be generated.
 
+### Effect scope
+
+Before the model runs, the Worker decides whether the run's starter is trusted, from the signed
+OIDC event name and actor and the event Gardener's bridge reported, and freezes the answer in the
+run's request. Trusted starters are schedules, manual runs, pushes and same-repository
+`synchronize` by a person, a subject's author who counts as a maintainer, and anyone else with
+write or admin access as the bridge looked it up with the read-only token. Bots, outsiders, fork
+heads and failed lookups are untrusted; every doubt narrows. See
+[Effect scope](docs/task-authoring.md#effect-scope).
+
+An untrusted starter's run is confined to its trigger. What that guarantees:
+
+- every step that targets an issue, pull request or discussion targets the one that triggered the
+  run, matched by kind and number, or one an earlier step of the same plan created;
+- no step edits, publishes or deletes an existing release, or re-runs a check;
+- the same pure check runs when each step is proposed, when the Worker builds the plan, and when
+  apply re-parses the digest-bound plan, so the three cannot disagree. Plans for runs pinned to
+  0.1.16 or earlier don't carry the scope, because their apply would refuse the field; those keep
+  the first two checks.
+
+Each task's run limits are enforced in one atomic D1 statement before the model starts: by default
+an untrusted starter may cause three runs of a task a day.
+
 ### Captured changes
 
 A task that commits code does not put file bytes in its plan. When a commit is proposed, the
@@ -157,6 +180,18 @@ task saw. No other operation can force-push, and none can delete a branch.
   the repository that ships the release it was deployed from (its `GARDENER_RELEASE_WORKFLOW_REF`),
   at the repository's enrolled commit or that release's commit. `connect` refuses a lock pinned to
   any other repository.
+- **Trigger scope confines where, not what.** A run that outsiders can start still reads their
+  text, and a task that declares `pull_request.merge` can merge the outsider's own pull request if
+  that text persuades the model. `generate` warns about such tasks.
+- **Maintainer-started runs read untrusted text.** A maintainer's comment on an outsider's issue
+  gets repository scope, and the model still reads the outsider's issue. Keep instructions and
+  effects narrow for tasks maintainers start on others' threads, or set `effect-scope: trigger`.
+- **Bot pushes are untrusted.** A push or `synchronize` by a bot, including Dependabot, is confined,
+  and with nothing behind it can only create: it may open issues, pull requests and branches.
+- **`branch.create` under wide patterns.** A confined run may create any branch its task's
+  `branches` patterns allow. The run limits bound how many.
+- **Many accounts.** `runs-per-author` counts each GitHub account separately. Only a task's `runs`
+  limit, or the AI Gateway cap, bounds someone with many accounts, and `runs` has no default.
 - **Kill switch.** `gardener repository disable` blocks planning, apply and syncs for the
   repository. To stop one task, remove it from the default branch.
 

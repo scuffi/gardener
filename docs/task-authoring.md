@@ -299,6 +299,69 @@ After a `commit.create` earlier in the same plan pushes to the pull request's br
 stops them. Resolve only threads the commit fixed: apply stops at the first failed step, so a
 resolve planned after the commit never runs unless the commit landed.
 
+### Effect scope
+
+Who started a run decides where it may act. Gardener decides this once, before the model runs, from
+what GitHub signed and Gardener's own bridge reported, so neither the model nor the text it reads
+can change it.
+
+A run's starter is **trusted** when the run is:
+
+- a schedule or a manual run, because starting one needs write access;
+- a push, or a pull request's `synchronize` from a branch in this repository, by a person: both
+  needed a push to this repository;
+- started by the author of the issue, pull request, comment, review or discussion that triggered
+  it, when they count as a maintainer the way [`authors: maintainers`](#mentions-and-authors)
+  counts them;
+- started by someone acting on another person's issue or pull request (labelling it, say) who has
+  write or admin access. GitHub's maintain role counts as write; triage doesn't, because triage can
+  label but can't write code.
+
+Everyone else is untrusted: outsiders, bots, pull request heads in another repository, and anyone
+whose access couldn't be checked. A bot's push is untrusted on purpose: Dependabot's commit messages
+carry upstream release notes, which anyone upstream can write. Opening or reviewing a pull request
+doesn't count as a push, because anyone can open a pull request from a branch that already exists.
+
+Trusted runs may act anywhere their declared effects allow. Untrusted runs are confined to what
+triggered them, which Gardener calls **trigger scope**:
+
+- A step on an issue, pull request or discussion must name the one that triggered the run, or one
+  an earlier step of the same plan created with `issue.create`, `pull_request.open` or
+  `pull_request.open_draft`. A comment on a pull request's conversation counts as that pull request.
+  Discussion #5 and issue #5 are different things, and only the one that triggered the run counts.
+- Steps that create something new are allowed: `issue.create`, `pull_request.open`,
+  `pull_request.open_draft`, `branch.create` and `release.create`. So is `commit.create`, which
+  always builds on the run's own checkout.
+- `release.update`, `release.publish`, `release.delete` and `check.rerun` are refused: nothing ties
+  an existing release or check run to the trigger.
+- A run with nothing behind it, such as a bot's push, can only create.
+
+Gardener checks scope when each step is proposed, again when it builds the plan, and once more when
+the plan is applied. The model's instructions tell it its scope, and a refused step names the
+reason. Text is never inspected, so a comment may mention other issues freely.
+
+To confine every run of a task, maintainers' runs included:
+
+```yaml
+effect-scope: trigger
+```
+
+Nothing widens scope for an untrusted starter.
+
+Trigger scope confines *where* a run acts, not *what* it does. A task that outsiders can start and
+that declares `pull_request.merge` can still merge the outsider's own pull request if their text
+persuades the model. `generate` warns when a task that admits non-maintainers declares a high-impact
+effect: `pull_request.merge`, `pull_request.review.submit` (an approval can satisfy branch
+protection) or a `release.*` kind. A task admits non-maintainers unless every trigger is a schedule,
+a manual run, a push, or an authored trigger limited by `authors` to maintainers or named logins.
+`issue.reopened`, the `labeled` triggers and `pull_request.synchronize` all admit them.
+
+A `branch.create` entry with wide `branches` patterns lets a confined run create branches anywhere
+those patterns allow. The [run limits](#run-limits) bound how many.
+
+Projects pinned to 0.1.16 or earlier get the first two checks as soon as the runtime is upgraded;
+the check at apply arrives when the repository is upgraded too.
+
 ### Branches
 
 `branch.create`, `commit.create`, `pull_request.open` and `pull_request.open_draft` write to a named
@@ -482,8 +545,8 @@ Model IDs are the provider's own, after the prefix: for example `anthropic/claud
 
 ## Limits
 
-All five are required; the [limits table](task-reference.md#limits) gives each one's meaning and
-allowed range.
+The first five are required; the [limits table](task-reference.md#limits) gives each one's meaning
+and allowed range.
 
 Reasoning models, including the default `@cf/zai-org/glm-5.3`, spend `output-tokens` while they
 think. Too small a budget cuts a response off before it calls a tool, and the run fails. The
@@ -497,8 +560,35 @@ transport ceiling below plus provider and runtime ceilings apply; when present, 
 application fail closed. Omitted keys never reach canonical bundle bytes, so adding the keys later
 is the only thing that changes a hash.
 
-Limits bound one run, not how often a task runs. To cap model use across runs, set a rate limit on
-the installation's AI Gateway; see [Capping model use](operations.md#capping-model-use).
+### Run limits
+
+The limits above bound one run. Two more bound how often a task runs:
+
+```yaml
+limits:
+  runs-per-author: 3/day
+  runs: 50/day
+```
+
+Each is `<count>/<minute|hour|day|week|month>`, with a count from 1 to 99,999; a month is 30 days.
+A window always ends now, so `3/day` means at most three in any 24 hours.
+
+- `runs-per-author` limits how many runs one untrusted starter may cause, counted by their GitHub
+  account. Trusted starters (maintainers, schedules, manual runs and pushes, see
+  [Effect scope](#effect-scope)) are neither counted nor limited. When it is omitted, it is `3/day`.
+  `unlimited` turns it off.
+- `runs` limits every run of the task, maintainers' included: it's the task's total ceiling. It has
+  no default.
+
+Only runs that pass the trigger filters and are about to call the model count, so skipped runs
+never use up a limit. Each task counts on its own. A run over a limit completes as a skip without
+calling the model, with a summary such as "Rate limit reached: 3 runs per day per author for this
+task; nothing to do". The planning job still starts. Like any skip, it removes 👀 and adds no result
+reaction, so the author learns nothing from it, and the job summary tells maintainers what happened.
+
+`runs-per-author` doesn't stop one person with many accounts; `runs` does. For a ceiling across
+every task, set a rate limit on the installation's AI Gateway; see
+[Capping model use](operations.md#capping-model-use).
 
 ### The transport ceiling always applies
 

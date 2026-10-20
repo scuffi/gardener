@@ -28,7 +28,8 @@ import {
   type RunnerEffectReceiptV1,
 } from "@gardener/protocol";
 import { assertRunnerToolBudget } from "./task-limits";
-import { mergeBaseProposalRefusal } from "./proposal-authority";
+import { mergeBaseProposalRefusal, runEffectScope, runTriggerScopeRefusal } from "./proposal-authority";
+import { planCarriesEffectScope } from "./workflow-refs";
 
 export type CompletedTaskOutcomeV1 = Extract<TaskOutcomeV1, { status: "completed" }>;
 
@@ -339,9 +340,17 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   const declared = new Set<string>(request.bundle.effects);
   const operations: Record<string, unknown>[] = [];
   const materializing: string[] = [];
+  const proposals: TaskEffectProposalV1[] = [];
+  const resource = taskEventBindingFromNormalizedEvent(request.event).resource;
 
   for (const [index, candidate] of outcome.proposedEffects.entries()) {
     const proposal = taskEffectProposalV1Schema.parse(candidate);
+    // Trigger scope, for every plan whether or not it carries `effectScope`,
+    // so a run on an older pin still gets two independent checks (see the
+    // note on the capture's base below for why this repeat is sound).
+    const scopeRefusal = runTriggerScopeRefusal(request, proposal, proposals, resource);
+    if (scopeRefusal !== undefined) throw new Error(scopeRefusal);
+    proposals.push(proposal);
     if (!declared.has(proposal.kind)) {
       throw new Error(`Task proposed the undeclared effect ${proposal.kind}`);
     }
@@ -394,6 +403,12 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   // to the planning commit, so a drifted capture is rejected once, in the
   // contract, rather than by two rules that could disagree. Branch patterns
   // and the rule that a commit sits on the capture are checked there too.
+  // Trigger scope is checked both here (above) and in the contract, which
+  // does not contradict this: the worry is two rules drifting apart, and
+  // proposal, plan build and plan schema all call the one pure
+  // `triggerScopeRefusal`, so they cannot disagree. The repeat exists because
+  // plans for older pins cannot carry `effectScope`, and the contract checks
+  // only plans that do.
   const branchPatterns = bundleBranchPatterns(request.bundle);
   const checkoutSha = taskCheckoutSha(request.bundle, request.event);
 
@@ -425,6 +440,13 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
         : { maxEffectBytes: request.bundle.limits.maxEffectBytes }),
     },
     ...(branchPatterns === undefined ? {} : { branchPatterns }),
+    // Apply re-checks scope from this field. Left out for older pins, whose
+    // apply would refuse the plan, and for requests admitted before starters
+    // were recorded, so their plans stay byte-identical to the ones they
+    // already published; the check above still covers both.
+    ...(planCarriesEffectScope(request.event.workflow.jobWorkflowRef) && request.starter !== undefined
+      ? { effectScope: runEffectScope(request) }
+      : {}),
     ...(capture === undefined ? {} : { capture: capture.manifest, changesSha256: capture.changesSha256 }),
     operations,
   });

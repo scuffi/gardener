@@ -2,6 +2,7 @@ import {
   authoredTriggerSubject,
   authorPermissionV1Schema,
   maintainerAssociations,
+  starterSubject,
   type AuthorPermissionV1,
 } from "@gardener/contracts";
 import { runnerEventV1Schema, type RunnerEventV1 } from "@gardener/protocol";
@@ -45,6 +46,42 @@ export function withAuthorPermission(event: RunnerEventV1, permission: AuthorPer
   const found = subjectOf(event);
   if (found === null) return event;
   const parsed = runnerEventV1Schema.safeParse({ ...event, [found.key]: { ...found.subject, authorPermission: permission } });
+  return parsed.success ? parsed.data : event;
+}
+
+/** The OIDC actor of the run, as the runner environment names it (`GITHUB_ACTOR`, `GITHUB_ACTOR_ID`). */
+export interface RunActor {
+  readonly login: string | undefined;
+  readonly id: string | undefined;
+}
+
+/**
+ * The login whose repository permission decides whether the run's starter is
+ * trusted: the actor, when it is someone other than the subject's author (the
+ * labeller of an issue, say). Null whenever the Worker can decide without it:
+ * schedules, manual runs, pushes and `synchronize` decide from the event, and
+ * an actor who is the author is judged by the author's own association and
+ * permission. Bots (`name[bot]`) are never looked up: the Worker never trusts
+ * them. An actor the environment does not name fully is not looked up either,
+ * which fails closed, because the Worker then treats the starter as untrusted.
+ */
+export function actorPermissionLogin(event: RunnerEventV1, actor: RunActor): string | null {
+  // Kinds in `starterDecidingKinds` have no entry, so they are never looked up.
+  const key = (starterSubject as Record<string, string | undefined>)[event.kind];
+  if (key === undefined) return null;
+  const subject = (event as Record<string, unknown>)[key] as { author?: { id?: unknown } } | undefined;
+  if (subject === null || typeof subject !== "object") return null;
+  if (actor.login === undefined || !LOGIN.test(actor.login)) return null;
+  if (actor.id === undefined || !/^[1-9][0-9]{0,19}$/.test(actor.id)) return null;
+  return subject.author?.id === actor.id ? null : actor.login;
+}
+
+/**
+ * The event with the actor's looked-up permission. Fails closed like
+ * `withAuthorPermission`: the event comes back unchanged if it would not parse.
+ */
+export function withActorPermission(event: RunnerEventV1, permission: AuthorPermissionV1): RunnerEventV1 {
+  const parsed = runnerEventV1Schema.safeParse({ ...event, actorPermission: permission });
   return parsed.success ? parsed.data : event;
 }
 

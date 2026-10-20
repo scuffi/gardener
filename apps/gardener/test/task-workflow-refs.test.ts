@@ -1,5 +1,14 @@
+/// <reference types="node" />
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { releaseMismatchAdvice, trustedTaskWorkflowRefs } from "../src/task-runtime/workflow-refs";
+import {
+  planCarriesEffectScope,
+  releaseMismatchAdvice,
+  TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE,
+  trustedTaskWorkflowRefs,
+} from "../src/task-runtime/workflow-refs";
 
 const ref = (repository: string, sha: string, file = "gardener-task.yml") => `${repository}/.github/workflows/${file}@${sha.repeat(40)}`;
 
@@ -40,5 +49,52 @@ describe("releaseMismatchAdvice", () => {
   it("tells a missing pin from a malformed one", () => {
     expect(releaseMismatchAdvice(undefined, workflow)).toMatch(/^This runtime has no release pin and this workflow is on cdcdcdcdcdcd\./);
     expect(releaseMismatchAdvice("not-a-ref")).toMatch(/^This runtime's release pin is malformed\./);
+  });
+});
+
+/**
+ * Release-blocking, and a mirror of scripts/check-release-pins.mjs: the
+ * current release's task workflow must be absent from the list of workflows
+ * whose plans cannot carry `effectScope`, and every earlier release's must be
+ * present. A missing entry breaks every run of that release; a present current
+ * one silently drops apply's scope check for everyone on it.
+ */
+describe("task workflows without effectScope", () => {
+  const root = fileURLToPath(new URL("../../../", import.meta.url));
+  const defaultWorkflowRef = (source: string | null) => /DEFAULT_WORKFLOW_REF =\s*"([^"]+)"/.exec(source ?? "")?.[1];
+  const current = defaultWorkflowRef(readFileSync(`${root}packages/cli/src/project.ts`, "utf8"));
+  const git = (...args: string[]) => {
+    try {
+      return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      return null;
+    }
+  };
+  // Shallow clones (the Check workflow's) have no tags; full history does.
+  const tags = (git("tag", "--list", "v*") ?? "").split("\n").filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
+
+  it("leaves the current release's task workflow out, so its plans carry effectScope", () => {
+    expect(current).toMatch(/\/gardener-task\.yml@[0-9a-f]{40}$/);
+    expect(
+      planCarriesEffectScope(current!),
+      `DEFAULT_WORKFLOW_REF (${current}) is an earlier release's workflow: pin this release's gardener-task.yml before releasing`,
+    ).toBe(true);
+  });
+
+  it.skipIf(tags.length === 0)("lists every earlier release's task workflow", () => {
+    const released = new Set(tags.map((tag) => defaultWorkflowRef(git("show", `${tag}:packages/cli/src/project.ts`))));
+    released.delete(current);
+    expect(released.size).toBeGreaterThan(0);
+    for (const ref of released) {
+      expect(ref, `a release's DEFAULT_WORKFLOW_REF`).toMatch(/@[0-9a-f]{40}$/);
+      expect(planCarriesEffectScope(ref!), `${ref} must be in TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE`).toBe(false);
+    }
+  });
+
+  it("keys on the commit, wherever the workflow is pinned from", () => {
+    const [sha] = TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE;
+    expect(planCarriesEffectScope(`scuffi/gardener/.github/workflows/gardener-task.yml@${sha}`)).toBe(false);
+    expect(planCarriesEffectScope(`fork/gardener/.github/workflows/gardener-task.yml@${sha}`)).toBe(false);
+    expect(planCarriesEffectScope(`scuffi/gardener/.github/workflows/gardener-task.yml@${"e".repeat(40)}`)).toBe(true);
   });
 });

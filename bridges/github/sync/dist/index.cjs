@@ -27151,11 +27151,19 @@ var operationKindValues = [
 var operationKindSchema = external_exports.enum(operationKindValues);
 var operationFamilySchema = external_exports.enum(["issue", "pull_request", "git", "discussion", "check", "release"]);
 var operationCatalogEntrySchema = external_exports.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: external_exports.literal(true), highImpact: external_exports.boolean() }).strict();
+var highImpactKinds = /* @__PURE__ */ new Set([
+  "pull_request.merge",
+  "pull_request.review.submit",
+  "release.create",
+  "release.update",
+  "release.publish",
+  "release.delete"
+]);
 var operationCatalog = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
   kind,
   family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind.startsWith("commit.") ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
   persistent: true,
-  highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete"
+  highImpact: highImpactKinds.has(kind)
 })));
 var shaSchema = external_exports.string().regex(/^[a-fA-F0-9]{40}$/);
 function isValidGitBranchName(value) {
@@ -27870,6 +27878,20 @@ var taskNetworkPolicyV1Schema = external_exports.strictObject({
   }
 });
 var TASK_RUNTIME_SECONDS_MAX = 21600;
+var runLimitPattern = /^([1-9][0-9]{0,4})\/(minute|hour|day|week|month)$/;
+var runLimitExamples = { runs: "50/day", runsPerAuthor: "3/day" };
+function runLimitIssue(value, field, label = field) {
+  if (runLimitPattern.test(value)) return void 0;
+  if (value === "unlimited" && field === "runsPerAuthor") return void 0;
+  const unlimited = field === "runsPerAuthor" ? ", or unlimited to turn it off" : "";
+  return `${label} must be <count>/<minute|hour|day|week|month> with a count from 1 to 99999${unlimited}, for example ${runLimitExamples[field]}; got ${JSON.stringify(value)}`;
+}
+function runLimitSchema(field) {
+  return external_exports.string().superRefine((value, context) => {
+    const issue2 = runLimitIssue(value, field);
+    if (issue2 !== void 0) context.addIssue({ code: "custom", message: issue2 });
+  });
+}
 var taskLimitsV1Schema = external_exports.strictObject({
   runtimeSeconds: external_exports.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
   maxTurns: external_exports.number().int().positive(),
@@ -27882,7 +27904,18 @@ var taskLimitsV1Schema = external_exports.strictObject({
    * planning and application fail closed.
    */
   maxEffectOperations: external_exports.number().int().positive().max(1e3).optional(),
-  maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional()
+  maxEffectBytes: external_exports.number().int().min(1024).max(5e7).optional(),
+  /**
+   * Runs of this task, by anyone, in a window: the task's total ceiling.
+   * Stored as written, and absent unless the task sets it, so the Worker
+   * owns any default and tasks without it hash as before.
+   */
+  runs: runLimitSchema("runs").optional(),
+  /**
+   * Runs one untrusted starter may cause in a window, or `unlimited`.
+   * Absent means the Worker's default applies, so no bundle hash changes.
+   */
+  runsPerAuthor: runLimitSchema("runsPerAuthor").optional()
 });
 var taskModelIdSchema = external_exports.string().min(1).max(256).regex(/^[A-Za-z0-9@][A-Za-z0-9@._:/+-]*$/, "model must be an AI Gateway model id such as @cf/moonshotai/kimi-k2.6 or openai/gpt-5.1").refine(
   (id) => !id.split("/").some((segment) => segment === "" || segment === "." || segment === ".."),
@@ -27940,7 +27973,14 @@ var taskBundleV1Schema = external_exports.strictObject({
    * off, so bundles that keep the default hash as before. The runtime ignores
    * it; only the generated workflow reads it.
    */
-  reactions: external_exports.literal(false).optional()
+  reactions: external_exports.literal(false).optional(),
+  /**
+   * Confines every run to what triggered it, whoever started it. Without it
+   * the Worker confines only runs an untrusted starter caused. There is no
+   * value that widens scope, and it is present only when set, so other
+   * bundles hash as before.
+   */
+  effectScope: external_exports.literal("trigger").optional()
 }).superRefine((bundle, context) => {
   const headTrigger = bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind) || eventNameByTriggerKind[trigger.kind] === "issue_comment");
   if (bundle.checkout === "pull-request-head" && !headTrigger) {
@@ -28099,6 +28139,21 @@ var authoredTriggerSubject = {
 function isAuthoredTriggerKind(kind) {
   return Object.hasOwn(authoredTriggerSubject, kind);
 }
+var starterSubject = {
+  ...authoredTriggerSubject,
+  "github.issue.labeled": "issue",
+  "github.issue.unlabeled": "issue",
+  "github.issue.reopened": "issue",
+  "github.pull_request.reopened": "pullRequest",
+  "github.pull_request.ready_for_review": "pullRequest",
+  "github.pull_request.converted_to_draft": "pullRequest",
+  "github.pull_request.labeled": "pullRequest",
+  "github.pull_request.unlabeled": "pullRequest",
+  "github.discussion.answered": "discussion",
+  "github.discussion.unanswered": "discussion",
+  "github.discussion.labeled": "discussion",
+  "github.discussion.unlabeled": "discussion"
+};
 var maintainerDefaultKinds = /* @__PURE__ */ new Set([
   "github.issue_comment.created",
   "github.issue_comment.edited",
@@ -28331,6 +28386,44 @@ function checksOutPullRequestHead(bundle) {
   if (patterns === void 0) return false;
   return !(patterns.length === DEFAULT_WRITE_BRANCHES.length && patterns.every((pattern, index) => pattern === DEFAULT_WRITE_BRANCHES[index]));
 }
+var trustedStarterReasonValues = [
+  /** A cron run: no person started it. */
+  "schedule",
+  /** A manual run, which needs write access to dispatch. */
+  "manual",
+  /** A push by a person, which needed write access. */
+  "push",
+  /** A same-repository head moved by a person, which needed write access. */
+  "synchronize",
+  /** The subject's author started the run and counts as a maintainer. */
+  "maintainer_author",
+  /** Someone other than the author started it, with write or admin permission. */
+  "maintainer_actor"
+];
+var untrustedStarterReasonValues = [
+  /** A bot, whose text may carry third-party content (release notes, say). */
+  "bot",
+  /** A pull request head from another repository. */
+  "fork_head",
+  /** The subject's author started the run and is not a maintainer. */
+  "author_not_maintainer",
+  /** Someone other than the author started it, with less than write permission. */
+  "actor_not_maintainer",
+  /** Nothing showed who started it or what they may do (for example a failed lookup), so it fails closed. */
+  "actor_unknown"
+];
+var taskRunStarterV1Schema = external_exports.strictObject({
+  trusted: external_exports.boolean(),
+  reason: external_exports.enum([...trustedStarterReasonValues, ...untrustedStarterReasonValues])
+}).superRefine((starter, context) => {
+  if (trustedStarterReasonValues.includes(starter.reason) !== starter.trusted) {
+    context.addIssue({
+      code: "custom",
+      path: ["trusted"],
+      message: `starter reason ${starter.reason} means trusted is ${!starter.trusted}`
+    });
+  }
+});
 var taskRunRequestV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.task-run-request/v1"),
   runId: boundIdentifier,
@@ -28341,7 +28434,13 @@ var taskRunRequestV1Schema = external_exports.strictObject({
   event: normalizedEventV1Schema,
   model: external_exports.strictObject({ id: external_exports.string().min(1).max(256) }),
   admittedAt: external_exports.iso.datetime(),
-  deadlineAt: external_exports.iso.datetime()
+  deadlineAt: external_exports.iso.datetime(),
+  /**
+   * Who started the run, frozen at admission. Optional so a request admitted
+   * before it existed still parses; absent means untrusted, which only
+   * narrows the run's effect scope.
+   */
+  starter: taskRunStarterV1Schema.optional()
 }).superRefine((request, context) => {
   if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
     context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
@@ -28836,6 +28935,96 @@ function triggeringPullRequestRefusal(kind, payload, references, resource) {
   }
   return void 0;
 }
+var onIssue = { allow: "trigger", field: "issueNumber" };
+var onPull = { allow: "trigger", field: "pullNumber" };
+var onDiscussion = { allow: "trigger", field: "discussionNumber" };
+var creates = { allow: "creates" };
+var refused = { allow: "never" };
+var triggerScopeClassification = {
+  "issue.label.add": onIssue,
+  "issue.label.remove": onIssue,
+  "issue.comment.create": onIssue,
+  // Apply refuses a comment that is not on the targeted number, so checking the target suffices.
+  "issue.comment.update": onIssue,
+  "issue.close": onIssue,
+  "issue.reopen": onIssue,
+  "issue.assignee.add": onIssue,
+  "issue.assignee.remove": onIssue,
+  "issue.create": creates,
+  "pull_request.comment.create": onPull,
+  "pull_request.comment.update": onPull,
+  "pull_request.review.submit": onPull,
+  "pull_request.reviewer.request": onPull,
+  "pull_request.reviewer.remove": onPull,
+  "pull_request.update": onPull,
+  "pull_request.label.add": onPull,
+  "pull_request.label.remove": onPull,
+  "pull_request.update_branch": onPull,
+  "pull_request.review_comment.reply": onPull,
+  "pull_request.review_thread.resolve": onPull,
+  "pull_request.merge": onPull,
+  // A wide `branches` glob lets a confined run create many branches; the run limits bound that.
+  "branch.create": creates,
+  // `commitBaseRefusal` pins every commit to the capture's base, under every checkout mode.
+  "commit.create": { allow: "checkout" },
+  "commit.merge_base": onPull,
+  "pull_request.open": creates,
+  "pull_request.open_draft": creates,
+  "discussion.comment.create": onDiscussion,
+  "discussion.comment.update": onDiscussion,
+  "discussion.answer.mark": onDiscussion,
+  "discussion.answer.unmark": onDiscussion,
+  "discussion.close": onDiscussion,
+  "discussion.reopen": onDiscussion,
+  // No field relates a check run or an existing release to the trigger.
+  "check.rerun": refused,
+  "release.create": creates,
+  "release.update": refused,
+  "release.publish": refused,
+  "release.delete": refused
+};
+var triggerResourceKinds = {
+  issueNumber: ["issue", "pull_request"],
+  pullNumber: ["pull_request", "issue"],
+  discussionNumber: ["discussion"]
+};
+var createdResourceOutputs = {
+  issueNumber: { "issue.create": "issueNumber" },
+  pullNumber: { "pull_request.open": "pullNumber", "pull_request.open_draft": "pullNumber" },
+  discussionNumber: {}
+};
+function resourceLabel(resource) {
+  return `${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}`;
+}
+var CONFINED = "this run is confined to what triggered it";
+function triggerScopeRefusal(kind, payload, references, resource, earlier) {
+  const scope = Object.hasOwn(triggerScopeClassification, kind) ? triggerScopeClassification[kind] : void 0;
+  if (scope === void 0 || scope.allow === "never") {
+    return `${kind} is not allowed: ${CONFINED}, and nothing ties ${kind} to the trigger`;
+  }
+  if (scope.allow !== "trigger") return void 0;
+  const reference = references[`/${scope.field}`];
+  if (reference !== void 0) {
+    if (triggeringPullRequestKinds.includes(kind)) {
+      return `${kind} must name the pull request that triggered this run directly, not by reference`;
+    }
+    const ref = reference !== null && typeof reference === "object" && !Object.hasOwn(reference, "placeholders") ? reference : {};
+    const createdBy = typeof ref.step === "string" ? earlier.get(ref.step) : void 0;
+    const created = createdBy === void 0 ? void 0 : createdResourceOutputs[scope.field][createdBy];
+    if (created === void 0 || ref.output !== created) {
+      return `${kind} may reference ${scope.field} only from an earlier step of this plan that created it: ${CONFINED}`;
+    }
+    return void 0;
+  }
+  if (resource === null) {
+    return `${kind} needs a run triggered from an issue, pull request or discussion: ${CONFINED}, and nothing triggered it`;
+  }
+  const target = payload !== null && typeof payload === "object" ? payload[scope.field] : void 0;
+  if (!triggerResourceKinds[scope.field].includes(resource.kind) || target !== resource.number) {
+    return `${kind} may act only on ${resourceLabel(resource)}, which triggered this run: ${CONFINED}`;
+  }
+  return void 0;
+}
 var captureMaterializedPointers = {
   "commit.create": ["/files"],
   "commit.merge_base": ["/files", "/conflictedPaths"]
@@ -28977,6 +29166,13 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * did. Absent when every branch-writing kind keeps the `gardener/**` default.
    */
   branchPatterns: taskBranchPatternsV1Schema.optional(),
+  /**
+   * Where this plan's steps may act. `trigger` confines every step to what
+   * triggered the run (see `triggerScopeRefusal`), and apply re-checks it
+   * here. Absent means no such check, so plans for pins that predate it
+   * still parse; the Worker checks scope when it builds those itself.
+   */
+  effectScope: external_exports.enum(["trigger", "repository"]).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -29065,6 +29261,11 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
     }
     const pullRefusal = triggeringPullRequestRefusal(operation.kind, operation.payload, operation.references, plan.event.resource);
     if (pullRefusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "pullNumber"], message: pullRefusal });
+    if (plan.effectScope === "trigger") {
+      const earlier = new Map(plan.operations.slice(0, index).map((candidate) => [candidate.stepName, candidate.kind]));
+      const scopeRefusal = triggerScopeRefusal(operation.kind, operation.payload, operation.references, plan.event.resource, earlier);
+      if (scopeRefusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index], message: scopeRefusal });
+    }
     if (operation.kind === "commit.create" && plan.capture !== void 0) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });
@@ -29505,6 +29706,24 @@ function modelWarning(model) {
   if (NATIVE_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix))) return void 0;
   return `uses model ${model}, which is sent to AI Gateway as OpenAI-compatible chat completions. Gardener has only verified @cf/, anthropic/ and openai/ models; this one may fail if it cannot call tools.`;
 }
+function authoredRunLimit(field, label) {
+  return external_exports.string().superRefine((value, context) => {
+    const issue2 = runLimitIssue(value, field, label);
+    if (issue2 !== void 0) context.addIssue({ code: "custom", message: issue2 });
+  });
+}
+function admitsNonMaintainers(bundle) {
+  return bundle.triggers.some((trigger) => {
+    if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER || trigger.kind === PUSH_TRIGGER) return false;
+    return !("authors" in trigger) || trigger.authors === "any";
+  });
+}
+function highImpactWarning(bundle) {
+  if (!admitsNonMaintainers(bundle)) return void 0;
+  const kinds = bundle.effects.filter((kind) => operationCatalog.some((entry) => entry.kind === kind && entry.highImpact));
+  if (kinds.length === 0) return void 0;
+  return `declares ${kinds.join(", ")} and can be started by people who are not maintainers. Their runs are confined to what triggered them, but the model can still be talked into these effects there: an outsider's own pull request could be approved or merged, and a release reaches every user. Restrict the triggers with authors: maintainers, or remove these effects.`;
+}
 var authoringSchema = external_exports.strictObject({
   schema: external_exports.literal("gardener.task/v1"),
   id: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
@@ -29515,6 +29734,7 @@ var authoringSchema = external_exports.strictObject({
   draft: external_exports.boolean().optional(),
   checkout: external_exports.enum(["provider", "pull-request-head"]).optional(),
   reactions: external_exports.boolean().optional(),
+  "effect-scope": external_exports.literal("trigger").optional(),
   model: taskModelIdSchema.optional(),
   tools: external_exports.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: external_exports.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
@@ -29530,7 +29750,9 @@ var authoringSchema = external_exports.strictObject({
     "input-tokens": external_exports.number().int().positive(),
     "output-tokens": external_exports.number().int().positive(),
     "max-effect-operations": external_exports.number().int().positive().max(1e3).optional(),
-    "max-effect-bytes": external_exports.number().int().min(1024).max(5e7).optional()
+    "max-effect-bytes": external_exports.number().int().min(1024).max(5e7).optional(),
+    runs: authoredRunLimit("runs", "limits.runs").optional(),
+    "runs-per-author": authoredRunLimit("runsPerAuthor", "limits.runs-per-author").optional()
   })
 }).superRefine((authoring, context) => {
   if (authoring.trigger === void 0 === (authoring.triggers === void 0)) {
@@ -29645,12 +29867,17 @@ async function compileTaskSource(source, sourceName = "TASK.md", options = {}) {
       inputTokens: authoring.limits["input-tokens"],
       outputTokens: authoring.limits["output-tokens"],
       maxEffectOperations: authoring.limits["max-effect-operations"],
-      maxEffectBytes: authoring.limits["max-effect-bytes"]
+      maxEffectBytes: authoring.limits["max-effect-bytes"],
+      // Absent stays absent: the Worker applies its defaults, so bundles that
+      // set neither hash as before.
+      ...authoring.limits.runs === void 0 ? {} : { runs: authoring.limits.runs },
+      ...authoring.limits["runs-per-author"] === void 0 ? {} : { runsPerAuthor: authoring.limits["runs-per-author"] }
     },
     model: authoring.model ?? DEFAULT_TASK_MODEL,
     ...authoring.checkout === "pull-request-head" ? { checkout: "pull-request-head" } : {},
     ...authoring.draft === true ? { draft: true } : {},
-    ...authoring.reactions === false ? { reactions: false } : {}
+    ...authoring.reactions === false ? { reactions: false } : {},
+    ...authoring["effect-scope"] === "trigger" ? { effectScope: "trigger" } : {}
   });
   return {
     bundle,
@@ -29769,6 +29996,10 @@ async function planProject(input2) {
   const warnings = [
     ...tasks.length === 0 ? ["No .gardener/tasks/*/TASK.md files were found. Once this reaches the default branch, no Gardener task runs."] : [],
     ...tasks.filter((task) => task.bundle.tools.includes("repository.exec")).map((task) => `Task ${task.bundle.taskId} ${UNRESTRICTED_EGRESS_WARNING}`),
+    ...tasks.flatMap((task) => {
+      const warning = highImpactWarning(task.bundle);
+      return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];
+    }),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];

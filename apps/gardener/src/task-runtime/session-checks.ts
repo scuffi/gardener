@@ -14,7 +14,17 @@ import {
   type RunnerActionV1,
   type RunnerHelloV1,
 } from "@gardener/protocol";
-import { eventNameByTriggerKind, type TaskRunRequestV1 } from "@gardener/contracts";
+import {
+  eventHeadIsSameRepository,
+  eventNameByTriggerKind,
+  maintainerAssociations,
+  maintainerPermissions,
+  starterSubject,
+  type AuthorPermissionV1,
+  type NormalizedEventV1,
+  type TaskRunRequestV1,
+  type TaskRunStarterV1,
+} from "@gardener/contracts";
 import type { HarnessToolInvocation } from "../harness";
 import { taskToolInputKeys } from "./tool-input-schemas";
 import { listFilesPath, repositoryPath } from "./repository-paths";
@@ -109,6 +119,72 @@ export function assertReportedEventMatchesOidc(kind: keyof typeof eventNameByTri
       `Reported event ${kind} does not match the ${eventName} event in the verified OIDC claims`,
     );
   }
+}
+
+/** What `trustedStarter` decides from: the signed OIDC identity and the admitted event. */
+export interface StarterEvidence {
+  /** The event name GitHub signed into the OIDC token. */
+  readonly eventName: string;
+  /** The OIDC `actor_id` and `actor`, also signed. */
+  readonly actor: { readonly id: string; readonly login: string };
+  /** The normalized event, whose kind already agrees with `eventName`. */
+  readonly event: NormalizedEventV1;
+  /** The actor's permission, when the bridge looked it up; absent fails closed. */
+  readonly actorPermission?: AuthorPermissionV1 | undefined;
+}
+
+const isBot = (login: string): boolean => login.endsWith("[bot]");
+
+/**
+ * Whether the person (or thing) that started this run is trusted, decided once
+ * at admission and frozen in the request. Trusted runs may act anywhere their
+ * declared effects allow; every other run is confined to what triggered it.
+ *
+ * 1. A schedule or manual run is trusted: dispatching needs write access.
+ * 2. A push, or a `synchronize` whose head is in this repository, by anyone
+ *    but a bot: producing it needed a push here. A bot is untrusted on
+ *    purpose, because Dependabot's commits carry upstream release notes.
+ * 3. The subject's own author, when they count as a maintainer exactly as
+ *    `authors: maintainers` counts them, and are not a bot.
+ * 4. Someone acting on another's subject (the labeller, say), with write or
+ *    admin permission as the bridge looked it up.
+ *
+ * Everything else is untrusted, including a lookup that failed or never
+ * happened, because failing closed only narrows what the run may do.
+ */
+export function trustedStarter(evidence: StarterEvidence): TaskRunStarterV1 {
+  const { eventName, actor, event } = evidence;
+  if (eventName === "schedule") return { trusted: true, reason: "schedule" };
+  if (eventName === "workflow_dispatch") return { trusted: true, reason: "manual" };
+  if (isBot(actor.login)) return { trusted: false, reason: "bot" };
+  if (eventName === "push") return { trusted: true, reason: "push" };
+  if (event.kind === "github.pull_request.synchronize") {
+    // Checked here, before the decision is frozen, rather than trusting the
+    // generated workflow's fork guard or the later re-check.
+    return eventHeadIsSameRepository(event)
+      ? { trusted: true, reason: "synchronize" }
+      : { trusted: false, reason: "fork_head" };
+  }
+  const key = (starterSubject as Record<string, string | undefined>)[event.kind];
+  const value = key === undefined ? undefined : (event as Record<string, unknown>)[key];
+  if (value === null || typeof value !== "object") return { trusted: false, reason: "actor_unknown" };
+  const subject = value as {
+    author: { id: string; login: string };
+    authorAssociation?: string;
+    authorPermission?: string;
+  };
+  if (subject.author.id === actor.id) {
+    if (isBot(subject.author.login)) return { trusted: false, reason: "bot" };
+    const maintainer = (subject.authorAssociation !== undefined
+      && (maintainerAssociations as readonly string[]).includes(subject.authorAssociation))
+      || (subject.authorPermission !== undefined
+        && (maintainerPermissions as readonly string[]).includes(subject.authorPermission));
+    return maintainer ? { trusted: true, reason: "maintainer_author" } : { trusted: false, reason: "author_not_maintainer" };
+  }
+  if (evidence.actorPermission === undefined) return { trusted: false, reason: "actor_unknown" };
+  return (maintainerPermissions as readonly string[]).includes(evidence.actorPermission)
+    ? { trusted: true, reason: "maintainer_actor" }
+    : { trusted: false, reason: "actor_not_maintainer" };
 }
 
 /** An effects session applies only the plan its own workflow run and attempt produced. */

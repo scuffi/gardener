@@ -18,6 +18,7 @@ import {
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
   threadOpenerLogin,
+  taskEventBindingFromNormalizedEvent,
   type NormalizedEventV1,
   type TaskAuthorsFilterV1,
   type TaskOutcomeV1,
@@ -27,6 +28,7 @@ import {
 } from "@gardener/contracts";
 import { canonicalSha256 } from "@gardener/core";
 import { mergeBaseToolRefusal } from "./tool-authority";
+import { runEffectScope, triggerScopeReason } from "./proposal-authority";
 import {
   HARNESS_ADAPTER_VERSIONS,
   type AgentHarness,
@@ -463,6 +465,7 @@ function branchNote(bundle: TaskRunRequestV1["bundle"], kind: string): string {
 function effectGuidance(request: TaskRunRequestV1): string[] {
   const effects: readonly string[] = request.bundle.effects;
   const notes: string[] = [];
+  if (effects.length > 0) notes.push(scopeNote(request));
   if (effects.some(isBranchWriteKind)) {
     notes.push(
       `Branch patterns: * matches within one path segment and ** matches one or more segments. A pattern never matches the default branch (${request.event.repository.defaultBranch}) unless it names it exactly.`,
@@ -494,6 +497,21 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
     notes.push("Labels must already exist in the repository; Gardener never creates a label.");
   }
   return notes.length === 0 ? [] : ["", ...notes];
+}
+
+/**
+ * Where this run's steps may act, so the model hears it before proposing.
+ * Every proposal, and the plan, is checked against the same scope anyway.
+ */
+function scopeNote(request: TaskRunRequestV1): string {
+  if (runEffectScope(request) === "repository") {
+    return "Scope: this run may act on any issue, pull request or discussion in the repository, within the effects above.";
+  }
+  const resource = taskEventBindingFromNormalizedEvent(request.event).resource;
+  const trigger = resource === null
+    ? "nothing triggered it, so it may only create new things (and commit to its checkout)"
+    : `steps may act only on ${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}, or on something an earlier step of this run creates`;
+  return `Scope: this run is confined to what triggered it because ${triggerScopeReason(request)}; ${trigger}. release.update, release.publish, release.delete and check.rerun are refused.`;
 }
 
 /**

@@ -4,7 +4,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { taskEffectPlanV1Schema, type TaskEffectPlanV1 } from "@gardener/contracts";
 import { type RunnerEventV1 } from "@gardener/protocol";
-import { authorPermissionLogin, fetchAuthorPermission, withAuthorPermission } from "./author-permission";
+import {
+  actorPermissionLogin,
+  authorPermissionLogin,
+  fetchAuthorPermission,
+  withActorPermission,
+  withAuthorPermission,
+} from "./author-permission";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent, normalizePullRequest } from "./event";
 import { fetchCurrentPullRequest, UnconfirmedHeadError, withCheckoutSha, withCurrentPullRequestHead } from "./current-head";
@@ -156,13 +162,23 @@ async function githubEvent(checkoutSha: string | undefined): Promise<RunnerEvent
   // maintainers` also accepts write access, looked up here before any task
   // command runs. Without it the run falls back to the association alone.
   const login = authorPermissionLogin(event);
-  if (login === null) return event;
-  const permission = await fetchAuthorPermission({
+  const authored = login === null ? null : await fetchAuthorPermission({
     repository: requiredEnvironment("GITHUB_REPOSITORY"),
     login,
     token: providerReadToken,
   });
-  return permission === null ? event : withAuthorPermission(event, permission);
+  const withAuthor = authored === null ? event : withAuthorPermission(event, authored);
+  // Whoever acted on someone else's issue or pull request (the labeller, say)
+  // is trusted only with write access, looked up the same way. The Worker
+  // decides from it; without it the run is confined to what triggered it.
+  const actorLogin = actorPermissionLogin(withAuthor, { login: process.env.GITHUB_ACTOR, id: process.env.GITHUB_ACTOR_ID });
+  if (actorLogin === null) return withAuthor;
+  const actor = await fetchAuthorPermission({
+    repository: requiredEnvironment("GITHUB_REPOSITORY"),
+    login: actorLogin,
+    token: providerReadToken,
+  });
+  return actor === null ? withAuthor : withActorPermission(withAuthor, actor);
 }
 
 /** Moves a queued run's event to the pull request head the workflow checked out. */

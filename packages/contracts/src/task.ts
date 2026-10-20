@@ -755,6 +755,43 @@ export function isAuthoredTriggerKind(kind: TaskTriggerKindV1): kind is Authored
 }
 
 /**
+ * Events whose starter is decided from the event alone: a schedule, a manual
+ * run, or a push to this repository (a `synchronize` moved a head, which needed
+ * a push too). Neither the bridge nor the Worker looks anyone up for these.
+ */
+export const starterDecidingKinds = [
+  "github.schedule",
+  "github.workflow_dispatch",
+  "github.push",
+  "github.pull_request.synchronize",
+] as const satisfies readonly TaskTriggerKindV1[];
+
+/**
+ * The subject whose author a run's starter is compared with: the authored
+ * text an authored trigger names, otherwise the issue, pull request or
+ * discussion the event is about. The OIDC actor is either that author or
+ * someone acting on it (the labeller, say). Absent for the kinds above.
+ */
+export const starterSubject = {
+  ...authoredTriggerSubject,
+  "github.issue.labeled": "issue",
+  "github.issue.unlabeled": "issue",
+  "github.issue.reopened": "issue",
+  "github.pull_request.reopened": "pullRequest",
+  "github.pull_request.ready_for_review": "pullRequest",
+  "github.pull_request.converted_to_draft": "pullRequest",
+  "github.pull_request.labeled": "pullRequest",
+  "github.pull_request.unlabeled": "pullRequest",
+  "github.discussion.answered": "discussion",
+  "github.discussion.unanswered": "discussion",
+  "github.discussion.labeled": "discussion",
+  "github.discussion.unlabeled": "discussion",
+} as const satisfies Record<
+  Exclude<TaskTriggerKindV1, (typeof starterDecidingKinds)[number]>,
+  "issue" | "comment" | "pullRequest" | "review" | "discussion"
+>;
+
+/**
  * Authored triggers whose text anyone who can comment may write, so they only
  * run for maintainers unless the task says otherwise. A trigger with
  * `mentions` defaults the same way.

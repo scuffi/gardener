@@ -54,6 +54,7 @@ tools, effects, network access or permissions.
 | `draft` | no | `true` makes the task run only by hand. |
 | `checkout` | no | `pull-request-head` checks out the pull request's head instead of GitHub's merge preview, also for a comment on a pull request or a manual run naming one. Needs a pull request or issue comment trigger. Implied by `commit.merge_base`, and when a `commit.create` entry lists `branches` other than `gardener/**`. |
 | `reactions` | no | `false` turns off the 👀 → 🚀/😕 reactions. On by default. See [Reactions](#reactions). |
+| `effect-scope` | no | `trigger` confines every run to what triggered it, whoever started it. Without it, only runs an untrusted starter caused are confined. See [Effect scope](task-authoring.md#effect-scope). |
 
 ## Triggers
 
@@ -247,14 +248,16 @@ about every task that declares `repository.exec`.
 | `output-tokens` | yes | Total generated across the run, including reasoning. | at least 16 × `max-turns` |
 | `max-effect-operations` | no | Most operations one plan may propose. Needs at least one effect. | 1–1,000 |
 | `max-effect-bytes` | no | Largest plan. | 1,024–50,000,000 |
+| `runs-per-author` | no | Runs one untrusted starter may cause, in any window of that length. Defaults to `3/day`. | `<count>/<minute\|hour\|day\|week\|month>` with a count of 1–99,999, or `unlimited` |
+| `runs` | no | Runs of the task by anyone, maintainers included, in any window of that length. No default. | `<count>/<minute\|hour\|day\|week\|month>` with a count of 1–99,999 |
 
 A run that exceeds a limit fails with `budget-exceeded` and changes nothing. Every plan and receipt
 must also fit in 4 MiB of canonical JSON, and one commit may change at most 1,000 files. The plan
 job times out after `runtime-seconds` plus 10 minutes.
 
-There is no limit across runs: a task anyone can trigger runs once per event. To cap total model
-use, set a rate limit on the installation's AI Gateway; see
-[Capping model use](operations.md#capping-model-use).
+A run over `runs-per-author` or `runs` completes as a skip without calling the model; a month is 30
+days. See [Run limits](task-authoring.md#run-limits). To cap model use across every task, set a rate
+limit on the installation's AI Gateway; see [Capping model use](operations.md#capping-model-use).
 
 ## Model
 

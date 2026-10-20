@@ -107,9 +107,18 @@ npx @scuffi/gardener deploy --workspace my-gardener \
 
 ### Capping model use
 
-Task limits bound each run, not how many runs there are: a task runs once for every event that
-matches it. Keep tasks with public triggers on `authors: maintainers`, and cap total model use with
-AI Gateway [rate limiting](https://developers.cloudflare.com/ai-gateway/features/rate-limiting/).
+A task runs once for every event that matches it. Two kinds of limit stop that from running away.
+
+Each task's [run limits](task-authoring.md#run-limits) bound how often that task calls the model:
+`runs-per-author` (3 a day for each outsider unless the task says otherwise) and `runs` (the task's
+total, maintainers included, with no default). A run over either finishes as a skip before the
+model is called, so it costs nothing. They don't bound many tasks together, and a task without
+`runs` isn't bounded against one person with many accounts.
+
+The AI Gateway cap is account-wide: it covers every task in every repository on the installation,
+and anything else that uses the gateway. Set it as the outer ceiling, with AI Gateway
+[rate limiting](https://developers.cloudflare.com/ai-gateway/features/rate-limiting/), and keep
+tasks with public triggers on `authors: maintainers` where you can.
 Set it on the account's `default` gateway, which `@cf/…` models always use, and on the gateway
 passed to `--ai-gateway` if there is one. A request over the limit fails with HTTP 429. Gardener
 retries a request to the `--ai-gateway` gateway twice with backoff, then fails the run without

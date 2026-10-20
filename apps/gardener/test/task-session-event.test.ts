@@ -31,8 +31,8 @@ const runnerComment = {
 };
 
 describe("runner event conversion", () => {
-  it("carries the whole runner payload, dropping only the wire envelope", () => {
-    expect(source).toMatch(/function eventPayload\(event: RunnerEventV1\)[^{]*\{\n  const \{ schemaVersion: _schemaVersion, \.\.\.payload \} = event;\n  return payload;\n\}/);
+  it("carries the whole runner payload, dropping only the wire envelope and the actor's permission", () => {
+    expect(source).toMatch(/function eventPayload\(event: RunnerEventV1\)[^{]*\{\n(?:  \/\/.*\n)*  const \{ schemaVersion: _schemaVersion, actorPermission: _actorPermission, \.\.\.payload \} = event;\n  return payload;\n\}/);
     expect(source).toMatch(/event: \{\n        \.\.\.eventPayload\(runnerEvent\),/);
   });
 
@@ -55,6 +55,28 @@ describe("runner event conversion", () => {
     });
     expect(event).toMatchObject({ checkoutSha: sha("d"), pullRequest: { number: 12, head: { sha: sha("d") } }, issue: { number: 12 } });
     expect(taskCheckoutSha({ checkout: "pull-request-head" }, event)).toBe(sha("d"));
+  });
+
+  it("drops the actor's permission, which the strict normalized event has no place for", () => {
+    const normalized = (payload: Record<string, unknown>) => normalizedEventV1Schema.safeParse({
+      ...payload,
+      schemaVersion: "gardener.normalized-event/v1",
+      eventId: "github:1:1",
+      occurredAt: "2026-10-12T12:00:00.000Z",
+      repository: {
+        id: "1374842705", ownerId: "45369682", owner: "scuffi", name: "gardener", fullName: "scuffi/gardener",
+        visibility: "private", commitSha: sha("b"), ref: "refs/heads/main", defaultBranch: "main",
+      },
+      workflow: {
+        runId: "1", runAttempt: 1, eventName: "issue_comment", workflowRef: "scuffi/gardener/.github/workflows/gardener.yml@refs/heads/main",
+        jobWorkflowRef: `scuffi/gardener/.github/workflows/gardener-task.yml@${sha("c")}`, runnerEnvironment: "github-hosted",
+      },
+      actor,
+    });
+    const { schemaVersion: _schemaVersion, ...payload } = runnerEventV1Schema.parse({ ...runnerComment, actorPermission: "write" });
+    expect(normalized(payload).success).toBe(false);
+    const { actorPermission: _actorPermission, ...stripped } = payload;
+    expect(normalized(stripped).success).toBe(true);
   });
 });
 

@@ -90,6 +90,7 @@ Unknown keys are errors.
 | `draft` | no | `true` makes the task run only by hand. See [Trying a task](#trying-a-task). |
 | `checkout` | no | `pull-request-head` checks out a pull request's head instead of GitHub's merge preview, also for comments on a pull request and manual runs naming one. Needs a pull request or issue comment trigger. Implied by `commit.merge_base`, and when `commit.create` may write beyond `gardener/**`. |
 | `reactions` | no | `false` stops the 👀 reaction while the task works on an issue or comment, and the 🚀 or 😕 it leaves after. On by default. |
+| `effect-scope` | no | `trigger` confines every run to the issue or pull request that triggered it, even a maintainer's. See [Who a run may act on](#who-a-run-may-act-on). |
 
 ## Triggers
 
@@ -229,8 +230,18 @@ network:            # tasks with repository.exec
 | `output-tokens` | Total generated across the run, including reasoning. | at least 16 × `max-turns` |
 | `max-effect-operations` | Optional cap on proposed changes per run. Needs at least one effect. | 1–1,000 |
 | `max-effect-bytes` | Optional cap on the plan's size. | 1,024–50,000,000 |
+| `runs` | Optional cap on this task's runs across everyone, maintainers included, e.g. `50/day`. | `<count>/<minute\|hour\|day\|week\|month>` |
+| `runs-per-author` | Cap on runs started by each non-maintainer. Defaults to `3/day`; `unlimited` turns it off. | as `runs`, or `unlimited` |
 
-A run that runs out of any budget fails with `budget-exceeded` and changes nothing. What
+A run that runs out of any budget fails with `budget-exceeded` and changes nothing. A run over `runs` or
+`runs-per-author` completes as a skip without calling the model. A month is 30 days.
+
+### Who a run may act on
+
+Runs started by a maintainer, a schedule, a manual run or a push may act anywhere the task's effects
+allow. Runs started by anyone else, including bots, may only act on the issue or pull request that
+triggered them, or on what the run itself creates; they can't change releases or re-run checks.
+Mentioning other issues in text is always fine. What
 Gardener's starter tasks use:
 
 | Task | runtime-seconds | max-turns | max-tool-calls | input-tokens | output-tokens |
