@@ -1,0 +1,73 @@
+SECURITY.md
+  s_afec0ff6bc51f3::t_9bf9d2562a28c9 79-101,183-194
+apps/gardener/migrations/0005_actions_task_run_admissions.sql
+  s_afec0ff6bc51f3::t_421f3670c35053 1-23
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_afec0ff6bc51f3::t_4436dd6168c066 31-32,343-344,348-353,406-411,443-449
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_afec0ff6bc51f3::t_18dd93a243c050 21,31,468,502-516
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_afec0ff6bc51f3::t_a895f11d25269b 13-14,16,20-62,81,108-109,111-113
+apps/gardener/src/task-runtime/run-admissions.ts
+  s_afec0ff6bc51f3::t_587851d429159f 1-111
+apps/gardener/src/task-runtime/session-checks.ts
+  s_afec0ff6bc51f3::t_d8ea876914e40a 17-27,124-189
+apps/gardener/src/task-runtime/session.ts
+  s_afec0ff6bc51f3::t_c7ee2c1c830140 106,113,1012-1014,1017,1048-1075,1460-1463,1467-1479
+apps/gardener/src/task-runtime/workflow-refs.ts
+  s_de0b486c128948::t_681b82c3d5a030 54-85
+apps/gardener/test/task-effect-scope.test.ts
+  s_afec0ff6bc51f3::t_b15ea6b0d04765 1-187
+apps/gardener/test/task-run-admissions.test.ts
+  s_afec0ff6bc51f3::t_c3fa83932283d8 1-180
+apps/gardener/test/task-session-admission.test.ts
+  s_afec0ff6bc51f3::t_4706870f1cc692 1-48
+apps/gardener/test/task-session-event.test.ts
+  s_afec0ff6bc51f3::t_6ebd214ad95d5d 34-35,59-80
+apps/gardener/test/task-trusted-starter.test.ts
+  s_afec0ff6bc51f3::t_8e1e013eb14d0a 1-167
+apps/gardener/test/task-workflow-refs.test.ts
+  s_afec0ff6bc51f3::t_82daa8161c5108 1-4,6-11,54-100
+docs/operations.md
+  s_afec0ff6bc51f3::t_1d8aa6100d4104 110-121
+docs/task-authoring.md
+  s_afec0ff6bc51f3::t_7c525944d3e83f 302-364,548-549,563-591
+docs/task-reference.md
+  s_afec0ff6bc51f3::t_4e8328afb2528c 57,251-252,258-260
+packages/cli/src/task-guide.md
+  s_de0b486c128948::t_15df29cbdc7ff5 93,233-234,236-244
+packages/runner/src/author-permission.ts
+  s_afec0ff6bc51f3::t_ac57c34e612cdc 5,52-87
+packages/runner/src/main.ts
+  s_afec0ff6bc51f3::t_10d9d64904388e 7-13,165,170-181
+packages/runner/test/author-permission.test.ts
+  s_afec0ff6bc51f3::t_f145d81eea129f 2-8,82-125
+scripts/check-cli-package.mjs
+  s_de0b486c128948::t_d83f26a4124bfb 18
+scripts/check-release-pins.mjs
+  s_de0b486c128948::t_a2019d19359695 142-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b154df684f7fe6f37431ed98010650c67f5c19b5",
+  "prompts": {},
+  "sessions": {
+    "s_afec0ff6bc51f3": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a1594c-92a4-7449-928a-d960abe78431",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
