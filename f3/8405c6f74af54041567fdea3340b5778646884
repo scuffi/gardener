@@ -1,0 +1,23 @@
+.github/workflows/gardener-check.yml
+  s_de0b486c128948::t_0579cbc16177c5 23
+.github/workflows/gardener-sync.yml
+  s_de0b486c128948::t_ea85dd0de490eb 30
+.github/workflows/gardener-task.yml
+  s_de0b486c128948::t_4fb47b359588c7 148,202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f38405c6f74af54041567fdea3340b5778646884",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
