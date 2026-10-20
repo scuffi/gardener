@@ -23,7 +23,7 @@ import {
   type GitHubActionsTaskPlanV1,
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
-import { compileTaskSource, modelWarning, type CompiledTask } from "./task-authoring.js";
+import { compileTaskSource, highImpactWarning, modelWarning, type CompiledTask } from "./task-authoring.js";
 import { renderTaskGuide, TASK_GUIDE_PATH } from "./task-guide.js";
 
 /** The most tasks one sync may carry (`syncRequestV1Schema`), so the most a project may hold. */
@@ -398,6 +398,10 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
     ...tasks
       .filter((task) => task.bundle.tools.includes("repository.exec"))
       .map((task) => `Task ${task.bundle.taskId} ${UNRESTRICTED_EGRESS_WARNING}`),
+    ...tasks.flatMap((task) => {
+      const warning = highImpactWarning(task.bundle);
+      return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
+    }),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];

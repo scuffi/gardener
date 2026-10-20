@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { operationKindValues } from "../src/operations";
 import {
   normalizedEventV1Schema,
+  parseRunLimit,
+  runLimitIssue,
+  trustedStarterReasonValues,
+  untrustedStarterReasonValues,
   pullRequestFamilyTriggerKindValues,
   TASK_RUNTIME_SECONDS_MAX,
   taskBundleV1Schema,
@@ -288,6 +292,36 @@ describe("Actions-native task v1 contracts", () => {
     })).toThrow(/deadline/);
   });
 
+  it("carries an optional starter whose trust agrees with its reason", () => {
+    const request = {
+      schemaVersion: "gardener.task-run-request/v1",
+      runId: "run:fixture:1",
+      bundle: fixtureBundle(),
+      bundleHash: hash,
+      sourcePath: ".gardener/tasks/fixture.inspect/TASK.md",
+      policySnapshotHash: "d".repeat(64),
+      event: fixtureEvent(),
+      model: { id: "@cf/test/model" },
+      admittedAt: "2026-09-17T12:00:00.000Z",
+      deadlineAt: "2026-09-17T12:05:00.000Z",
+    } as const;
+    // A request admitted before the field existed still parses.
+    expect(taskRunRequestV1Schema.parse(request)).not.toHaveProperty("starter");
+    for (const reason of trustedStarterReasonValues) {
+      const starter = { trusted: true, reason };
+      expect(taskRunRequestV1Schema.parse({ ...request, starter }).starter).toEqual(starter);
+      expect(() => taskRunRequestV1Schema.parse({ ...request, starter: { trusted: false, reason } })).toThrow(/means trusted is true/);
+    }
+    for (const reason of untrustedStarterReasonValues) {
+      const starter = { trusted: false, reason };
+      expect(taskRunRequestV1Schema.parse({ ...request, starter }).starter).toEqual(starter);
+      expect(() => taskRunRequestV1Schema.parse({ ...request, starter: { trusted: true, reason } })).toThrow(/means trusted is false/);
+    }
+    expect(() => taskRunRequestV1Schema.parse({ ...request, starter: { trusted: true } })).toThrow();
+    expect(() => taskRunRequestV1Schema.parse({ ...request, starter: { trusted: true, reason: "schedule", login: "x" } })).toThrow();
+    expect(() => taskRunRequestV1Schema.parse({ ...request, starter: { trusted: true, reason: "admin" } })).toThrow();
+  });
+
   it("keeps shell results structured and process-state consistent", () => {
     const result = {
       schemaVersion: "gardener.task-tool-result/v1",
@@ -316,5 +350,62 @@ describe("Actions-native task v1 contracts", () => {
     } as const;
     expect(taskOutcomeV1Schema.parse(outcome)).toEqual(outcome);
     expect(() => taskOutcomeV1Schema.parse({ ...outcome, providerReceipt: { id: "not-allowed" } })).toThrow();
+  });
+});
+
+describe("run limits", () => {
+  const withLimits = (limits: Record<string, unknown>) => ({ ...fixtureBundle(), limits: { ...fixtureBundle().limits, ...limits } });
+
+  it("parses every window, with a month of 30 days", () => {
+    const windows = { minute: 60, hour: 3_600, day: 86_400, week: 604_800, month: 2_592_000 };
+    for (const [window, windowSeconds] of Object.entries(windows)) {
+      for (const field of ["runs", "runsPerAuthor"] as const) {
+        expect(parseRunLimit(`3/${window}`, field)).toEqual({ count: 3, windowSeconds });
+      }
+    }
+  });
+
+  it("accepts counts from 1 to 99999 and nothing outside them", () => {
+    expect(parseRunLimit("1/day", "runs")).toEqual({ count: 1, windowSeconds: 86_400 });
+    expect(parseRunLimit("99999/day", "runs")).toEqual({ count: 99_999, windowSeconds: 86_400 });
+    for (const value of ["0/day", "100000/day", "01/day", "-1/day"]) {
+      expect(() => parseRunLimit(value, "runs"), value).toThrow(/runs must be <count>\/<minute\|hour\|day\|week\|month> with a count from 1 to 99999, for example 50\/day/);
+    }
+  });
+
+  it("accepts unlimited only per author", () => {
+    expect(parseRunLimit("unlimited", "runsPerAuthor")).toBe("unlimited");
+    expect(() => parseRunLimit("unlimited", "runs")).toThrow(/runs must be/);
+    expect(runLimitIssue("unlimited", "runs")).not.toMatch(/unlimited to turn it off/);
+    expect(runLimitIssue("never", "runsPerAuthor")).toMatch(/runsPerAuthor must be .* or unlimited to turn it off, for example 3\/day; got "never"/);
+  });
+
+  it("refuses garbage and whitespace", () => {
+    for (const value of ["", "3", "3/", "/day", "3/days", "3/Day", "3 /day", " 3/day", "3/day ", "3/day\n", "3/fortnight", "1.5/day", "3/day/day", "Unlimited", " unlimited"]) {
+      expect(runLimitIssue(value, "runsPerAuthor"), JSON.stringify(value)).toMatch(/runsPerAuthor must be/);
+      expect(runLimitIssue(value, "runs"), JSON.stringify(value)).toMatch(/runs must be/);
+    }
+  });
+
+  it("names the field as the reader wrote it", () => {
+    expect(runLimitIssue("lots", "runsPerAuthor", "limits.runs-per-author")).toMatch(/^limits\.runs-per-author must be/);
+  });
+
+  it("are optional bundle limits stored as written", () => {
+    expect(taskBundleV1Schema.parse(fixtureBundle()).limits).not.toHaveProperty("runs");
+    expect(taskBundleV1Schema.parse(fixtureBundle()).limits).not.toHaveProperty("runsPerAuthor");
+    expect(taskBundleV1Schema.parse(withLimits({ runs: "50/day", runsPerAuthor: "unlimited" })).limits)
+      .toMatchObject({ runs: "50/day", runsPerAuthor: "unlimited" });
+    expect(() => taskBundleV1Schema.parse(withLimits({ runs: "unlimited" }))).toThrow(/runs must be/);
+    expect(() => taskBundleV1Schema.parse(withLimits({ runsPerAuthor: "0/day" }))).toThrow(/runsPerAuthor must be/);
+    expect(() => taskBundleV1Schema.parse(withLimits({ runs: 50 }))).toThrow();
+  });
+});
+
+describe("bundle effect scope", () => {
+  it("is absent unless set, and can only tighten", () => {
+    expect(taskBundleV1Schema.parse(fixtureBundle())).not.toHaveProperty("effectScope");
+    expect(taskBundleV1Schema.parse({ ...fixtureBundle(), effectScope: "trigger" }).effectScope).toBe("trigger");
+    expect(() => taskBundleV1Schema.parse({ ...fixtureBundle(), effectScope: "repository" })).toThrow();
   });
 });

@@ -9,6 +9,7 @@ import {
   isAuthoredTriggerKind,
   operationCatalog,
   operationKindValues,
+  runLimitIssue,
   taskBundleV1Schema,
   taskModelIdSchema,
   taskToolV1Schema,
@@ -155,6 +156,44 @@ export function modelWarning(model: string): string | undefined {
     + "Gardener has only verified @cf/, anthropic/ and openai/ models; this one may fail if it cannot call tools.";
 }
 
+/** A run limit as written in TASK.md, checked with the contract's message under the authored name. */
+function authoredRunLimit(field: "runs" | "runsPerAuthor", label: string) {
+  return z.string().superRefine((value, context) => {
+    const issue = runLimitIssue(value, field, label);
+    if (issue !== undefined) context.addIssue({ code: "custom", message: issue });
+  });
+}
+
+/**
+ * Whether anyone but a maintainer can start this task. Only schedules,
+ * manual runs, pushes (each needs write access) and authored triggers whose
+ * `authors` names maintainers or exact logins keep outsiders out. Everything
+ * else admits them: a reopened issue can be its author's doing, triage can
+ * label but reads as `read`, and a bot can move a pull request's head.
+ */
+export function admitsNonMaintainers(bundle: Pick<TaskBundleV1, "triggers">): boolean {
+  return bundle.triggers.some((trigger) => {
+    if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER || trigger.kind === PUSH_TRIGGER) return false;
+    return !("authors" in trigger) || trigger.authors === "any";
+  });
+}
+
+/**
+ * A build warning for a task that outsiders can start and that declares a
+ * high-impact effect, or undefined. Trigger scope confines where such a run
+ * acts, not what it does: it can still merge or approve the outsider's own
+ * pull request if the model is persuaded to.
+ */
+export function highImpactWarning(bundle: Pick<TaskBundleV1, "triggers" | "effects">): string | undefined {
+  if (!admitsNonMaintainers(bundle)) return undefined;
+  const kinds = bundle.effects.filter((kind) => operationCatalog.some((entry) => entry.kind === kind && entry.highImpact));
+  if (kinds.length === 0) return undefined;
+  return `declares ${kinds.join(", ")} and can be started by people who are not maintainers. `
+    + "Their runs are confined to what triggered them, but the model can still be talked into these effects there: "
+    + "an outsider's own pull request could be approved or merged, and a release reaches every user. "
+    + "Restrict the triggers with authors: maintainers, or remove these effects.";
+}
+
 const authoringSchema = z.strictObject({
   schema: z.literal("gardener.task/v1"),
   id: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
@@ -165,6 +204,7 @@ const authoringSchema = z.strictObject({
   draft: z.boolean().optional(),
   checkout: z.enum(["provider", "pull-request-head"]).optional(),
   reactions: z.boolean().optional(),
+  "effect-scope": z.literal("trigger").optional(),
   model: taskModelIdSchema.optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
   effects: z.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
@@ -181,6 +221,8 @@ const authoringSchema = z.strictObject({
     "output-tokens": z.number().int().positive(),
     "max-effect-operations": z.number().int().positive().max(1_000).optional(),
     "max-effect-bytes": z.number().int().min(1_024).max(50_000_000).optional(),
+    runs: authoredRunLimit("runs", "limits.runs").optional(),
+    "runs-per-author": authoredRunLimit("runsPerAuthor", "limits.runs-per-author").optional(),
   }),
 }).superRefine((authoring, context) => {
   if ((authoring.trigger === undefined) === (authoring.triggers === undefined)) {
@@ -350,11 +392,16 @@ export async function compileTaskSource(
       outputTokens: authoring.limits["output-tokens"],
       maxEffectOperations: authoring.limits["max-effect-operations"],
       maxEffectBytes: authoring.limits["max-effect-bytes"],
+      // Absent stays absent: the Worker applies its defaults, so bundles that
+      // set neither hash as before.
+      ...(authoring.limits.runs === undefined ? {} : { runs: authoring.limits.runs }),
+      ...(authoring.limits["runs-per-author"] === undefined ? {} : { runsPerAuthor: authoring.limits["runs-per-author"] }),
     },
     model: authoring.model ?? DEFAULT_TASK_MODEL,
     ...(authoring.checkout === "pull-request-head" ? { checkout: "pull-request-head" } : {}),
     ...(authoring.draft === true ? { draft: true } : {}),
     ...(authoring.reactions === false ? { reactions: false } : {}),
+    ...(authoring["effect-scope"] === "trigger" ? { effectScope: "trigger" } : {}),
   });
   return {
     bundle,

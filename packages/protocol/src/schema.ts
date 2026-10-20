@@ -422,6 +422,13 @@ function runnerEventMember<Kind extends string, Shape extends z.ZodRawShape>(kin
      * contract: present only with `pullRequest`, and equal to its head sha.
      */
     checkoutSha: sha1.optional(),
+    /**
+     * The repository permission of whoever caused the event (the labeller,
+     * say), when it is not the subject's author. Looked up by the bridge only
+     * when nothing else decides whether the run's starter is trusted; an old
+     * bridge never sends it, which only narrows the run's effect scope.
+     */
+    actorPermission: eventAuthorPermission,
   });
 }
 

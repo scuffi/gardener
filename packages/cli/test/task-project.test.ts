@@ -20,7 +20,7 @@ import {
 } from "../src/project";
 import { operationKindValues, taskToolV1Schema, taskTriggerKindValues } from "@gardener/contracts";
 import { renderTaskGuide, TASK_GUIDE_PATH } from "../src/task-guide";
-import { compileTaskSource, DEFAULT_TASK_MODEL, effectFamilyGlobValues, expandEffectSelectors, modelWarning } from "../src/task-authoring";
+import { admitsNonMaintainers, compileTaskSource, DEFAULT_TASK_MODEL, effectFamilyGlobValues, expandEffectSelectors, highImpactWarning, modelWarning } from "../src/task-authoring";
 
 const TASK = `---
 schema: gardener.task/v1
@@ -292,6 +292,38 @@ describe("TASK.md compiler", () => {
       .rejects.toThrow();
   });
 
+  it("compiles run limits and effect scope, and leaves both out of bundles that do not set them", async () => {
+    const limited = await compileTaskSource(TASK
+      .replace("  output-tokens: 1200", "  output-tokens: 1200\n  runs: 50/day\n  runs-per-author: 3/hour")
+      .replace("tools:", "effect-scope: trigger\ntools:"));
+    expect(limited.bundle.limits).toMatchObject({ runs: "50/day", runsPerAuthor: "3/hour" });
+    expect(limited.bundle.effectScope).toBe("trigger");
+    expect(JSON.parse(limited.canonicalBundle)).toMatchObject({ effectScope: "trigger", limits: { runs: "50/day", runsPerAuthor: "3/hour" } });
+
+    const off = await compileTaskSource(TASK.replace("  output-tokens: 1200", "  output-tokens: 1200\n  runs-per-author: unlimited"));
+    expect(off.bundle.limits.runsPerAuthor).toBe("unlimited");
+    expect(off.bundle.limits).not.toHaveProperty("runs");
+
+    // The Worker applies the defaults, so a task without these fields hashes as before.
+    const base = await compileTaskSource(TASK);
+    expect(base.bundle).not.toHaveProperty("effectScope");
+    expect(base.bundle.limits).not.toHaveProperty("runs");
+    expect(base.bundle.limits).not.toHaveProperty("runsPerAuthor");
+    expect(base.canonicalBundle).not.toMatch(/effectScope|"runs"|runsPerAuthor/);
+  });
+
+  it("refuses run limits and effect scopes it cannot enforce, naming the field and an example", async () => {
+    const withLimit = (line: string) => compileTaskSource(TASK.replace("  output-tokens: 1200", `  output-tokens: 1200\n${line}`));
+    await expect(withLimit("  runs: unlimited")).rejects.toThrow(/limits\.runs must be <count>\/<minute\|hour\|day\|week\|month> with a count from 1 to 99999, for example 50\/day/);
+    await expect(withLimit("  runs-per-author: 0/day")).rejects.toThrow(/limits\.runs-per-author must be .* or unlimited to turn it off, for example 3\/day/);
+    await expect(withLimit("  runs-per-author: 3/fortnight")).rejects.toThrow(/limits\.runs-per-author must be/);
+    await expect(withLimit("  runs: 100000/day")).rejects.toThrow(/limits\.runs must be/);
+    await expect(withLimit("  runs: 5")).rejects.toThrow();
+    await expect(withLimit("  runs_per_author: 3/day")).rejects.toThrow();
+    // Nothing widens scope: repository scope is never written, only earned by who starts the run.
+    await expect(compileTaskSource(TASK.replace("tools:", "effect-scope: repository\ntools:"))).rejects.toThrow();
+  });
+
   it("emits triggers in canonical order regardless of authoring order", async () => {
     const reordered = await compileTaskSource(TASK.replace(
       "trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example",
@@ -531,6 +563,44 @@ describe("local Gardener project", () => {
     expect(warnings[0]).toMatch(/unrestricted network egress/);
     expect(warnings[0]).toMatch(/exfiltrate private source/);
     expect(warnings[0]).toMatch(/demo-only and is not production-ready/);
+  });
+
+  it("warns when a task outsiders can start declares a high-impact effect", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-impact-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await mkdir(join(root, ".gardener/tasks/example"), { recursive: true });
+    const write = (source: string) => writeFile(join(root, ".gardener/tasks/example/TASK.md"), source);
+    await write(TASK.replace("  - issue.comment.create", "  - issue.comment.create\n  - pull_request.merge"));
+    const warnings = (await buildProject({ repositoryRoot: root })).warnings;
+    expect(warnings).toEqual([expect.stringMatching(/^Task example-task declares pull_request\.merge and can be started by people who are not maintainers/)]);
+    expect(warnings[0]).toMatch(/authors: maintainers/);
+
+    // The same effect behind a maintainers-only trigger, or no high-impact effect at all, is quiet.
+    await write(TASK.replace("  - issue.comment.create", "  - issue.comment.create\n  - pull_request.merge")
+      .replace("  labels-all:", "  authors: maintainers\n  labels-all:"));
+    expect((await buildProject({ repositoryRoot: root })).warnings).toEqual([]);
+    await write(TASK);
+    expect((await buildProject({ repositoryRoot: root })).warnings).toEqual([]);
+  });
+
+  it("counts a task as admitting outsiders unless every trigger needs write access or names who may start it", async () => {
+    const triggers = (...list: unknown[]) => ({ triggers: list as never, effects: ["pull_request.review.submit" as const] });
+    const dispatch = { kind: "github.workflow_dispatch" };
+    expect(admitsNonMaintainers(triggers(dispatch))).toBe(false);
+    expect(admitsNonMaintainers(triggers({ kind: "github.schedule", cron: "0 3 * * 1" }, dispatch))).toBe(false);
+    expect(admitsNonMaintainers(triggers({ kind: "github.push", branches: ["main"] }, dispatch))).toBe(false);
+    const authored = (authors: unknown) => ({ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors });
+    expect(admitsNonMaintainers(triggers(authored("maintainers"), dispatch))).toBe(false);
+    expect(admitsNonMaintainers(triggers(authored(["maintainers", "octo"]), dispatch))).toBe(false);
+    expect(admitsNonMaintainers(triggers(authored(["octo"]), dispatch))).toBe(false);
+    expect(admitsNonMaintainers(triggers(authored("any"), dispatch))).toBe(true);
+    // Triggers without authors: a reopened issue, a label (triage reads as read), a moved head (bots).
+    for (const kind of ["github.issue.reopened", "github.issue.labeled", "github.pull_request.synchronize"]) {
+      expect(admitsNonMaintainers(triggers({ kind, labelsAll: [] }, dispatch)), kind).toBe(true);
+    }
+    expect(highImpactWarning(triggers(authored("any"), dispatch))).toMatch(/declares pull_request\.review\.submit/);
+    expect(highImpactWarning({ ...triggers(authored("any"), dispatch), effects: ["issue.comment.create"] })).toBeUndefined();
+    expect(highImpactWarning(triggers(authored("maintainers"), dispatch))).toBeUndefined();
   });
 
   it("always renders the same-repository guard for pull-request triggers", async () => {

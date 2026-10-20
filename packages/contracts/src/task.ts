@@ -388,6 +388,57 @@ export type TaskNetworkPolicyV1 = z.infer<typeof taskNetworkPolicyV1Schema>;
  */
 export const TASK_RUNTIME_SECONDS_MAX = 21_600;
 
+/** Seconds in each run-limit window. A month is 30 days, so every window is a fixed length. */
+export const runLimitWindowSeconds = {
+  minute: 60,
+  hour: 3_600,
+  day: 86_400,
+  week: 604_800,
+  month: 2_592_000,
+} as const;
+export type RunLimitWindowV1 = keyof typeof runLimitWindowSeconds;
+
+const runLimitPattern = /^([1-9][0-9]{0,4})\/(minute|hour|day|week|month)$/;
+
+/** A parsed run limit: at most `count` runs in any `windowSeconds`. */
+export interface RunLimitV1 {
+  readonly count: number;
+  readonly windowSeconds: number;
+}
+
+/** The run-limit fields, as the bundle names them. Only `runsPerAuthor` can be turned off. */
+export type RunLimitFieldV1 = "runs" | "runsPerAuthor";
+
+const runLimitExamples: Record<RunLimitFieldV1, string> = { runs: "50/day", runsPerAuthor: "3/day" };
+
+/**
+ * Why `value` is not a valid limit for `field`, or `undefined` when it is.
+ * `label` is how the reader wrote the field (`limits.runs-per-author` in a
+ * TASK.md), so the message names what they can find and fix.
+ */
+export function runLimitIssue(value: string, field: RunLimitFieldV1, label: string = field): string | undefined {
+  if (runLimitPattern.test(value)) return undefined;
+  if (value === "unlimited" && field === "runsPerAuthor") return undefined;
+  const unlimited = field === "runsPerAuthor" ? ", or unlimited to turn it off" : "";
+  return `${label} must be <count>/<minute|hour|day|week|month> with a count from 1 to 99999${unlimited}, for example ${runLimitExamples[field]}; got ${JSON.stringify(value)}`;
+}
+
+/** The count and window a limit string names, or `"unlimited"`. Throws on a value `runLimitIssue` refuses. */
+export function parseRunLimit(value: string, field: RunLimitFieldV1): RunLimitV1 | "unlimited" {
+  const issue = runLimitIssue(value, field);
+  if (issue !== undefined) throw new Error(issue);
+  if (value === "unlimited") return "unlimited";
+  const [, count, window] = runLimitPattern.exec(value)!;
+  return { count: Number(count), windowSeconds: runLimitWindowSeconds[window as RunLimitWindowV1] };
+}
+
+function runLimitSchema(field: RunLimitFieldV1) {
+  return z.string().superRefine((value, context) => {
+    const issue = runLimitIssue(value, field);
+    if (issue !== undefined) context.addIssue({ code: "custom", message: issue });
+  });
+}
+
 export const taskLimitsV1Schema = z.strictObject({
   runtimeSeconds: z.number().int().positive().max(TASK_RUNTIME_SECONDS_MAX),
   maxTurns: z.number().int().positive(),
@@ -401,6 +452,17 @@ export const taskLimitsV1Schema = z.strictObject({
    */
   maxEffectOperations: z.number().int().positive().max(1_000).optional(),
   maxEffectBytes: z.number().int().min(1_024).max(50_000_000).optional(),
+  /**
+   * Runs of this task, by anyone, in a window: the task's total ceiling.
+   * Stored as written, and absent unless the task sets it, so the Worker
+   * owns any default and tasks without it hash as before.
+   */
+  runs: runLimitSchema("runs").optional(),
+  /**
+   * Runs one untrusted starter may cause in a window, or `unlimited`.
+   * Absent means the Worker's default applies, so no bundle hash changes.
+   */
+  runsPerAuthor: runLimitSchema("runsPerAuthor").optional(),
 });
 export type TaskLimitsV1 = z.infer<typeof taskLimitsV1Schema>;
 
@@ -496,6 +558,13 @@ export const taskBundleV1Schema = z.strictObject({
    * it; only the generated workflow reads it.
    */
   reactions: z.literal(false).optional(),
+  /**
+   * Confines every run to what triggered it, whoever started it. Without it
+   * the Worker confines only runs an untrusted starter caused. There is no
+   * value that widens scope, and it is present only when set, so other
+   * bundles hash as before.
+   */
+  effectScope: z.literal("trigger").optional(),
 }).superRefine((bundle, context) => {
   // A comment on a pull request's conversation arrives as an issue_comment
   // event, and the planning job can check out that pull request's head too.
@@ -1021,6 +1090,50 @@ export function eventHeadIsSameRepository(event: NormalizedEventV1): boolean {
   return pullRequest.head.repo !== null && pullRequest.head.repo.id === event.repository.id;
 }
 
+/**
+ * Why a run's starter is, or is not, trusted. The Worker decides at admission
+ * from data Gardener's own code produced, before the model runs.
+ */
+export const trustedStarterReasonValues = [
+  /** A cron run: no person started it. */
+  "schedule",
+  /** A manual run, which needs write access to dispatch. */
+  "manual",
+  /** A push by a person, which needed write access. */
+  "push",
+  /** A same-repository head moved by a person, which needed write access. */
+  "synchronize",
+  /** The subject's author started the run and counts as a maintainer. */
+  "maintainer_author",
+  /** Someone other than the author started it, with write or admin permission. */
+  "maintainer_actor",
+] as const;
+export const untrustedStarterReasonValues = [
+  /** A bot, whose text may carry third-party content (release notes, say). */
+  "bot",
+  /** A pull request head from another repository. */
+  "fork_head",
+  /** The subject's author started the run and is not a maintainer. */
+  "author_not_maintainer",
+  /** Someone other than the author started it, with less than write permission. */
+  "actor_not_maintainer",
+  /** Nothing showed who started it or what they may do (for example a failed lookup), so it fails closed. */
+  "actor_unknown",
+] as const;
+export const taskRunStarterV1Schema = z.strictObject({
+  trusted: z.boolean(),
+  reason: z.enum([...trustedStarterReasonValues, ...untrustedStarterReasonValues]),
+}).superRefine((starter, context) => {
+  if ((trustedStarterReasonValues as readonly string[]).includes(starter.reason) !== starter.trusted) {
+    context.addIssue({
+      code: "custom",
+      path: ["trusted"],
+      message: `starter reason ${starter.reason} means trusted is ${!starter.trusted}`,
+    });
+  }
+});
+export type TaskRunStarterV1 = z.infer<typeof taskRunStarterV1Schema>;
+
 export const taskRunRequestV1Schema = z.strictObject({
   schemaVersion: z.literal("gardener.task-run-request/v1"),
   runId: boundIdentifier,
@@ -1032,6 +1145,12 @@ export const taskRunRequestV1Schema = z.strictObject({
   model: z.strictObject({ id: z.string().min(1).max(256) }),
   admittedAt: z.iso.datetime(),
   deadlineAt: z.iso.datetime(),
+  /**
+   * Who started the run, frozen at admission. Optional so a request admitted
+   * before it existed still parses; absent means untrusted, which only
+   * narrows the run's effect scope.
+   */
+  starter: taskRunStarterV1Schema.optional(),
 }).superRefine((request, context) => {
   if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
     context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
@@ -1998,6 +2117,161 @@ export function triggeringPullRequestRefusal(
   return undefined;
 }
 
+/** The payload field that names the resource a targeted kind acts on. */
+export type TriggerScopeTargetFieldV1 = "issueNumber" | "pullNumber" | "discussionNumber";
+
+/**
+ * How trigger scope treats a kind: allowed only on the triggering resource
+ * (`field` names it), allowed because it creates something new, allowed
+ * because it is already bound to the run's own checkout, or never allowed.
+ */
+export type TriggerScopeClassV1 =
+  | { readonly allow: "trigger"; readonly field: TriggerScopeTargetFieldV1 }
+  | { readonly allow: "creates" }
+  | { readonly allow: "checkout" }
+  | { readonly allow: "never" };
+
+const onIssue = { allow: "trigger", field: "issueNumber" } as const;
+const onPull = { allow: "trigger", field: "pullNumber" } as const;
+const onDiscussion = { allow: "trigger", field: "discussionNumber" } as const;
+const creates = { allow: "creates" } as const;
+const refused = { allow: "never" } as const;
+
+/**
+ * Every kind's treatment under trigger scope. Deliberately `Partial`: a kind
+ * added to the catalog without an entry here compiles, is refused by
+ * `triggerScopeRefusal`, and fails the test that enumerates the catalog, so a
+ * new kind fails closed until someone decides how it relates to the trigger.
+ */
+export const triggerScopeClassification: Readonly<Partial<Record<OperationKind, TriggerScopeClassV1>>> = {
+  "issue.label.add": onIssue,
+  "issue.label.remove": onIssue,
+  "issue.comment.create": onIssue,
+  // Apply refuses a comment that is not on the targeted number, so checking the target suffices.
+  "issue.comment.update": onIssue,
+  "issue.close": onIssue,
+  "issue.reopen": onIssue,
+  "issue.assignee.add": onIssue,
+  "issue.assignee.remove": onIssue,
+  "issue.create": creates,
+  "pull_request.comment.create": onPull,
+  "pull_request.comment.update": onPull,
+  "pull_request.review.submit": onPull,
+  "pull_request.reviewer.request": onPull,
+  "pull_request.reviewer.remove": onPull,
+  "pull_request.update": onPull,
+  "pull_request.label.add": onPull,
+  "pull_request.label.remove": onPull,
+  "pull_request.update_branch": onPull,
+  "pull_request.review_comment.reply": onPull,
+  "pull_request.review_thread.resolve": onPull,
+  "pull_request.merge": onPull,
+  // A wide `branches` glob lets a confined run create many branches; the run limits bound that.
+  "branch.create": creates,
+  // `commitBaseRefusal` pins every commit to the capture's base, under every checkout mode.
+  "commit.create": { allow: "checkout" },
+  "commit.merge_base": onPull,
+  "pull_request.open": creates,
+  "pull_request.open_draft": creates,
+  "discussion.comment.create": onDiscussion,
+  "discussion.comment.update": onDiscussion,
+  "discussion.answer.mark": onDiscussion,
+  "discussion.answer.unmark": onDiscussion,
+  "discussion.close": onDiscussion,
+  "discussion.reopen": onDiscussion,
+  // No field relates a check run or an existing release to the trigger.
+  "check.rerun": refused,
+  "release.create": creates,
+  "release.update": refused,
+  "release.publish": refused,
+  "release.delete": refused,
+};
+
+/**
+ * Triggering resource kinds each target field may name. Kind matters as much
+ * as number: discussions are numbered apart from the sequence issues and pull
+ * requests share, so discussion #5 and issue #5 can both exist. A pull request
+ * is an issue in that sequence, and a comment on a pull request's
+ * conversation arrives as an issue event with the pull request's number.
+ */
+const triggerResourceKinds: Record<TriggerScopeTargetFieldV1, readonly TaskEventResourceV1["kind"][]> = {
+  issueNumber: ["issue", "pull_request"],
+  pullNumber: ["pull_request", "issue"],
+  discussionNumber: ["discussion"],
+};
+
+/**
+ * The earlier steps a target field may reference instead, and the output
+ * that names what each created. A reference resolves to that step's declared
+ * output, so it can only yield the number the run itself created.
+ */
+const createdResourceOutputs: Record<TriggerScopeTargetFieldV1, Readonly<Partial<Record<OperationKind, string>>>> = {
+  issueNumber: { "issue.create": "issueNumber" },
+  pullNumber: { "pull_request.open": "pullNumber", "pull_request.open_draft": "pullNumber" },
+  discussionNumber: {},
+};
+
+function resourceLabel(resource: TaskEventResourceV1): string {
+  return `${resource.kind === "pull_request" ? "pull request" : resource.kind} #${resource.number}`;
+}
+
+const CONFINED = "this run is confined to what triggered it";
+
+/**
+ * Why this step may not run when the run is confined to its trigger, or
+ * `undefined` when it may. Default-deny: only the kinds classified above are
+ * ever allowed. Text is never inspected; only the resource a step acts on.
+ *
+ * It composes with `triggeringPullRequestRefusal` and never replaces it: both
+ * run, so the stricter wins, and the kinds confined to the triggering pull
+ * request may not use the created-resource exemption either.
+ *
+ * `earlier` holds the kinds of the steps before this one, by step name, so a
+ * reference can be traced to the step that created what it names.
+ */
+export function triggerScopeRefusal(
+  kind: string,
+  payload: unknown,
+  references: Readonly<Record<string, unknown>>,
+  resource: TaskEventResourceV1 | null,
+  earlier: ReadonlyMap<string, OperationKind>,
+): string | undefined {
+  const scope = Object.hasOwn(triggerScopeClassification, kind)
+    ? triggerScopeClassification[kind as OperationKind]
+    : undefined;
+  if (scope === undefined || scope.allow === "never") {
+    return `${kind} is not allowed: ${CONFINED}, and nothing ties ${kind} to the trigger`;
+  }
+  if (scope.allow !== "trigger") return undefined;
+
+  const reference = references[`/${scope.field}`];
+  if (reference !== undefined) {
+    if ((triggeringPullRequestKinds as readonly string[]).includes(kind)) {
+      return `${kind} must name the pull request that triggered this run directly, not by reference`;
+    }
+    const ref = reference !== null && typeof reference === "object" && !Object.hasOwn(reference, "placeholders")
+      ? reference as { step?: unknown; output?: unknown }
+      : {};
+    const createdBy = typeof ref.step === "string" ? earlier.get(ref.step) : undefined;
+    const created = createdBy === undefined ? undefined : createdResourceOutputs[scope.field][createdBy];
+    if (created === undefined || ref.output !== created) {
+      return `${kind} may reference ${scope.field} only from an earlier step of this plan that created it: ${CONFINED}`;
+    }
+    return undefined;
+  }
+
+  if (resource === null) {
+    return `${kind} needs a run triggered from an issue, pull request or discussion: ${CONFINED}, and nothing triggered it`;
+  }
+  const target = payload !== null && typeof payload === "object"
+    ? (payload as Record<string, unknown>)[scope.field]
+    : undefined;
+  if (!triggerResourceKinds[scope.field].includes(resource.kind) || target !== resource.number) {
+    return `${kind} may act only on ${resourceLabel(resource)}, which triggered this run: ${CONFINED}`;
+  }
+  return undefined;
+}
+
 export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): TaskEventBindingV1 {
   const base = {
     kind: event.kind,
@@ -2283,6 +2557,13 @@ export const taskEffectPlanV1Schema = z.strictObject({
    * did. Absent when every branch-writing kind keeps the `gardener/**` default.
    */
   branchPatterns: taskBranchPatternsV1Schema.optional(),
+  /**
+   * Where this plan's steps may act. `trigger` confines every step to what
+   * triggered the run (see `triggerScopeRefusal`), and apply re-checks it
+   * here. Absent means no such check, so plans for pins that predate it
+   * still parse; the Worker checks scope when it builds those itself.
+   */
+  effectScope: z.enum(["trigger", "repository"]).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -2383,6 +2664,12 @@ export const taskEffectPlanV1Schema = z.strictObject({
     }
     const pullRefusal = triggeringPullRequestRefusal(operation.kind, operation.payload, operation.references, plan.event.resource);
     if (pullRefusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", "pullNumber"], message: pullRefusal });
+    // Beside the check above, never instead of it: both apply, so the stricter wins.
+    if (plan.effectScope === "trigger") {
+      const earlier = new Map(plan.operations.slice(0, index).map((candidate) => [candidate.stepName, candidate.kind] as const));
+      const scopeRefusal = triggerScopeRefusal(operation.kind, operation.payload, operation.references, plan.event.resource, earlier);
+      if (scopeRefusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index], message: scopeRefusal });
+    }
     if (operation.kind === "commit.create" && plan.capture !== undefined) {
       const refusal = commitBaseRefusal(operation, plan.operations.slice(0, index), plan.capture.baseSha);
       if (refusal !== undefined) context.addIssue({ code: "custom", path: ["operations", index, "payload", "expectedHeadSha"], message: refusal });

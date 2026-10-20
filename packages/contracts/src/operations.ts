@@ -17,11 +17,25 @@ export type OperationKind = z.infer<typeof operationKindSchema>;
 export const operationFamilySchema = z.enum(["issue", "pull_request", "git", "discussion", "check", "release"]);
 export const operationCatalogEntrySchema = z.object({ kind: operationKindSchema, family: operationFamilySchema, persistent: z.literal(true), highImpact: z.boolean() }).strict();
 export type OperationCatalogEntry = z.infer<typeof operationCatalogEntrySchema>;
+/**
+ * Kinds whose effect reaches past the thread they act on. Trigger scope
+ * confines *where* a run acts, not *what* it does, so `generate` warns when a
+ * task that admits non-maintainers declares one: an approving review can
+ * satisfy branch protection, and a release is visible to every user.
+ */
+const highImpactKinds: ReadonlySet<OperationKind> = new Set([
+  "pull_request.merge",
+  "pull_request.review.submit",
+  "release.create",
+  "release.update",
+  "release.publish",
+  "release.delete",
+]);
 export const operationCatalog: readonly OperationCatalogEntry[] = Object.freeze(operationKindValues.map((kind) => operationCatalogEntrySchema.parse({
   kind,
   family: kind.startsWith("issue.") ? "issue" : kind.startsWith("pull_request.") ? "pull_request" : kind === "branch.create" || kind.startsWith("commit.") ? "git" : kind.startsWith("discussion.") ? "discussion" : kind.startsWith("check.") ? "check" : "release",
   persistent: true,
-  highImpact: kind === "pull_request.merge" || kind === "release.publish" || kind === "release.delete",
+  highImpact: highImpactKinds.has(kind),
 })));
 
 export const shaSchema = z.string().regex(/^[a-fA-F0-9]{40}$/);

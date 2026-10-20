@@ -48,6 +48,22 @@ describe("runner action contract", () => {
     expect(runnerEventV1Schema.parse(legacy)).toEqual(legacy);
   });
 
+  it("carries the actor's permission only as an optional value of the author-permission enum", () => {
+    const labeled = {
+      schemaVersion: "gardener.runner.event/v1",
+      kind: "github.issue.labeled",
+      repository: { defaultBranch: "main" },
+      issue: { id: "999", number: 1, title: "Bug", body: null, labels: ["bug"], author: { id: "1", login: "octo" } },
+      label: "bug",
+    };
+    expect(runnerEventV1Schema.parse(labeled)).toEqual(labeled);
+    for (const actorPermission of ["admin", "write", "read", "none"]) {
+      expect(runnerEventV1Schema.parse({ ...labeled, actorPermission })).toEqual({ ...labeled, actorPermission });
+    }
+    expect(runnerEventV1Schema.safeParse({ ...labeled, actorPermission: "maintain" }).success).toBe(false);
+    expect(runnerEventV1Schema.safeParse({ ...labeled, actorPermission: null }).success).toBe(false);
+  });
+
   it("keeps the qualified shell action shape byte-compatible", () => {
     expect(runnerActionV1Schema.parse(shell)).toEqual(shell);
   });

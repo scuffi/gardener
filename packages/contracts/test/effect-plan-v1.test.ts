@@ -811,3 +811,82 @@ describe("ordered effect plan", () => {
     }))).toThrow();
   });
 });
+
+describe("effect scope in the plan", () => {
+  const elsewhere = () => planOperation("issue.comment.create", "comment", 1, {
+    payload: { ...proposablePayloadFor("issue.comment.create"), issueNumber: 9 },
+  });
+  const parse = (effectScope: "trigger" | "repository" | undefined, operations: Record<string, unknown>[]) =>
+    taskEffectPlanV1Schema.safeParse(plan({ ...(effectScope === undefined ? {} : { effectScope }), operations }));
+  const messages = (result: ReturnType<typeof parse>) => result.success ? [] : result.error.issues.map((issue) => issue.message);
+
+  it("accepts a step on the trigger in every scope, and without the field", () => {
+    for (const scope of ["trigger", "repository", undefined] as const) {
+      expect(parse(scope, [planOperation("issue.comment.create", "comment", 1)]).success, String(scope)).toBe(true);
+    }
+    expect(plan()).not.toHaveProperty("effectScope");
+  });
+
+  it("refuses a step elsewhere only in trigger scope", () => {
+    expect(messages(parse("trigger", [elsewhere()]))).toEqual([expect.stringMatching(/may act only on issue #2, which triggered this run/)]);
+    expect(parse("repository", [elsewhere()]).success).toBe(true);
+    expect(parse(undefined, [elsewhere()]).success).toBe(true);
+    const refused = parse("trigger", [elsewhere()]);
+    expect(refused.success ? [] : refused.error.issues.map((issue) => issue.path)).toEqual([["operations", 0]]);
+  });
+
+  it("refuses the kinds nothing ties to the trigger only in trigger scope", () => {
+    for (const kind of ["release.update", "release.publish", "release.delete", "check.rerun"] as const) {
+      expect(messages(parse("trigger", [planOperation(kind, "step", 1)])), kind).toEqual([expect.stringMatching(/is not allowed: this run is confined/)]);
+      expect(parse("repository", [planOperation(kind, "step", 1)]).success, kind).toBe(true);
+    }
+  });
+
+  it("allows a step on what an earlier step created, with the earlier steps traced", () => {
+    const { issueNumber: _, ...label } = proposablePayloadFor("issue.label.add");
+    const created = [
+      planOperation("issue.create", "file", 1),
+      planOperation("issue.label.add", "label", 2, { payload: label, references: { "/issueNumber": { step: "file", output: "issueNumber" } } }),
+    ];
+    expect(parse("trigger", created).success).toBe(true);
+    const onceRemoved = [
+      planOperation("issue.comment.create", "comment", 1),
+      planOperation("issue.label.add", "label", 2, { payload: label, references: { "/issueNumber": { step: "comment", output: "issueNumber" } } }),
+    ];
+    expect(messages(parse("trigger", onceRemoved))).toEqual([expect.stringMatching(/only from an earlier step of this plan that created it/)]);
+    expect(parse("repository", onceRemoved).success).toBe(true);
+  });
+
+  it("keeps the triggering pull request check beside it, so both refuse a referenced reply", () => {
+    const { pullNumber: _, ...reply } = proposablePayloadFor("pull_request.review_comment.reply");
+    const operations = [
+      planOperation("pull_request.open", "open", 1),
+      planOperation("pull_request.review_comment.reply", "reply", 2, { payload: reply, references: { "/pullNumber": { step: "open", output: "pullNumber" } } }),
+    ];
+    const prEvent = {
+      kind: "github.pull_request.opened", eventName: "pull_request", action: "opened",
+      resource: { kind: "pull_request", id: "301", number: 3 }, commentId: null,
+    };
+    const trigger = taskEffectPlanV1Schema.safeParse(plan({ effectScope: "trigger", event: prEvent, operations }));
+    expect(messages(trigger)).toEqual([
+      expect.stringMatching(/directly, not by reference/),
+      expect.stringMatching(/directly, not by reference/),
+    ]);
+    expect(messages(taskEffectPlanV1Schema.safeParse(plan({ effectScope: "repository", event: prEvent, operations })))).toEqual([
+      expect.stringMatching(/directly, not by reference/),
+    ]);
+  });
+
+  it("refuses targeted steps when nothing triggered the run, but lets it create", () => {
+    const push = { kind: "github.push", eventName: "push", action: null, resource: null, commentId: null };
+    expect(messages(taskEffectPlanV1Schema.safeParse(plan({ effectScope: "trigger", event: push }))))
+      .toEqual([expect.stringMatching(/needs a run triggered from an issue, pull request or discussion/)]);
+    expect(taskEffectPlanV1Schema.safeParse(plan({ effectScope: "trigger", event: push, operations: [planOperation("issue.create", "file", 1)] })).success)
+      .toBe(true);
+  });
+
+  it("accepts only the two scopes", () => {
+    expect(taskEffectPlanV1Schema.safeParse(plan({ effectScope: "everywhere" })).success).toBe(false);
+    expect(taskEffectPlanV1Schema.safeParse(plan({ effectScope: null })).success).toBe(false);
+  });
+});
