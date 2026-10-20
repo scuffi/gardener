@@ -1,0 +1,31 @@
+.changeset/abuse-controls.md
+  s_de0b486c128948::t_d90524e82da088 5
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_6eeccce1871896 43320
+bridges/github/sync/dist/index.cjs
+  s_de0b486c128948::t_4c5863497488de 29726
+docs/task-authoring.md
+  s_de0b486c128948::t_3abe2395ac61d2 322-323
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_e8d130d88e5a42 180-181
+packages/cli/src/task-guide.md
+  s_de0b486c128948::t_69c1262869a131 241-245
+packages/runner/src/author-permission.ts
+  s_de0b486c128948::t_d7ec3ab4382328 74-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c0e2a38669e619c0a844abd971b8f160d9ea3333",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
