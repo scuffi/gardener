@@ -29723,8 +29723,7 @@ function admitsNonMaintainers(bundle) {
   return bundle.triggers.some((trigger) => {
     if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER) return false;
     if (!("authors" in trigger)) return true;
-    const authors = trigger.authors;
-    return !(authors === "maintainers" || Array.isArray(authors) && authors.every((entry) => entry === "maintainers"));
+    return trigger.authors !== "maintainers";
   });
 }
 function highImpactWarning(bundle) {

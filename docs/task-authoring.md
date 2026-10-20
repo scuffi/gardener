@@ -319,8 +319,8 @@ A run's starter is **trusted** when the run is:
 
 Everyone else is untrusted: outsiders, bots, pull request heads in another repository, and anyone
 whose access couldn't be checked. That includes logins named in `authors` who aren't maintainers,
-and every bot named there: the trigger admits them, and their runs get trigger scope. A bot's push is untrusted on purpose: Dependabot's commit messages
-carry upstream release notes, which anyone upstream can write. Opening or reviewing a pull request
+and every bot named there: the trigger admits them, and their runs get trigger scope. A bot's push
+is untrusted on purpose: Dependabot's commit messages carry upstream release notes, which anyone upstream can write. Opening or reviewing a pull request
 doesn't count as a push, because anyone can open a pull request from a branch that already exists.
 
 Trusted runs may act anywhere their declared effects allow. Untrusted runs are confined to what

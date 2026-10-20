@@ -43317,7 +43317,7 @@ function actorPermissionTarget(event, actor2) {
   if (key === void 0) return null;
   const subject = event[key];
   if (subject === null || typeof subject !== "object") return null;
-  if (actor2.login === void 0 || actor2.login.endsWith("[bot]") || !LOGIN.test(actor2.login)) return null;
+  if (actor2.login === void 0 || !LOGIN.test(actor2.login)) return null;
   if (actor2.id === void 0 || !/^[1-9][0-9]{0,19}$/.test(actor2.id)) return null;
   return subject.author?.id === actor2.id ? null : { login: actor2.login, id: actor2.id };
 }

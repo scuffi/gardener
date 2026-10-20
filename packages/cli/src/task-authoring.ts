@@ -177,8 +177,8 @@ export function admitsNonMaintainers(bundle: Pick<TaskBundleV1, "triggers">): bo
   return bundle.triggers.some((trigger) => {
     if (trigger.kind === SCHEDULE_TRIGGER || trigger.kind === DISPATCH_TRIGGER) return false;
     if (!("authors" in trigger)) return true;
-    const authors: unknown = trigger.authors;
-    return !(authors === "maintainers" || (Array.isArray(authors) && authors.every((entry) => entry === "maintainers")));
+    // Named logins needn't be maintainers, so only `maintainers` keeps outsiders out.
+    return trigger.authors !== "maintainers";
   });
 }
 

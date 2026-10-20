@@ -592,7 +592,6 @@ describe("local Gardener project", () => {
     expect(admitsNonMaintainers(triggers({ kind: "github.push", branches: ["main"] }, dispatch))).toBe(true);
     const authored = (authors: unknown) => ({ kind: "github.issue_comment.created", labelsAll: [], mentions: [], authors });
     expect(admitsNonMaintainers(triggers(authored("maintainers"), dispatch))).toBe(false);
-    expect(admitsNonMaintainers(triggers(authored(["maintainers"]), dispatch))).toBe(false);
     // Named logins needn't be maintainers, and their runs are confined unless they are.
     expect(admitsNonMaintainers(triggers(authored(["maintainers", "octo"]), dispatch))).toBe(true);
     expect(admitsNonMaintainers(triggers(authored(["octo"]), dispatch))).toBe(true);

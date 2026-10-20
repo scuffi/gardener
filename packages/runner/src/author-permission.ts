@@ -71,7 +71,8 @@ export function actorPermissionTarget(event: RunnerEventV1, actor: RunActor): { 
   if (key === undefined) return null;
   const subject = (event as Record<string, unknown>)[key] as { author?: { id?: unknown } } | undefined;
   if (subject === null || typeof subject !== "object") return null;
-  if (actor.login === undefined || actor.login.endsWith("[bot]") || !LOGIN.test(actor.login)) return null;
+  // LOGIN rejects `name[bot]`, so bots are never looked up.
+  if (actor.login === undefined || !LOGIN.test(actor.login)) return null;
   if (actor.id === undefined || !/^[1-9][0-9]{0,19}$/.test(actor.id)) return null;
   return subject.author?.id === actor.id ? null : { login: actor.login, id: actor.id };
 }
