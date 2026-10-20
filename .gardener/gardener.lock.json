@@ -3,10 +3,10 @@
   "target": {
     "id": "github-actions/v1",
     "adapterVersion": "1",
-    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@242825edd810a0219e008e3d68081c5cde6dc1ee"
+    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@5c9c136ffd6b2e545f398dc413a60e04b66da406"
   },
   "release": {
-    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@242825edd810a0219e008e3d68081c5cde6dc1ee"
+    "workflowRef": "scuffi/gardener/.github/workflows/gardener-task.yml@5c9c136ffd6b2e545f398dc413a60e04b66da406"
   },
   "tasks": {
     "dependabot-merge": {
