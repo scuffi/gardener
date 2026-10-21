@@ -1,0 +1,47 @@
+.gardener/SKILL.md
+  s_20d34cd557e560::t_6d4d3f32381ae3 191-192
+SECURITY.md
+  s_20d34cd557e560::t_981ba5c1b0747b 182-190
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_20d34cd557e560::t_9936752405ba77 527
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_e1b56344c8000f 49023-49034,49050-49061,49063-49064,49069-49071,49073,49076-49078,49170,49173,49201-49207,49222-49223,49229-49232,49296-49298
+docs/operations.md
+  s_20d34cd557e560::t_3bbdeb38aca8c1 182-186
+docs/task-authoring.md
+  s_20d34cd557e560::t_db8aeb54f628b2 540-541,544-545,548-551,554-563
+docs/task-reference.md
+  s_de0b486c128948::t_8f5c4714dacbdd 200-201
+packages/cli/src/task-guide.md
+  s_20d34cd557e560::t_411aaf10d9b73d 191-192
+packages/contracts/src/messages.ts
+  s_20d34cd557e560::t_e93b58ec9ca0fc 33-36
+packages/runner/src/messages.ts
+  s_20d34cd557e560::t_21ff51670686c6 31-34,37-38,45-64,107-155,158-167,170,172-173,180-201,204,207-208,329-332,366-367,370-371,374,411-417,433,440-447,564-566
+packages/runner/test/messages.test.ts
+  s_20d34cd557e560::t_6b87f5d4fef217 5,7,9-10,26-27,29,54,65,90-91,95-141,170-172,174-232,236-237,243-256,317,333-361
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "78870a1d2416c319fa262c31338c539cf646dd26",
+  "prompts": {},
+  "sessions": {
+    "s_20d34cd557e560": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a15de3-b179-7588-b9b6-798b9b1d0757",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
