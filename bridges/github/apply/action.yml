@@ -24,6 +24,10 @@ inputs:
   capture-artifact-path:
     description: Downloaded trusted capture directory for capture-backed plans.
     required: false
+  chat-webhook:
+    description: Google Chat or Slack incoming-webhook URL for the plan's message. Empty skips the message. Never logged or recorded.
+    required: false
+    default: ""
 outputs:
   status:
     description: Applied or stopped plan status.

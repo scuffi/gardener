@@ -1,6 +1,10 @@
 import {
   bundleBranchPatterns,
   captureDeferredPointers,
+  MESSAGE_SEND_KIND,
+  messageFromSendPayload,
+  messageSubjectNumber,
+  messageSendPayloadV1Schema,
   operationOutputNames,
   operationOutputType,
   taskCaptureChangesDigestInput,
@@ -11,11 +15,13 @@ import {
   taskStepIssues,
   taskEventBindingFromNormalizedEvent,
   taskOutcomeV1Schema,
+  type MessageV1,
   type TaskCaptureManifestV1,
   type TaskEffectPlanV1,
   type TaskEffectProposalV1,
   type TaskOutcomeV1,
   type TaskRunRequestV1,
+  type OperationKind,
   impliedEffectKinds,
 } from "@gardener/contracts";
 import { canonicalJson, canonicalSha256 } from "@gardener/core";
@@ -28,8 +34,8 @@ import {
   type RunnerEffectReceiptV1,
 } from "@gardener/protocol";
 import { assertRunnerToolBudget } from "./task-limits";
-import { mergeBaseProposalRefusal, runEffectScope, runTriggerScopeRefusal } from "./proposal-authority";
-import { planCarriesEffectScope } from "./workflow-refs";
+import { mergeBaseProposalRefusal, messageProposalRefusal, operationSteps, runEffectScope, runTriggerScopeRefusal } from "./proposal-authority";
+import { planCarries } from "./workflow-refs";
 
 export type CompletedTaskOutcomeV1 = Extract<TaskOutcomeV1, { status: "completed" }>;
 
@@ -237,7 +243,8 @@ export async function assertProposalFitsLedger(
   storage: ProposalLedgerStorage,
   proposal: TaskEffectProposalV1,
 ): Promise<void> {
-  const earlier = new Map((await readProposalLedger(storage)).map((step) => [step.stepName, step.kind] as const));
+  const earlier = new Map(operationSteps(await readProposalLedger(storage))
+    .map((step) => [step.stepName, step.kind as OperationKind] as const));
   const issues = taskStepIssues(proposal, { earlier });
   if (issues.length > 0) {
     throw new Error(issues.map((issue) => `${issue.path.join(" ")}: ${issue.message}`).join("; "));
@@ -341,10 +348,22 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   const operations: Record<string, unknown>[] = [];
   const materializing: string[] = [];
   const proposals: TaskEffectProposalV1[] = [];
+  const messages: MessageV1[] = [];
   const resource = taskEventBindingFromNormalizedEvent(request.event).resource;
 
   for (const [index, candidate] of outcome.proposedEffects.entries()) {
     const proposal = taskEffectProposalV1Schema.parse(candidate);
+    if (proposal.kind === MESSAGE_SEND_KIND) {
+      // The plan schema cannot see the bundle, so declaration is checked
+      // here, beside the operations'. The same rules as at proposal: one per
+      // run, on a workflow whose apply sends messages, within scope.
+      if (!declared.has(proposal.kind)) throw new Error(`Task proposed the undeclared effect ${proposal.kind}`);
+      const refusal = messageProposalRefusal(request, proposal, proposals);
+      if (refusal !== undefined) throw new Error(refusal);
+      proposals.push(proposal);
+      messages.push(messageFromSendPayload(messageSendPayloadV1Schema.parse(proposal.payload)));
+      continue;
+    }
     // Trigger scope, for every plan whether or not it carries `effectScope`,
     // so a run on an older pin still gets two independent checks (see the
     // note on the capture's base below for why this repeat is sound).
@@ -444,9 +463,12 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     // apply would refuse the plan, and for requests admitted before starters
     // were recorded, so their plans stay byte-identical to the ones they
     // already published; the check above still covers both.
-    ...(planCarriesEffectScope(request.event.workflow.jobWorkflowRef) && request.starter !== undefined
+    ...(planCarries("effectScope", request.event.workflow.jobWorkflowRef) && request.starter !== undefined
       ? { effectScope: runEffectScope(request) }
       : {}),
+    // Left out when there is none, so other plans stay byte-identical, and
+    // never present for an older pin: `messageProposalRefusal` refused it.
+    ...(messages.length === 0 ? {} : { messages }),
     ...(capture === undefined ? {} : { capture: capture.manifest, changesSha256: capture.changesSha256 }),
     operations,
   });
@@ -641,7 +663,19 @@ export function assertMonotonicReceipt(existing: RunnerEffectReceiptV1, next: Ru
     plannedOperations: receipt.plannedOperations,
   });
   if (immutable(existing) !== immutable(next)) throw new Error("Effect receipt plan identity changed");
-  if (existing.status === "applied") throw new Error("An applied effect receipt is terminal");
+  if (existing.status === "applied") {
+    // Its operations are final. Only its message may still move, and only
+    // from untried or failed: sent, skipped and conflicted are final for the plan.
+    if (next.status !== "applied" || canonicalJson(existing.operations) !== canonicalJson(next.operations)) {
+      throw new Error("An applied effect receipt is terminal");
+    }
+    const before = existing.messages?.[0];
+    if (before !== undefined && before.status !== "failed") throw new Error("The effect receipt's message is already settled");
+    if (next.messages === undefined) {
+      throw new Error(before === undefined ? "An applied effect receipt is terminal" : "Effect receipt dropped its message");
+    }
+    return;
+  }
   const immutablePrefixLength = existing.status === "stopped"
     ? Math.max(0, existing.operations.length - 1)
     : existing.operations.length;
@@ -671,6 +705,7 @@ export function assertReceiptMatchesPlan(plan: TaskEffectPlanV1, receipt: Runner
   if ((receipt.changesSha256 ?? null) !== (plan.changesSha256 ?? null)) {
     throw new Error("Effect receipt changes digest does not match the plan");
   }
+  assertMessageReceiptsMatchPlan(plan, receipt);
   receipt.operations.forEach((entry, index) => {
     const planned = plan.operations[index];
     if (planned === undefined) throw new Error(`Effect receipt records unplanned step ${entry.stepName}`);
@@ -703,6 +738,28 @@ export function assertReceiptMatchesPlan(plan: TaskEffectPlanV1, receipt: Runner
       }
     } else if (actual.length > 0) {
       throw new Error(`Failed effect receipt step ${entry.stepName} may not publish outputs`);
+    }
+  });
+}
+
+/**
+ * A message receipt answers the plan's own message: the same channel and the
+ * same subject, by kind and number. A receipt for a plan with no message has
+ * none.
+ */
+function assertMessageReceiptsMatchPlan(plan: TaskEffectPlanV1, receipt: RunnerEffectReceiptV1): void {
+  const received = receipt.messages ?? [];
+  const planned = plan.messages ?? [];
+  if (received.length > planned.length) throw new Error("Effect receipt records a message the plan does not send");
+  received.forEach((entry, index) => {
+    const message = planned[index]!;
+    // Apply names an issue subject whose link is a pull request's page as one.
+    const kindMatches = entry.subject.kind === message.subject.kind
+      || (message.subject.kind === "issue" && entry.subject.kind === "pull_request");
+    if (entry.channel !== message.channel
+      || !kindMatches
+      || entry.subject.number !== messageSubjectNumber(message.subject)) {
+      throw new Error("Effect receipt records a message for another channel or subject than the plan's");
     }
   });
 }

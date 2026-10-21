@@ -43,6 +43,34 @@ const onEdited = (mentions: string[]): Trigger[] =>
   [{ kind: "github.issue_comment.edited", labelsAll: [], mentions, authors: "maintainers" }];
 
 describe("trigger filters", () => {
+  it("skips a labeled event whose added label isn't one of labels-all, even when the subject carries them", () => {
+    const labeled = (label: string, labels: string[]) =>
+      event("github.issue.labeled", { issue: { ...issue, labels }, label });
+    const onLabeled = (labelsAll: string[]): Trigger[] => [{ kind: "github.issue.labeled", labelsAll }];
+    // The label just added starts the task.
+    expect(triggerFiltersExclude(labeled("gardener-fix", ["gardener-fix"]), onLabeled(["gardener-fix"]))).toBe(false);
+    // A later label on a subject that already carries it is skipped, not failed.
+    expect(triggerFiltersExclude(labeled("bug", ["gardener-fix", "bug"]), onLabeled(["gardener-fix"]))).toBe(true);
+    // Exact match, as labels-all is.
+    expect(triggerFiltersExclude(labeled("Gardener-Fix", ["Gardener-Fix", "gardener-fix"]), onLabeled(["gardener-fix"]))).toBe(true);
+    // Any listed label counts, once the subject carries them all.
+    expect(triggerFiltersExclude(labeled("b", ["a", "b"]), onLabeled(["a", "b"]))).toBe(false);
+    // Without labels-all, any label starts it, as before.
+    expect(triggerFiltersExclude(labeled("bug", ["bug"]), onLabeled([]))).toBe(false);
+    // Pull requests and discussions follow the same rule.
+    const pullRequest = { ...issue, labels: ["fix", "later"], draft: false, merged: false };
+    expect(triggerFiltersExclude(event("github.pull_request.labeled", { pullRequest, label: "later" }),
+      [{ kind: "github.pull_request.labeled", labelsAll: ["fix"] }])).toBe(true);
+    const discussion = { ...issue, labels: ["ask", "later"] };
+    expect(triggerFiltersExclude(event("github.discussion.labeled", { discussion, label: "later" }),
+      [{ kind: "github.discussion.labeled", labelsAll: ["ask"] }])).toBe(true);
+    expect(triggerFiltersExclude(event("github.discussion.labeled", { discussion, label: "ask" }),
+      [{ kind: "github.discussion.labeled", labelsAll: ["ask"] }])).toBe(false);
+    // unlabeled is unchanged: the removed label is not one the subject carries.
+    expect(triggerFiltersExclude(event("github.issue.unlabeled", { issue: { ...issue, labels: ["keep"] }, label: "other" }),
+      [{ kind: "github.issue.unlabeled", labelsAll: ["keep"] }])).toBe(false);
+  });
+
   it("admits maintainers only when authors is maintainers, failing closed without an association", () => {
     for (const association of ["OWNER", "MEMBER", "COLLABORATOR"]) {
       expect(triggerFiltersExclude(created("hi", association), onCreated([], "maintainers"))).toBe(false);
@@ -192,7 +220,7 @@ describe("authors lists and opened-by", () => {
   it("applies opened-by to label events, which have no authors", () => {
     const onLabel: Trigger[] = [{ kind: "github.pull_request.labeled", labelsAll: ["ship"], openedBy: ["dependabot[bot]"] } as Trigger];
     const labeled = (author: { id: string; login: string }) => event("github.pull_request.labeled", {
-      pullRequest: { ...pullRequest(author), labels: ["ship"] }, label: { name: "ship" },
+      pullRequest: { ...pullRequest(author), labels: ["ship"] }, label: "ship",
     });
     expect(triggerFiltersExclude(labeled({ id: "49699333", login: "dependabot[bot]" }), onLabel)).toBe(false);
     expect(triggerFiltersExclude(labeled(actor), onLabel)).toBe(true);

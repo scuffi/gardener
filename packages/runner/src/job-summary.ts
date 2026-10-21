@@ -13,6 +13,7 @@ import * as core from "@actions/core";
 import type { TaskEffectPlanV1 } from "@gardener/contracts";
 import type { RunnerEffectReceiptV1, RunnerTerminalV1 } from "@gardener/protocol";
 import { applyFailureAdvice, planFailureAdvice, splitFailureTrail } from "./failure-advice";
+import type { MessageOutcome } from "./messages";
 
 export interface JobSummaryContext {
   /** `GITHUB_RUN_ID`. */
@@ -90,6 +91,7 @@ export function renderPlanJobSummary(input: {
     if (trail) lines.push(`**Before stopping:** ${cell(trail)}`, "");
     lines.push(fenced("Error details", message), "");
   } else if (input.terminal) {
+    const message = input.plan?.messages?.[0];
     if (input.plan && input.plan.operations.length > 0) {
       const count = input.plan.operations.length;
       lines.push(`The model proposed ${count} ${count === 1 ? "step" : "steps"}. The **Apply exact task plan** job applies them.`, "");
@@ -98,8 +100,11 @@ export function renderPlanJobSummary(input: {
         lines.push(`| ${index + 1} | ${code(operation.stepName)} | ${code(operation.kind)} | ${cell(operation.rationale)} |`);
       });
       lines.push("");
-    } else {
+    } else if (message === undefined) {
       lines.push("The model proposed no changes, so nothing is applied.", "");
+    }
+    if (message !== undefined) {
+      lines.push(`The model proposed a message about ${subjectLabel(message.subject)}, which the **Apply exact task plan** job sends after the steps apply: ${cell(message.summary)}`, "");
     }
     lines.push(details("Model's summary (written by the model)", input.terminal.summary), "");
   }
@@ -113,16 +118,22 @@ export function renderApplyJobSummary(input: {
   receipt?: RunnerEffectReceiptV1;
   /** Set when apply failed outside a step (bindings, digest, connection). */
   error?: string;
+  /** What became of the plan's message, when apply reached it. */
+  message?: MessageOutcome;
   context?: JobSummaryContext;
 }): string {
   const lines: string[] = [];
   const task = taskLabel(input.plan?.taskName ?? input.context?.taskName);
   const receipt = input.receipt;
-  const heading = receipt?.status === "applied" && input.error === undefined
-    ? "✅ Plan applied"
-    : receipt?.status === "stopped"
-      ? "❌ Plan stopped"
-      : "❌ Apply failed";
+  // A failed message fails the job, but the steps before it applied.
+  const messageFailed = receipt?.status === "applied" && input.message?.receipt.status === "failed";
+  const heading = messageFailed
+    ? "❌ Plan applied, message not sent"
+    : receipt?.status === "applied" && input.error === undefined
+      ? "✅ Plan applied"
+      : receipt?.status === "stopped"
+        ? "❌ Plan stopped"
+        : "❌ Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
   const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : undefined;
   if (stopping?.receipt.error) {
@@ -133,7 +144,7 @@ export function renderApplyJobSummary(input: {
       `**What to do:** ${advice.todo}`,
       "",
     );
-  } else if (input.error !== undefined && receipt?.status !== "stopped") {
+  } else if (input.error !== undefined && receipt?.status !== "stopped" && !messageFailed) {
     lines.push(
       "**What happened:** the apply job stopped before finishing the plan.",
       "",
@@ -143,7 +154,7 @@ export function renderApplyJobSummary(input: {
       "",
     );
   }
-  if (receipt) {
+  if (receipt && receipt.plannedOperations > 0) {
     const done = receipt.operations.length;
     if (receipt.status === "stopped" && receipt.stoppedAtStep) {
       const before = receipt.operations.filter((step) => step.receipt.status === "succeeded" || step.receipt.status === "skipped").length;
@@ -163,8 +174,46 @@ export function renderApplyJobSummary(input: {
       lines.push(fenced(`Error from ${inline(step.stepName)}: ${inline(step.receipt.error.code)}`, step.receipt.error.message), "");
     }
   }
+  if (input.message !== undefined) lines.push(...messageLines(input.message), "");
   lines.push(...footer(input.context, input.plan?.runId, false));
   return lines.join("\n");
+}
+
+/**
+ * The message's outcome. Never the destination: a skip says why without it,
+ * and only a sent message shows its text, exactly as sent.
+ */
+function messageLines(outcome: MessageOutcome): string[] {
+  const { receipt } = outcome;
+  const about = subjectLabel(receipt.subject);
+  if (outcome.settled) {
+    const earlier = receipt.status === "sent" ? "was sent by an earlier attempt" : `was settled by an earlier attempt (${receipt.status})`;
+    return [`**Message** about ${about} ${earlier}; it is not sent again.`];
+  }
+  switch (receipt.status) {
+    case "sent":
+      return [`**Message** about ${about} sent (${inline(receipt.transport ?? "")}):`, "", quote(outcome.text ?? "")];
+    case "skipped":
+      return [receipt.reason === "destination_unset"
+        ? `**Message** about ${about} not sent: GARDENER_CHAT_WEBHOOK is not set. Set the repository secret to a Google Chat or Slack incoming-webhook URL to post messages.`
+        : `**Message** about ${about} not sent: GARDENER_CHAT_WEBHOOK is not a supported incoming-webhook URL. Use a Google Chat (chat.googleapis.com) or Slack (hooks.slack.com) incoming-webhook URL.`];
+    case "conflicted":
+      return [receipt.reason === "subject_elsewhere"
+        ? `**Message** about ${about} not sent: its GitHub link is no longer in this repository.`
+        : `**Message** about ${about} not sent: it changed after the task read it, so the message could be out of date.`];
+    case "failed":
+      return [
+        `**Message** about ${about} not sent. The steps above stand; re-run the failed job to try the message again.`,
+        "",
+        fenced("Error details", outcome.error ?? "the message could not be sent"),
+      ];
+  }
+}
+
+function subjectLabel(subject: { kind: string; number?: number; issueNumber?: number; pullNumber?: number; discussionNumber?: number }): string {
+  const number = subject.number ?? subject.issueNumber ?? subject.pullNumber ?? subject.discussionNumber;
+  const kind = subject.kind === "pull_request" ? "pull request" : subject.kind;
+  return `${kind} #${number}`;
 }
 
 /**

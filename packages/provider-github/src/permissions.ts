@@ -1,4 +1,4 @@
-import { operationKindValues, type OperationKind } from "@gardener/contracts";
+import { MESSAGE_SEND_KIND, operationKindValues, type OperationKind, type TaskEffectKindV1 } from "@gardener/contracts";
 
 /**
  * GitHub Actions `permissions:` keys Gardener can derive, rendered in this
@@ -164,4 +164,27 @@ export function operationApplyPermissions(kind: OperationKind): GitHubPermission
 /** Read scopes planning needs to build preconditions for one operation kind. */
 export function operationPlanningReadPermissions(kind: OperationKind): GitHubPermissions {
   return permissionsFromScopes(OPERATION_PLANNING_READ_PERMISSIONS[kind]);
+}
+
+/**
+ * What apply needs to send a message: it reads the subject again to check its
+ * pinned version and take its title, link and author. The subject's kind is
+ * known only once the model proposes, so a task declaring `message.send` gets
+ * read on all three. It writes nothing to the repository; the destination is a
+ * secret, not a GitHub permission.
+ */
+export const MESSAGE_SEND_TOKEN_PERMISSIONS: readonly GitHubPermissionScope[] = Object.freeze([
+  "issues:read",
+  "pull-requests:read",
+  "discussions:read",
+]);
+
+/**
+ * Scopes the apply job needs for one declared effect. Every effects-to-
+ * permissions path goes through here, so `message.send`, which is not an
+ * operation, is handled explicitly rather than by indexing the operation map.
+ */
+export function effectApplyPermissions(kind: TaskEffectKindV1): GitHubPermissions {
+  if (kind === MESSAGE_SEND_KIND) return permissionsFromScopes(MESSAGE_SEND_TOKEN_PERMISSIONS);
+  return operationApplyPermissions(kind);
 }

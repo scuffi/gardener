@@ -38,6 +38,10 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      chat-webhook:
+        description: Google Chat or Slack incoming-webhook URL for tasks that declare message.send. Only the apply step sees it.
+        required: false
 
 jobs:
   # Shows that the task is working on what started the run. Like apply, this
@@ -208,6 +212,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           runtime-url: ${{ inputs.runtime-url }}
           task-name: ${{ inputs.task-name }}
+          # The only place the destination is interpolated: the planning job,
+          # which runs the model and task commands, never sees it.
+          chat-webhook: ${{ secrets.chat-webhook }}
 
   # Replaces 👀 with the result: 🚀 when the plan was applied, 😕 when planning
   # or applying failed, and nothing when the task proposed nothing or the run

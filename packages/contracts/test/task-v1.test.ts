@@ -129,9 +129,9 @@ describe("Actions-native task v1 contracts", () => {
     })).toThrow(/unique/);
   });
 
-  it("exposes exactly the persistent provider operations as effect authority", () => {
-    expect(taskEffectKindV1Schema.options).toEqual([...operationKindValues]);
-    expect(taskEffectKindV1Schema.options).toHaveLength(37);
+  it("exposes exactly the persistent provider operations, plus message.send, as effect authority", () => {
+    expect(taskEffectKindV1Schema.options).toEqual([...operationKindValues, "message.send"]);
+    expect(operationKindValues).toHaveLength(37);
     // commit.merge_base needs its tool and a trigger whose head it can merge into.
     expect(taskBundleV1Schema.parse({
       ...fixtureBundle(),

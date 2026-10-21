@@ -55,6 +55,10 @@ vi.mock("../src/context", () => ({
 // On a GitHub runner this is set, and the job summary would call core.summary,
 // which this mock leaves out. job-summary.test.ts covers the summary.
 delete process.env.GITHUB_STEP_SUMMARY;
+// The bridge reads the chat destination once, at load. Plans without a
+// message never use it; the message tests below do.
+const CHAT_WEBHOOK = "https://hooks.slack.com/services/T0SECRET1/B0SECRET2/abcdefSECRETxyz";
+process.env["INPUT_CHAT-WEBHOOK"] = CHAT_WEBHOOK;
 const effects = await import("../src/effects-main");
 await vi.waitFor(() => expect(core.setFailed).toHaveBeenCalled());
 
@@ -1075,6 +1079,46 @@ describe("apply job guards before any write", () => {
   it("reaches the runtime session when every binding holds", async () => {
     await apply();
     expect(core.priorEffectReceipt).toHaveBeenCalledTimes(1);
+  });
+
+  describe("a plan's message", () => {
+    const PLANNED = "2026-09-17T12:00:00.000Z";
+    const messagePlan = () => plan([], {
+      messages: [{ channel: "default", subject: { kind: "issue", issueNumber: 7, expectedIssueUpdatedAt: PLANNED }, summary: "Crash on start." }],
+    });
+    afterEach(() => { vi.unstubAllGlobals(); });
+
+    /** GitHub answers the subject as planned; the chat service answers `status`. */
+    function chat(status: number) {
+      const posts: string[] = [];
+      vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith("https://api.github.com/")) {
+          return Response.json({ updated_at: PLANNED, title: "Crash", html_url: "https://github.com/owner/repo/issues/7", user: { login: "octocat" } });
+        }
+        posts.push(String(init?.body));
+        return new Response(status === 200 ? "ok" : `no such hook ${CHAT_WEBHOOK}`, { status });
+      }));
+      return posts;
+    }
+
+    it("fails the apply job when it could not be sent, after recording the failure", async () => {
+      const posts = chat(500);
+      const failure = await apply({ plan: messagePlan() });
+      expect(posts).toHaveLength(1);
+      expect(failure).toMatch(/^Message not sent: the chat service answered 500/);
+      expect(failure).not.toContain("hooks.slack.com");
+      expect(failure).not.toContain("abcdefSECRETxyz");
+      const recorded = core.recordEffect.mock.calls.at(-1)?.[0];
+      expect(recorded).toMatchObject({ status: "applied", plannedOperations: 0, messages: [{ status: "failed", reason: "send_failed" }] });
+    });
+
+    it("leaves the apply job green when it was sent", async () => {
+      const posts = chat(200);
+      expect(await apply({ plan: messagePlan() })).toBeUndefined();
+      expect(posts).toHaveLength(1);
+      expect(core.recordEffect.mock.calls.at(-1)?.[0]).toMatchObject({ messages: [{ status: "sent" }] });
+    });
   });
 
   it("refuses a plan for another repository, commit or run", async () => {

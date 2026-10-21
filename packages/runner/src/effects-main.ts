@@ -48,9 +48,15 @@ import {
   type OperationOutputsV1,
 } from "./github-effects";
 import { addSecret, jobSummaryContext, renderApplyJobSummary, writeJobSummary } from "./job-summary";
+import { messageMayTarget, sendPlanMessage, type MessageOutcome } from "./messages";
 
 const inputToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
 delete process.env["INPUT_GITHUB-TOKEN"];
+// The chat destination is read once and removed from the environment, like
+// the token, and masked so it never reaches a log or the summary.
+const chatWebhook = process.env["INPUT_CHAT-WEBHOOK"]?.trim() ?? "";
+delete process.env["INPUT_CHAT-WEBHOOK"];
+if (chatWebhook !== "") addSecret(chatWebhook);
 
 interface EffectsSession {
   root: ReturnType<typeof newWebSocketRpcSession<PublicSessionCapability>>;
@@ -60,12 +66,15 @@ interface EffectsSession {
 interface ApplyResult {
   receipt: RunnerEffectReceiptV1;
   outputs: ReadonlyMap<string, Readonly<Record<string, string | number | boolean | null>>>;
+  /** What became of the plan's message, when it has one and every operation applied. */
+  message?: MessageOutcome;
 }
 
 export async function runEffectsMain(): Promise<void> {
   let connection: EffectsSession | undefined;
   let plan: TaskEffectPlanV1 | undefined;
   let receipt: RunnerEffectReceiptV1 | undefined;
+  let message: MessageOutcome | undefined;
   try {
     const artifactPath = core.getInput("artifact-path", { required: true });
     const expectedSha256 = core.getInput("expected-sha256", { required: true });
@@ -95,15 +104,22 @@ export async function runEffectsMain(): Promise<void> {
       token,
       deadlineAt,
       prior,
+      destination: chatWebhook,
       ...(capture ? { captureDirectory: capture.directory } : {}),
       record: (receipt) => connection!.session.recordEffect(receipt),
     });
 
     receipt = result.receipt;
-    // Nothing after this write can throw, so the catch below only writes when
-    // no summary was written here. A stopped plan is summarised by the catch.
-    if (result.receipt.status === "applied") {
-      await writeJobSummary(() => renderApplyJobSummary({ plan: plan!, receipt: receipt!, context: jobSummaryContext() }));
+    message = result.message;
+    if (message?.receipt.status === "skipped") {
+      core.notice(message.receipt.reason === "destination_unset"
+        ? "Message not sent: GARDENER_CHAT_WEBHOOK is not set."
+        : "Message not sent: GARDENER_CHAT_WEBHOOK is not a supported incoming-webhook URL.");
+    }
+    // Nothing after this write can throw, except a failed message, which the
+    // catch summarises. A stopped plan is summarised by the catch too.
+    if (result.receipt.status === "applied" && message?.receipt.status !== "failed") {
+      await writeJobSummary(() => renderApplyJobSummary({ plan: plan!, receipt: receipt!, ...(message ? { message } : {}), context: jobSummaryContext() }));
     }
     core.setOutput("status", result.receipt.status);
     core.setOutput("completed-operations", String(result.receipt.operations.length));
@@ -118,11 +134,16 @@ export async function runEffectsMain(): Promise<void> {
       const error = last?.receipt.error;
       throw new Error(`Effect plan stopped at ${result.receipt.stoppedAtStep}: ${error?.message ?? "provider operation failed"}`);
     }
+    if (message?.receipt.status === "failed") {
+      // The operations stand; rerunning the job tries the message again.
+      throw new Error(`Message not sent: ${message.error ?? "it could not be sent"}`);
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Gardener effect failed";
     await writeJobSummary(() => renderApplyJobSummary({
       ...(plan ? { plan } : {}),
       ...(receipt ? { receipt } : {}),
+      ...(message ? { message } : {}),
       error: reason,
       context: jobSummaryContext(),
     }));
@@ -138,6 +159,8 @@ export async function applyOrderedPlan(input: {
   token: string;
   deadlineAt: number;
   prior: RunnerEffectReceiptV1 | null;
+  /** The `chat-webhook` input: where the plan's message goes. Empty or absent skips it. */
+  destination?: string;
   captureDirectory?: string;
   record(receipt: RunnerEffectReceiptV1): Promise<unknown>;
   fetch?: typeof fetch;
@@ -208,7 +231,7 @@ export async function applyOrderedPlan(input: {
       resumeIndex = index + 1;
     }
     if (input.prior.status === "applied") {
-      return { receipt: input.prior, outputs };
+      return settleMessage(input, completed, outputs);
     }
   }
 
@@ -297,8 +320,46 @@ export async function applyOrderedPlan(input: {
     await input.record(progress);
   }
 
-  const applied = effectReceipt(plan, input.artifactSha256, completed, "applied", null);
-  return { receipt: applied, outputs };
+  return settleMessage(input, completed, outputs);
+}
+
+/**
+ * The applied receipt, with the plan's message settled. Only reached once
+ * every operation applied, so a message never goes out about a plan that
+ * stopped. Resume follows the message receipt: a prior `sent`, `skipped` or
+ * `conflicted` one is returned unchanged; a prior `failed` one, or none, is
+ * tried now and recorded.
+ */
+async function settleMessage(
+  input: Parameters<typeof applyOrderedPlan>[0],
+  completed: RunnerPlanStepReceiptV1[],
+  outputs: ApplyResult["outputs"],
+): Promise<ApplyResult> {
+  const { plan } = input;
+  const appliedPrior = input.prior?.status === "applied" ? input.prior : undefined;
+  const withoutMessage = (): ApplyResult => ({
+    receipt: appliedPrior ?? effectReceipt(plan, input.artifactSha256, completed, "applied", null),
+    outputs,
+  });
+  if (plan.messages === undefined) return withoutMessage();
+  const message = await sendPlanMessage({
+    plan,
+    operations: completed,
+    prior: appliedPrior?.messages?.[0],
+    planDigest: input.artifactSha256,
+    destination: input.destination ?? "",
+    token: input.token,
+    deadlineAt: input.deadlineAt,
+    ...(input.fetch ? { fetch: input.fetch } : {}),
+  });
+  // No message to send, whatever the plan field says: the same receipt as a
+  // plan without one, never one the caller must assume exists.
+  if (message === undefined) return withoutMessage();
+  // Settled only by the prior receipt's own message, so it stands unchanged.
+  if (message.settled && appliedPrior !== undefined) return { receipt: appliedPrior, outputs, message };
+  const receipt = effectReceipt(plan, input.artifactSha256, completed, "applied", null, [message.receipt]);
+  await input.record(receipt);
+  return { receipt, outputs, message };
 }
 
 const RESOURCE_NUMBER_FIELDS = [
@@ -312,6 +373,8 @@ const RESOURCE_NUMBER_FIELDS = [
  * reference is unknown until that step runs, so it counts as a possible match.
  */
 function laterStepMayTarget(plan: TaskEffectPlanV1, index: number, resource: string): boolean {
+  // The message checks its subject's version too, after every step.
+  if (messageMayTarget(plan, resource)) return true;
   return plan.operations.slice(index + 1).some((step) => RESOURCE_NUMBER_FIELDS.some(([field, family]) => {
     if (!resource.startsWith(`${family}:`)) return false;
     if (Object.hasOwn(step.references, `/${field}`)) return true;
@@ -523,6 +586,7 @@ function effectReceipt(
   operations: RunnerPlanStepReceiptV1[],
   status: "running" | "applied" | "stopped",
   stoppedAtStep: string | null,
+  messages?: RunnerEffectReceiptV1["messages"],
 ): RunnerEffectReceiptV1 {
   return runnerEffectReceiptV1Schema.parse({
     schemaVersion: "gardener.runner.effect-receipt/v1",
@@ -534,6 +598,7 @@ function effectReceipt(
     status,
     stoppedAtStep,
     operations,
+    ...(messages === undefined ? {} : { messages }),
   });
 }
 

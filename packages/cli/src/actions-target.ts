@@ -1,14 +1,15 @@
 import {
   checksOutPullRequestHead,
   dispatchTargetKinds,
+  MESSAGE_SEND_KIND,
   triggerKindOrder,
   type TaskBundleV1,
   type TaskTriggerKindV1,
 } from "@gardener/contracts";
 import {
   GITHUB_PERMISSION_KEYS,
+  effectApplyPermissions,
   mergePermissions,
-  operationApplyPermissions,
   orderPermissions,
   type GitHubPermissionKey,
   type GitHubPermissions,
@@ -114,8 +115,11 @@ export const REACTION_PERMISSIONS: Partial<Record<GitHubActionsTriggerBindingV1[
   discussion_comment: { discussions: "write" },
 };
 
-/** Write scopes the checkout-free apply job needs for one exact operation kind. */
-const effectPermissions = operationApplyPermissions;
+/**
+ * Scopes the checkout-free apply job needs for one declared effect: an
+ * operation's writes, or the reads `message.send` checks its subject with.
+ */
+const effectPermissions = effectApplyPermissions;
 
 /** The longest a job on a GitHub-hosted runner may run. */
 const GITHUB_HOSTED_JOB_MAX_MINUTES = 360;
@@ -174,6 +178,14 @@ export function compileGitHubActionsTask(bundle: TaskBundleV1): GitHubActionsTas
   // Tasks without `repository.exec` never run task-controlled commands, so they
   // must declare `default: deny` with empty lists.
   const declaresExec = bundle.tools.includes("repository.exec");
+  // The chat destination is a secret in the apply job. Refusing the pair means
+  // it never shares a run with task-controlled commands, whatever the runner
+  // does to keep the jobs apart.
+  if (declaresExec && (bundle.effects as readonly string[]).includes(MESSAGE_SEND_KIND)) {
+    throw new Error(
+      `Task ${bundle.taskId} declares both message.send and repository.exec; a task that posts messages may not run commands. Split it into two tasks`,
+    );
+  }
   const expectedDefault = declaresExec ? "allow" : "deny";
   if (bundle.network.default !== expectedDefault) {
     throw new Error(

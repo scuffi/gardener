@@ -104,6 +104,11 @@ Propose one commit.
       const trigger = parse(called)?.on?.workflow_call;
       if (trigger === undefined) problems.push(`${ref[2]} at ${ref[3]} is not a reusable workflow (no workflow_call)`);
       checkInputs(`generated ${file} job ${id}`, job.with, trigger?.inputs);
+      // GitHub refuses a caller that passes a secret the called workflow
+      // doesn't declare, as a message.send caller would against a pre-0.1.18 pin.
+      for (const name of Object.keys(typeof job.secrets === "object" && job.secrets !== null ? job.secrets : {})) {
+        if (!(name in (trigger?.secrets ?? {}))) problems.push(`generated ${file} job ${id} passes secret ${name}, which ${ref[2]} at ${ref[3]} doesn't declare`);
+      }
       if (job.with && "pull-request-head" in job.with) sawPullRequestHead = true;
       if (job.with && "merge-base" in job.with) sawMergeBase = true;
     }
@@ -139,20 +144,52 @@ for (const [path, content] of reusable) {
   if (bridges === 0) problems.push(`${path} at ${sha} pins no Gardener bridge`);
 }
 
-// The runtime leaves `effectScope` out of plans for runs of older releases,
-// whose apply bridge parses plans strictly. A release missing from that list
-// breaks every run of it, and this release's own ref being on it drops apply's
-// scope check, so both directions are checked here, where the tags exist.
-const withoutScope = new Set(
-  /TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE[^[]*\[([^\]]*)\]/.exec(readFileSync("apps/gardener/src/task-runtime/workflow-refs.ts", "utf8"))?.[1]
-    .match(/[0-9a-f]{40}/g) ?? [],
-);
-if (withoutScope.size === 0) problems.push("TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE could not be read from workflow-refs.ts");
-if (withoutScope.has(sha)) problems.push(`DEFAULT_WORKFLOW_REF ${sha} is in TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE; pin this release's own gardener-task.yml`);
+// The runtime leaves a plan field out of plans for runs of releases whose
+// apply bridge predates it, since those parse plans strictly. Each field has a
+// set of such task workflows in workflow-refs.ts. Decide per released tag, from
+// that tag's own contracts, which fields it supports: a tag without a field
+// must be listed for it (or every run of that release breaks), a tag with it
+// must not be (or apply's check of the field is silently dropped). Detectors
+// are one line each; add one with each new set.
+const detectors = {
+  effectScope: (contracts) => contracts.includes("effectScope"),
+  messages: (contracts) => /\bmessageV1Schema\b/.test(contracts),
+};
+const refsSource = readFileSync("apps/gardener/src/task-runtime/workflow-refs.ts", "utf8");
+const arrays = new Map();
+for (const [, name, body] of refsSource.matchAll(/const (\w+) = \[([^\]]*)\]/g)) {
+  arrays.set(name, [...body.matchAll(/\.\.\.(\w+)|"([0-9a-f]{40})"/g)].flatMap(([, spread, ref]) => (spread ? arrays.get(spread) ?? [`unresolved ${spread}`] : [ref])));
+}
+const without = {};
+for (const [, capability, name] of refsSource.matchAll(/(\w+): new Set\((\w+)\)/g)) without[capability] = new Set(arrays.get(name) ?? []);
+for (const capability of Object.keys(detectors)) {
+  if (!without[capability] || without[capability].size === 0) problems.push(`TASK_WORKFLOWS_WITHOUT.${capability} could not be read from workflow-refs.ts`);
+}
+for (const capability of Object.keys(without)) {
+  if (!(capability in detectors)) problems.push(`TASK_WORKFLOWS_WITHOUT.${capability} has no detector in check-release-pins.mjs`);
+}
+const workingContracts = readFileSync("packages/contracts/src/task.ts", "utf8");
+const releasedShas = new Set();
 for (const tag of git("tag", "--list", "v*").split("\n").filter((name) => /^v\d+\.\d+\.\d+$/.test(name))) {
   const released = /DEFAULT_WORKFLOW_REF =\s*"[^"]*@([0-9a-f]{40})"/.exec(at(tag, "packages/cli/src/project.ts") ?? "")?.[1];
-  if (released !== undefined && released !== sha && !withoutScope.has(released)) {
-    problems.push(`${tag}'s task workflow ${released} is missing from TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE in workflow-refs.ts`);
+  if (released === undefined) continue;
+  releasedShas.add(released);
+  const contracts = at(tag, "packages/contracts/src/task.ts") ?? "";
+  for (const [capability, supports] of Object.entries(detectors)) {
+    const listed = without[capability]?.has(released) ?? false;
+    if (!supports(contracts) && !listed) problems.push(`${tag}'s task workflow ${released} lacks ${capability} but is missing from TASK_WORKFLOWS_WITHOUT.${capability} in workflow-refs.ts`);
+    if (supports(contracts) && listed) problems.push(`${tag}'s task workflow ${released} supports ${capability} but is listed in TASK_WORKFLOWS_WITHOUT.${capability} in workflow-refs.ts`);
+  }
+}
+// This release's own workflow is judged by the working tree's contracts. Until
+// it is pinned, DEFAULT_WORKFLOW_REF still names the previous release's
+// workflow, which the tag loop above already judged; say so rather than fail.
+if (releasedShas.has(sha)) {
+  console.warn(`DEFAULT_WORKFLOW_REF still pins a released task workflow (${sha}); pin this release's own gardener-task.yml before releasing.`);
+} else {
+  for (const [capability, supports] of Object.entries(detectors)) {
+    if (!supports(workingContracts)) problems.push(`this tree's contracts don't support ${capability}; its detector in check-release-pins.mjs is out of date`);
+    if (without[capability]?.has(sha)) problems.push(`DEFAULT_WORKFLOW_REF ${sha} is in TASK_WORKFLOWS_WITHOUT.${capability}; pin this release's own gardener-task.yml`);
   }
 }
 

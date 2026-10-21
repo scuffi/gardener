@@ -7,10 +7,11 @@ import {
   type TaskAuthorsFilterV1,
   githubHandleV1Schema,
   isAuthoredTriggerKind,
+  MESSAGE_SEND_KIND,
   operationCatalog,
-  operationKindValues,
   runLimitIssue,
   taskBundleV1Schema,
+  taskEffectKindValues,
   taskModelIdSchema,
   taskToolV1Schema,
   taskTriggerKindValues,
@@ -30,14 +31,18 @@ const safeLabel = z.string().trim().min(1).max(100).regex(
   "labels may contain only letters, numbers, spaces, dots, underscores, and hyphens",
 );
 
-const OPERATION_FAMILY_BY_KIND = new Map(operationCatalog.map((entry) => [entry.kind, entry.family]));
+const OPERATION_FAMILY_BY_KIND: ReadonlyMap<string, string> = new Map(operationCatalog.map((entry) => [entry.kind, entry.family]));
 const OPERATION_FAMILY_VALUES = [...new Set(operationCatalog.map((entry) => entry.family))].sort();
 
-/** Authoring shorthand that expands to every exact operation kind in one family. */
+/**
+ * Authoring shorthand that expands to every exact operation kind in one family.
+ * `message.send` is not an operation and has no family, so `message.*` is not a
+ * glob: it must be named exactly.
+ */
 export const effectFamilyGlobValues = OPERATION_FAMILY_VALUES.map((family) => `${family}.*`) as [string, ...string[]];
 
 const effectSelectorSchema = z.union([
-  z.enum(operationKindValues),
+  z.enum(taskEffectKindValues),
   z.enum(effectFamilyGlobValues),
 ]);
 
@@ -198,6 +203,24 @@ export function highImpactWarning(bundle: Pick<TaskBundleV1, "triggers" | "effec
     + "Restrict the triggers with authors: maintainers, or remove these effects.";
 }
 
+/**
+ * Build warnings for a task that declares `message.send`: where the
+ * destination comes from, what posting discloses, and, when outsiders can
+ * start it, that they can cause posts. Empty for other tasks.
+ */
+export function messageWarnings(bundle: Pick<TaskBundleV1, "triggers" | "effects">): string[] {
+  if (!(bundle.effects as readonly string[]).includes(MESSAGE_SEND_KIND)) return [];
+  return [
+    "declares message.send. Set the GARDENER_CHAT_WEBHOOK repository secret to a Google Chat or Slack incoming-webhook URL; "
+      + "until it is set, runs skip the message and still succeed.",
+    "declares message.send. In a private repository, each message shows the subject's title, link and author to everyone in the chat space.",
+    ...(admitsNonMaintainers(bundle)
+      ? ["declares message.send and can be started by people who are not maintainers, so they can cause posts about their own issues, pull requests or discussions. "
+        + "The summary is checked and the link is Gardener's, but the subject's title is theirs. Restrict the triggers with authors: maintainers if that is not wanted."]
+      : []),
+  ];
+}
+
 const authoringSchema = z.strictObject({
   schema: z.literal("gardener.task/v1"),
   id: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
@@ -211,7 +234,7 @@ const authoringSchema = z.strictObject({
   "effect-scope": z.literal("trigger").optional(),
   model: taskModelIdSchema.optional(),
   tools: z.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
-  effects: z.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
+  effects: z.array(effectEntrySchema).max(taskEffectKindValues.length + effectFamilyGlobValues.length).default([]),
   network: z.strictObject({
     default: z.enum(["deny", "allow"]),
     allow: z.array(z.string()),
@@ -279,11 +302,13 @@ export function expandEffectSelectors(selectors: readonly string[], tools: reado
     if (selector.endsWith(".*")) families.add(selector.slice(0, -".*".length));
     else exact.add(selector);
   }
+  // `message.send` has no operation family, so no glob selects it.
   const globbed = (kind: TaskEffectKindV1) => {
     const tool = GLOB_KINDS_NEEDING_TOOL.get(kind);
-    return families.has(OPERATION_FAMILY_BY_KIND.get(kind)!) && (tool === undefined || tools.includes(tool));
+    const family = OPERATION_FAMILY_BY_KIND.get(kind);
+    return family !== undefined && families.has(family) && (tool === undefined || tools.includes(tool));
   };
-  return operationKindValues.filter((kind) => exact.has(kind) || globbed(kind));
+  return taskEffectKindValues.filter((kind) => exact.has(kind) || globbed(kind));
 }
 
 type AuthoredTrigger = z.output<typeof triggerAuthoringSchema>;

@@ -61,6 +61,16 @@ generate` adds it, so the compiled bundle always contains it. See [Running a tas
 `labels-all` is an AND filter over the labels of the issue, pull request, or discussion that carries
 the event. Supplying a key that an event does not support is a compilation error.
 
+On `github.issue.labeled`, `github.pull_request.labeled` and `github.discussion.labeled`, a
+non-empty `labels-all` also requires the label just added to be one of the listed labels. Without
+that, once `gardener-fix` is on an issue, every later label anyone adds would start the task again.
+With one listed label the task runs exactly once, when that label is added; with N listed labels up
+to N events can match, one for each listed label as it is added while the subject carries the rest.
+GitHub sends one `labeled` event per label, even when several are added at once. An empty
+`labels-all` on a `.labeled` trigger still matches any added label, and `.unlabeled` triggers are
+unchanged. The generated workflow prefilters on the added label case-insensitively; the runtime
+decides exactly, and a run the prefilter admits but the runtime rejects completes as a skip.
+
 `pull_request_target` is deliberately not modeled and can never be generated.
 
 ### Mentions and authors
@@ -216,8 +226,8 @@ bridge process; the token is never placed in model context or in the execution e
 
 ## Effects
 
-`effects` is the exact operation authority for the task. List exact operation kinds, family globs, or
-both. Globs expand deterministically into the canonical operation order, and overlapping selectors
+`effects` is the exact operation authority for the task, plus `message.send` (see
+[Messages](#messages)). List exact operation kinds, family globs, or both. Globs expand deterministically into the canonical operation order, and overlapping selectors
 collapse without duplication.
 
 The [effect tables](task-reference.md#effects) list every kind, what it does, the write scope it
@@ -494,6 +504,58 @@ provider preconditions, stop-on-first-failure, and exact-prefix resume still app
 Human-in-the-loop approval is intentionally deferred until after every trigger and effect path is
 qualified end to end. Tasks granting merge, release, check-rerun, or other destructive authority
 must therefore be treated as automatic production automation, not as approval-gated workflows.
+
+### Messages
+
+`message.send` posts one message to the repository's chat space, for example to tell the team about
+an urgent issue:
+
+```yaml
+effects:
+  - issue.label.add
+  - message.send
+```
+
+It is declared like an effect so everything a task can do is listed in one place, but it is a
+property of the plan, not an operation: the model proposes it like any step, with a subject (an
+issue, pull request or discussion, by number, and the `updatedAt` it read) and a summary, and the
+apply job sends it only after every operation succeeded. A run sends at most one message. Name it
+exactly: `message.*` is not a glob, and family globs never include it. `max-effect-operations`
+does not count it.
+
+The destination is the `GARDENER_CHAT_WEBHOOK` repository secret, a Google Chat or Slack
+incoming-webhook URL. It is passed only to callers of tasks that declare `message.send`, and only
+the apply step sees it; the model never chooses where a message goes. Without the secret, runs skip
+the message and still succeed. `generate` warns about the secret, that in a private repository each
+message shows the subject's title, link and author to everyone in the chat space, and, for a task
+that people who are not maintainers can start, that they can cause posts about their own issues.
+Under trigger scope the message may only be about what triggered the run.
+
+The summary is at most 400 characters of one-line plain text without `<`, `>`, `&` or backticks;
+the model is refused and can retry otherwise. A task may not declare both `message.send` and
+`repository.exec`, so the destination never shares a run with task-controlled commands. The pinned
+workflow must be 0.1.18 or later; `generate` refuses `message.send` on older pins and says to run
+`gardener upgrade`.
+
+The message is one link to the subject on GitHub, then its title and author, then the summary:
+
+```text
+owner/repo#123  `App crashes on start`  (@octocat)
+`Crash on start for every user since 2.4.`
+```
+
+Apply reads the subject first. It sends nothing, and records the message as `conflicted`, if
+someone other than this run changed the subject since the model read it, or if its link no longer
+points into this repository. The title and summary are shown as code, cut to one line, with any
+`<`, `>` and backticks swapped for lookalike characters, so neither can add a link or a mention.
+The apply job summary shows the text sent, or why nothing was sent.
+
+A message that could not be sent (the chat service was down or refused it) fails the apply job
+after every operation applied. Re-running the job sends the message again without repeating the
+operations. A sent, skipped or conflicted message is never sent again. On Google Chat, a plan's message
+reaches the space at most once: every attempt carries the same message id, and Chat refuses a repeat. On
+Slack it is at least once: if Slack accepted a message but the answer was lost, a rerun posts it
+twice.
 
 ### Using one step's result in a later step
 

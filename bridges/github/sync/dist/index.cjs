@@ -27373,6 +27373,9 @@ var operationOptions = [
   operationBase.extend({ kind: external_exports.literal("release.delete"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.boolean(), expectedPublished: external_exports.boolean(), expectedReleaseUpdatedAt: expectedTimestamp }).strict()
 ];
 var reservedMarker = /(?:<!--\s*gardener-operation:|gardener-operation:|gardener-idempotency:)/i;
+function containsReservedOperationMarker(text) {
+  return reservedMarker.test(text);
+}
 function collectStrings(value, output2) {
   if (typeof value === "string") output2.push(value);
   else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
@@ -27547,6 +27550,69 @@ function operationOutputRenderedMaxLength(type) {
 }
 function operationOutputSentinel(type) {
   return outputSentinels[type];
+}
+
+// ../contracts/src/messages.ts
+var MESSAGE_SEND_KIND = "message.send";
+var MESSAGE_SUMMARY_MAX_CHARACTERS = 400;
+function isMessageInvisibleCharacter(character) {
+  return /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(character);
+}
+function isMessageMarkupCharacter(character) {
+  return character === "<" || character === ">" || character === "`" || character === "&";
+}
+function messageSummaryRefusal(summary) {
+  const characters = Array.from(summary.trim());
+  if (characters.length === 0) return "summary must not be empty";
+  if (characters.length > MESSAGE_SUMMARY_MAX_CHARACTERS) {
+    return `summary must be at most ${MESSAGE_SUMMARY_MAX_CHARACTERS} characters, and has ${characters.length}`;
+  }
+  if (characters.some(isMessageInvisibleCharacter)) {
+    return "summary must be one line of plain text: no newlines, control, zero-width or direction characters";
+  }
+  if (characters.some(isMessageMarkupCharacter)) return "summary must not contain <, >, & or backticks";
+  if (containsReservedOperationMarker(summary)) return "summary contains a reserved idempotency marker";
+  return void 0;
+}
+var messageSummaryV1Schema = external_exports.string().trim().superRefine((summary, context) => {
+  const refusal = messageSummaryRefusal(summary);
+  if (refusal !== void 0) context.addIssue({ code: "custom", message: refusal });
+});
+var expectedUpdatedAt = external_exports.iso.datetime();
+var subjectNumber = external_exports.number().int().positive();
+var messageSubjectKindValues = ["issue", "pull_request", "discussion"];
+var messageSendPayloadV1Schema = external_exports.strictObject({
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(messageSubjectKindValues),
+    number: subjectNumber,
+    expectedUpdatedAt: expectedUpdatedAt.describe(
+      "The subject's updatedAt as you read it: from the normalized event for the triggering issue, pull request or discussion, otherwise from provider.api.read. If it changes before apply, nothing is sent."
+    )
+  }),
+  summary: messageSummaryV1Schema.describe(
+    `One or two plain sentences, at most ${MESSAGE_SUMMARY_MAX_CHARACTERS} characters, without newlines, <, >, & or backticks. Gardener adds the link, title and author itself.`
+  )
+});
+var messageV1Schema = external_exports.strictObject({
+  /**
+   * One destination per repository for now. Named channels come later, and
+   * widening this literal is a contract change that needs the same old-pin
+   * treatment as the plan's `messages` field itself.
+   */
+  channel: external_exports.literal("default"),
+  subject: external_exports.discriminatedUnion("kind", [
+    external_exports.strictObject({ kind: external_exports.literal("issue"), issueNumber: subjectNumber, expectedIssueUpdatedAt: expectedUpdatedAt }),
+    external_exports.strictObject({ kind: external_exports.literal("pull_request"), pullNumber: subjectNumber, expectedPullUpdatedAt: expectedUpdatedAt }),
+    external_exports.strictObject({
+      kind: external_exports.literal("discussion"),
+      discussionNumber: subjectNumber,
+      expectedDiscussionUpdatedAt: expectedUpdatedAt
+    })
+  ]),
+  summary: messageSummaryV1Schema
+});
+function messageSubjectNumber(subject) {
+  return subject.kind === "issue" ? subject.issueNumber : subject.kind === "pull_request" ? subject.pullNumber : subject.discussionNumber;
 }
 
 // ../contracts/src/branches.ts
@@ -27839,6 +27905,14 @@ var triggerKindOrder = new Map(
 var pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
   (kind) => kind.startsWith("github.pull_request")
 );
+var labeledTriggerKindValues = [
+  "github.issue.labeled",
+  "github.pull_request.labeled",
+  "github.discussion.labeled"
+];
+function isLabeledTriggerKind(kind) {
+  return labeledTriggerKindValues.includes(kind);
+}
 function dispatchTargetKinds(triggers, options = {}) {
   const kinds = [...new Set(triggers.map((trigger) => trigger.kind))];
   const targets = [];
@@ -27860,7 +27934,7 @@ var taskToolV1Schema = external_exports.enum([
    */
   "repository.merge_base"
 ]);
-var taskEffectKindValues = operationKindValues;
+var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND];
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
@@ -28645,6 +28719,18 @@ var taskEffectProposalV1Schema = external_exports.strictObject({
   references: taskStepReferencesV1Schema.default({}),
   rationale: external_exports.string().trim().min(1).max(5e3)
 }).superRefine((proposal, context) => {
+  if (proposal.kind === MESSAGE_SEND_KIND) {
+    if (Object.keys(proposal.references).length > 0) {
+      context.addIssue({ code: "custom", path: ["references"], message: "message.send takes no references" });
+    }
+    const parsed = messageSendPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue2 of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue2.path.map(String)], message: `${encodeJsonPointer(issue2.path) || "payload"}: ${issue2.message}` });
+      }
+    }
+    return;
+  }
   for (const message of captureOwnedPointerIssues(proposal.kind, proposal.payload, proposal.references)) {
     context.addIssue({ code: "custom", path: ["payload"], message });
   }
@@ -29032,6 +29118,20 @@ function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   }
   return void 0;
 }
+var messageSubjectFields = {
+  issue: "issueNumber",
+  pull_request: "pullNumber",
+  discussion: "discussionNumber"
+};
+function messageTriggerScopeRefusal(subject, resource) {
+  if (resource === null) {
+    return `message.send needs a run triggered from an issue, pull request or discussion: ${CONFINED}, and nothing triggered it`;
+  }
+  if (!triggerResourceKinds[messageSubjectFields[subject.kind]].includes(resource.kind) || messageSubjectNumber(subject) !== resource.number) {
+    return `message.send may be only about ${resourceLabel(resource)}, which triggered this run: ${CONFINED}`;
+  }
+  return void 0;
+}
 var captureMaterializedPointers = {
   "commit.create": ["/files"],
   "commit.merge_base": ["/files", "/conflictedPaths"]
@@ -29063,7 +29163,8 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   stepName: taskStepNameV1Schema,
   /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
   operationId: boundIdentifier,
-  kind: taskEffectKindV1Schema,
+  /** Operations only: `message.send` travels in the plan's `messages`. */
+  kind: operationKindSchema,
   payload: taskEffectPayloadV1Schema,
   references: taskStepReferencesV1Schema.default({}),
   rationale: external_exports.string().trim().min(1).max(5e3)
@@ -29093,6 +29194,7 @@ function referencedOutputType(reference, stepName, context, path, issues) {
 }
 function taskStepIssues(step, context) {
   const issues = [];
+  if (step.kind === MESSAGE_SEND_KIND) return issues;
   const resolvedTypes = /* @__PURE__ */ new Map();
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -29180,6 +29282,13 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * still parse; the Worker checks scope when it builds those itself.
    */
   effectScope: external_exports.enum(["trigger", "repository"]).optional(),
+  /**
+   * Sent by apply after every operation succeeded. Absent for plans without a
+   * message, so those hash as before, and always absent for task workflows
+   * whose apply predates it (see `planCarries`). Not counted by
+   * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
+   */
+  messages: external_exports.array(messageV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -29286,6 +29395,12 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       }
     }
   });
+  if (plan.effectScope === "trigger") {
+    plan.messages?.forEach((message, index) => {
+      const refusal = messageTriggerScopeRefusal(message.subject, plan.event.resource);
+      if (refusal !== void 0) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal });
+    });
+  }
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
@@ -29469,6 +29584,15 @@ function orderPermissions(permissions) {
 function operationApplyPermissions(kind) {
   return permissionsFromScopes(OPERATION_TOKEN_PERMISSIONS[kind]);
 }
+var MESSAGE_SEND_TOKEN_PERMISSIONS = Object.freeze([
+  "issues:read",
+  "pull-requests:read",
+  "discussions:read"
+]);
+function effectApplyPermissions(kind) {
+  if (kind === MESSAGE_SEND_KIND) return permissionsFromScopes(MESSAGE_SEND_TOKEN_PERMISSIONS);
+  return operationApplyPermissions(kind);
+}
 
 // src/actions-target.ts
 var GITHUB_ACTIONS_TARGET = "github-actions/v1";
@@ -29514,7 +29638,7 @@ var REACTION_PERMISSIONS = {
   discussion: { discussions: "write" },
   discussion_comment: { discussions: "write" }
 };
-var effectPermissions = operationApplyPermissions;
+var effectPermissions = effectApplyPermissions;
 var GITHUB_HOSTED_JOB_MAX_MINUTES = 360;
 var PLAN_JOB_OVERHEAD_MINUTES = 10;
 function planTimeoutMinutes(runtimeSeconds) {
@@ -29544,6 +29668,11 @@ function compileGitHubActionsTask(bundle) {
     throw new Error(`Task ${bundle.taskId} lists triggers outside canonical order`);
   }
   const declaresExec = bundle.tools.includes("repository.exec");
+  if (declaresExec && bundle.effects.includes(MESSAGE_SEND_KIND)) {
+    throw new Error(
+      `Task ${bundle.taskId} declares both message.send and repository.exec; a task that posts messages may not run commands. Split it into two tasks`
+    );
+  }
   const expectedDefault = declaresExec ? "allow" : "deny";
   if (bundle.network.default !== expectedDefault) {
     throw new Error(
@@ -29616,7 +29745,7 @@ var OPERATION_FAMILY_BY_KIND = new Map(operationCatalog.map((entry) => [entry.ki
 var OPERATION_FAMILY_VALUES = [...new Set(operationCatalog.map((entry) => entry.family))].sort();
 var effectFamilyGlobValues = OPERATION_FAMILY_VALUES.map((family) => `${family}.*`);
 var effectSelectorSchema = external_exports.union([
-  external_exports.enum(operationKindValues),
+  external_exports.enum(taskEffectKindValues),
   external_exports.enum(effectFamilyGlobValues)
 ]);
 var effectWithOptionsSchema = external_exports.strictObject({
@@ -29732,6 +29861,14 @@ function highImpactWarning(bundle) {
   if (kinds.length === 0) return void 0;
   return `declares ${kinds.join(", ")} and can be started by people who are not maintainers. Their runs are confined to what triggered them, but the model can still be talked into these effects there: an outsider's own pull request could be approved or merged, and a release reaches every user. Restrict the triggers with authors: maintainers, or remove these effects.`;
 }
+function messageWarnings(bundle) {
+  if (!bundle.effects.includes(MESSAGE_SEND_KIND)) return [];
+  return [
+    "declares message.send. Set the GARDENER_CHAT_WEBHOOK repository secret to a Google Chat or Slack incoming-webhook URL; until it is set, runs skip the message and still succeed.",
+    "declares message.send. In a private repository, each message shows the subject's title, link and author to everyone in the chat space.",
+    ...admitsNonMaintainers(bundle) ? ["declares message.send and can be started by people who are not maintainers, so they can cause posts about their own issues, pull requests or discussions. The summary is checked and the link is Gardener's, but the subject's title is theirs. Restrict the triggers with authors: maintainers if that is not wanted."] : []
+  ];
+}
 var authoringSchema = external_exports.strictObject({
   schema: external_exports.literal("gardener.task/v1"),
   id: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
@@ -29745,7 +29882,7 @@ var authoringSchema = external_exports.strictObject({
   "effect-scope": external_exports.literal("trigger").optional(),
   model: taskModelIdSchema.optional(),
   tools: external_exports.array(taskToolV1Schema).min(1).max(taskToolV1Schema.options.length),
-  effects: external_exports.array(effectEntrySchema).max(operationKindValues.length + effectFamilyGlobValues.length).default([]),
+  effects: external_exports.array(effectEntrySchema).max(taskEffectKindValues.length + effectFamilyGlobValues.length).default([]),
   network: external_exports.strictObject({
     default: external_exports.enum(["deny", "allow"]),
     allow: external_exports.array(external_exports.string()),
@@ -29793,9 +29930,10 @@ function expandEffectSelectors(selectors, tools = []) {
   }
   const globbed = (kind) => {
     const tool = GLOB_KINDS_NEEDING_TOOL.get(kind);
-    return families.has(OPERATION_FAMILY_BY_KIND.get(kind)) && (tool === void 0 || tools.includes(tool));
+    const family = OPERATION_FAMILY_BY_KIND.get(kind);
+    return family !== void 0 && families.has(family) && (tool === void 0 || tools.includes(tool));
   };
-  return operationKindValues.filter((kind) => exact.has(kind) || globbed(kind));
+  return taskEffectKindValues.filter((kind) => exact.has(kind) || globbed(kind));
 }
 function toContractTrigger(authored, options, sourceName) {
   const kind = authored.event;
@@ -30008,6 +30146,7 @@ async function planProject(input2) {
       const warning = highImpactWarning(task.bundle);
       return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];
     }),
+    ...tasks.flatMap((task) => messageWarnings(task.bundle).map((warning) => `Task ${task.bundle.taskId} ${warning}`)),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];
@@ -30118,6 +30257,10 @@ function renderTriggerCondition(binding, task) {
       clauses.push(`contains(${binding.labelsExpression}, ${yamlSingleQuoted(label)})`);
     }
   }
+  if (trigger !== void 0 && isLabeledTriggerKind(trigger.kind) && labels.length > 0) {
+    const added = labels.map((label) => `github.event.label.name == ${yamlSingleQuoted(label)}`);
+    clauses.push(added.length === 1 ? added[0] : `(${added.join(" || ")})`);
+  }
   if (trigger !== void 0 && "authors" in trigger && isAuthoredTriggerKind(trigger.kind)) {
     clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions));
   }
@@ -30204,7 +30347,22 @@ var TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD = /* @__PURE__ */ new Set([
 function definesPullRequestHead(workflowRef) {
   return !TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
 }
+var TASK_WORKFLOWS_WITHOUT_CHAT_WEBHOOK = /* @__PURE__ */ new Set([
+  ...TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD,
+  "4007bf661f62730882de20dd2df36b30c3e4a593",
+  "242825edd810a0219e008e3d68081c5cde6dc1ee",
+  "5c9c136ffd6b2e545f398dc413a60e04b66da406"
+]);
+function definesChatWebhook(workflowRef) {
+  return !TASK_WORKFLOWS_WITHOUT_CHAT_WEBHOOK.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+function declaresMessages(task) {
+  return task.bundle.effects.includes(MESSAGE_SEND_KIND);
+}
 function pinnedWorkflowRefusal(task, workflowRef) {
+  if (declaresMessages(task) && !definesChatWebhook(workflowRef)) {
+    return `Task ${task.bundle.taskId} declares message.send, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
+  }
   if (definesPullRequestHead(workflowRef)) return void 0;
   const commentHead = task.bundle.checkout === "pull-request-head" && !task.bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind));
   const needs = [
@@ -30262,7 +30420,7 @@ ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundl
         \${{
         ${reactions}
         }}
-`}`;
+`}${declaresMessages(task) ? "    secrets:\n      chat-webhook: ${{ secrets.GARDENER_CHAT_WEBHOOK }}\n" : ""}`;
 }
 function renderSyncWorkflow(workflowRef) {
   const syncRef = syncWorkflowRefFor(workflowRef);

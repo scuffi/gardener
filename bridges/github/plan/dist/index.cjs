@@ -40289,6 +40289,9 @@ var operationOptions = [
   operationBase.extend({ kind: external_exports.literal("release.delete"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.boolean(), expectedPublished: external_exports.boolean(), expectedReleaseUpdatedAt: expectedTimestamp }).strict()
 ];
 var reservedMarker = /(?:<!--\s*gardener-operation:|gardener-operation:|gardener-idempotency:)/i;
+function containsReservedOperationMarker(text) {
+  return reservedMarker.test(text);
+}
 function collectStrings(value, output2) {
   if (typeof value === "string") output2.push(value);
   else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
@@ -40463,6 +40466,69 @@ function operationOutputRenderedMaxLength(type) {
 }
 function operationOutputSentinel(type) {
   return outputSentinels[type];
+}
+
+// ../contracts/src/messages.ts
+var MESSAGE_SEND_KIND = "message.send";
+var MESSAGE_SUMMARY_MAX_CHARACTERS = 400;
+function isMessageInvisibleCharacter(character) {
+  return /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(character);
+}
+function isMessageMarkupCharacter(character) {
+  return character === "<" || character === ">" || character === "`" || character === "&";
+}
+function messageSummaryRefusal(summary2) {
+  const characters = Array.from(summary2.trim());
+  if (characters.length === 0) return "summary must not be empty";
+  if (characters.length > MESSAGE_SUMMARY_MAX_CHARACTERS) {
+    return `summary must be at most ${MESSAGE_SUMMARY_MAX_CHARACTERS} characters, and has ${characters.length}`;
+  }
+  if (characters.some(isMessageInvisibleCharacter)) {
+    return "summary must be one line of plain text: no newlines, control, zero-width or direction characters";
+  }
+  if (characters.some(isMessageMarkupCharacter)) return "summary must not contain <, >, & or backticks";
+  if (containsReservedOperationMarker(summary2)) return "summary contains a reserved idempotency marker";
+  return void 0;
+}
+var messageSummaryV1Schema = external_exports.string().trim().superRefine((summary2, context) => {
+  const refusal2 = messageSummaryRefusal(summary2);
+  if (refusal2 !== void 0) context.addIssue({ code: "custom", message: refusal2 });
+});
+var expectedUpdatedAt = external_exports.iso.datetime();
+var subjectNumber = external_exports.number().int().positive();
+var messageSubjectKindValues = ["issue", "pull_request", "discussion"];
+var messageSendPayloadV1Schema = external_exports.strictObject({
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(messageSubjectKindValues),
+    number: subjectNumber,
+    expectedUpdatedAt: expectedUpdatedAt.describe(
+      "The subject's updatedAt as you read it: from the normalized event for the triggering issue, pull request or discussion, otherwise from provider.api.read. If it changes before apply, nothing is sent."
+    )
+  }),
+  summary: messageSummaryV1Schema.describe(
+    `One or two plain sentences, at most ${MESSAGE_SUMMARY_MAX_CHARACTERS} characters, without newlines, <, >, & or backticks. Gardener adds the link, title and author itself.`
+  )
+});
+var messageV1Schema = external_exports.strictObject({
+  /**
+   * One destination per repository for now. Named channels come later, and
+   * widening this literal is a contract change that needs the same old-pin
+   * treatment as the plan's `messages` field itself.
+   */
+  channel: external_exports.literal("default"),
+  subject: external_exports.discriminatedUnion("kind", [
+    external_exports.strictObject({ kind: external_exports.literal("issue"), issueNumber: subjectNumber, expectedIssueUpdatedAt: expectedUpdatedAt }),
+    external_exports.strictObject({ kind: external_exports.literal("pull_request"), pullNumber: subjectNumber, expectedPullUpdatedAt: expectedUpdatedAt }),
+    external_exports.strictObject({
+      kind: external_exports.literal("discussion"),
+      discussionNumber: subjectNumber,
+      expectedDiscussionUpdatedAt: expectedUpdatedAt
+    })
+  ]),
+  summary: messageSummaryV1Schema
+});
+function messageSubjectNumber(subject) {
+  return subject.kind === "issue" ? subject.issueNumber : subject.kind === "pull_request" ? subject.pullNumber : subject.discussionNumber;
 }
 
 // ../contracts/src/branches.ts
@@ -40767,7 +40833,7 @@ var taskToolV1Schema = external_exports.enum([
    */
   "repository.merge_base"
 ]);
-var taskEffectKindValues = operationKindValues;
+var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND];
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
@@ -41527,6 +41593,18 @@ var taskEffectProposalV1Schema = external_exports.strictObject({
   references: taskStepReferencesV1Schema.default({}),
   rationale: external_exports.string().trim().min(1).max(5e3)
 }).superRefine((proposal, context) => {
+  if (proposal.kind === MESSAGE_SEND_KIND) {
+    if (Object.keys(proposal.references).length > 0) {
+      context.addIssue({ code: "custom", path: ["references"], message: "message.send takes no references" });
+    }
+    const parsed = messageSendPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue3 of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue3.path.map(String)], message: `${encodeJsonPointer(issue3.path) || "payload"}: ${issue3.message}` });
+      }
+    }
+    return;
+  }
   for (const message3 of captureOwnedPointerIssues(proposal.kind, proposal.payload, proposal.references)) {
     context.addIssue({ code: "custom", path: ["payload"], message: message3 });
   }
@@ -41948,6 +42026,20 @@ function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   }
   return void 0;
 }
+var messageSubjectFields = {
+  issue: "issueNumber",
+  pull_request: "pullNumber",
+  discussion: "discussionNumber"
+};
+function messageTriggerScopeRefusal(subject, resource) {
+  if (resource === null) {
+    return `message.send needs a run triggered from an issue, pull request or discussion: ${CONFINED}, and nothing triggered it`;
+  }
+  if (!triggerResourceKinds[messageSubjectFields[subject.kind]].includes(resource.kind) || messageSubjectNumber(subject) !== resource.number) {
+    return `message.send may be only about ${resourceLabel(resource)}, which triggered this run: ${CONFINED}`;
+  }
+  return void 0;
+}
 var captureMaterializedPointers = {
   "commit.create": ["/files"],
   "commit.merge_base": ["/files", "/conflictedPaths"]
@@ -41979,7 +42071,8 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   stepName: taskStepNameV1Schema,
   /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
   operationId: boundIdentifier,
-  kind: taskEffectKindV1Schema,
+  /** Operations only: `message.send` travels in the plan's `messages`. */
+  kind: operationKindSchema,
   payload: taskEffectPayloadV1Schema,
   references: taskStepReferencesV1Schema.default({}),
   rationale: external_exports.string().trim().min(1).max(5e3)
@@ -42009,6 +42102,7 @@ function referencedOutputType(reference, stepName2, context, path5, issues) {
 }
 function taskStepIssues(step, context) {
   const issues = [];
+  if (step.kind === MESSAGE_SEND_KIND) return issues;
   const resolvedTypes = /* @__PURE__ */ new Map();
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -42096,6 +42190,13 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * still parse; the Worker checks scope when it builds those itself.
    */
   effectScope: external_exports.enum(["trigger", "repository"]).optional(),
+  /**
+   * Sent by apply after every operation succeeded. Absent for plans without a
+   * message, so those hash as before, and always absent for task workflows
+   * whose apply predates it (see `planCarries`). Not counted by
+   * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
+   */
+  messages: external_exports.array(messageV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -42202,6 +42303,12 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       }
     }
   });
+  if (plan.effectScope === "trigger") {
+    plan.messages?.forEach((message3, index) => {
+      const refusal2 = messageTriggerScopeRefusal(message3.subject, plan.event.resource);
+      if (refusal2 !== void 0) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal2 });
+    });
+  }
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
@@ -42721,6 +42828,39 @@ var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
     updatedAt: external_exports.iso.datetime({ offset: true })
   }).optional()
 });
+var runnerMessageReceiptV1Schema = external_exports.strictObject({
+  channel: external_exports.literal("default"),
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(["issue", "pull_request", "discussion"]),
+    number: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  }),
+  /** The transport chosen for the destination. Absent only when no destination was usable. */
+  transport: external_exports.enum(["google-chat-webhook", "slack-webhook"]).optional(),
+  status: external_exports.enum(["sent", "skipped", "conflicted", "failed"]),
+  reason: external_exports.enum([
+    "destination_unset",
+    "destination_unsupported",
+    "subject_changed",
+    "subject_elsewhere",
+    "subject_unreadable",
+    "send_failed",
+    "deadline_expired"
+  ]).optional(),
+  attemptedAt: external_exports.iso.datetime()
+}).superRefine((receipt, context) => {
+  const reasons = {
+    sent: [void 0],
+    skipped: ["destination_unset", "destination_unsupported"],
+    conflicted: ["subject_changed", "subject_elsewhere"],
+    failed: ["subject_unreadable", "send_failed", "deadline_expired"]
+  };
+  if (!reasons[receipt.status].includes(receipt.reason)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: `a ${receipt.status} message cannot have reason ${receipt.reason ?? "none"}` });
+  }
+  if (receipt.status === "skipped" === (receipt.transport !== void 0)) {
+    context.addIssue({ code: "custom", path: ["transport"], message: "only a skipped message has no transport" });
+  }
+});
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
   planRunId: identifier2,
@@ -42734,7 +42874,7 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
    * nothing about how many steps were supposed to run, so a truncated apply
    * would read as a successful one.
    */
-  plannedOperations: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  plannedOperations: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   status: external_exports.enum(["running", "applied", "stopped"]),
   /** The step that halted the plan, or null when every step in the plan ran. */
   stoppedAtStep: stepName.nullable(),
@@ -42742,8 +42882,23 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
    * Recorded steps, in plan order. No count ceiling here either — the bound is
    * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
    */
-  operations: external_exports.array(runnerPlanStepReceiptV1Schema).min(1)
+  operations: external_exports.array(runnerPlanStepReceiptV1Schema),
+  /**
+   * The plan's message, once apply tried it. Only after every operation
+   * applied, so only on an applied receipt. A plan whose only effect is a
+   * message has no operations, which is the one receipt with none.
+   */
+  messages: external_exports.array(runnerMessageReceiptV1Schema).min(1).max(1).optional()
 }).superRefine((receipt, context) => {
+  if (receipt.plannedOperations > 0 && receipt.operations.length === 0) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a receipt for a plan with steps records at least one" });
+  }
+  if (receipt.plannedOperations === 0 && receipt.messages === void 0) {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message" });
+  }
+  if (receipt.messages !== void 0 && receipt.status !== "applied") {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a message is tried only after every step applied" });
+  }
   const bytes = canonicalJsonByteLength2(receipt);
   if (bytes === null) {
     context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });
@@ -45654,6 +45809,7 @@ function renderPlanJobSummary(input2) {
     if (trail) lines.push(`**Before stopping:** ${cell(trail)}`, "");
     lines.push(fenced("Error details", message3), "");
   } else if (input2.terminal) {
+    const message3 = input2.plan?.messages?.[0];
     if (input2.plan && input2.plan.operations.length > 0) {
       const count = input2.plan.operations.length;
       lines.push(`The model proposed ${count} ${count === 1 ? "step" : "steps"}. The **Apply exact task plan** job applies them.`, "");
@@ -45662,13 +45818,21 @@ function renderPlanJobSummary(input2) {
         lines.push(`| ${index + 1} | ${code(operation.stepName)} | ${code(operation.kind)} | ${cell(operation.rationale)} |`);
       });
       lines.push("");
-    } else {
+    } else if (message3 === void 0) {
       lines.push("The model proposed no changes, so nothing is applied.", "");
+    }
+    if (message3 !== void 0) {
+      lines.push(`The model proposed a message about ${subjectLabel(message3.subject)}, which the **Apply exact task plan** job sends after the steps apply: ${cell(message3.summary)}`, "");
     }
     lines.push(details("Model's summary (written by the model)", input2.terminal.summary), "");
   }
   lines.push(...footer(input2.context, input2.plan?.runId));
   return lines.join("\n");
+}
+function subjectLabel(subject) {
+  const number4 = subject.number ?? subject.issueNumber ?? subject.pullNumber ?? subject.discussionNumber;
+  const kind = subject.kind === "pull_request" ? "pull request" : subject.kind;
+  return `${kind} #${number4}`;
 }
 async function writeJobSummary(render) {
   try {

@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  planCarriesEffectScope,
+  planCarries,
   releaseMismatchAdvice,
-  TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE,
+  TASK_WORKFLOWS_WITHOUT,
   trustedTaskWorkflowRefs,
 } from "../src/task-runtime/workflow-refs";
 
@@ -53,13 +53,14 @@ describe("releaseMismatchAdvice", () => {
 });
 
 /**
- * Release-blocking, and a mirror of scripts/check-release-pins.mjs: the
- * current release's task workflow must be absent from the list of workflows
- * whose plans cannot carry `effectScope`, and every earlier release's must be
- * present. A missing entry breaks every run of that release; a present current
- * one silently drops apply's scope check for everyone on it.
+ * Release-blocking, and a mirror of scripts/check-release-pins.mjs (which also
+ * checks each set against what each tag's contracts support): the current
+ * release's task workflow must carry every plan field, and every earlier
+ * release's must be listed for the fields it lacks. A missing entry breaks
+ * every run of that release; a present current one silently drops apply's
+ * check of that field for everyone on it.
  */
-describe("task workflows without effectScope", () => {
+describe("task workflows without plan capabilities", () => {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const defaultWorkflowRef = (source: string | null) => /DEFAULT_WORKFLOW_REF =\s*"([^"]+)"/.exec(source ?? "")?.[1];
   const current = defaultWorkflowRef(readFileSync(`${root}packages/cli/src/project.ts`, "utf8"));
@@ -72,29 +73,45 @@ describe("task workflows without effectScope", () => {
   };
   // Shallow clones (the Check workflow's) have no tags; full history does.
   const tags = (git("tag", "--list", "v*") ?? "").split("\n").filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
+  const releasedRefs = new Set(tags.map((tag) => defaultWorkflowRef(git("show", `${tag}:packages/cli/src/project.ts`))));
+  const capabilities = Object.keys(TASK_WORKFLOWS_WITHOUT) as (keyof typeof TASK_WORKFLOWS_WITHOUT)[];
 
-  it("leaves the current release's task workflow out, so its plans carry effectScope", () => {
+  it("leaves the current release's task workflow out, so its plans carry every field", () => {
     expect(current).toMatch(/\/gardener-task\.yml@[0-9a-f]{40}$/);
-    expect(
-      planCarriesEffectScope(current!),
-      `DEFAULT_WORKFLOW_REF (${current}) is an earlier release's workflow: pin this release's gardener-task.yml before releasing`,
-    ).toBe(true);
+    // Until this release's own workflow is pinned, DEFAULT_WORKFLOW_REF still
+    // names the previous release's, which lacks the fields this release adds.
+    if (releasedRefs.has(current)) return;
+    for (const capability of capabilities) {
+      expect(
+        planCarries(capability, current!),
+        `DEFAULT_WORKFLOW_REF (${current}) is an earlier release's workflow: pin this release's gardener-task.yml before releasing`,
+      ).toBe(true);
+    }
   });
 
-  it.skipIf(tags.length === 0)("lists every earlier release's task workflow", () => {
-    const released = new Set(tags.map((tag) => defaultWorkflowRef(git("show", `${tag}:packages/cli/src/project.ts`))));
+  it.skipIf(tags.length === 0)("lists every earlier release's task workflow as lacking messages", () => {
+    const released = new Set(releasedRefs);
     released.delete(current);
     expect(released.size).toBeGreaterThan(0);
     for (const ref of released) {
       expect(ref, `a release's DEFAULT_WORKFLOW_REF`).toMatch(/@[0-9a-f]{40}$/);
-      expect(planCarriesEffectScope(ref!), `${ref} must be in TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE`).toBe(false);
+      expect(planCarries("messages", ref!), `${ref} must be in TASK_WORKFLOWS_WITHOUT.messages`).toBe(false);
     }
   });
 
+  it("only ever adds capabilities: each set contains the earlier one", () => {
+    for (const sha of TASK_WORKFLOWS_WITHOUT.effectScope) expect(TASK_WORKFLOWS_WITHOUT.messages.has(sha)).toBe(true);
+    // 0.1.17 shipped `effectScope` but not `messages`.
+    expect(planCarries("effectScope", `scuffi/gardener/.github/workflows/gardener-task.yml@5c9c136ffd6b2e545f398dc413a60e04b66da406`)).toBe(true);
+    expect(planCarries("messages", `scuffi/gardener/.github/workflows/gardener-task.yml@5c9c136ffd6b2e545f398dc413a60e04b66da406`)).toBe(false);
+  });
+
   it("keys on the commit, wherever the workflow is pinned from", () => {
-    const [sha] = TASK_WORKFLOWS_WITHOUT_EFFECT_SCOPE;
-    expect(planCarriesEffectScope(`scuffi/gardener/.github/workflows/gardener-task.yml@${sha}`)).toBe(false);
-    expect(planCarriesEffectScope(`fork/gardener/.github/workflows/gardener-task.yml@${sha}`)).toBe(false);
-    expect(planCarriesEffectScope(`scuffi/gardener/.github/workflows/gardener-task.yml@${"e".repeat(40)}`)).toBe(true);
+    for (const capability of capabilities) {
+      const [sha] = TASK_WORKFLOWS_WITHOUT[capability];
+      expect(planCarries(capability, `scuffi/gardener/.github/workflows/gardener-task.yml@${sha}`)).toBe(false);
+      expect(planCarries(capability, `fork/gardener/.github/workflows/gardener-task.yml@${sha}`)).toBe(false);
+      expect(planCarries(capability, `scuffi/gardener/.github/workflows/gardener-task.yml@${"e".repeat(40)}`)).toBe(true);
+    }
   });
 });

@@ -133,6 +133,8 @@ function renderEffects(): string {
     const outputs = operationOutputNames(kind).map((name) => `\`${name}\``);
     rows.push(`| \`${kind}\` | ${EFFECT_DESCRIPTIONS[kind]} | ${writes.join(", ")} | ${outputs.join(", ")} |`);
   }
+  // Not an operation: no write scope and no outputs. See "Messages".
+  rows.push("| `message.send` | Post one message about an issue, pull request or discussion to the repository's chat space, after every other step applied. At most one per run. | none | none |");
   return rows.join("\n");
 }
 

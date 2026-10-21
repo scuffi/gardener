@@ -235,3 +235,49 @@ describe("ordered plan receipts", () => {
     expect(() => runnerOperationReceiptV1Schema.parse(operationReceipt({ kind: "IssueCommentCreate" }))).toThrow();
   });
 });
+
+describe("message receipts", () => {
+  const message = (overrides: Record<string, unknown> = {}) => ({
+    channel: "default",
+    subject: { kind: "issue", number: 12 },
+    transport: "slack-webhook",
+    status: "sent",
+    attemptedAt,
+    ...overrides,
+  });
+  const parses = (overrides: Record<string, unknown>) => runnerEffectReceiptV1Schema.safeParse(planReceipt(overrides)).success;
+
+  it("ride on an applied receipt, at most one", () => {
+    expect(parses({ messages: [message()] })).toBe(true);
+    expect(parses({ messages: [message(), message()] })).toBe(false);
+    expect(parses({ messages: [] })).toBe(false);
+    expect(parses({ status: "running", plannedOperations: 2, messages: [message()] })).toBe(false);
+  });
+
+  it("pair each status with its reasons, and only a skip has no transport", () => {
+    expect(parses({ messages: [message({ status: "skipped", reason: "destination_unset", transport: undefined })] })).toBe(true);
+    expect(parses({ messages: [message({ status: "skipped", reason: "destination_unsupported", transport: undefined })] })).toBe(true);
+    expect(parses({ messages: [message({ status: "skipped", reason: "destination_unset" })] })).toBe(false);
+    expect(parses({ messages: [message({ transport: undefined })] })).toBe(false);
+    expect(parses({ messages: [message({ reason: "send_failed" })] })).toBe(false);
+    expect(parses({ messages: [message({ status: "conflicted", reason: "subject_changed" })] })).toBe(true);
+    expect(parses({ messages: [message({ status: "conflicted", reason: "send_failed" })] })).toBe(false);
+    expect(parses({ messages: [message({ status: "failed", reason: "send_failed" })] })).toBe(true);
+    expect(parses({ messages: [message({ status: "failed" })] })).toBe(false);
+  });
+
+  it("carry no destination, text or response", () => {
+    expect(parses({ messages: [message({ url: "https://hooks.slack.com/x" })] })).toBe(false);
+    expect(parses({ messages: [message({ text: "hi" })] })).toBe(false);
+    expect(parses({ messages: [message({ channel: "ops" })] })).toBe(false);
+  });
+
+  it("let a plan whose only effect is a message have a receipt without steps, and no other", () => {
+    expect(parses({ plannedOperations: 0, operations: [], messages: [message()] })).toBe(true);
+    expect(parses({ plannedOperations: 0, operations: [] })).toBe(false);
+    expect(parses({ plannedOperations: 1, operations: [], messages: [message()] })).toBe(false);
+    expect(parses({ plannedOperations: 2, operations: [], status: "running" })).toBe(false);
+    expect(parses({ plannedOperations: 2, operations: [], status: "stopped", stoppedAtStep: "comment" })).toBe(false);
+    expect(parses({ plannedOperations: 0, operations: [], status: "running", messages: [message()] })).toBe(false);
+  });
+});

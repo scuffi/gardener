@@ -20292,6 +20292,9 @@ function error(message, properties = {}) {
 function warning(message, properties = {}) {
   issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
+function notice(message, properties = {}) {
+  issueCommand("notice", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
 function getIDToken(aud) {
   return __awaiter5(this, void 0, void 0, function* () {
     return yield OidcClient.getIDToken(aud);
@@ -20299,7 +20302,7 @@ function getIDToken(aud) {
 }
 
 // src/effects-main.ts
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 var import_promises3 = require("node:fs/promises");
 var import_node_path2 = __toESM(require("node:path"), 1);
 
@@ -40298,6 +40301,9 @@ var operationOptions = [
   operationBase.extend({ kind: external_exports.literal("release.delete"), releaseId: githubNumericIdSchema, expectedTagName: external_exports.string().min(1).max(255), expectedTargetCommitSha: shaSchema, expectedDraft: external_exports.boolean(), expectedPublished: external_exports.boolean(), expectedReleaseUpdatedAt: expectedTimestamp }).strict()
 ];
 var reservedMarker = /(?:<!--\s*gardener-operation:|gardener-operation:|gardener-idempotency:)/i;
+function containsReservedOperationMarker(text) {
+  return reservedMarker.test(text);
+}
 function collectStrings(value, output2) {
   if (typeof value === "string") output2.push(value);
   else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output2));
@@ -40472,6 +40478,69 @@ function operationOutputRenderedMaxLength(type) {
 }
 function operationOutputSentinel(type) {
   return outputSentinels[type];
+}
+
+// ../contracts/src/messages.ts
+var MESSAGE_SEND_KIND = "message.send";
+var MESSAGE_SUMMARY_MAX_CHARACTERS = 400;
+function isMessageInvisibleCharacter(character) {
+  return /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(character);
+}
+function isMessageMarkupCharacter(character) {
+  return character === "<" || character === ">" || character === "`" || character === "&";
+}
+function messageSummaryRefusal(summary2) {
+  const characters = Array.from(summary2.trim());
+  if (characters.length === 0) return "summary must not be empty";
+  if (characters.length > MESSAGE_SUMMARY_MAX_CHARACTERS) {
+    return `summary must be at most ${MESSAGE_SUMMARY_MAX_CHARACTERS} characters, and has ${characters.length}`;
+  }
+  if (characters.some(isMessageInvisibleCharacter)) {
+    return "summary must be one line of plain text: no newlines, control, zero-width or direction characters";
+  }
+  if (characters.some(isMessageMarkupCharacter)) return "summary must not contain <, >, & or backticks";
+  if (containsReservedOperationMarker(summary2)) return "summary contains a reserved idempotency marker";
+  return void 0;
+}
+var messageSummaryV1Schema = external_exports.string().trim().superRefine((summary2, context) => {
+  const refusal = messageSummaryRefusal(summary2);
+  if (refusal !== void 0) context.addIssue({ code: "custom", message: refusal });
+});
+var expectedUpdatedAt = external_exports.iso.datetime();
+var subjectNumber = external_exports.number().int().positive();
+var messageSubjectKindValues = ["issue", "pull_request", "discussion"];
+var messageSendPayloadV1Schema = external_exports.strictObject({
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(messageSubjectKindValues),
+    number: subjectNumber,
+    expectedUpdatedAt: expectedUpdatedAt.describe(
+      "The subject's updatedAt as you read it: from the normalized event for the triggering issue, pull request or discussion, otherwise from provider.api.read. If it changes before apply, nothing is sent."
+    )
+  }),
+  summary: messageSummaryV1Schema.describe(
+    `One or two plain sentences, at most ${MESSAGE_SUMMARY_MAX_CHARACTERS} characters, without newlines, <, >, & or backticks. Gardener adds the link, title and author itself.`
+  )
+});
+var messageV1Schema = external_exports.strictObject({
+  /**
+   * One destination per repository for now. Named channels come later, and
+   * widening this literal is a contract change that needs the same old-pin
+   * treatment as the plan's `messages` field itself.
+   */
+  channel: external_exports.literal("default"),
+  subject: external_exports.discriminatedUnion("kind", [
+    external_exports.strictObject({ kind: external_exports.literal("issue"), issueNumber: subjectNumber, expectedIssueUpdatedAt: expectedUpdatedAt }),
+    external_exports.strictObject({ kind: external_exports.literal("pull_request"), pullNumber: subjectNumber, expectedPullUpdatedAt: expectedUpdatedAt }),
+    external_exports.strictObject({
+      kind: external_exports.literal("discussion"),
+      discussionNumber: subjectNumber,
+      expectedDiscussionUpdatedAt: expectedUpdatedAt
+    })
+  ]),
+  summary: messageSummaryV1Schema
+});
+function messageSubjectNumber(subject2) {
+  return subject2.kind === "issue" ? subject2.issueNumber : subject2.kind === "pull_request" ? subject2.pullNumber : subject2.discussionNumber;
 }
 
 // ../contracts/src/branches.ts
@@ -40775,7 +40844,7 @@ var taskToolV1Schema = external_exports.enum([
    */
   "repository.merge_base"
 ]);
-var taskEffectKindValues = operationKindValues;
+var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND];
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
@@ -41535,6 +41604,18 @@ var taskEffectProposalV1Schema = external_exports.strictObject({
   references: taskStepReferencesV1Schema.default({}),
   rationale: external_exports.string().trim().min(1).max(5e3)
 }).superRefine((proposal, context) => {
+  if (proposal.kind === MESSAGE_SEND_KIND) {
+    if (Object.keys(proposal.references).length > 0) {
+      context.addIssue({ code: "custom", path: ["references"], message: "message.send takes no references" });
+    }
+    const parsed = messageSendPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue3 of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue3.path.map(String)], message: `${encodeJsonPointer(issue3.path) || "payload"}: ${issue3.message}` });
+      }
+    }
+    return;
+  }
   for (const message of captureOwnedPointerIssues(proposal.kind, proposal.payload, proposal.references)) {
     context.addIssue({ code: "custom", path: ["payload"], message });
   }
@@ -41956,6 +42037,20 @@ function triggerScopeRefusal(kind, payload, references, resource, earlier) {
   }
   return void 0;
 }
+var messageSubjectFields = {
+  issue: "issueNumber",
+  pull_request: "pullNumber",
+  discussion: "discussionNumber"
+};
+function messageTriggerScopeRefusal(subject2, resource) {
+  if (resource === null) {
+    return `message.send needs a run triggered from an issue, pull request or discussion: ${CONFINED}, and nothing triggered it`;
+  }
+  if (!triggerResourceKinds[messageSubjectFields[subject2.kind]].includes(resource.kind) || messageSubjectNumber(subject2) !== resource.number) {
+    return `message.send may be only about ${resourceLabel(resource)}, which triggered this run: ${CONFINED}`;
+  }
+  return void 0;
+}
 function taskEventBindingFromNormalizedEvent(event) {
   const base = {
     kind: event.kind,
@@ -42023,7 +42118,8 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   stepName: taskStepNameV1Schema,
   /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
   operationId: boundIdentifier,
-  kind: taskEffectKindV1Schema,
+  /** Operations only: `message.send` travels in the plan's `messages`. */
+  kind: operationKindSchema,
   payload: taskEffectPayloadV1Schema,
   references: taskStepReferencesV1Schema.default({}),
   rationale: external_exports.string().trim().min(1).max(5e3)
@@ -42053,6 +42149,7 @@ function referencedOutputType(reference, stepName2, context, path3, issues) {
 }
 function taskStepIssues(step, context) {
   const issues = [];
+  if (step.kind === MESSAGE_SEND_KIND) return issues;
   const resolvedTypes = /* @__PURE__ */ new Map();
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -42140,6 +42237,13 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * still parse; the Worker checks scope when it builds those itself.
    */
   effectScope: external_exports.enum(["trigger", "repository"]).optional(),
+  /**
+   * Sent by apply after every operation succeeded. Absent for plans without a
+   * message, so those hash as before, and always absent for task workflows
+   * whose apply predates it (see `planCarries`). Not counted by
+   * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
+   */
+  messages: external_exports.array(messageV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -42246,6 +42350,12 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       }
     }
   });
+  if (plan.effectScope === "trigger") {
+    plan.messages?.forEach((message, index) => {
+      const refusal = messageTriggerScopeRefusal(message.subject, plan.event.resource);
+      if (refusal !== void 0) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal });
+    });
+  }
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
@@ -42765,6 +42875,39 @@ var runnerPlanStepReceiptV1Schema = external_exports.strictObject({
     updatedAt: external_exports.iso.datetime({ offset: true })
   }).optional()
 });
+var runnerMessageReceiptV1Schema = external_exports.strictObject({
+  channel: external_exports.literal("default"),
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(["issue", "pull_request", "discussion"]),
+    number: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  }),
+  /** The transport chosen for the destination. Absent only when no destination was usable. */
+  transport: external_exports.enum(["google-chat-webhook", "slack-webhook"]).optional(),
+  status: external_exports.enum(["sent", "skipped", "conflicted", "failed"]),
+  reason: external_exports.enum([
+    "destination_unset",
+    "destination_unsupported",
+    "subject_changed",
+    "subject_elsewhere",
+    "subject_unreadable",
+    "send_failed",
+    "deadline_expired"
+  ]).optional(),
+  attemptedAt: external_exports.iso.datetime()
+}).superRefine((receipt, context) => {
+  const reasons = {
+    sent: [void 0],
+    skipped: ["destination_unset", "destination_unsupported"],
+    conflicted: ["subject_changed", "subject_elsewhere"],
+    failed: ["subject_unreadable", "send_failed", "deadline_expired"]
+  };
+  if (!reasons[receipt.status].includes(receipt.reason)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: `a ${receipt.status} message cannot have reason ${receipt.reason ?? "none"}` });
+  }
+  if (receipt.status === "skipped" === (receipt.transport !== void 0)) {
+    context.addIssue({ code: "custom", path: ["transport"], message: "only a skipped message has no transport" });
+  }
+});
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
   planRunId: identifier2,
@@ -42778,7 +42921,7 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
    * nothing about how many steps were supposed to run, so a truncated apply
    * would read as a successful one.
    */
-  plannedOperations: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  plannedOperations: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   status: external_exports.enum(["running", "applied", "stopped"]),
   /** The step that halted the plan, or null when every step in the plan ran. */
   stoppedAtStep: stepName.nullable(),
@@ -42786,8 +42929,23 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
    * Recorded steps, in plan order. No count ceiling here either — the bound is
    * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
    */
-  operations: external_exports.array(runnerPlanStepReceiptV1Schema).min(1)
+  operations: external_exports.array(runnerPlanStepReceiptV1Schema),
+  /**
+   * The plan's message, once apply tried it. Only after every operation
+   * applied, so only on an applied receipt. A plan whose only effect is a
+   * message has no operations, which is the one receipt with none.
+   */
+  messages: external_exports.array(runnerMessageReceiptV1Schema).min(1).max(1).optional()
 }).superRefine((receipt, context) => {
+  if (receipt.plannedOperations > 0 && receipt.operations.length === 0) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a receipt for a plan with steps records at least one" });
+  }
+  if (receipt.plannedOperations === 0 && receipt.messages === void 0) {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message" });
+  }
+  if (receipt.messages !== void 0 && receipt.status !== "applied") {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a message is tried only after every step applied" });
+  }
   const bytes = canonicalJsonByteLength2(receipt);
   if (bytes === null) {
     context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });
@@ -46567,6 +46725,11 @@ function planningReadScopes(kind) {
 function scopeKey(scope) {
   return scope.slice(0, scope.lastIndexOf(":"));
 }
+var MESSAGE_SEND_TOKEN_PERMISSIONS = Object.freeze([
+  "issues:read",
+  "pull-requests:read",
+  "discussions:read"
+]);
 
 // src/github-effects.ts
 var DEFAULT_API_BASE_URL = "https://api.github.com";
@@ -46843,14 +47006,14 @@ async function loadIssue(scope, issueNumber, expectPull) {
   }
   return data;
 }
-function assertIssueState(scope, issue3, expectedState, expectedUpdatedAt, check2 = "exact") {
+function assertIssueState(scope, issue3, expectedState, expectedUpdatedAt3, check2 = "exact") {
   if (issue3.state !== expectedState) {
     throw conflict("issue_state_changed", `Precondition failed: issue state is ${String(issue3.state)}`);
   }
   if (check2 === "append" && issue3.locked === true) {
     throw conflict("issue_locked", "Precondition failed: the conversation is locked");
   }
-  if (!atExpectedVersion(scope, issue3.updated_at, expectedUpdatedAt) && check2 === "exact") {
+  if (!atExpectedVersion(scope, issue3.updated_at, expectedUpdatedAt3) && check2 === "exact") {
     throw conflict("issue_changed", "Precondition failed: issue changed after the operation was planned");
   }
 }
@@ -47971,12 +48134,12 @@ async function loadDiscussion(scope, number4) {
     answerNodeId: answer && typeof answer.id === "string" ? answer.id : null
   };
 }
-function assertDiscussionState(scope, discussion, expectedState, expectedUpdatedAt, check2 = "exact") {
+function assertDiscussionState(scope, discussion, expectedState, expectedUpdatedAt3, check2 = "exact") {
   const state = discussion.closed ? "closed" : "open";
   if (state !== expectedState) {
     throw conflict("discussion_state_changed", `Precondition failed: discussion state is ${state}`);
   }
-  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt) && check2 === "exact") {
+  if (!atExpectedVersion(scope, discussion.updatedAt, expectedUpdatedAt3) && check2 === "exact") {
     throw conflict("discussion_changed", "Precondition failed: discussion changed after the operation was planned");
   }
 }
@@ -48318,10 +48481,10 @@ async function assertReleaseIdentity(scope, release, operation) {
     throw conflict("release_target_changed", `Precondition failed: release target resolves to ${targetSha}`);
   }
 }
-async function assertReleaseRevision(scope, release, expectedUpdatedAt) {
+async function assertReleaseRevision(scope, release, expectedUpdatedAt3) {
   if (typeof release.node_id !== "string") throw failure2("github_response_invalid", "Release node id was missing");
   const updatedAt = await releaseUpdatedAt(scope, release.node_id);
-  if (!sameInstant(updatedAt, expectedUpdatedAt)) {
+  if (!sameInstant(updatedAt, expectedUpdatedAt3)) {
     throw conflict("release_changed", "Precondition failed: release changed after the operation was planned");
   }
 }
@@ -48725,7 +48888,8 @@ function renderApplyJobSummary(input2) {
   const lines = [];
   const task = taskLabel(input2.plan?.taskName ?? input2.context?.taskName);
   const receipt = input2.receipt;
-  const heading = receipt?.status === "applied" && input2.error === void 0 ? "\u2705 Plan applied" : receipt?.status === "stopped" ? "\u274C Plan stopped" : "\u274C Apply failed";
+  const messageFailed = receipt?.status === "applied" && input2.message?.receipt.status === "failed";
+  const heading = messageFailed ? "\u274C Plan applied, message not sent" : receipt?.status === "applied" && input2.error === void 0 ? "\u2705 Plan applied" : receipt?.status === "stopped" ? "\u274C Plan stopped" : "\u274C Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
   const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : void 0;
   if (stopping?.receipt.error) {
@@ -48736,7 +48900,7 @@ function renderApplyJobSummary(input2) {
       `**What to do:** ${advice.todo}`,
       ""
     );
-  } else if (input2.error !== void 0 && receipt?.status !== "stopped") {
+  } else if (input2.error !== void 0 && receipt?.status !== "stopped" && !messageFailed) {
     lines.push(
       "**What happened:** the apply job stopped before finishing the plan.",
       "",
@@ -48746,7 +48910,7 @@ function renderApplyJobSummary(input2) {
       ""
     );
   }
-  if (receipt) {
+  if (receipt && receipt.plannedOperations > 0) {
     const done = receipt.operations.length;
     if (receipt.status === "stopped" && receipt.stoppedAtStep) {
       const before = receipt.operations.filter((step) => step.receipt.status === "succeeded" || step.receipt.status === "skipped").length;
@@ -48766,8 +48930,36 @@ function renderApplyJobSummary(input2) {
       lines.push(fenced(`Error from ${inline(step.stepName)}: ${inline(step.receipt.error.code)}`, step.receipt.error.message), "");
     }
   }
+  if (input2.message !== void 0) lines.push(...messageLines(input2.message), "");
   lines.push(...footer(input2.context, input2.plan?.runId, false));
   return lines.join("\n");
+}
+function messageLines(outcome) {
+  const { receipt } = outcome;
+  const about = subjectLabel(receipt.subject);
+  if (outcome.settled) {
+    const earlier = receipt.status === "sent" ? "was sent by an earlier attempt" : `was settled by an earlier attempt (${receipt.status})`;
+    return [`**Message** about ${about} ${earlier}; it is not sent again.`];
+  }
+  switch (receipt.status) {
+    case "sent":
+      return [`**Message** about ${about} sent (${inline(receipt.transport ?? "")}):`, "", quote(outcome.text ?? "")];
+    case "skipped":
+      return [receipt.reason === "destination_unset" ? `**Message** about ${about} not sent: GARDENER_CHAT_WEBHOOK is not set. Set the repository secret to a Google Chat or Slack incoming-webhook URL to post messages.` : `**Message** about ${about} not sent: GARDENER_CHAT_WEBHOOK is not a supported incoming-webhook URL. Use a Google Chat (chat.googleapis.com) or Slack (hooks.slack.com) incoming-webhook URL.`];
+    case "conflicted":
+      return [receipt.reason === "subject_elsewhere" ? `**Message** about ${about} not sent: its GitHub link is no longer in this repository.` : `**Message** about ${about} not sent: it changed after the task read it, so the message could be out of date.`];
+    case "failed":
+      return [
+        `**Message** about ${about} not sent. The steps above stand; re-run the failed job to try the message again.`,
+        "",
+        fenced("Error details", outcome.error ?? "the message could not be sent")
+      ];
+  }
+}
+function subjectLabel(subject2) {
+  const number4 = subject2.number ?? subject2.issueNumber ?? subject2.pullNumber ?? subject2.discussionNumber;
+  const kind = subject2.kind === "pull_request" ? "pull request" : subject2.kind;
+  return `${kind} #${number4}`;
 }
 async function writeJobSummary(render) {
   try {
@@ -48826,13 +49018,277 @@ ${quote(text)}
 </details>`;
 }
 
+// src/messages.ts
+var import_node_crypto3 = require("node:crypto");
+function messageKey(planDigest) {
+  if (!/^[0-9a-f]{64}$/.test(planDigest)) throw new Error("message key needs the plan's SHA-256 digest");
+  return (0, import_node_crypto3.createHash)("sha256").update(`gardener.message-key/v1
+${planDigest}`).digest("hex").slice(0, 56);
+}
+function googleChatMessageId(key) {
+  if (!/^[0-9a-f]{1,56}$/.test(key)) throw new Error("Google Chat message ids take a lowercase hex key of at most 56 characters");
+  return `client-${key}`;
+}
+var MessageSendError = class extends Error {
+};
+var TITLE_MAX_CHARACTERS = 200;
+var ERROR_DETAIL_MAX_CHARACTERS = 200;
+var MAX_RESPONSE_BYTES3 = 64 * 1024;
+var GITHUB_TIMEOUT_MS = 1e4;
+var LOOKALIKES = { "<": "\u2039", ">": "\u203A", "`": "\u02BC" };
+function sanitizeMessageText(text, maxCharacters) {
+  const characters = Array.from(text.replace(/\s+/gu, " ")).filter((character) => !isMessageInvisibleCharacter(character)).map((character) => isMessageMarkupCharacter(character) ? LOOKALIKES[character] ?? character : character);
+  const flat = characters.join("").replace(/ {2,}/g, " ").trim();
+  const kept = Array.from(flat);
+  if (maxCharacters === void 0 || kept.length <= maxCharacters) return flat;
+  return `${kept.slice(0, maxCharacters - 1).join("").trimEnd()}\u2026`;
+}
+function messageText(message, escape) {
+  const title = sanitizeMessageText(message.title, TITLE_MAX_CHARACTERS) || "(untitled)";
+  const author = sanitizeMessageText(message.author, 100) || "unknown";
+  const summary2 = sanitizeMessageText(message.summary) || "(no summary)";
+  return `<${message.subjectUrl}|${escape(message.subjectLabel)}> \`${escape(title)}\` (@${escape(author)})
+\`${escape(summary2)}\``;
+}
+async function postJson(input2) {
+  const { fetchImpl, destination, url: url2, body: body2, signal } = input2;
+  let response;
+  try {
+    response = await fetchImpl(url2, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=UTF-8" },
+      body: JSON.stringify(body2),
+      redirect: "error",
+      signal
+    });
+  } catch (error63) {
+    const kind = error63 instanceof Error ? error63.name : "error";
+    throw new MessageSendError(`the chat service could not be reached (${kind})`);
+  }
+  if (response.ok) return;
+  let detail = "";
+  try {
+    const text = (await readBoundedBody(response, MAX_RESPONSE_BYTES3)).text;
+    if (input2.alreadyDone?.(response.status, text)) return;
+    detail = scrubDestination(text, destination).replace(/\s+/g, " ").trim().slice(0, ERROR_DETAIL_MAX_CHARACTERS);
+  } catch {
+  }
+  throw new MessageSendError(`the chat service answered ${response.status}${detail ? `: ${detail}` : ""}`);
+}
+function scrubDestination(text, destination) {
+  const url2 = new URL(destination);
+  const secrets = /* @__PURE__ */ new Set([destination, `${url2.origin}${url2.pathname}`, url2.search.slice(1)]);
+  for (const value of url2.searchParams.values()) secrets.add(value);
+  for (const segment of url2.pathname.split("/")) if (segment.length >= 8) secrets.add(segment);
+  let scrubbed = text;
+  for (const secret of [...secrets].filter((value) => value.length >= 4).sort((left, right) => right.length - left.length)) {
+    scrubbed = scrubbed.split(secret).join("***");
+  }
+  return scrubbed;
+}
+function googleChatTransport(destination, fetchImpl) {
+  return {
+    id: "google-chat-webhook",
+    render(message) {
+      const text = messageText(message, (value) => value);
+      return { body: { text }, text };
+    },
+    send: (body2, signal, key) => postJson({
+      fetchImpl,
+      destination,
+      url: withQueryParameter(destination, "messageId", googleChatMessageId(key)),
+      body: body2,
+      signal,
+      alreadyDone: (status, text) => status === 409 && googleErrorStatus(text) === "ALREADY_EXISTS"
+    })
+  };
+}
+function withQueryParameter(destination, name2, value) {
+  const url2 = new URL(destination);
+  const parameter = `${name2}=${value}`;
+  url2.search = url2.search.length > 1 ? `${url2.search.slice(1)}&${parameter}` : parameter;
+  return url2.toString();
+}
+function googleErrorStatus(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed.error?.status === "string" ? parsed.error.status : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function slackTransport(destination, fetchImpl) {
+  return {
+    id: "slack-webhook",
+    render(message) {
+      const text = messageText(message, (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
+      return { body: { text }, text };
+    },
+    // Slack incoming webhooks take no client key, so a rerun can post twice.
+    send: (body2, signal) => postJson({ fetchImpl, destination, url: destination, body: body2, signal })
+  };
+}
+function transportFor(destination, fetchImpl = fetch) {
+  let url2;
+  try {
+    url2 = new URL(destination);
+  } catch {
+    return void 0;
+  }
+  if (url2.protocol !== "https:" || url2.username !== "" || url2.password !== "" || url2.port !== "") return void 0;
+  if (url2.hostname === "chat.googleapis.com") return googleChatTransport(destination, fetchImpl);
+  if (url2.hostname === "hooks.slack.com") return slackTransport(destination, fetchImpl);
+  return void 0;
+}
+var DISCUSSION_QUERY2 = `query($owner:String!,$name:String!,$number:Int!){
+  repository(owner:$owner,name:$name){
+    discussion(number:$number){ updatedAt title url author{ login } }
+  }
+}`;
+async function readMessageSubject(input2) {
+  const [owner, name2] = input2.repository.split("/");
+  const headers = {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${input2.token}`,
+    "user-agent": "gardener-runner",
+    "x-github-api-version": "2022-11-28"
+  };
+  const signal = input2.signal ?? AbortSignal.timeout(GITHUB_TIMEOUT_MS);
+  try {
+    const repoPath = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name2)}`;
+    let value;
+    if (input2.subject.kind === "discussion") {
+      const response = await (input2.fetch ?? fetch)("https://api.github.com/graphql", {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({ query: DISCUSSION_QUERY2, variables: { owner, name: name2, number: input2.subject.discussionNumber } }),
+        redirect: "error",
+        signal
+      });
+      if (!response.ok) return null;
+      const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES3);
+      if (body2.truncated) return null;
+      const discussion = JSON.parse(body2.text).data?.repository?.discussion;
+      if (!discussion) return null;
+      value = { updated_at: discussion.updatedAt, title: discussion.title, html_url: discussion.url, user: discussion.author };
+    } else {
+      const path3 = input2.subject.kind === "issue" ? `issues/${input2.subject.issueNumber}` : `pulls/${input2.subject.pullNumber}`;
+      const response = await (input2.fetch ?? fetch)(`${repoPath}/${path3}`, { headers, redirect: "error", signal });
+      if (!response.ok) return null;
+      const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES3);
+      if (body2.truncated) return null;
+      value = JSON.parse(body2.text);
+    }
+    const user = value.user;
+    if (typeof value.updated_at !== "string" || typeof value.title !== "string" || typeof value.html_url !== "string") return null;
+    return {
+      updatedAt: value.updated_at,
+      title: value.title,
+      url: value.html_url,
+      author: typeof user?.login === "string" ? user.login : "ghost"
+    };
+  } catch {
+    return null;
+  }
+}
+function subjectUrlInRepository(url2, repository, subject2) {
+  const section = subject2.kind === "issue" ? "(?:issues|pull)" : subject2.kind === "pull_request" ? "pull" : "discussions";
+  const match = new RegExp(`^https://github\\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/${section}/([1-9][0-9]*)$`).exec(url2);
+  return match !== null && match[1].toLowerCase() === repository.toLowerCase() && Number(match[2]) === messageSubjectNumber(subject2);
+}
+function subjectResourceKeys(subject2) {
+  const number4 = messageSubjectNumber(subject2);
+  return subject2.kind === "discussion" ? [`discussion:${number4}`] : [`issue:${number4}`, `pull:${number4}`];
+}
+function messageMayTarget(plan, resource) {
+  return (plan.messages ?? []).some((message) => subjectResourceKeys(message.subject).includes(resource));
+}
+function ownSubjectVersion(operations, subject2) {
+  const keys = subjectResourceKeys(subject2);
+  return operations.filter((step) => step.receipt.status === "succeeded" && step.resourceVersion !== void 0 && keys.includes(step.resourceVersion.resource)).at(-1)?.resourceVersion?.updatedAt;
+}
+function sameInstant2(left, right) {
+  const leftMs = Date.parse(left);
+  return Number.isFinite(leftMs) && leftMs === Date.parse(right);
+}
+function expectedUpdatedAt2(subject2) {
+  return subject2.kind === "issue" ? subject2.expectedIssueUpdatedAt : subject2.kind === "pull_request" ? subject2.expectedPullUpdatedAt : subject2.expectedDiscussionUpdatedAt;
+}
+async function sendPlanMessage(input2) {
+  const message = input2.plan.messages?.[0];
+  if (message === void 0) return void 0;
+  const prior = input2.prior;
+  if (prior !== void 0 && prior.status !== "failed") return { receipt: prior, settled: true };
+  const now = input2.now ?? (() => /* @__PURE__ */ new Date());
+  const base = {
+    channel: message.channel,
+    subject: { kind: message.subject.kind, number: messageSubjectNumber(message.subject) },
+    attemptedAt: now().toISOString()
+  };
+  const destination = input2.destination.trim();
+  if (destination === "") return { receipt: { ...base, status: "skipped", reason: "destination_unset" } };
+  const transport = transportFor(destination, input2.fetch);
+  if (transport === void 0) return { receipt: { ...base, status: "skipped", reason: "destination_unsupported" } };
+  const sent = { ...base, transport: transport.id };
+  const remaining = () => input2.deadlineAt - now().getTime();
+  if (remaining() <= 1e3) {
+    return { receipt: { ...sent, status: "failed", reason: "deadline_expired" }, error: "the apply job's deadline passed before the message was sent" };
+  }
+  const subject2 = await readMessageSubject({
+    repository: input2.plan.repository.fullName,
+    subject: message.subject,
+    token: input2.token,
+    ...input2.fetch ? { fetch: input2.fetch } : {},
+    signal: AbortSignal.timeout(Math.min(GITHUB_TIMEOUT_MS, Math.max(1e3, remaining())))
+  });
+  if (subject2 === null) {
+    return { receipt: { ...sent, status: "failed", reason: "subject_unreadable" }, error: `${subjectName(message.subject)} could not be read` };
+  }
+  const own2 = ownSubjectVersion(input2.operations, message.subject);
+  if (!sameInstant2(subject2.updatedAt, expectedUpdatedAt2(message.subject)) && (own2 === void 0 || !sameInstant2(subject2.updatedAt, own2))) {
+    return { receipt: { ...sent, status: "conflicted", reason: "subject_changed" } };
+  }
+  if (!subjectUrlInRepository(subject2.url, input2.plan.repository.fullName, message.subject)) {
+    return { receipt: { ...sent, status: "conflicted", reason: "subject_elsewhere" } };
+  }
+  const named = { ...sent, subject: { kind: subjectKindFromUrl(subject2.url, message.subject.kind), number: sent.subject.number } };
+  const rendered = transport.render({
+    subjectUrl: subject2.url,
+    subjectLabel: `${input2.plan.repository.fullName}#${messageSubjectNumber(message.subject)}`,
+    title: subject2.title,
+    author: subject2.author,
+    summary: message.summary
+  });
+  if (remaining() <= 1e3) {
+    return { receipt: { ...named, status: "failed", reason: "deadline_expired" }, error: "the apply job's deadline passed before the message was sent" };
+  }
+  try {
+    await transport.send(rendered.body, AbortSignal.timeout(Math.min(1e4, Math.max(1e3, remaining()))), messageKey(input2.planDigest));
+  } catch (error63) {
+    const reason = error63 instanceof MessageSendError ? error63.message : "the message could not be sent";
+    return { receipt: { ...named, status: "failed", reason: "send_failed" }, error: reason };
+  }
+  return { receipt: { ...named, status: "sent" }, text: rendered.text };
+}
+function subjectKindFromUrl(url2, kind) {
+  return kind === "issue" && /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[0-9]+$/.test(url2) ? "pull_request" : kind;
+}
+function subjectName(subject2) {
+  const number4 = messageSubjectNumber(subject2);
+  return subject2.kind === "issue" ? `Issue #${number4}` : subject2.kind === "pull_request" ? `Pull request #${number4}` : `Discussion #${number4}`;
+}
+
 // src/effects-main.ts
 var inputToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
 delete process.env["INPUT_GITHUB-TOKEN"];
+var chatWebhook = process.env["INPUT_CHAT-WEBHOOK"]?.trim() ?? "";
+delete process.env["INPUT_CHAT-WEBHOOK"];
+if (chatWebhook !== "") addSecret(chatWebhook);
 async function runEffectsMain() {
   let connection;
   let plan;
   let receipt;
+  let message;
   try {
     const artifactPath = getInput("artifact-path", { required: true });
     const expectedSha256 = getInput("expected-sha256", { required: true });
@@ -48845,7 +49301,7 @@ async function runEffectsMain() {
     if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("expected-sha256 must be a SHA-256 digest");
     const bytes = await (0, import_promises3.readFile)(artifactPath);
     if (bytes.byteLength > EFFECT_TRANSPORT_MAX_BYTES2) throw new Error("Effect artifact is too large");
-    const actualSha256 = (0, import_node_crypto3.createHash)("sha256").update(bytes).digest("hex");
+    const actualSha256 = (0, import_node_crypto4.createHash)("sha256").update(bytes).digest("hex");
     if (!equalDigest(actualSha256, expectedSha256)) throw new Error("Effect artifact digest mismatch");
     plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
     await assertApplyBindings(plan, token);
@@ -48859,12 +49315,17 @@ async function runEffectsMain() {
       token,
       deadlineAt,
       prior,
+      destination: chatWebhook,
       ...capture ? { captureDirectory: capture.directory } : {},
       record: (receipt2) => connection.session.recordEffect(receipt2)
     });
     receipt = result.receipt;
-    if (result.receipt.status === "applied") {
-      await writeJobSummary(() => renderApplyJobSummary({ plan, receipt, context: jobSummaryContext() }));
+    message = result.message;
+    if (message?.receipt.status === "skipped") {
+      notice(message.receipt.reason === "destination_unset" ? "Message not sent: GARDENER_CHAT_WEBHOOK is not set." : "Message not sent: GARDENER_CHAT_WEBHOOK is not a supported incoming-webhook URL.");
+    }
+    if (result.receipt.status === "applied" && message?.receipt.status !== "failed") {
+      await writeJobSummary(() => renderApplyJobSummary({ plan, receipt, ...message ? { message } : {}, context: jobSummaryContext() }));
     }
     setOutput("status", result.receipt.status);
     setOutput("completed-operations", String(result.receipt.operations.length));
@@ -48879,11 +49340,15 @@ async function runEffectsMain() {
       const error63 = last?.receipt.error;
       throw new Error(`Effect plan stopped at ${result.receipt.stoppedAtStep}: ${error63?.message ?? "provider operation failed"}`);
     }
+    if (message?.receipt.status === "failed") {
+      throw new Error(`Message not sent: ${message.error ?? "it could not be sent"}`);
+    }
   } catch (error63) {
     const reason = error63 instanceof Error ? error63.message : "Gardener effect failed";
     await writeJobSummary(() => renderApplyJobSummary({
       ...plan ? { plan } : {},
       ...receipt ? { receipt } : {},
+      ...message ? { message } : {},
       error: reason,
       context: jobSummaryContext()
     }));
@@ -48934,7 +49399,7 @@ async function applyOrderedPlan(input2) {
       resumeIndex = index + 1;
     }
     if (input2.prior.status === "applied") {
-      return { receipt: input2.prior, outputs };
+      return settleMessage(input2, completed, outputs);
     }
   }
   for (let index = resumeIndex; index < plan.operations.length; index += 1) {
@@ -49014,8 +49479,31 @@ async function applyOrderedPlan(input2) {
     const progress = effectReceipt(plan, input2.artifactSha256, completed, status, null);
     await input2.record(progress);
   }
-  const applied = effectReceipt(plan, input2.artifactSha256, completed, "applied", null);
-  return { receipt: applied, outputs };
+  return settleMessage(input2, completed, outputs);
+}
+async function settleMessage(input2, completed, outputs) {
+  const { plan } = input2;
+  const appliedPrior = input2.prior?.status === "applied" ? input2.prior : void 0;
+  const withoutMessage = () => ({
+    receipt: appliedPrior ?? effectReceipt(plan, input2.artifactSha256, completed, "applied", null),
+    outputs
+  });
+  if (plan.messages === void 0) return withoutMessage();
+  const message = await sendPlanMessage({
+    plan,
+    operations: completed,
+    prior: appliedPrior?.messages?.[0],
+    planDigest: input2.artifactSha256,
+    destination: input2.destination ?? "",
+    token: input2.token,
+    deadlineAt: input2.deadlineAt,
+    ...input2.fetch ? { fetch: input2.fetch } : {}
+  });
+  if (message === void 0) return withoutMessage();
+  if (message.settled && appliedPrior !== void 0) return { receipt: appliedPrior, outputs, message };
+  const receipt = effectReceipt(plan, input2.artifactSha256, completed, "applied", null, [message.receipt]);
+  await input2.record(receipt);
+  return { receipt, outputs, message };
 }
 var RESOURCE_NUMBER_FIELDS = [
   ["issueNumber", "issue"],
@@ -49023,6 +49511,7 @@ var RESOURCE_NUMBER_FIELDS = [
   ["discussionNumber", "discussion"]
 ];
 function laterStepMayTarget(plan, index, resource) {
+  if (messageMayTarget(plan, resource)) return true;
   return plan.operations.slice(index + 1).some((step) => RESOURCE_NUMBER_FIELDS.some(([field, family]) => {
     if (!resource.startsWith(`${family}:`)) return false;
     if (Object.hasOwn(step.references, `/${field}`)) return true;
@@ -49049,7 +49538,7 @@ ${marker}`;
 }
 var MATERIALIZATION_FAILED = "effect_materialization_failed";
 function unmaterializedStepHash(step) {
-  return (0, import_node_crypto3.createHash)("sha256").update(canonicalJson2({
+  return (0, import_node_crypto4.createHash)("sha256").update(canonicalJson2({
     operationId: step.operationId,
     kind: step.kind,
     payload: step.payload,
@@ -49175,7 +49664,7 @@ function validateRecordedOutputs(kind, value) {
 function runnerStepReceipt(stepName2, receipt, outputs, resourceVersion) {
   return { stepName: stepName2, receipt, outputs, ...resourceVersion ? { resourceVersion } : {} };
 }
-function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep) {
+function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep, messages) {
   return runnerEffectReceiptV1Schema.parse({
     schemaVersion: "gardener.runner.effect-receipt/v1",
     planRunId: plan.runId,
@@ -49185,7 +49674,8 @@ function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep) 
     plannedOperations: plan.operations.length,
     status,
     stoppedAtStep,
-    operations
+    operations,
+    ...messages === void 0 ? {} : { messages }
   });
 }
 function assertReceiptEnvelope(plan, artifactSha256, receipt) {
@@ -49283,7 +49773,7 @@ async function prepareCapture(plan, directory) {
     schemaVersion: "gardener.task-capture-ref/v1",
     captureId: plan.capture.captureId,
     baseSha: plan.capture.baseSha,
-    manifestSha256: (0, import_node_crypto3.createHash)("sha256").update(manifestJson).digest("hex"),
+    manifestSha256: (0, import_node_crypto4.createHash)("sha256").update(manifestJson).digest("hex"),
     changesSha256: plan.changesSha256,
     fileCount: plan.capture.files.length,
     sizeBytes: plan.capture.totalBytes,
@@ -49299,7 +49789,7 @@ function captureReader(directory) {
     if (!/^[a-f0-9]{64}$/.test(sha2563)) throw new Error("Captured content digest is invalid");
     const bytes = await (0, import_promises3.readFile)(import_node_path2.default.join(content, sha2563));
     if (bytes.byteLength !== sizeBytes) throw new Error("Captured content size changed after verification");
-    const digest = (0, import_node_crypto3.createHash)("sha256").update(bytes).digest("hex");
+    const digest = (0, import_node_crypto4.createHash)("sha256").update(bytes).digest("hex");
     if (!equalDigest(digest, sha2563)) throw new Error("Captured content changed after verification");
     return bytes;
   };
@@ -49335,7 +49825,7 @@ function canonicalJson2(value) {
 }
 function equalDigest(left, right) {
   if (!/^[a-f0-9]{64}$/.test(left) || !/^[a-f0-9]{64}$/.test(right)) return false;
-  return (0, import_node_crypto3.timingSafeEqual)(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
+  return (0, import_node_crypto4.timingSafeEqual)(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 }
 function requiredEnvironment(name2) {
   const value = process.env[name2];

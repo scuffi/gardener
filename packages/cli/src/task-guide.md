@@ -112,7 +112,9 @@ Each trigger is `event:` plus optional filters. A task may use each event at mos
 | `github.schedule` | `cron` (required), five fields, e.g. `0 3 * * 1` |
 | `github.workflow_dispatch` | none |
 
-- `labels-all`: the issue, pull request or discussion must carry **all** of these labels.
+- `labels-all`: the issue, pull request or discussion must carry **all** of these labels. On the
+  `.labeled` triggers the label just added must also be one of them, so a later unrelated label
+  does not start the task again: one listed label runs exactly once, N listed labels up to N times.
 - `mentions`: the text must @mention one of these handles. `self` means the `handle` in
   `.gardener/gardener.json`, and `generate` fails if no handle is set.
 - `authors`: who wrote the triggering text: `maintainers` (owner, members, collaborators, anyone
@@ -181,6 +183,13 @@ instructions ask for an effect that isn't declared, it can't happen.
   and approve pull requests** turned on in the repository.
 - The model plans every step before any runs. A later step can use an earlier step's output (for
   example a new pull request's URL in a comment); the model is told how.
+- `message.send` posts one short message about an issue, pull request or discussion to the chat
+  space in the `GARDENER_CHAT_WEBHOOK` repository secret (a Google Chat or Slack incoming webhook),
+  after every other step applied. Name it exactly (`message.*` is not a glob). At most one per run;
+  the summary is one line, at most 400 characters, without `<`, `>`, `&` or backticks. It can't be
+  combined with `repository.exec`. Tell the model when to post, for example only for urgent issues.
+  Nothing is sent if the subject changed since the model read it. On Slack, a rerun after a lost
+  answer can post twice; Google Chat never posts a plan's message twice.
 
 ## Updating open pull requests
 

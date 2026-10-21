@@ -162,6 +162,30 @@ the regenerated files.
 Anyone who can push to the default branch decides what Gardener may do there. Protect it with
 required reviews or a CODEOWNERS entry for `.gardener/**` if that matters for the repository.
 
+## Chat messages
+
+Tasks that declare `message.send` post to the chat space in the `GARDENER_CHAT_WEBHOOK` repository
+secret. Create an incoming webhook in Google Chat (space → Apps & integrations → Webhooks) or in
+Slack (an app with incoming webhooks), and store its URL:
+
+```sh
+gh secret set GARDENER_CHAT_WEBHOOK --repo owner/repo
+```
+
+The generated caller passes the secret to Gardener's workflow only for tasks that declare
+`message.send`, and only the apply step receives it. It is masked in logs, read once and removed
+from the step's environment, and never written to the plan, the receipt or the job summary. Only
+`https://chat.googleapis.com/` and `https://hooks.slack.com/` URLs are used; any other value is
+skipped, and the job summary says so without showing it. Without the secret, runs skip the message.
+Anyone who can edit repository secrets can point messages at another space.
+
+A plan's Google Chat message reaches the space at most once: each post carries a `messageId` derived from the
+plan's digest (not secret), and Chat refuses a repeat with `409 ALREADY_EXISTS`, which apply counts
+as sent. Slack has no such key, so a rerun after a lost answer can post twice. Google Chat accepts about
+one message per second per space; a burst of runs whose messages fail with `429` can be rerun.
+Chat remembers the id only while the message exists: if someone deletes it and the apply job is
+rerun, it can be posted again. To rotate the destination, replace the secret; to stop messages without changing tasks, delete it.
+
 ## Inspecting runs
 
 ```bash
@@ -231,6 +255,11 @@ Going back below 0.1.17 fails any run that 0.1.17 admitted and that is still in 
 request records who started it, which an older runtime refuses to read. Let in-flight runs finish,
 or rerun them afterwards. Migration 0005, which holds run admissions for the run limits, only adds a
 table, so it is safe to leave in place; older runtimes ignore it.
+
+Going back below 0.1.18 fails any run still in flight whose plan carries a message (a task that
+declares `message.send` and proposed one): an older runtime cannot read the stored plan, or the
+receipt that records the message. This is accepted; rerun such runs afterwards. Plans without a
+message are unaffected.
 
 Gardener has no teardown command. To remove an installation, delete its `gardener-<workspace>`
 Worker and D1 database, and any Access application for its hostname, in the Cloudflare dashboard.

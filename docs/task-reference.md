@@ -98,7 +98,7 @@ declared. Using a filter a kind does not accept is a compile error.
 
 | Filter | Meaning |
 | --- | --- |
-| `labels-all` | Every listed label must be on the issue, pull request or discussion. Up to 20. |
+| `labels-all` | Every listed label must be on the issue, pull request or discussion. Up to 20. On the three `.labeled` triggers, the label just added must also be one of them, so a later unrelated label doesn't start the task again. With N listed labels up to N events can match (one per listed label as it is added); with one label, exactly once. |
 | `mentions` | The text must @mention one of these handles; `self` is the project's `handle`. Whole-handle and case-insensitive. On comment triggers the text is the comment, on `pull_request_review.submitted` the review, otherwise the issue, pull request or discussion body. On an `.edited` trigger, only an edit that adds a mention counts. |
 | `authors` | Who may have written the text: `maintainers`, `any`, or a list of logins that may include `maintainers`. `maintainers` is the owner, organization members and collaborators, or anyone with write or admin access. The default is `maintainers` for comment triggers, `pull_request_review.submitted`, and any trigger with `mentions`; otherwise `any`. |
 | `opened-by` | Exact logins that opened the thread the event belongs to, such as `["dependabot[bot]"]`. |
@@ -123,8 +123,8 @@ never shown to the model or to commands.
 
 ## Effects
 
-`effects` lists the exact operations a task may propose. Each entry is a kind, a family glob, or a
-kind with options. Every declared effect is applied automatically, with no approval step.
+`effects` lists the exact operations a task may propose, and `message.send` (see
+[Messages](#messages)). Each entry is a kind, a family glob, or a kind with options. Every declared effect is applied automatically, with no approval step.
 
 <!-- generated:families -->
 | Glob | Expands to |
@@ -181,10 +181,41 @@ A family glob grants every current and future member of its family. Prefer exact
 | `release.update` | Edit a release. | `contents` | `draft`, `prerelease`, `releaseId`, `releaseUrl`, `tagName` |
 | `release.publish` | Publish a draft release. | `contents` | `draft`, `prerelease`, `releaseId`, `releaseUrl`, `tagName` |
 | `release.delete` | Delete a release. | `contents` | `releaseId`, `tagName` |
+| `message.send` | Post one message about an issue, pull request or discussion to the repository's chat space, after every other step applied. At most one per run. | none | none |
 <!-- /generated:effects -->
 
 A step can use an earlier step's outputs, either as a whole field or as `{{name}}` placeholders in
 text. See [Using one step's result in a later step](task-authoring.md#using-one-steps-result-in-a-later-step).
+
+### Messages
+
+`message.send` posts one short message about an issue, pull request or discussion to the
+repository's chat space (a Google Chat or Slack incoming webhook in the `GARDENER_CHAT_WEBHOOK`
+repository secret). It is declared in `effects` like an operation, but it is not one:
+
+- it must be named exactly; `message.*` is not a glob, and no family glob includes it;
+- a run sends at most one, after every other step applied; it is not counted by
+  `max-effect-operations` or `max-effect-bytes`, publishes no outputs and takes no references;
+- the model writes only a summary of at most 400 characters, one line of plain text without `<`,
+  `>`, `&` or backticks; Gardener adds the link, title and author;
+- it needs no write scope; the caller grants read on issues, pull requests and discussions so apply
+  can check the subject has not changed since the model read it, and sends nothing if it has;
+- under trigger scope it may only be about what triggered the run;
+- a task may not declare both `message.send` and `repository.exec`.
+
+Apply records what became of the message in the plan's receipt, never the destination or the text:
+
+| Status | Reason | Meaning |
+| --- | --- | --- |
+| `sent` | | The chat service accepted it. |
+| `skipped` | `destination_unset`, `destination_unsupported` | `GARDENER_CHAT_WEBHOOK` is empty, or not an `https://chat.googleapis.com/` or `https://hooks.slack.com/` URL. The job succeeds. |
+| `conflicted` | `subject_changed`, `subject_elsewhere` | The subject changed since the model read it (other than by this run's own steps), or its link is outside the repository. Nothing is sent; the job succeeds. |
+| `failed` | `subject_unreadable`, `send_failed`, `deadline_expired` | The job fails after the operations applied. A rerun tries only the message again. |
+
+A plan's Google Chat message reaches the space at most once: each attempt carries the same `messageId`, and a
+`409 ALREADY_EXISTS` refusal of a repeat counts as `sent`. Slack delivery is at least once: a rerun
+after a lost answer can post the message twice. An issue subject whose link is a pull request is
+recorded as `pull_request`.
 
 ### Branches
 

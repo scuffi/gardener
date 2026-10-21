@@ -10,6 +10,8 @@ import {
   dispatchTargetKinds,
   githubHandleV1Schema,
   isAuthoredTriggerKind,
+  isLabeledTriggerKind,
+  MESSAGE_SEND_KIND,
   isEditedTriggerKind,
   maintainerAssociations,
   type AuthoredTriggerKindV1,
@@ -23,7 +25,7 @@ import {
   type GitHubActionsTaskPlanV1,
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
-import { compileTaskSource, highImpactWarning, modelWarning, type CompiledTask } from "./task-authoring.js";
+import { compileTaskSource, highImpactWarning, messageWarnings, modelWarning, type CompiledTask } from "./task-authoring.js";
 import { renderTaskGuide, TASK_GUIDE_PATH } from "./task-guide.js";
 
 /** The most tasks one sync may carry (`syncRequestV1Schema`), so the most a project may hold. */
@@ -402,6 +404,7 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
       const warning = highImpactWarning(task.bundle);
       return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
     }),
+    ...tasks.flatMap((task) => messageWarnings(task.bundle).map((warning) => `Task ${task.bundle.taskId} ${warning}`)),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
@@ -577,6 +580,14 @@ function renderTriggerCondition(binding: GitHubActionsTriggerBindingV1, task: Bu
       clauses.push(`contains(${binding.labelsExpression}, ${yamlSingleQuoted(label)})`);
     }
   }
+  if (trigger !== undefined && isLabeledTriggerKind(trigger.kind) && labels.length > 0) {
+    // The label just added must be one of labels-all, or every later label on
+    // a subject that already carries them would start the task again. GitHub
+    // compares case-insensitively, so this only admits more than the Worker's
+    // exact check, which makes the decision.
+    const added = labels.map((label) => `github.event.label.name == ${yamlSingleQuoted(label)}`);
+    clauses.push(added.length === 1 ? added[0]! : `(${added.join(" || ")})`);
+  }
   if (trigger !== undefined && "authors" in trigger && isAuthoredTriggerKind(trigger.kind)) {
     clauses.push(...authoredTriggerClauses(trigger.kind, trigger.mentions));
   }
@@ -731,8 +742,32 @@ function definesPullRequestHead(workflowRef: string): boolean {
   return !TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
 }
 
+/**
+ * The task workflows of releases before the `chat-webhook` secret (0.1.0–0.1.17).
+ * GitHub refuses a caller that passes a secret its reusable workflow does not
+ * declare, so tasks declaring `message.send` cannot run on these. A fixed list
+ * for the same reason as the ones above.
+ */
+const TASK_WORKFLOWS_WITHOUT_CHAT_WEBHOOK = new Set([
+  ...TASK_WORKFLOWS_WITHOUT_PULL_REQUEST_HEAD,
+  "4007bf661f62730882de20dd2df36b30c3e4a593",
+  "242825edd810a0219e008e3d68081c5cde6dc1ee",
+  "5c9c136ffd6b2e545f398dc413a60e04b66da406",
+]);
+
+function definesChatWebhook(workflowRef: string): boolean {
+  return !TASK_WORKFLOWS_WITHOUT_CHAT_WEBHOOK.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+
+function declaresMessages(task: BuiltTask): boolean {
+  return (task.bundle.effects as readonly string[]).includes(MESSAGE_SEND_KIND);
+}
+
 /** Why this task cannot run on the pinned workflow, or `undefined` when it can. */
 function pinnedWorkflowRefusal(task: BuiltTask, workflowRef: string): string | undefined {
+  if (declaresMessages(task) && !definesChatWebhook(workflowRef)) {
+    return `Task ${task.bundle.taskId} declares message.send, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
+  }
   if (definesPullRequestHead(workflowRef)) return undefined;
   // Older workflows check out a pull request head only for pull request
   // events, so a comment task that asks for the head would silently plan on
@@ -817,7 +852,11 @@ ${setsPlanTimeout ? `      plan-timeout-minutes: ${planTimeoutMinutes(task.bundl
         \${{
         ${reactions}
         }}
-`}`;
+`}${declaresMessages(task)
+  // Only tasks that post get the destination, and the reusable workflow
+  // hands it only to its apply step.
+  ? "    secrets:\n      chat-webhook: ${{ secrets.GARDENER_CHAT_WEBHOOK }}\n"
+  : ""}`;
 }
 
 /**

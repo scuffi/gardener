@@ -6,6 +6,7 @@ import {
   checksOutPullRequestHead,
   dispatchTargetKinds,
   isAuthoredTriggerKind,
+  isLabeledTriggerKind,
   isBranchWriteKind,
   isEditedTriggerKind,
   taskCheckoutSha,
@@ -15,6 +16,8 @@ import {
   normalizedPullRequest,
   operationOutputCatalog,
   operationProposalPayloadJsonSchema,
+  MESSAGE_SEND_KIND,
+  messageSendPayloadJsonSchema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
   threadOpenerLogin,
@@ -272,7 +275,9 @@ function assertTriggerMatches(
   triggers: TaskRunRequestV1["bundle"]["triggers"],
   pullRequestHead: boolean,
 ): void {
-  const matches = triggers.some((trigger) => triggerSelects(trigger, event) && authoredFiltersPass(trigger, event));
+  const matches = triggers.some((trigger) => triggerSelects(trigger, event)
+    && addedLabelPasses(trigger, event)
+    && authoredFiltersPass(trigger, event));
   if (!matches) throw new Error(`Task does not declare trigger ${event.kind}`);
   assertDispatchTargetOffered(event, triggers, pullRequestHead);
 }
@@ -295,14 +300,29 @@ function triggerSelects(trigger: TaskTrigger, event: NormalizedEventV1): boolean
 
 /**
  * True when the event is one a declared trigger selects, but every such
- * trigger's `mentions` or `authors` filter excludes it. The workflow can only
- * approximate those filters, so this is an expected outcome, not tampering:
- * the run completes as a skip. Any other mismatch still fails the run.
+ * trigger's `mentions`, `authors` or added-label filter excludes it. The
+ * workflow can only approximate those filters (callers generated before the
+ * added-label rule don't check it at all), so this is an expected outcome, not
+ * tampering: the run completes as a skip. Any other mismatch still fails the run.
  */
 export function triggerFiltersExclude(event: NormalizedEventV1, triggers: readonly TaskTrigger[]): boolean {
   const selecting = triggers.filter((trigger) => triggerSelects(trigger, event));
   return selecting.length > 0
-    && !selecting.some((trigger) => openedByPasses(trigger, event) && authoredFiltersPass(trigger, event));
+    && !selecting.some((trigger) => openedByPasses(trigger, event)
+      && addedLabelPasses(trigger, event)
+      && authoredFiltersPass(trigger, event));
+}
+
+/**
+ * On a `labeled` trigger with `labels-all`, the label just added must be one of
+ * them. Otherwise, once the subject carries the labels, every later label
+ * anyone adds would start the task again. Exact match, as `labels-all` is;
+ * the workflow's prefilter compares case-insensitively, which only admits more.
+ * Every bridge sends the added label, so there is no fallback for its absence.
+ */
+function addedLabelPasses(trigger: TaskTrigger, event: NormalizedEventV1): boolean {
+  if (!isLabeledTriggerKind(trigger.kind) || !("labelsAll" in trigger) || trigger.labelsAll.length === 0) return true;
+  return "label" in event && trigger.labelsAll.includes(event.label);
 }
 
 /**
@@ -441,15 +461,20 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
       "Exact payloadJson contracts for the declared kinds follow. Use these field names and JSON types exactly.",
       "Fields listed in required are mandatory unless referencesJson supplies that exact JSON pointer.",
       "Never add schemaVersion, id, repository, kind, commit.create files, or commit.merge_base files and conflictedPaths; trusted Gardener code owns them.",
-      ...request.bundle.effects.map((kind) => `  ${kind}: ${operationProposalPayloadJsonSchema(kind)}`),
+      ...request.bundle.effects.map((kind) => `  ${kind}: ${kind === MESSAGE_SEND_KIND ? messageSendPayloadJsonSchema() : operationProposalPayloadJsonSchema(kind)}`),
       "",
       "Outputs each kind publishes once it runs, which later steps may use through referencesJson, whole or as {{placeholders}} in text (nullable outputs cannot fill a placeholder):",
-      ...request.bundle.effects.map((kind) => `  ${kind}: ${Object.entries(operationOutputCatalog[kind]).map(([name, type]) => `${name} (${type})`).join(", ")}`),
+      ...request.bundle.effects
+        .filter((kind): kind is OperationKind => kind !== MESSAGE_SEND_KIND)
+        .map((kind) => `  ${kind}: ${Object.entries(operationOutputCatalog[kind]).map(([name, type]) => `${name} (${type})`).join(", ")}`),
     ]),
     ...effectGuidance(request),
     ...(limits.maxEffectOperations === undefined
       ? []
-      : [`This task may propose at most ${limits.maxEffectOperations} steps.`]),
+      // A message is not counted by the step limit, so say so where it applies.
+      : [request.bundle.effects.includes(MESSAGE_SEND_KIND)
+        ? `This task may propose at most ${limits.maxEffectOperations} steps that change the repository, and one message.send in addition.`
+        : `This task may propose at most ${limits.maxEffectOperations} steps.`]),
     "",
     `runId=${request.runId}`,
     `taskId=${request.bundle.taskId}`,
@@ -495,6 +520,13 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
   if ((effects.includes("pull_request.open") || effects.includes("pull_request.open_draft"))
     && effects.includes("pull_request.label.add")) {
     notes.push("pull_request.open and pull_request.open_draft take optional labels, applied right after the pull request opens; set them only when the task instructions call for them.");
+  }
+  if (effects.includes(MESSAGE_SEND_KIND)) {
+    notes.push(
+      "message.send posts one short message about an issue, pull request or discussion to the repository's chat space, at most once per run, "
+        + "and only after every other step has applied. It publishes no outputs and takes no referencesJson. Gardener adds the link, title and author itself; "
+        + "nothing is sent if the subject changed after you read its updatedAt.",
+    );
   }
   if (effects.some((kind) => kind === "issue.create" || kind.endsWith(".label.add"))) {
     notes.push("Labels must already exist in the repository; Gardener never creates a label.");

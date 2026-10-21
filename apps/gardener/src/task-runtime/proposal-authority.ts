@@ -6,6 +6,10 @@ import {
   commitBaseRefusal,
   impliedEffectKinds,
   isBranchWriteKind,
+  MESSAGE_SEND_KIND,
+  messageFromSendPayload,
+  messageSendPayloadV1Schema,
+  messageTriggerScopeRefusal,
   normalizedPullRequest,
   taskCheckoutSha,
   taskEventBindingFromNormalizedEvent,
@@ -16,6 +20,7 @@ import {
   type TaskEventResourceV1,
   type TaskRunRequestV1,
 } from "@gardener/contracts";
+import { planCapabilityAdvice, planCarries } from "./workflow-refs";
 
 /** Where a run's steps may act: anywhere the task allows, or only on what triggered it. */
 export type RunEffectScope = "trigger" | "repository";
@@ -55,9 +60,41 @@ export function runTriggerScopeRefusal(
   resource: TaskEventResourceV1 | null,
 ): string | undefined {
   if (runEffectScope(request) !== "trigger") return undefined;
-  const kinds = new Map(earlier.map((candidate) => [candidate.stepName, candidate.kind as OperationKind] as const));
+  if (step.kind === MESSAGE_SEND_KIND) {
+    const parsed = messageSendPayloadV1Schema.safeParse(step.payload);
+    // The proposal contract has already refused a malformed payload.
+    if (!parsed.success) return "message.send payload is not a valid message";
+    const refusal = messageTriggerScopeRefusal(messageFromSendPayload(parsed.data).subject, resource);
+    return refusal === undefined ? undefined : `${refusal} (confined because ${triggerScopeReason(request)})`;
+  }
+  const kinds = new Map(operationSteps(earlier).map((candidate) => [candidate.stepName, candidate.kind as OperationKind] as const));
   const refusal = triggerScopeRefusal(step.kind, step.payload, step.references, resource, kinds);
   return refusal === undefined ? undefined : `${refusal} (confined because ${triggerScopeReason(request)})`;
+}
+
+/** The steps that become operations: a message is never an earlier step anything can reference. */
+export function operationSteps<Step extends Pick<TaskEffectProposalV1, "kind">>(steps: readonly Step[]): Step[] {
+  return steps.filter((step) => step.kind !== MESSAGE_SEND_KIND);
+}
+
+/**
+ * Why this run may not send this message, or `undefined`. One message per run;
+ * it must be about something this run may act on; and the run's task workflow
+ * must have an apply step that sends messages, since an older one would
+ * refuse the whole plan.
+ */
+export function messageProposalRefusal(
+  request: Pick<TaskRunRequestV1, "bundle" | "event" | "starter">,
+  proposal: TaskEffectProposalV1,
+  earlier: readonly Pick<TaskEffectProposalV1, "stepName" | "kind">[],
+): string | undefined {
+  const workflowRef = request.event.workflow.jobWorkflowRef;
+  if (!planCarries("messages", workflowRef)) return planCapabilityAdvice("message.send", workflowRef);
+  const previous = earlier.find((step) => step.kind === MESSAGE_SEND_KIND);
+  if (previous !== undefined) {
+    return `A run sends at most one message, and step ${previous.stepName} already proposed message.send`;
+  }
+  return runTriggerScopeRefusal(request, proposal, earlier, taskEventBindingFromNormalizedEvent(request.event).resource);
 }
 
 /**
@@ -92,6 +129,9 @@ export function proposalAuthorityRefusal(
   if (implied !== undefined) {
     return `Labels on ${proposal.kind} need the ${implied} effect, which the task did not declare`;
   }
+  // A message is not an operation: none of the operation rules below apply,
+  // and it has its own.
+  if (proposal.kind === MESSAGE_SEND_KIND) return messageProposalRefusal(request, proposal, earlier);
   if (isBranchWriteKind(proposal.kind)) {
     const field = branchWriteFields[proposal.kind];
     const branch = (proposal.payload as Record<string, unknown>)[field];

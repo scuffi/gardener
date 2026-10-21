@@ -462,6 +462,31 @@ describe("local Gardener project", () => {
     expect(await workflowOf("drafter")).not.toContain("pull-request-head");
   });
 
+  it("requires the added label to be one of labels-all on labeled triggers only", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-labeled-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    await mkdir(join(root, ".gardener/tasks/labels"), { recursive: true });
+    await writeFile(join(root, ".gardener/tasks/labels/TASK.md"), WIDE_TASK
+      .replace("id: wide-task", "id: labels")
+      .replace(/triggers:[\s\S]*?tools:/, `triggers:
+  - event: github.pull_request.labeled
+    labels-all: [fix, "ready now"]
+  - event: github.discussion.labeled
+    labels-all: [ask]
+  - event: github.issue.labeled
+  - event: github.issue.unlabeled
+    labels-all: [keep]
+  - event: github.pull_request.synchronize
+    labels-all: [fix]
+tools:`));
+    const built = await buildProject({ repositoryRoot: root });
+    const workflow = await readFile(join(root, built.tasks[0]!.workflow), "utf8");
+    expect(workflow).toContain("(github.event.label.name == 'fix' || github.event.label.name == 'ready now'))");
+    expect(workflow).toContain("contains(github.event.discussion.labels.*.name, 'ask') && github.event.label.name == 'ask')");
+    // Only labeled triggers with labels-all gain the clause.
+    expect(workflow.match(/github\.event\.label\.name/g)).toHaveLength(3);
+  });
+
   it("renders deterministic multi-trigger workflows with derived permissions", async () => {
     const root = await mkdtemp(join(tmpdir(), "gardener-project-triggers-"));
     await initializeProject({ repositoryRoot: root, demos: false });
@@ -483,6 +508,8 @@ describe("local Gardener project", () => {
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(workflow).toContain("github.event_name == 'issues' && github.event.action == 'labeled'");
     expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'gardener-wide')");
+    // A labeled trigger runs only when the label just added is one it lists.
+    expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'gardener-wide') && github.event.label.name == 'gardener-wide')");
     expect(workflow).toContain("github.event_name == 'schedule'");
 
     // Caller permissions are the fixed planning read union plus task-exact writes.

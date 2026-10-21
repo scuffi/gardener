@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   COMMIT_FILE_LIMIT,
   operationOutputRenderedMaxLength,
+  operationKindSchema,
   operationKindValues,
   operationOutputNames,
   operationOutputSentinel,
@@ -18,6 +19,13 @@ import {
   commitBaseRefusal,
   isBranchWriteKind,
 } from "./branches";
+import {
+  MESSAGE_SEND_KIND,
+  messageSendPayloadV1Schema,
+  messageSubjectNumber,
+  messageV1Schema,
+  type MessageV1,
+} from "./messages";
 
 const identifier = z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
 const boundIdentifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
@@ -318,6 +326,22 @@ export const pullRequestFamilyTriggerKindValues = taskTriggerKindValues.filter(
   (kind) => kind.startsWith("github.pull_request"),
 );
 
+/**
+ * Triggers fired by adding one label. With a non-empty `labels-all`, the label
+ * just added must be one of them, as well as the subject carrying them all, so
+ * a later unrelated label doesn't start the task again.
+ */
+export const labeledTriggerKindValues = [
+  "github.issue.labeled",
+  "github.pull_request.labeled",
+  "github.discussion.labeled",
+] as const satisfies readonly TaskTriggerKindV1[];
+export type LabeledTriggerKindV1 = typeof labeledTriggerKindValues[number];
+
+export function isLabeledTriggerKind(kind: TaskTriggerKindV1): kind is LabeledTriggerKindV1 {
+  return (labeledTriggerKindValues as readonly TaskTriggerKindV1[]).includes(kind);
+}
+
 /** Resources a manual run may target, by number. */
 export const dispatchTargetKindValues = ["issue", "pull_request"] as const;
 export type DispatchTargetKindV1 = typeof dispatchTargetKindValues[number];
@@ -357,8 +381,14 @@ export const taskToolV1Schema = z.enum([
 ]);
 export type TaskToolV1 = z.infer<typeof taskToolV1Schema>;
 
-/** Canonical effect authority vocabulary: exactly the persistent provider operations. */
-export const taskEffectKindValues = operationKindValues;
+/**
+ * What a task may declare in `effects:` and the model may propose: every
+ * persistent provider operation, plus `message.send`, which compiles to the
+ * plan's `messages` rather than to an operation. Plan operations stay
+ * `operationKindValues`, so a message can never be smuggled in as an
+ * operation, and every effects-to-permissions path must handle it explicitly.
+ */
+export const taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND] as const;
 export const taskEffectKindV1Schema = z.enum(taskEffectKindValues);
 export type TaskEffectKindV1 = z.infer<typeof taskEffectKindV1Schema>;
 
@@ -1530,6 +1560,21 @@ export const taskEffectProposalV1Schema = z.strictObject({
   references: taskStepReferencesV1Schema.default({}),
   rationale: z.string().trim().min(1).max(5_000),
 }).superRefine((proposal, context) => {
+  if (proposal.kind === MESSAGE_SEND_KIND) {
+    // A message is not an operation: its payload has its own contract, and it
+    // fills nothing from earlier steps, so a reference could only smuggle
+    // unchecked text into the summary.
+    if (Object.keys(proposal.references).length > 0) {
+      context.addIssue({ code: "custom", path: ["references"], message: "message.send takes no references" });
+    }
+    const parsed = messageSendPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue.path.map(String)], message: `${encodeJsonPointer(issue.path) || "payload"}: ${issue.message}` });
+      }
+    }
+    return;
+  }
   // Repository file bytes are capture-owned. A proposal must omit them, and
   // trying to supply them is refused here rather than silently accepted as a
   // second, capture-free way to write a commit.
@@ -2326,6 +2371,31 @@ export function triggerScopeRefusal(
   return undefined;
 }
 
+/** The target field a message subject kind names, as operations on that kind name it. */
+const messageSubjectFields: Record<MessageV1["subject"]["kind"], TriggerScopeTargetFieldV1> = {
+  issue: "issueNumber",
+  pull_request: "pullNumber",
+  discussion: "discussionNumber",
+};
+
+/**
+ * Why a confined run may not send a message about this subject, or
+ * `undefined`. The same rule as an operation on that kind: the subject must be
+ * the resource that triggered the run, matched by kind and number.
+ */
+export function messageTriggerScopeRefusal(
+  subject: MessageV1["subject"],
+  resource: TaskEventResourceV1 | null,
+): string | undefined {
+  if (resource === null) {
+    return `message.send needs a run triggered from an issue, pull request or discussion: ${CONFINED}, and nothing triggered it`;
+  }
+  if (!triggerResourceKinds[messageSubjectFields[subject.kind]].includes(resource.kind) || messageSubjectNumber(subject) !== resource.number) {
+    return `message.send may be only about ${resourceLabel(resource)}, which triggered this run: ${CONFINED}`;
+  }
+  return undefined;
+}
+
 export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): TaskEventBindingV1 {
   const base = {
     kind: event.kind,
@@ -2440,7 +2510,8 @@ export const taskEffectPlanOperationV1Schema = z.strictObject({
   stepName: taskStepNameV1Schema,
   /** Derived from run id, step order, step name, and canonical payload. Never model-supplied. */
   operationId: boundIdentifier,
-  kind: taskEffectKindV1Schema,
+  /** Operations only: `message.send` travels in the plan's `messages`. */
+  kind: operationKindSchema,
   payload: taskEffectPayloadV1Schema,
   references: taskStepReferencesV1Schema.default({}),
   rationale: z.string().trim().min(1).max(5_000),
@@ -2516,10 +2587,12 @@ function referencedOutputType(
  * output is told while it can still correct the step.
  */
 export function taskStepIssues(
-  step: Pick<TaskEffectPlanOperationV1, "stepName" | "kind" | "payload" | "references">,
+  step: Pick<TaskEffectPlanOperationV1, "stepName" | "payload" | "references"> & { readonly kind: TaskEffectKindV1 },
   context: TaskStepContextV1,
 ): TaskStepIssueV1[] {
   const issues: TaskStepIssueV1[] = [];
+  // A message is checked by its own payload contract and takes no references.
+  if (step.kind === MESSAGE_SEND_KIND) return issues;
   const resolvedTypes = new Map<string, OperationOutputType>();
   const outputKey = (output: TaskStepOutputRefV1) => `${output.step}\u0000${output.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -2618,6 +2691,13 @@ export const taskEffectPlanV1Schema = z.strictObject({
    * still parse; the Worker checks scope when it builds those itself.
    */
   effectScope: z.enum(["trigger", "repository"]).optional(),
+  /**
+   * Sent by apply after every operation succeeded. Absent for plans without a
+   * message, so those hash as before, and always absent for task workflows
+   * whose apply predates it (see `planCarries`). Not counted by
+   * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
+   */
+  messages: z.array(messageV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -2739,6 +2819,14 @@ export const taskEffectPlanV1Schema = z.strictObject({
       }
     }
   });
+  // Beside the operations' scope check: a confined run's message may only be
+  // about what triggered it.
+  if (plan.effectScope === "trigger") {
+    plan.messages?.forEach((message, index) => {
+      const refusal = messageTriggerScopeRefusal(message.subject, plan.event.resource);
+      if (refusal !== undefined) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal });
+    });
+  }
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });

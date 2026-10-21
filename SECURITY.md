@@ -124,6 +124,7 @@ The apply job has no checkout and runs no repository code. It performs these ste
 2. Authenticate as the effects phase.
 3. Have the Worker confirm the plan is the one it issued for this run.
 4. Execute each operation in order.
+5. Send the plan's message, if it has one, once every operation applied.
 
 Every operation carries the GitHub state it was planned against. Depending on the operation, that
 can include:
@@ -160,6 +161,27 @@ request into any base, including the default branch, so its required checks are 
 dismiss reviews. GitHub computes that history and applies it only if the head is still the one the
 task saw. No other operation can force-push, and none can delete a branch.
 
+### Messages
+
+A plan carries at most one message: a subject (an issue, pull request or discussion, by number and
+the `updated_at` the model read) and a summary. The destination is not in the plan, the receipt or
+anything the model sees. It is the `GARDENER_CHAT_WEBHOOK` secret, which the generated caller
+passes only for tasks that declare `message.send`, and which Gardener's reusable workflow
+interpolates only into the apply step. The planning job, which runs the model, never receives it.
+The apply step masks it, deletes it from its environment, and posts only to
+`https://chat.googleapis.com/` or `https://hooks.slack.com/`, by exact host, with redirects refused.
+The only thing apply adds to the URL is Google Chat's `messageId`, a hash of the plan artifact's
+digest, which the receipt records anyway, so it reveals nothing. Errors from the chat service are
+cut short and scrubbed of the URL and its parts before they reach the log or job summary. A task may not declare both `message.send` and `repository.exec`, so no
+task-controlled command runs in a job that could see the secret.
+
+The summary is limited when the model proposes it: one line, at most 400 characters, no `<`, `>`,
+`&`, backticks, control or format characters, and no Gardener marker. Apply then fetches the
+subject's title, author and link itself, and refuses to send if the subject changed since planning,
+except by the plan's own steps, or if its link leaves the repository. The title and summary are
+sanitized with the same rules (lookalikes replace `<`, `>` and backticks; Slack's `&`, `<`, `>`
+are escaped) and shown as code, so the only link in a message is the one Gardener built.
+
 ## Known limitations
 
 - **No human approval.** Declared effects apply automatically. A task that declares merge,
@@ -194,6 +216,12 @@ task saw. No other operation can force-push, and none can delete a branch.
   `branches` patterns allow. The run limits bound how many.
 - **Many accounts.** `runs-per-author` counts each GitHub account separately. Only a task's `runs`
   limit, or the AI Gateway cap, bounds someone with many accounts, and `runs` has no default.
+- **Messages show outsiders' text.** A message quotes the subject's title, which its author wrote,
+  and a summary the model wrote after reading untrusted text. Both are inert, but they can still
+  say misleading things. In a private repository, everyone in the chat space sees the title.
+- **Slack messages go out at least once.** Slack incoming webhooks take no idempotency key, so a
+  rerun after a lost answer can post twice. Google Chat posts carry a `messageId` derived from the
+  plan's digest, and Chat refuses a repeat, so a plan's message reaches a Chat space at most once.
 - **Kill switch.** `gardener repository disable` blocks planning, apply and syncs for the
   repository. To stop one task, remove it from the default branch.
 
@@ -211,6 +239,10 @@ is piped to `wrangler deploy` and stored only as the runtime Worker's secret. It
 disk, D1, GitHub, or command arguments, and never reaches a runner. Anyone who can edit the
 runtime Worker can use it. The gateway sees every request, including repository content the model
 reads.
+
+A `GARDENER_CHAT_WEBHOOK` repository secret, when set, is a credential for posting to one chat
+space. Anyone with it can post there; anyone who can edit repository secrets can redirect
+messages. It is never written to the plan, receipt, D1 or job summary.
 
 If you suspect compromise, disable the repository with `gardener repository disable`. Preserve the
 D1 database. The database blocks updates and deletes on the run audit table, `actions_task_audit`, so

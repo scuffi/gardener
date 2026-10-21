@@ -577,6 +577,53 @@ export const runnerPlanStepReceiptV1Schema = z.strictObject({
 export type RunnerPlanStepReceiptV1 = z.infer<typeof runnerPlanStepReceiptV1Schema>;
 
 /**
+ * What became of the plan's message. Nothing here names the destination or
+ * carries what the chat service said: no URL, no response body, no text. The
+ * subject is restated so the runtime can check the receipt answers the plan's
+ * own message, mirroring the contracts' `MessageV1` without depending on it.
+ *
+ * `sent` is final, and so are `skipped` (no usable destination) and
+ * `conflicted` (the subject changed after planning): a rerun of the same plan
+ * sends nothing more. `failed` is retried on a rerun.
+ */
+export const runnerMessageReceiptV1Schema = z.strictObject({
+  channel: z.literal("default"),
+  subject: z.strictObject({
+    kind: z.enum(["issue", "pull_request", "discussion"]),
+    number: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  }),
+  /** The transport chosen for the destination. Absent only when no destination was usable. */
+  transport: z.enum(["google-chat-webhook", "slack-webhook"]).optional(),
+  status: z.enum(["sent", "skipped", "conflicted", "failed"]),
+  reason: z.enum([
+    "destination_unset",
+    "destination_unsupported",
+    "subject_changed",
+    "subject_elsewhere",
+    "subject_unreadable",
+    "send_failed",
+    "deadline_expired",
+  ]).optional(),
+  attemptedAt: z.iso.datetime(),
+}).superRefine((receipt, context) => {
+  const reasons: Record<typeof receipt.status, readonly (string | undefined)[]> = {
+    sent: [undefined],
+    skipped: ["destination_unset", "destination_unsupported"],
+    conflicted: ["subject_changed", "subject_elsewhere"],
+    failed: ["subject_unreadable", "send_failed", "deadline_expired"],
+  };
+  if (!reasons[receipt.status].includes(receipt.reason)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: `a ${receipt.status} message cannot have reason ${receipt.reason ?? "none"}` });
+  }
+  // Apply chooses the transport before anything else, so only a message
+  // skipped for want of a usable destination has none.
+  if ((receipt.status === "skipped") === (receipt.transport !== undefined)) {
+    context.addIssue({ code: "custom", path: ["transport"], message: "only a skipped message has no transport" });
+  }
+});
+export type RunnerMessageReceiptV1 = z.infer<typeof runnerMessageReceiptV1Schema>;
+
+/**
  * Receipt for one ordered plan application.
  *
  * Failure policy is stop-and-resume: the apply job halts on the first failed or
@@ -597,7 +644,7 @@ export const runnerEffectReceiptV1Schema = z.strictObject({
    * nothing about how many steps were supposed to run, so a truncated apply
    * would read as a successful one.
    */
-  plannedOperations: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  plannedOperations: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   status: z.enum(["running", "applied", "stopped"]),
   /** The step that halted the plan, or null when every step in the plan ran. */
   stoppedAtStep: stepName.nullable(),
@@ -605,8 +652,23 @@ export const runnerEffectReceiptV1Schema = z.strictObject({
    * Recorded steps, in plan order. No count ceiling here either — the bound is
    * `EFFECT_TRANSPORT_MAX_BYTES`, enforced below over the canonical receipt.
    */
-  operations: z.array(runnerPlanStepReceiptV1Schema).min(1),
+  operations: z.array(runnerPlanStepReceiptV1Schema),
+  /**
+   * The plan's message, once apply tried it. Only after every operation
+   * applied, so only on an applied receipt. A plan whose only effect is a
+   * message has no operations, which is the one receipt with none.
+   */
+  messages: z.array(runnerMessageReceiptV1Schema).min(1).max(1).optional(),
 }).superRefine((receipt, context) => {
+  if (receipt.plannedOperations > 0 && receipt.operations.length === 0) {
+    context.addIssue({ code: "custom", path: ["operations"], message: "a receipt for a plan with steps records at least one" });
+  }
+  if (receipt.plannedOperations === 0 && receipt.messages === undefined) {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message" });
+  }
+  if (receipt.messages !== undefined && receipt.status !== "applied") {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a message is tried only after every step applied" });
+  }
   const bytes = canonicalJsonByteLength(receipt);
   if (bytes === null) {
     context.addIssue({ code: "custom", message: "receipt cannot be canonically serialized" });

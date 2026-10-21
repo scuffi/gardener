@@ -240,6 +240,10 @@ const operationOptions = [
 ] as const;
 
 const reservedMarker = /(?:<!--\s*gardener-operation:|gardener-operation:|gardener-idempotency:)/i;
+/** Whether text carries a marker apply uses to recognise what it wrote. Model text may never forge one. */
+export function containsReservedOperationMarker(text: string): boolean {
+  return reservedMarker.test(text);
+}
 function collectStrings(value: unknown, output: string[]): void {
   if (typeof value === "string") output.push(value);
   else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output));

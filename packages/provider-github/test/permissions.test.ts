@@ -78,3 +78,14 @@ describe("operation permission mapping", () => {
     expect(readOnlyApply).toEqual([]);
   });
 });
+
+describe("declared effect permissions", () => {
+  it("map every declarable effect, handling message.send explicitly with reads only", async () => {
+    const { effectApplyPermissions } = await import("../src/permissions");
+    const { taskEffectKindValues } = await import("@gardener/contracts");
+    expect(effectApplyPermissions("message.send")).toEqual({ discussions: "read", issues: "read", "pull-requests": "read" });
+    for (const kind of taskEffectKindValues) expect(() => effectApplyPermissions(kind), kind).not.toThrow();
+    expect(effectApplyPermissions("issue.comment.create")).toEqual(operationApplyPermissions("issue.comment.create"));
+    expect(OPERATION_TOKEN_PERMISSIONS).not.toHaveProperty("message.send");
+  });
+});

@@ -160,6 +160,19 @@ describe("trigger matching", () => {
     }))).rejects.toThrow(/does not declare trigger/);
   });
 
+  it("refuses to start the model for a labeled event whose added label isn't in labels-all", async () => {
+    // The session completes such runs as a skip first; this is the backstop.
+    const labeled = (label: string) => ({
+      ...pullRequestEvent("1374842705"),
+      kind: "github.pull_request.labeled",
+      workflow: { ...pullRequestEvent("1374842705").workflow, eventName: "pull_request" },
+      label,
+    }) as NormalizedEventV1;
+    const triggers: TaskBundleV1["triggers"] = [{ kind: "github.pull_request.labeled", labelsAll: ["ready"] }];
+    await expect(createTaskHarnessRequest(await request(labeled("ready"), { triggers }))).resolves.toBeDefined();
+    await expect(createTaskHarnessRequest(await request(labeled("other"), { triggers }))).rejects.toThrow(/does not declare trigger/);
+  });
+
   it("refuses to start the model for an event the authors filter excludes", async () => {
     // The session completes such runs as a skip first; this is the backstop.
     await expect(createTaskHarnessRequest(await request(pullRequestEvent("1374842705"), {
