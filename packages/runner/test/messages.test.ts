@@ -2,8 +2,12 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { taskEffectPlanV1Schema, type TaskEffectPlanV1 } from "@gardener/contracts";
 import type { RunnerPlanStepReceiptV1 } from "@gardener/protocol";
+import { isMessageMarkupCharacter } from "@gardener/contracts";
 import {
+  defangMessageText,
   googleChatMessageId,
+  neutralizeLineStart,
+  messageEmoji,
   messageKey,
   sanitizeMessageText,
   scrubDestination,
@@ -19,8 +23,10 @@ const SLACK = "https://hooks.slack.com/services/T0SECRET1/B0SECRET2/abcdefSECRET
 const PLANNED = "2026-10-21T10:00:00Z";
 
 const input = (overrides: Partial<RenderedMessageInput> = {}): RenderedMessageInput => ({
+  emoji: "🐛",
+  repositoryName: "repo",
   subjectUrl: "https://github.com/owner/repo/issues/7",
-  subjectLabel: "owner/repo#7",
+  number: 7,
   title: "App crashes",
   author: "octocat",
   summary: "Crash on start for every user.",
@@ -45,7 +51,7 @@ function plan(extra: Partial<TaskEffectPlanV1> = {}): TaskEffectPlanV1 {
 }
 
 /** GitHub answers the subject read; the chat service answers with `chat`. */
-function service(options: { updatedAt?: string; url?: string; title?: string; chat?: Response | Error; read?: number } = {}) {
+function service(options: { updatedAt?: string; url?: string; title?: string; labels?: unknown; chat?: Response | Error; read?: number } = {}) {
   const posts: { url: string; body: string; redirect?: RequestRedirect | undefined }[] = [];
   const fetchImpl = vi.fn(async (request: RequestInfo | URL, init?: RequestInit) => {
     const url = String(request);
@@ -56,6 +62,7 @@ function service(options: { updatedAt?: string; url?: string; title?: string; ch
         title: options.title ?? "App crashes <users/all>",
         html_url: options.url ?? "https://github.com/owner/repo/issues/7",
         user: { login: "octocat" },
+        labels: options.labels ?? [{ name: "bug" }],
       });
     }
     posts.push({ url, body: String(init?.body), redirect: init?.redirect });
@@ -80,8 +87,56 @@ describe("sanitizing message text", () => {
   it("makes text one inert line, with the same predicates as the summary refusal", () => {
     expect(sanitizeMessageText("a\nb\r\n\tc\u2028d\u2029e")).toBe("a b c d e");
     expect(sanitizeMessageText("zero\u200bwidth\u202eflip\u0000")).toBe("zerowidthflip");
-    expect(sanitizeMessageText("<users/all> `x` a&b")).toBe("‹users/all› ʼxʼ a&b");
+    expect(sanitizeMessageText("<users/all> `x` a&b")).toBe("‹users/all› 'x' a&b");
+    expect(sanitizeMessageText("*bold* _it_ ~st~")).toBe("∗bold∗ ˍitˍ ∼st∼");
     expect(sanitizeMessageText("  spaced   out  ")).toBe("spaced out");
+  });
+
+  it("replaces every markup character the summary refusal names, except & which each transport handles", () => {
+    for (const character of ["<", ">", "`", "&", "*", "_", "~"]) {
+      const kept = sanitizeMessageText(`a${character}b`).includes(character);
+      expect(kept, character).toBe(character === "&");
+    }
+    expect(["<", ">", "`", "&"].every(isMessageMarkupCharacter)).toBe(true);
+  });
+
+  it("normalizes compatibility forms first, so fullwidth markup and dots are caught", () => {
+    const leader = "\u2024";
+    expect(sanitizeMessageText("\uFF1Cusers/all\uFF1E \uFF0Abold\uFF0A \uFF3Fit\uFF3F")).toBe("‹users/all› ∗bold∗ ˍitˍ");
+    expect(sanitizeMessageText("evil\uFF0Eexample")).toBe(`evil${leader}example`);
+    expect(sanitizeMessageText("evil\uFF61example")).toBe(`evil${leader}example`);
+    expect(sanitizeMessageText("evil\u3002example")).toBe(`evil${leader}example`);
+    // Already defanged text stays defanged: U+2024 normalizes to `.` and is caught again.
+    expect(sanitizeMessageText(`evil${leader}example`)).toBe(`evil${leader}example`);
+    expect(sanitizeMessageText("ev\u200Bil.example")).toBe(`evil${leader}example`);
+  });
+
+  it("defangs internationalized hosts", () => {
+    const leader = "\u2024";
+    expect(defangMessageText("see пример.рф now")).toBe(`see пример${leader}рф now`);
+    expect(defangMessageText("evil.рф")).toBe(`evil${leader}рф`);
+    expect(defangMessageText("https://münchen.example/x")).toBe(`https:\u2215\u2215münchen${leader}example/x`);
+  });
+
+  it("defangs filenames with TLD-like extensions on purpose, and leaves bare IPv4 and localhost", () => {
+    const leader = "\u2024";
+    expect(defangMessageText("server.ts and README.md")).toBe(`server${leader}ts and README${leader}md`);
+    expect(defangMessageText("192.168.1.1 and 1.2.3.4:8080")).toBe("192.168.1.1 and 1.2.3.4:8080");
+    expect(defangMessageText("localhost")).toBe("localhost");
+    expect(defangMessageText("http://localhost:3000")).toBe("http:\u2215\u2215localhost:3000");
+  });
+
+  it("defangs anything a client could autolink, and leaves prose alone", () => {
+    const leader = "\u2024";
+    expect(defangMessageText("https://evil.example")).toBe(`https:\u2215\u2215evil${leader}example`);
+    expect(defangMessageText("see www.phish.example now")).toBe(`see www${leader}phish${leader}example now`);
+    expect(defangMessageText("evil.example/login")).toBe(`evil${leader}example/login`);
+    expect(defangMessageText("mail a@b.co")).toBe(`mail a@b${leader}co`);
+    expect(defangMessageText("ftp://10.0.0.1/x")).toBe("ftp:\u2215\u221510.0.0.1/x");
+    for (const prose of ["Crash on start. Every user, since 2.4.1.", "Fixes #12 for @octocat", "v1.2.3 and node 22.x", "e.g. this, U.S.A.", "Ошибка при запуске. Всегда."]) {
+      expect(defangMessageText(prose), prose).toBe(prose);
+    }
+    expect(sanitizeMessageText("Go to https://evil.example/login now")).not.toMatch(/:\/\/|evil\.example/);
   });
 
   it("truncates by code points, never splitting a surrogate pair", () => {
@@ -112,21 +167,93 @@ describe("transports", () => {
     }
   });
 
-  it("render one Gardener link, then the title and summary in code spans", () => {
-    const { text, body } = transportFor(GOOGLE)!.render(input({ title: "Bad <users/all> `x` www.evil.example &lt;!channel&gt;" }));
-    expect(text).toBe("<https://github.com/owner/repo/issues/7|owner/repo#7> `Bad ‹users/all› ʼxʼ www.evil.example &lt;!channel&gt;` (@octocat)\n`Crash on start for every user.`");
+  it("render the notifier format: emoji, repository, one link, author, title, then the summary", () => {
+    const { text, body } = transportFor(GOOGLE)!.render(input({ title: "Tracking: response schemas" }));
+    expect(text).toBe("🐛 repo <https://github.com/owner/repo/issues/7|#7> (@octocat) - Tracking: response schemas\nCrash on start for every user.");
     expect(body).toEqual({ text });
+    expect(text).not.toContain("`");
+  });
+
+  const HOSTILE = [
+    "<users/all>", "<!channel>", "<https://evil.example|click>", "https://evil.example", "www.phish.example",
+    "evil.example/login", "&lt;!channel&gt;", "*bold*", "_it_", "~st~", "`code`", "```block```",
+  ];
+
+  it("leave hostile titles and summaries inert in both transports, with Gardener's link the only one", () => {
+    for (const hostile of HOSTILE) {
+      for (const destination of [GOOGLE, SLACK]) {
+        const { text } = transportFor(destination)!.render(input({ title: `x ${hostile} y`, summary: `s ${hostile} t` }));
+        const [first, second] = text.split("\n") as [string, string];
+        // One `<…|…>` link, the subject's; no formatting characters or URLs after it.
+        expect(text.match(/</g), `${hostile} ${destination}`).toHaveLength(1);
+        expect(first.startsWith("🐛 repo <https://github.com/owner/repo/issues/7|#7> (@octocat) - "), hostile).toBe(true);
+        for (const part of [first.slice(first.indexOf(" - ")), second]) {
+          expect(part, `${hostile} ${destination}`).not.toMatch(/[<>*_~`]|:\/\/|evil\.example|phish\.example/);
+        }
+      }
+    }
+  });
+
+  it("sanitize the repository name like the title, so it can't format or link either", () => {
+    const first = (repositoryName: string, destination = GOOGLE) =>
+      transportFor(destination)!.render(input({ repositoryName })).text.split(" <")[0];
+    expect(first("my_repo_name")).toBe("🐛 myˍrepoˍname");
+    expect(first("docs.rs")).toBe("🐛 docs\u2024rs");
+    expect(first("")).toBe("🐛 repository");
+    for (const hostile of HOSTILE) {
+      for (const destination of [GOOGLE, SLACK]) {
+        const { text } = transportFor(destination)!.render(input({ repositoryName: hostile }));
+        expect(text.match(/</g), `${hostile} ${destination}`).toHaveLength(1);
+        expect(text.split(" <")[0], `${hostile} ${destination}`).not.toMatch(/[<>*_~`]|:\/\/|evil\.example|phish\.example/);
+      }
+    }
+  });
+
+  it("neutralize a list marker at the start of the summary line, and nothing else", () => {
+    expect(neutralizeLineStart("- item")).toBe("\u2010 item");
+    expect(neutralizeLineStart("+ item")).toBe("\uFE62 item");
+    expect(neutralizeLineStart("12. item")).toBe("12\u2024 item");
+    for (const plain of ["-item", "1.5 is out", "a - b", "1) item", "no marker"]) expect(neutralizeLineStart(plain), plain).toBe(plain);
+    const second = (summary: string) => transportFor(GOOGLE)!.render(input({ summary })).text.split("\n")[1];
+    expect(second("- crash on start")).toBe("\u2010 crash on start");
+    expect(second("  1. crash")).toBe("1\u2024 crash");
+    // The title never starts a line, so it is left alone.
+    expect(transportFor(GOOGLE)!.render(input({ title: "- a list?" })).text).toContain(" - - a list?\n");
+  });
+
+  it("render the hostile cases exactly as expected", () => {
+    const leader = "\u2024";
+    const google = (title: string) => transportFor(GOOGLE)!.render(input({ title })).text.split("\n")[0]!.split(" - ")[1];
+    expect(google("<users/all>")).toBe("‹users/all›");
+    expect(google("https://evil.example")).toBe(`https:\u2215\u2215evil${leader}example`);
+    expect(google("www.phish.example")).toBe(`www${leader}phish${leader}example`);
+    expect(google("evil.example/login")).toBe(`evil${leader}example/login`);
+    expect(google("&lt;!channel&gt;")).toBe("&lt;!channel&gt;");
+    expect(google("*bold* _it_ ~st~ `x`")).toBe("∗bold∗ ˍitˍ ∼st∼ 'x'");
   });
 
   it("escape & first for Slack, so an encoded mention stays text", () => {
-    const { text } = transportFor(SLACK)!.render(input({ title: "&lt;!channel&gt; & <!here>", author: "a&b" }));
-    expect(text).toBe("<https://github.com/owner/repo/issues/7|owner/repo#7> `&amp;lt;!channel&amp;gt; &amp; ‹!here›` (@a&amp;b)\n`Crash on start for every user.`");
+    const { text } = transportFor(SLACK)!.render(input({ title: "&lt;!channel&gt; & <!here>", author: "a&b", repositoryName: "r&d" }));
+    expect(text).toBe("🐛 r&amp;d <https://github.com/owner/repo/issues/7|#7> (@a&amp;b) - &amp;lt;!channel&amp;gt; &amp; ‹!here›\nCrash on start for every user.");
     expect(text).not.toMatch(/<!/);
   });
 
   it("truncate the title to 200 characters", () => {
     const { text } = transportFor(GOOGLE)!.render(input({ title: "x".repeat(500) }));
-    expect(text).toContain(`\`${"x".repeat(199)}…\``);
+    expect(text).toContain(` - ${"x".repeat(199)}…\n`);
+  });
+});
+
+describe("the message emoji", () => {
+  it("comes from the first telling label, compared case-insensitively and exactly", () => {
+    expect(messageEmoji(["Regression", "bug"])).toBe("🔻");
+    expect(messageEmoji(["enhancement", "BUG"])).toBe("🐛");
+    expect(messageEmoji(["Enhancement"])).toBe("✨");
+    expect(messageEmoji(["question"])).toBe("❓");
+    expect(messageEmoji(["documentation", "question"])).toBe("❓");
+    expect(messageEmoji(["documentation"])).toBe("📚");
+    expect(messageEmoji(["bugs", "type: bug", "not-a-regression"])).toBe("🆕");
+    expect(messageEmoji([])).toBe("🆕");
   });
 });
 
@@ -187,7 +314,7 @@ describe("sending the plan's message", () => {
     expect(JSON.parse(posts[0]!.body)).toEqual({ text: outcome!.text });
     // A redirect could carry the post somewhere the host check never saw.
     expect(posts[0]!.redirect).toBe("error");
-    expect(outcome!.text).toContain("`App crashes ‹users/all›`");
+    expect(outcome!.text).toBe("🐛 repo <https://github.com/owner/repo/issues/7|#7> (@octocat) - App crashes ‹users/all›\nCrash on start.");
   });
 
   it("posts to Google Chat with the plan's message id, leaving the destination's own query as given", async () => {
@@ -201,6 +328,35 @@ describe("sending the plan's message", () => {
     const other = service();
     await send(encoded, other.fetch, { planDigest: "d".repeat(64) });
     expect(other.posts[0]!.url).not.toContain(id);
+  });
+
+  it("picks the emoji from the labels read at apply, which include the plan's own", async () => {
+    const emoji = async (labels: unknown) => (await send(SLACK, service({ labels }).fetch))?.text?.split(" ")[0];
+    expect(await emoji([{ name: "priority: high" }, { name: "Enhancement" }])).toBe("✨");
+    expect(await emoji([])).toBe("🆕");
+    expect(await emoji("not a list")).toBe("🆕");
+    expect(await emoji([null, 3, { name: 4 }, { name: "regression" }])).toBe("🔻");
+  });
+
+  it("reads a discussion's labels through GraphQL", async () => {
+    const posts: string[] = [];
+    let query = "";
+    const fetchImpl = (async (request: RequestInfo | URL, init?: RequestInit) => {
+      if (String(request) === "https://api.github.com/graphql") {
+        query = String(init?.body);
+        return Response.json({ data: { repository: { discussion: {
+          updatedAt: PLANNED, title: "How do I?", url: "https://github.com/owner/repo/discussions/9",
+          author: { login: "asker" }, labels: { nodes: [{ name: "Question" }] },
+        } } } });
+      }
+      posts.push(String(init?.body));
+      return new Response("ok");
+    }) as typeof fetch;
+    const discussionPlan = plan({ messages: [{ channel: "default", subject: { kind: "discussion", discussionNumber: 9, expectedDiscussionUpdatedAt: PLANNED }, summary: "Asked." }] });
+    const outcome = await send(SLACK, fetchImpl, { plan: discussionPlan });
+    expect(query).toContain("labels(first:100){ nodes{ name } }");
+    expect(outcome?.text).toBe("❓ repo <https://github.com/owner/repo/discussions/9|#9> (@asker) - How do I?\nAsked.");
+    expect(posts).toHaveLength(1);
   });
 
   it("posts to Slack at the destination as given, with no key", async () => {

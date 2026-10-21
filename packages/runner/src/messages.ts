@@ -17,7 +17,6 @@
 import { createHash } from "node:crypto";
 import {
   isMessageInvisibleCharacter,
-  isMessageMarkupCharacter,
   messageSubjectNumber,
   type MessageV1,
   type TaskEffectPlanV1,
@@ -29,14 +28,38 @@ export type MessageTransportId = NonNullable<RunnerMessageReceiptV1["transport"]
 
 /** Everything a transport renders, already read from GitHub by trusted code. Provider-neutral. */
 export interface RenderedMessageInput {
+  /** Chosen from the subject's labels by `messageEmoji`, so every transport agrees. */
+  emoji: string;
+  /** The repository's name without its owner. */
+  repositoryName: string;
   /** The subject's own GitHub web URL, checked to be in this repository. */
   subjectUrl: string;
-  /** `owner/repo#N`. */
-  subjectLabel: string;
+  /** The subject's number, shown as `#N` on the one link. */
+  number: number;
   title: string;
   /** The subject author's login. */
   author: string;
   summary: string;
+}
+
+/**
+ * Label names that pick a message's emoji, most telling first. Compared
+ * case-insensitively and exactly, against the labels read at apply, which
+ * include any the plan just added.
+ */
+const LABEL_EMOJI: readonly (readonly [string, string])[] = [
+  ["regression", "🔻"],
+  ["bug", "🐛"],
+  ["enhancement", "✨"],
+  ["question", "❓"],
+  ["documentation", "📚"],
+];
+const DEFAULT_EMOJI = "🆕";
+
+/** The emoji for a subject with these labels: the first entry of `LABEL_EMOJI` it carries, else 🆕. */
+export function messageEmoji(labels: readonly string[]): string {
+  const names = new Set(labels.map((label) => label.toLowerCase()));
+  return LABEL_EMOJI.find(([name]) => names.has(name))?.[1] ?? DEFAULT_EMOJI;
 }
 
 /**
@@ -81,37 +104,108 @@ const ERROR_DETAIL_MAX_CHARACTERS = 200;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const GITHUB_TIMEOUT_MS = 10_000;
 
-/** Safe lookalikes for the characters a chat service treats as markup. `&` is left to the transport. */
-const LOOKALIKES: Readonly<Record<string, string>> = { "<": "‹", ">": "›", "`": "ʼ" };
+/**
+ * Lookalikes for every character Google Chat or Slack treats as markup: `<`
+ * and `>` open links and mentions (`<!channel>`, `<users/all>`), and `*`, `_`,
+ * `~` and backticks are bold, italic, strike and code. `&` is left to the
+ * transport (Slack escapes it; Chat does not decode entities). `#123` and
+ * `@login` stay as they are: both products show them as plain text.
+ */
+const LOOKALIKES: Readonly<Record<string, string>> = {
+  "<": "‹",
+  ">": "›",
+  "*": "∗",
+  "`": "'",
+  "_": "ˍ",
+  "~": "∼",
+};
 
 /**
- * Text as one inert line: all whitespace (newlines and U+2028/U+2029 included)
- * collapsed to single spaces, invisible characters dropped, `<`, `>` and
- * backticks replaced with lookalikes, and at most `maxCharacters` code points,
- * so a surrogate pair is never split. Uses the same predicates as the
- * proposal's summary refusal, so the two cannot drift.
+ * A host-like token: labels of letters, digits, marks or hyphens in any
+ * script, joined by dots, ending in two or more letters, `www.` names and
+ * internationalized ones (`пример.рф`) included. A dot is `.` or U+3002
+ * IDEOGRAPHIC FULL STOP, which IDNA also reads as a label separator; the
+ * fullwidth and halfwidth stops (U+FF0E, U+FF61) become one of those under the
+ * NFKC normalization `sanitizeMessageText` applies first.
+ */
+const HOST_LIKE = /[\p{L}\p{N}\p{M}-]+(?:[.\u3002][\p{L}\p{N}\p{M}-]+)*[.\u3002]\p{L}{2,}/gu;
+
+/**
+ * Text no chat client can turn into a link: `://` becomes `:∕∕` (U+2215), and
+ * the dots of every host-like token become U+2024 ONE DOT LEADER, so
+ * `www.phish.example` or `evil.example/login` reads the same but autolinks to
+ * nothing. Both replacements keep the length.
+ *
+ * What it deliberately leaves or catches:
+ * - Versions and abbreviations (`1.2.3`, `e.g.`, `U.S.A.`) don't end in a
+ *   two-letter label, so they are untouched.
+ * - Filenames with a TLD-like extension (`server.ts`, `README.md`,
+ *   `package.json`, `Node.js`) are defanged too, on purpose: `.ts`, `.md`,
+ *   `.rs`, `.io`, `.sh` and `.py` are all real TLDs, and a rule that spared
+ *   them would spare those hosts. The cost is a dot that doesn't copy as one.
+ * - Bare IPv4 addresses (`192.168.1.1`) and `localhost` are not defanged:
+ *   neither product autolinks them without a scheme, and with one the `://`
+ *   is already broken.
+ * - In CJK text a sentence-ending `。` between two runs of letters reads as a
+ *   host separator and becomes `․`; that is the price of catching IDN hosts
+ *   written with it.
+ */
+export function defangMessageText(text: string): string {
+  return text.replaceAll("://", ":\u2215\u2215").replace(HOST_LIKE, (host) => host.replace(/[.\u3002]/g, "\u2024"));
+}
+
+/**
+ * Text as one inert line: NFKC-normalized first, so fullwidth and other
+ * compatibility forms of markup and dots (`＜`, `＊`, `．`) are caught as the
+ * characters they stand for; then all whitespace (newlines and U+2028/U+2029
+ * included) collapsed to single spaces, invisible characters dropped, markup characters
+ * replaced with lookalikes, link-like text defanged, and at most
+ * `maxCharacters` code points, so a surrogate pair is never split. Uses the
+ * same predicates as the proposal's summary refusal, so the two cannot drift.
+ * Nothing else keeps a title or summary from formatting, mentioning or
+ * linking (the format has no code spans), so the only link in a message is
+ * the one Gardener builds to the subject.
  */
 export function sanitizeMessageText(text: string, maxCharacters?: number): string {
-  const characters = Array.from(text.replace(/\s+/gu, " "))
+  const characters = Array.from(text.normalize("NFKC").replace(/\s+/gu, " "))
     .filter((character) => !isMessageInvisibleCharacter(character))
-    .map((character) => isMessageMarkupCharacter(character) ? LOOKALIKES[character] ?? character : character);
-  const flat = characters.join("").replace(/ {2,}/g, " ").trim();
+    .map((character) => LOOKALIKES[character] ?? character);
+  const flat = defangMessageText(characters.join("").replace(/ {2,}/g, " ").trim());
   const kept = Array.from(flat);
   if (maxCharacters === undefined || kept.length <= maxCharacters) return flat;
   return `${kept.slice(0, maxCharacters - 1).join("").trimEnd()}…`;
 }
 
 /**
- * The text both products accept: one link, built by Gardener to the subject's
- * own GitHub URL, then the title and summary inside inline code spans, which
- * neither product formats, autolinks or treats as mentions. `escape` is the
- * transport's own escaping of the untrusted parts.
+ * A list marker that would open the summary line (`- `, `+ `, `1. `) with its
+ * first character swapped for a lookalike, so Google Chat shows the text
+ * rather than a bullet. (`* ` and `> ` are already lookalikes.)
+ */
+export function neutralizeLineStart(text: string): string {
+  return text
+    .replace(/^-(?= )/, "\u2010")
+    .replace(/^\+(?= )/, "\uFE62")
+    .replace(/^(\d+)\.(?= )/, "$1\u2024");
+}
+
+/**
+ * The text both products accept, as two lines:
+ *
+ *     🐛 repo <https://github.com/owner/repo/issues/7|#7> (@author) - Title
+ *     Summary
+ *
+ * The one link is built by Gardener to the subject's own GitHub URL. Every
+ * text field (repository name, title, author, summary) is sanitized
+ * (`sanitizeMessageText`) so it cannot format, mention or link: a repository
+ * named `my_repo_name` would otherwise italicize, and one named `docs.rs` would
+ * add a second link. `escape` is the transport's own escaping on top.
  */
 function messageText(message: RenderedMessageInput, escape: (text: string) => string): string {
+  const repository = sanitizeMessageText(message.repositoryName, 100) || "repository";
   const title = sanitizeMessageText(message.title, TITLE_MAX_CHARACTERS) || "(untitled)";
   const author = sanitizeMessageText(message.author, 100) || "unknown";
-  const summary = sanitizeMessageText(message.summary) || "(no summary)";
-  return `<${message.subjectUrl}|${escape(message.subjectLabel)}> \`${escape(title)}\` (@${escape(author)})\n\`${escape(summary)}\``;
+  const summary = neutralizeLineStart(sanitizeMessageText(message.summary) || "(no summary)");
+  return `${message.emoji} ${escape(repository)} <${message.subjectUrl}|#${message.number}> (@${escape(author)}) - ${escape(title)}\n${escape(summary)}`;
 }
 
 /**
@@ -232,6 +326,10 @@ function slackTransport(destination: string, fetchImpl: typeof fetch): MessageTr
   return {
     id: "slack-webhook",
     render(message) {
+      // Only the `&` arm can fire today: every field reaching `escape` has been
+      // through `sanitizeMessageText`, which leaves no `<` or `>`. The other
+      // arms stay as a backstop for a field added without it (as the
+      // repository name once was); `&` must stay first either way.
       const text = messageText(message, (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
       return { body: { text }, text };
     },
@@ -265,11 +363,15 @@ export interface MessageSubjectRead {
   title: string;
   url: string;
   author: string;
+  /** Label names as read now, which include any the plan's own steps added. */
+  labels: string[];
 }
+
+const MAX_LABELS = 100;
 
 const DISCUSSION_QUERY = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){
-    discussion(number:$number){ updatedAt title url author{ login } }
+    discussion(number:$number){ updatedAt title url author{ login } labels(first:100){ nodes{ name } } }
   }
 }`;
 
@@ -306,7 +408,13 @@ export async function readMessageSubject(input: {
       const discussion = (JSON.parse(body.text) as { data?: { repository?: { discussion?: Record<string, unknown> | null } } })
         .data?.repository?.discussion;
       if (!discussion) return null;
-      value = { updated_at: discussion.updatedAt, title: discussion.title, html_url: discussion.url, user: discussion.author };
+      value = {
+        updated_at: discussion.updatedAt,
+        title: discussion.title,
+        html_url: discussion.url,
+        user: discussion.author,
+        labels: (discussion.labels as { nodes?: unknown } | null | undefined)?.nodes,
+      };
     } else {
       const path = input.subject.kind === "issue" ? `issues/${input.subject.issueNumber}` : `pulls/${input.subject.pullNumber}`;
       const response = await (input.fetch ?? fetch)(`${repoPath}/${path}`, { headers, redirect: "error", signal });
@@ -322,10 +430,19 @@ export async function readMessageSubject(input: {
       title: value.title,
       url: value.html_url,
       author: typeof user?.login === "string" ? user.login : "ghost",
+      labels: labelNames(value.labels),
     };
   } catch {
     return null;
   }
+}
+
+/** Label names from REST (`[{ name }]`) or GraphQL nodes; anything else is no labels. */
+function labelNames(labels: unknown): string[] {
+  if (!Array.isArray(labels)) return [];
+  return labels.slice(0, MAX_LABELS)
+    .map((label) => typeof label === "string" ? label : (label as { name?: unknown } | null)?.name)
+    .filter((name): name is string => typeof name === "string");
 }
 
 /** The subject's own web URL in this repository, so the one link a message carries can't point elsewhere. */
@@ -444,7 +561,9 @@ export async function sendPlanMessage(input: {
   const named = { ...sent, subject: { kind: subjectKindFromUrl(subject.url, message.subject.kind), number: sent.subject.number } };
   const rendered = transport.render({
     subjectUrl: subject.url,
-    subjectLabel: `${input.plan.repository.fullName}#${messageSubjectNumber(message.subject)}`,
+    emoji: messageEmoji(subject.labels),
+    repositoryName: input.plan.repository.fullName.split("/")[1] ?? input.plan.repository.fullName,
+    number: messageSubjectNumber(message.subject),
     title: subject.title,
     author: subject.author,
     summary: message.summary,

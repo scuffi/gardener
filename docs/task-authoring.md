@@ -537,18 +537,30 @@ the model is refused and can retry otherwise. A task may not declare both `messa
 workflow must be 0.1.18 or later; `generate` refuses `message.send` on older pins and says to run
 `gardener upgrade`.
 
-The message is one link to the subject on GitHub, then its title and author, then the summary:
+A message is two lines: an emoji, the repository's name, a link to the subject on GitHub, its
+author and title, then the summary:
 
 ```text
-owner/repo#123  `App crashes on start`  (@octocat)
-`Crash on start for every user since 2.4.`
+🐛 repo #123 (@octocat) - App crashes on start
+Crash on start for every user since 2.4.
 ```
+
+`#123` is the link. The emoji comes from the subject's labels as apply reads them, including any
+this run just added: `regression` 🔻, `bug` 🐛, `enhancement` ✨, `question` ❓, `documentation` 📚,
+checked in that order and matched case-insensitively; otherwise 🆕.
 
 Apply reads the subject first. It sends nothing, and records the message as `conflicted`, if
 someone other than this run changed the subject since the model read it, or if its link no longer
-points into this repository. The title and summary are shown as code, cut to one line, with any
-`<`, `>` and backticks swapped for lookalike characters, so neither can add a link or a mention.
-The apply job summary shows the text sent, or why nothing was sent.
+points into this repository. The repository name, title and summary are cut to one line, and
+characters the chat products treat as formatting (`<`, `>`, `*`, `_`, `~` and backticks, including
+their fullwidth forms) are swapped for lookalikes. Anything that looks like a web address is
+defanged (`https://` becomes `https:∕∕`, and the dots in `evil.example` or `пример.рф` become `․`),
+so none of them can add a link, a mention or formatting. Filenames with an extension that is also a
+top-level domain, such as `server.ts` or `README.md`, are defanged too, deliberately: those are
+real domains. Bare IP addresses and `localhost` are left alone, since neither product links them.
+A summary that starts with a list marker (`- `, `+ `, `1. `) has it swapped for a lookalike, so it
+shows as text rather than a bullet. The apply job summary shows the text sent, or why nothing was
+sent.
 
 A message that could not be sent (the chat service was down or refused it) fails the apply job
 after every operation applied. Re-running the job sends the message again without repeating the

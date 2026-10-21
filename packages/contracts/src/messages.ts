@@ -30,9 +30,10 @@ export function isMessageInvisibleCharacter(character: string): boolean {
 
 /**
  * Characters that are markup in a chat service's text: `<` and `>` open Slack
- * links and mentions (`<!channel>`, `<users/all>`), a backtick would end the
- * code span the text is rendered in, and `&` lets Slack decode `&lt;` into a
- * real `<` before it parses mrkdwn.
+ * links and mentions (`<!channel>`, `<users/all>`), a backtick starts code
+ * formatting, and `&` lets Slack decode `&lt;` into a real `<` before it parses
+ * mrkdwn. A summary is refused for these; the runner's sanitizer also replaces
+ * them (and `*`, `_`, `~`) in text the model didn't write, such as titles.
  */
 export function isMessageMarkupCharacter(character: string): boolean {
   return character === "<" || character === ">" || character === "`" || character === "&";

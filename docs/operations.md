@@ -179,6 +179,11 @@ from the step's environment, and never written to the plan, the receipt or the j
 skipped, and the job summary says so without showing it. Without the secret, runs skip the message.
 Anyone who can edit repository secrets can point messages at another space.
 
+Each message shows an emoji picked from the subject's labels (`regression`, `bug`, `enhancement`,
+`question`, `documentation`, else 🆕), the repository name, a link to the subject, its author and
+title, and on a second line the model's summary. See
+[Messages](task-authoring.md#messages) for the exact format and how titles are made inert.
+
 A plan's Google Chat message reaches the space at most once: each post carries a `messageId` derived from the
 plan's digest (not secret), and Chat refuses a repeat with `409 ALREADY_EXISTS`, which apply counts
 as sent. Slack has no such key, so a rerun after a lost answer can post twice. Google Chat accepts about

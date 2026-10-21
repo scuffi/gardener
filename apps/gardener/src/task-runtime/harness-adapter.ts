@@ -524,7 +524,7 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
   if (effects.includes(MESSAGE_SEND_KIND)) {
     notes.push(
       "message.send posts one short message about an issue, pull request or discussion to the repository's chat space, at most once per run, "
-        + "and only after every other step has applied. It publishes no outputs and takes no referencesJson. Gardener adds the link, title and author itself; "
+        + "and only after every other step has applied. It publishes no outputs and takes no referencesJson. Gardener adds the link, title, author and an emoji from the labels itself, and shows your summary as plain text on its own line; "
         + "nothing is sent if the subject changed after you read its updatedAt.",
     );
   }

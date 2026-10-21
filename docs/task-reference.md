@@ -197,7 +197,8 @@ repository secret). It is declared in `effects` like an operation, but it is not
 - a run sends at most one, after every other step applied; it is not counted by
   `max-effect-operations` or `max-effect-bytes`, publishes no outputs and takes no references;
 - the model writes only a summary of at most 400 characters, one line of plain text without `<`,
-  `>`, `&` or backticks; Gardener adds the link, title and author;
+  `>`, `&` or backticks; Gardener adds an emoji from the subject's labels, the repository name, the
+  link, the author and the title (see [Messages](task-authoring.md#messages) for the format);
 - it needs no write scope; the caller grants read on issues, pull requests and discussions so apply
   can check the subject has not changed since the model read it, and sends nothing if it has;
 - under trigger scope it may only be about what triggered the run;

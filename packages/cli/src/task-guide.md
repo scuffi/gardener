@@ -188,6 +188,8 @@ instructions ask for an effect that isn't declared, it can't happen.
   after every other step applied. Name it exactly (`message.*` is not a glob). At most one per run;
   the summary is one line, at most 400 characters, without `<`, `>`, `&` or backticks. It can't be
   combined with `repository.exec`. Tell the model when to post, for example only for urgent issues.
+  The message reads `🐛 repo #123 (@author) - Title`, then the summary; the emoji follows the
+  subject's labels (`regression`, `bug`, `enhancement`, `question`, `documentation`, else 🆕).
   Nothing is sent if the subject changed since the model read it. On Slack, a rerun after a lost
   answer can post twice; Google Chat never posts a plan's message twice.
 

@@ -179,8 +179,15 @@ The summary is limited when the model proposes it: one line, at most 400 charact
 `&`, backticks, control or format characters, and no Gardener marker. Apply then fetches the
 subject's title, author and link itself, and refuses to send if the subject changed since planning,
 except by the plan's own steps, or if its link leaves the repository. The title and summary are
-sanitized with the same rules (lookalikes replace `<`, `>` and backticks; Slack's `&`, `<`, `>`
-are escaped) and shown as code, so the only link in a message is the one Gardener built.
+sanitized with the same rules, and so is the repository name: NFKC normalization first (so
+fullwidth `＜` or `．` count as `<` and `.`), control and format characters dropped, one line,
+lookalikes for every formatting character either product knows (`<`, `>`, `*`, `_`, `~`,
+backticks), and link-like text defanged (`://` becomes `:∕∕`, and the dots of anything shaped like
+a host name, in any script and including `。`, become U+2024), with Slack's `&` escaped first. A
+leading list marker on the summary line is swapped for a lookalike. Bare IPv4 addresses and
+`localhost` are not defanged; neither product links them without a scheme. No code span is relied on, so the only link in a
+message is the one Gardener built to the subject. `#123` and `@login` stay as text; neither product
+turns them into a link or a mention in incoming-webhook text.
 
 ## Known limitations
 

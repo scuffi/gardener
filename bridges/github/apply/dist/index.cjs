@@ -49020,6 +49020,18 @@ ${quote(text)}
 
 // src/messages.ts
 var import_node_crypto3 = require("node:crypto");
+var LABEL_EMOJI = [
+  ["regression", "\u{1F53B}"],
+  ["bug", "\u{1F41B}"],
+  ["enhancement", "\u2728"],
+  ["question", "\u2753"],
+  ["documentation", "\u{1F4DA}"]
+];
+var DEFAULT_EMOJI = "\u{1F195}";
+function messageEmoji(labels) {
+  const names = new Set(labels.map((label) => label.toLowerCase()));
+  return LABEL_EMOJI.find(([name2]) => names.has(name2))?.[1] ?? DEFAULT_EMOJI;
+}
 function messageKey(planDigest) {
   if (!/^[0-9a-f]{64}$/.test(planDigest)) throw new Error("message key needs the plan's SHA-256 digest");
   return (0, import_node_crypto3.createHash)("sha256").update(`gardener.message-key/v1
@@ -49035,20 +49047,35 @@ var TITLE_MAX_CHARACTERS = 200;
 var ERROR_DETAIL_MAX_CHARACTERS = 200;
 var MAX_RESPONSE_BYTES3 = 64 * 1024;
 var GITHUB_TIMEOUT_MS = 1e4;
-var LOOKALIKES = { "<": "\u2039", ">": "\u203A", "`": "\u02BC" };
+var LOOKALIKES = {
+  "<": "\u2039",
+  ">": "\u203A",
+  "*": "\u2217",
+  "`": "'",
+  "_": "\u02CD",
+  "~": "\u223C"
+};
+var HOST_LIKE = new RegExp("[\\p{L}\\p{N}\\p{M}-]+(?:[.\\u3002][\\p{L}\\p{N}\\p{M}-]+)*[.\\u3002]\\p{L}{2,}", "gu");
+function defangMessageText(text) {
+  return text.replaceAll("://", ":\u2215\u2215").replace(HOST_LIKE, (host) => host.replace(/[.\u3002]/g, "\u2024"));
+}
 function sanitizeMessageText(text, maxCharacters) {
-  const characters = Array.from(text.replace(/\s+/gu, " ")).filter((character) => !isMessageInvisibleCharacter(character)).map((character) => isMessageMarkupCharacter(character) ? LOOKALIKES[character] ?? character : character);
-  const flat = characters.join("").replace(/ {2,}/g, " ").trim();
+  const characters = Array.from(text.normalize("NFKC").replace(/\s+/gu, " ")).filter((character) => !isMessageInvisibleCharacter(character)).map((character) => LOOKALIKES[character] ?? character);
+  const flat = defangMessageText(characters.join("").replace(/ {2,}/g, " ").trim());
   const kept = Array.from(flat);
   if (maxCharacters === void 0 || kept.length <= maxCharacters) return flat;
   return `${kept.slice(0, maxCharacters - 1).join("").trimEnd()}\u2026`;
 }
+function neutralizeLineStart(text) {
+  return text.replace(/^-(?= )/, "\u2010").replace(/^\+(?= )/, "\uFE62").replace(/^(\d+)\.(?= )/, "$1\u2024");
+}
 function messageText(message, escape) {
+  const repository = sanitizeMessageText(message.repositoryName, 100) || "repository";
   const title = sanitizeMessageText(message.title, TITLE_MAX_CHARACTERS) || "(untitled)";
   const author = sanitizeMessageText(message.author, 100) || "unknown";
-  const summary2 = sanitizeMessageText(message.summary) || "(no summary)";
-  return `<${message.subjectUrl}|${escape(message.subjectLabel)}> \`${escape(title)}\` (@${escape(author)})
-\`${escape(summary2)}\``;
+  const summary2 = neutralizeLineStart(sanitizeMessageText(message.summary) || "(no summary)");
+  return `${message.emoji} ${escape(repository)} <${message.subjectUrl}|#${message.number}> (@${escape(author)}) - ${escape(title)}
+${escape(summary2)}`;
 }
 async function postJson(input2) {
   const { fetchImpl, destination, url: url2, body: body2, signal } = input2;
@@ -49140,9 +49167,10 @@ function transportFor(destination, fetchImpl = fetch) {
   if (url2.hostname === "hooks.slack.com") return slackTransport(destination, fetchImpl);
   return void 0;
 }
+var MAX_LABELS = 100;
 var DISCUSSION_QUERY2 = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){
-    discussion(number:$number){ updatedAt title url author{ login } }
+    discussion(number:$number){ updatedAt title url author{ login } labels(first:100){ nodes{ name } } }
   }
 }`;
 async function readMessageSubject(input2) {
@@ -49170,7 +49198,13 @@ async function readMessageSubject(input2) {
       if (body2.truncated) return null;
       const discussion = JSON.parse(body2.text).data?.repository?.discussion;
       if (!discussion) return null;
-      value = { updated_at: discussion.updatedAt, title: discussion.title, html_url: discussion.url, user: discussion.author };
+      value = {
+        updated_at: discussion.updatedAt,
+        title: discussion.title,
+        html_url: discussion.url,
+        user: discussion.author,
+        labels: discussion.labels?.nodes
+      };
     } else {
       const path3 = input2.subject.kind === "issue" ? `issues/${input2.subject.issueNumber}` : `pulls/${input2.subject.pullNumber}`;
       const response = await (input2.fetch ?? fetch)(`${repoPath}/${path3}`, { headers, redirect: "error", signal });
@@ -49185,11 +49219,16 @@ async function readMessageSubject(input2) {
       updatedAt: value.updated_at,
       title: value.title,
       url: value.html_url,
-      author: typeof user?.login === "string" ? user.login : "ghost"
+      author: typeof user?.login === "string" ? user.login : "ghost",
+      labels: labelNames3(value.labels)
     };
   } catch {
     return null;
   }
+}
+function labelNames3(labels) {
+  if (!Array.isArray(labels)) return [];
+  return labels.slice(0, MAX_LABELS).map((label) => typeof label === "string" ? label : label?.name).filter((name2) => typeof name2 === "string");
 }
 function subjectUrlInRepository(url2, repository, subject2) {
   const section = subject2.kind === "issue" ? "(?:issues|pull)" : subject2.kind === "pull_request" ? "pull" : "discussions";
@@ -49254,7 +49293,9 @@ async function sendPlanMessage(input2) {
   const named = { ...sent, subject: { kind: subjectKindFromUrl(subject2.url, message.subject.kind), number: sent.subject.number } };
   const rendered = transport.render({
     subjectUrl: subject2.url,
-    subjectLabel: `${input2.plan.repository.fullName}#${messageSubjectNumber(message.subject)}`,
+    emoji: messageEmoji(subject2.labels),
+    repositoryName: input2.plan.repository.fullName.split("/")[1] ?? input2.plan.repository.fullName,
+    number: messageSubjectNumber(message.subject),
     title: subject2.title,
     author: subject2.author,
     summary: message.summary
