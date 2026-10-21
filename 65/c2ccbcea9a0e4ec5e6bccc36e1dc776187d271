@@ -1,0 +1,105 @@
+.changeset/messages-and-labeled-triggers.md
+  s_de0b486c128948::t_cf9fb026101e0e 1-7
+.gardener/SKILL.md
+  s_de0b486c128948::t_b9263230c5a9eb 115-117,186-192
+.github/workflows/gardener-task.yml
+  s_de0b486c128948::t_10e524e60dc33c 41-44,215-217
+SECURITY.md
+  s_de0b486c128948::t_cba51c85d4a3df 127,164-184,219-224,243-246
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_de0b486c128948::t_ca23ce81738404 4-7,18,24,37-38,246-247,351,356-366,466,469-471,666-678,708,744-765
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_de0b486c128948::t_259051b18c5289 9,19-20,278-280,303-306,311-325,464,467-469,474-477,524-530
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_de0b486c128948::t_6e1bdae654a6fe 9-12,23,63-70,75-99,132-134
+apps/gardener/src/task-runtime/workflow-refs.ts
+  s_de0b486c128948::t_07662142a08e15 56-61,63-68,70-95,97-113
+apps/gardener/test/task-event-matching.test.ts
+  s_de0b486c128948::t_e7f145ed49b629 163-175
+apps/gardener/test/task-messages.test.ts
+  s_de0b486c128948::t_99b80622530416 1-295
+apps/gardener/test/task-trigger-filters.test.ts
+  s_de0b486c128948::t_28d4323804066b 46-73,223
+apps/gardener/test/task-workflow-refs.test.ts
+  s_de0b486c128948::t_2bb766d852b16e 7,9,56-61,63,76-77,79,81-89,92-93,98,102-108,110-115
+bridges/github/apply/action.yml
+  s_de0b486c128948::t_f33ae0ba2b90fc 27-30
+bridges/github/apply/dist/index.cjs
+  s_de0b486c128948::t_b61467a341d60a 20295-20297,20305,40304-40306,40483-40545,40847,41607-41618,42040-42053,42121-42122,42152,42240-42246,42353-42358,42878-42910,42924,42932-42938,42940-42948,46728-46732,47009,47016,48137,48142,48484,48487,48891-48892,48903,48913,48933,48937-48963,49021-49280,49284-49286,49291,49304,49318,49323-49328,49343-49345,49351,49402,49482-49506,49514,49541,49667,49677-49678,49776,49792,49828
+bridges/github/plan/dist/index.cjs
+  s_de0b486c128948::t_60c6011470a073 40292-40294,40471-40533,40836,41596-41607,42029-42042,42074-42075,42105,42193-42199,42306-42311,42831-42863,42877,42885-42891,42893-42901,45812,45821,45824-45826,45832-45836
+bridges/github/sync/dist/index.cjs
+  s_de0b486c128948::t_44a42823778180 27376-27378,27555-27617,27908-27915,27937,28722-28733,29121-29134,29166-29167,29197,29285-29291,29398-29403,29587-29595,29641,29671-29675,29748,29864-29871,29885,29933-29934,29936,30149,30260-30263,30350-30361,30363-30365,30423
+docs/operations.md
+  s_de0b486c128948::t_e0d4b93905ed5d 165-187,258-262
+docs/task-authoring.md
+  s_de0b486c128948::t_a27892e4463545 64-73,229-230,508-559
+docs/task-reference.md
+  s_de0b486c128948::t_47309afbaf8966 101,126-127,184,190-219
+packages/cli/src/actions-target.ts
+  s_de0b486c128948::t_7951b6014c2b06 4,11,118-122,181-188
+packages/cli/src/project.ts
+  s_de0b486c128948::t_f5814c6b598d72 13-14,28,407,583-590,745-765,768-770,855-859
+packages/cli/src/task-authoring.ts
+  s_de0b486c128948::t_dfc75178092176 10,14,34,37-41,45,206-223,237,305,308-309,311
+packages/cli/src/task-guide.md
+  s_de0b486c128948::t_1a73a940ab156d 115-117,186-192
+packages/cli/test/chat-webhook-workflow.test.ts
+  s_de0b486c128948::t_221b8c92086b72 1-33
+packages/cli/test/docs.test.ts
+  s_de0b486c128948::t_d2efb42176cce3 136-137
+packages/cli/test/messages.test.ts
+  s_de0b486c128948::t_b7676422f25e9a 1-108
+packages/cli/test/task-project.test.ts
+  s_de0b486c128948::t_e3eb43c4c40491 465-489,511-512
+packages/contracts/src/index.ts
+  s_de0b486c128948::t_32f795ba103c15 4
+packages/contracts/src/messages.ts
+  s_de0b486c128948::t_2ee0065f36c678 1-141
+packages/contracts/src/operations.ts
+  s_de0b486c128948::t_78bbbbc2246e2a 243-246
+packages/contracts/src/task.ts
+  s_de0b486c128948::t_379f85b769b52f 5,22-28,329-344,384-391,1563-1577,2374-2398,2513-2514,2590,2594-2595,2694-2700,2822-2829
+packages/contracts/test/messages-v1.test.ts
+  s_de0b486c128948::t_de3a5cb4f3b88c 1-184
+packages/contracts/test/task-v1.test.ts
+  s_de0b486c128948::t_e1ba9467535d40 132-134
+packages/protocol/src/schema.ts
+  s_de0b486c128948::t_210f8072a034ef 579-625,647,655-661,663-671
+packages/protocol/test/effect-receipt.test.ts
+  s_de0b486c128948::t_e86d745d1034fb 238-283
+packages/provider-github/src/permissions.ts
+  s_de0b486c128948::t_e490a7dd169513 1,168-190
+packages/provider-github/test/permissions.test.ts
+  s_de0b486c128948::t_75efb138e6417a 81-91
+packages/runner/src/effects-main.ts
+  s_de0b486c128948::t_fa991959b58a8d 51,55-59,69-70,77,107,113-122,137-140,146,162-163,234,323-362,376-377,589,601
+packages/runner/src/job-summary.ts
+  s_de0b486c128948::t_e4a9e2bdcddddb 16,94,103,106-108,121-122,128-136,147,157,177,182-218
+packages/runner/src/messages.ts
+  s_de0b486c128948::t_2041f5330cb951 1-471
+packages/runner/test/effects-main.test.ts
+  s_de0b486c128948::t_a9b3bae09574b7 58-61,1084-1123
+packages/runner/test/effects-messages.test.ts
+  s_de0b486c128948::t_d83678c1ff92e0 1-215
+packages/runner/test/messages.test.ts
+  s_de0b486c128948::t_3cf3bf6941660d 1-371
+scripts/check-release-pins.mjs
+  s_de0b486c128948::t_b0c4571c901c70 107-111,147-172,175-192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "65c2ccbcea9a0e4ec5e6bccc36e1dc776187d271",
+  "prompts": {},
+  "sessions": {
+    "s_de0b486c128948": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a54b-7029-705c-8802-df38dfe75e1f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
