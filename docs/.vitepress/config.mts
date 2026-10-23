@@ -12,8 +12,13 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   sitemap: { hostname: site },
+  head: [
+    ["link", { rel: "icon", type: "image/svg+xml", href: "/gardener.svg" }],
+    ["meta", { name: "theme-color", content: "#2f9e5f" }],
+  ],
   // The docs are also read on GitHub, so they stay plain Markdown; this file only adds navigation.
   themeConfig: {
+    logo: "/gardener.svg",
     nav: [
       { text: "Guide", link: "/getting-started" },
       { text: "Reference", link: "/task-reference" },
