@@ -188,13 +188,13 @@ jobs:
     # downgrades that grant to read-only.
     steps:
       - name: Download exact effect plan
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: ${{ needs.plan.outputs.effect-artifact-name }}
           path: ${{ runner.temp }}/gardener-effect
       - name: Download trusted repository capture
         if: ${{ needs.plan.outputs.capture-sha256 != '' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: ${{ needs.plan.outputs.capture-artifact-name }}
           path: ${{ runner.temp }}/gardener-capture
