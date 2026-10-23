@@ -476,8 +476,11 @@ export class WorkingTreeCapture {
       throw new Error("Git exclude rules changed during execution; capture refuses model-supplied exclude rules");
     }
     const attributePaths = new Set<string>(this.#authority.attributeDigests.keys());
-    for (const entry of walked.keys()) {
-      if (entry === ATTRIBUTES_FILE || entry.endsWith(`/${ATTRIBUTES_FILE}`)) attributePaths.add(entry);
+    const introduced = [...walked.keys()].filter((entry) =>
+      (entry === ATTRIBUTES_FILE || entry.endsWith(`/${ATTRIBUTES_FILE}`)) && !attributePaths.has(entry));
+    const inert = await this.#inertAttributes(introduced, current.index);
+    for (const entry of introduced) {
+      if (!inert.has(entry)) attributePaths.add(entry);
     }
     const currentAttributes = await readAttributeDigests(this.#workspace, [...attributePaths]);
     for (const attributePath of attributePaths) {
@@ -485,6 +488,42 @@ export class WorkingTreeCapture {
         throw new Error(`Git attributes changed during execution (${attributePath}); capture refuses model-supplied filters`);
       }
     }
+  }
+
+  /**
+   * The newly created attributes files that cannot affect any capturable path.
+   *
+   * An attributes file governs only paths beneath its own directory. When Git
+   * ignores that directory, nothing untracked beneath it can be a candidate
+   * (Git cannot re-include a path under an excluded directory), so if the index
+   * also has no entry beneath it, the file has nothing to apply to. That is the
+   * shape of `npm install`: packages under `node_modules/` routinely ship their
+   * own `.gitattributes`, and refusing them failed every capture taken after a
+   * dependency install.
+   *
+   * The candidate set is re-derived here rather than trusted from a caller, and
+   * every capture re-runs this check after classification, so a directory that
+   * stops being ignored mid-capture is caught by the fresh check.
+   */
+  async #inertAttributes(introduced: readonly string[], index: ReadonlyMap<string, IndexEntry>): Promise<Set<string>> {
+    const directories = new Map<string, string>();
+    for (const entry of introduced) {
+      const slash = entry.lastIndexOf("/");
+      // The root attributes file applies to every path.
+      if (slash > 0) directories.set(entry, entry.slice(0, slash));
+    }
+    if (directories.size === 0) return new Set();
+    const occupied = new Set<string>();
+    const untracked = splitNul(await gitText(this.#workspace, ["ls-files", "-z", "--others", "--exclude-standard"]));
+    for (const candidate of [...index.keys(), ...untracked]) {
+      for (let slash = candidate.indexOf("/"); slash > 0; slash = candidate.indexOf("/", slash + 1)) {
+        occupied.add(candidate.slice(0, slash));
+      }
+    }
+    const vacant = [...new Set(directories.values())].filter((directory) => !occupied.has(directory));
+    if (vacant.length === 0) return new Set();
+    const ignored = await ignoredDirectories(this.#workspace, vacant);
+    return new Set([...directories].filter(([, directory]) => ignored.has(directory)).map(([entry]) => entry));
   }
 
   /**
@@ -956,12 +995,35 @@ function parseManifest(value: unknown): TaskCaptureManifestV1 {
 /* Git                                                                        */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The given directories Git ignores. Asked with a trailing slash so
+ * directory-only patterns such as `node_modules/` match, and decided from the
+ * verbose record, because a matching negated pattern (`!dir/`) un-ignores.
+ */
+async function ignoredDirectories(workspace: string, directories: readonly string[]): Promise<Set<string>> {
+  const output = await gitBuffer(
+    workspace,
+    ["check-ignore", "--stdin", "-z", "--verbose", "--non-matching"],
+    // Exit 1 only means that none of the paths is ignored.
+    { input: directories.map((directory) => `${directory}/\u0000`).join(""), acceptedCodes: [0, 1] },
+  );
+  const fields = output.toString("utf8").split("\u0000");
+  const ignored = new Set<string>();
+  for (let index = 0; index + 3 < fields.length; index += 4) {
+    const pattern = fields[index + 2] as string;
+    const pathname = fields[index + 3] as string;
+    if (pattern !== "" && !pattern.startsWith("!")) ignored.add(pathname.replace(/\/$/, ""));
+  }
+  return ignored;
+}
+
 function runGit(
   cwd: string,
   argv: readonly string[],
   input: string | undefined,
   onStdout: ((chunk: Buffer) => void) | undefined,
   stdoutPipe?: { meter: Transform; sink: NodeJS.WritableStream },
+  acceptedCodes: readonly number[] = [0],
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("git", ["-C", cwd, ...GIT_PINNED_ARGV, ...argv], {
@@ -1005,7 +1067,7 @@ function runGit(
           reject(failure);
           return;
         }
-        if (code === 0) {
+        if (code !== null && acceptedCodes.includes(code)) {
           resolve();
           return;
         }
@@ -1023,7 +1085,7 @@ function runGit(
 async function gitBuffer(
   cwd: string,
   argv: readonly string[],
-  options: { input?: string } = {},
+  options: { input?: string; acceptedCodes?: readonly number[] } = {},
 ): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -1031,7 +1093,7 @@ async function gitBuffer(
     size += chunk.byteLength;
     if (size > GIT_MAX_OUTPUT) throw new Error(`git ${argv[0] ?? ""} produced more than ${GIT_MAX_OUTPUT} bytes`);
     chunks.push(chunk);
-  });
+  }, undefined, options.acceptedCodes);
   return Buffer.concat(chunks);
 }
 

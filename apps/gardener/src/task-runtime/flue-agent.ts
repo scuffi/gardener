@@ -211,6 +211,7 @@ export function GardenerTaskFlueAgent(): string {
     name: TASK_TERMINAL_TOOL,
     description: [
       "Required final step. Call it exactly once, after every propose_effect call you intend to make.",
+      "If it fails, it did not finish the task: read the error, fix the cause (for example, undo changes the error names), and call it again. Never end your turn without a successful finish_task.",
       "summary: concise prose describing what you found and what you proposed.",
       "observationsJson: optional JSON array of {kind,summary,paths?} where kind is repository, event, test, or diagnostic.",
     ].join(" "),
@@ -218,54 +219,64 @@ export function GardenerTaskFlueAgent(): string {
     output: v.strictObject({ accepted: v.boolean(), proposedEffects: v.number(), capturedFiles: v.number() }),
     async run({ data, toolCallId }) {
       return sequentialTool(async () => {
-      // Read back from the durable session rather than from anything the
-      // model repeated here, so the outcome carries exactly the steps that
-      // passed the allowlist, ordering, and budget checks.
-      let proposedEffects = await facade.listProposals(request.runId);
-      // The capture is taken here, from the durable ledger, and nowhere else.
-      //
-      // It is not a tool: a model that could call it would choose *when* the
-      // photograph of the working tree is taken, and could take one and then
-      // keep editing. Deriving the need from proposals that are already
-      // durable means the decision is made by trusted code after the model's
-      // last turn, and this handler terminates immediately afterwards, so no
-      // further shell command can run between the capture and the commit it
-      // fills.
-      const capture = capturedSteps(proposedEffects).length > 0
-        ? await facade.captureRepository({ runId: request.runId, requestId: request.requestId, toolCallId })
-        : undefined;
-      if (capture !== undefined) {
-        // Capture admission commits the durable barrier before taking its own
-        // ledger snapshot. Read that now-stable ledger again so this terminal
-        // cannot omit a proposal admitted by another replay just before the
-        // barrier won the transaction race.
-        proposedEffects = await facade.listProposals(request.runId);
-      }
-      const outcome = taskOutcomeV1Schema.parse({
-        schemaVersion: "gardener.task-outcome/v1",
-        runId: request.runId,
-        taskId,
-        bundleHash: request.snapshot.agentRevisionHash,
-        status: "completed",
-        summary: data.summary,
-        observations: parseObservations(data.observationsJson),
-        proposedEffects,
-      }) as TaskOutcomeV1;
-      console.log("gardener task terminal accepted", {
-        taskId,
-        proposedEffects: proposedEffects.length,
-        ...(capture === undefined ? {} : { captureId: capture.captureId, capturedFiles: capture.fileCount }),
-      });
-      writeTaskOutcome(outcome);
-      // The session completes the run from this record once the finish hook
-      // confirms it; it never reads the agent for it (see task-completion.ts).
-      // A failure here fails the call, and the finish hook then refuses the run.
-      await withSessionRetries("record the task outcome", () =>
-        facade.recordTaskCandidate({ runId: request.runId, requestId: request.requestId, toolCallId, outcome }));
-      return {
-        output: { accepted: true, proposedEffects: proposedEffects.length, capturedFiles: capture?.fileCount ?? 0 },
-        terminate: true,
-      };
+        try {
+          // Read back from the durable session rather than from anything the
+          // model repeated here, so the outcome carries exactly the steps that
+          // passed the allowlist, ordering, and budget checks.
+          let proposedEffects = await facade.listProposals(request.runId);
+          // The capture is taken here, from the durable ledger, and nowhere else.
+          //
+          // It is not a tool: a model that could call it would choose *when* the
+          // photograph of the working tree is taken, and could take one and then
+          // keep editing. Deriving the need from proposals that are already
+          // durable means the decision is made by trusted code after the model's
+          // last turn, and this handler terminates immediately afterwards, so no
+          // further shell command can run between the capture and the commit it
+          // fills.
+          const capture = capturedSteps(proposedEffects).length > 0
+            ? await facade.captureRepository({ runId: request.runId, requestId: request.requestId, toolCallId })
+            : undefined;
+          if (capture !== undefined) {
+            // Capture admission commits the durable barrier before taking its own
+            // ledger snapshot. Read that now-stable ledger again so this terminal
+            // cannot omit a proposal admitted by another replay just before the
+            // barrier won the transaction race.
+            proposedEffects = await facade.listProposals(request.runId);
+          }
+          const outcome = taskOutcomeV1Schema.parse({
+            schemaVersion: "gardener.task-outcome/v1",
+            runId: request.runId,
+            taskId,
+            bundleHash: request.snapshot.agentRevisionHash,
+            status: "completed",
+            summary: data.summary,
+            observations: parseObservations(data.observationsJson),
+            proposedEffects,
+          }) as TaskOutcomeV1;
+          console.log("gardener task terminal accepted", {
+            taskId,
+            proposedEffects: proposedEffects.length,
+            ...(capture === undefined ? {} : { captureId: capture.captureId, capturedFiles: capture.fileCount }),
+          });
+          writeTaskOutcome(outcome);
+          // The session completes the run from this record once the finish hook
+          // confirms it; it never reads the agent for it (see task-completion.ts).
+          // A failure here fails the call, and the finish hook then refuses the run.
+          await withSessionRetries("record the task outcome", () =>
+            facade.recordTaskCandidate({ runId: request.runId, requestId: request.requestId, toolCallId, outcome }));
+          return {
+            output: { accepted: true, proposedEffects: proposedEffects.length, capturedFiles: capture?.fileCount ?? 0 },
+            terminate: true,
+          };
+        } catch (error) {
+          // The model gets this message and may retry. Logged because a model
+          // that stops instead leaves no other trace of why the run failed.
+          console.warn("gardener task terminal failed", {
+            taskId,
+            error: error instanceof Error ? error.message.slice(0, 500) : "non-error rejection",
+          });
+          throw error;
+        }
       });
     },
   });
@@ -332,7 +343,10 @@ export function GardenerTaskFlueAgent(): string {
     // declare only `provider.api.read`, or no tools at all, and a run that
     // legitimately proposes nothing is a normal outcome, so demanding a
     // particular repository call would fail correct tasks.
-    if (terminal.length === 0) refuse("task_completed_without_terminal_outcome");
+    if (terminal.length === 0) {
+      const failedTerminal = response.toolCalls.some((call) => call.tool === TASK_TERMINAL_TOOL && call.isError);
+      refuse(failedTerminal ? "task_terminal_call_failed" : "task_completed_without_terminal_outcome");
+    }
     if (terminal.length !== 1) refuse("task_has_multiple_terminal_outcomes");
     if (response.toolCalls.length > request.budget.maxToolCalls) refuse("task_tool_budget_exceeded");
     // `input-tokens` bounds each request's context, which the bounded provider
@@ -365,7 +379,7 @@ export function GardenerTaskFlueAgent(): string {
     "Execution protocol:",
     "1. Use the listed tools to gather the exact evidence the task needs.",
     `2. Call ${TASK_PROPOSE_TOOL} once per intended change, in application order. Propose none if none is warranted.`,
-    `3. Your final action MUST be ${TASK_TERMINAL_TOOL} with a summary.`,
+    `3. Your final action MUST be ${TASK_TERMINAL_TOOL} with a summary. If it fails, fix what its error names and call it again.`,
     "Never return the final response as assistant text.",
   ].join("\n");
 }

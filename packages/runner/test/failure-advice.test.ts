@@ -11,6 +11,8 @@ describe("planning failure advice", () => {
     ["Task execution exceeded its runtime deadline", /`runtime-seconds`/],
     ["Task runtime deadline expired", /`runtime-seconds`/],
     ["The model stopped without calling finish_task. It may have run out of output tokens", /stopped without reporting a result/],
+    ["The model called finish_task but the call failed, and the model stopped instead of fixing the cause and calling it again", /stopped instead of fixing the cause/],
+    ["The model reported a result, but Gardener could not record it: Task capture failed: Repository capture failed: Git index changed during execution. The model called finish_task but the call failed", /refused to capture its changes/],
     ["The model provider failed (HTTP 503)", /temporary problem/],
     ["The model provider rate-limited the request (HTTP 429)", /temporary problem/],
     ["The model provider rejected the request (HTTP 401). Check the provider keys", /refused the request/],

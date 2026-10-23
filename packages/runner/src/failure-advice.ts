@@ -41,6 +41,18 @@ export function planFailureAdvice(message: string, status: "failed" | "cancelled
       todo: "Raise `limits.runtime-seconds` in the task's TASK.md, or narrow its instructions.",
     };
   }
+  if (message.startsWith("The model reported a result, but Gardener could not record it: Task capture failed")) {
+    return {
+      what: "The model finished, but Gardener refused to capture its changes to the working tree, so nothing was changed.",
+      todo: "The reason is in the message below. A merge may only change its conflicted files, and nothing may be staged with `git add`; if the model broke one of those rules, re-run or tighten the task's instructions.",
+    };
+  }
+  if (message.startsWith("The model called finish_task but the call failed")) {
+    return {
+      what: "The model's final `finish_task` call failed and it stopped instead of fixing the cause and retrying, so nothing was changed.",
+      todo: "Re-run the workflow. If it repeats, the Worker logs (`gardener task terminal failed`) name the failure.",
+    };
+  }
   if (message.startsWith("The model stopped without calling finish_task")) {
     return {
       what: "The model stopped without reporting a result, so nothing was changed.",

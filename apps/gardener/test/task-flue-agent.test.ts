@@ -426,6 +426,9 @@ describe("canonical task Flue agent", () => {
     await expect(finish({ response: { toolCalls: [{ tool: "finish_task", isError: false }], usage } })).resolves.toBeUndefined();
     await expect(finish({ response: { toolCalls: [{ tool: "propose_effect", isError: false }], usage } }))
       .rejects.toThrow(/task_completed_without_terminal_outcome/);
+    // A failed finish_task is reported as such, not as a missing one.
+    await expect(finish({ response: { toolCalls: [{ tool: "propose_effect", isError: false }, { tool: "finish_task", isError: true }], usage } }))
+      .rejects.toThrow(/task_terminal_call_failed/);
     await expect(finish({
       response: { toolCalls: [{ tool: "finish_task", isError: false }, { tool: "finish_task", isError: false }], usage },
     })).rejects.toThrow(/task_has_multiple_terminal_outcomes/);

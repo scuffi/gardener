@@ -1,5 +1,9 @@
 export const RUNNER_TOOL_BUDGET_EXHAUSTED = "Task runner tool-call budget is exhausted";
 
+/** The model called finish_task, the call failed, and the model ended its turn instead of retrying. */
+export const TERMINAL_CALL_FAILED =
+  "The model called finish_task but the call failed, and the model stopped instead of fixing the cause and calling it again";
+
 export function assertRunnerToolBudget(maxToolCalls: number, completedOrPendingActions: number): void {
   if (!Number.isSafeInteger(maxToolCalls) || maxToolCalls < 1) {
     throw new Error("Task tool-call limit is invalid");
@@ -51,6 +55,11 @@ export function classifyTaskFailure(cause: unknown): { code: "budget-exceeded" |
   const limit = boundedTaskLimitFailure(cause);
   if (limit) return limit;
   const detail = errorChain(cause);
+  // Before the missing-finish check: a failed call is not a missing one, and
+  // the output-token advice would send the operator the wrong way.
+  if (detail.includes("task_terminal_call_failed")) {
+    return { code: "invalid-outcome", message: TERMINAL_CALL_FAILED };
+  }
   if (detail.includes("task_completed_without_terminal_outcome")) {
     return {
       code: "invalid-outcome",

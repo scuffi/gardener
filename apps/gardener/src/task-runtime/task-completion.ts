@@ -2,7 +2,7 @@ import { canonicalJson, canonicalSha256 } from "@gardener/core";
 import { taskOutcomeV1Schema, type TaskOutcomeV1 } from "@gardener/contracts";
 import type { HarnessModelUsage, HarnessOutcome, HarnessSubmission, JsonValue } from "../harness";
 import { harnessError } from "../harness/validation";
-import { classifyTaskFailure } from "./task-limits";
+import { TERMINAL_CALL_FAILED, classifyTaskFailure } from "./task-limits";
 
 /**
  * How a run's result reaches its session without the session calling the
@@ -23,7 +23,7 @@ const RESULT_KEY = "task-result";
 const SETTLEMENT_KEY = "task-settlement";
 const REFUSAL_KEY = "task-completion-refusal";
 const GENERIC_FAILURE = "Flue task execution failed";
-const REFUSAL_MAX_LENGTH = 300;
+const REFUSAL_MAX_LENGTH = 500;
 const MISSING_FINISH = "The model stopped without calling finish_task";
 /** The submission this session dispatched, so pushes for any other are refused. */
 export const SUBMISSION_KEY = "task-submission";
@@ -227,7 +227,7 @@ export async function explainRefusedCompletion(storage: CompletionStorage, outco
   // the finish hook's "stopped without calling finish_task".
   if (outcome.status !== "failed") return outcome;
   const message = outcome.error.message;
-  if (message !== GENERIC_FAILURE && !message.startsWith(MISSING_FINISH)) return outcome;
+  if (message !== GENERIC_FAILURE && !message.startsWith(MISSING_FINISH) && !message.startsWith(TERMINAL_CALL_FAILED)) return outcome;
   const refusal = await storage.get<string>(REFUSAL_KEY);
   if (!refusal) return outcome;
   const recorded = `The model reported a result, but Gardener could not record it: ${refusal}`;
@@ -240,7 +240,9 @@ export async function explainRefusedCompletion(storage: CompletionStorage, outco
 /**
  * The operator-visible text for a refusal. Only the completion paths' own
  * fixed messages leave the Worker (they name no model output, repository
- * content or ids); anything else stays in the Worker logs.
+ * content or ids), plus a refused working-tree capture, whose Gardener-authored
+ * diagnostic may name the repository path it refused; anything else stays in
+ * the Worker logs.
  */
 function refusalText(error: unknown): string {
   // A schema failure names the first field only; the full issue list can be
@@ -254,7 +256,7 @@ function refusalText(error: unknown): string {
     return `the result is not a valid task outcome${detail}`.slice(0, REFUSAL_MAX_LENGTH);
   }
   const message = error instanceof Error ? error.message.replace(/\s+/g, " ").trim() : "";
-  if (/^Task (completion|candidate|result) /.test(message)) return message.slice(0, REFUSAL_MAX_LENGTH);
+  if (/^Task (completion|candidate|result|capture) /.test(message)) return message.slice(0, REFUSAL_MAX_LENGTH);
   return "an unexpected error (details are in the Worker logs)";
 }
 

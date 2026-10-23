@@ -614,7 +614,15 @@ export class TaskRunnerSession extends DurableObject<Env> {
     try {
       return await this.admitCaptureChecked(input);
     } catch (error) {
-      throw transportableError(error);
+      const transportable = transportableError(error);
+      // The model sees this as a failed finish_task. If it then stops instead
+      // of retrying, this record is the only place the reason survives, and
+      // the run's failure message leads with it.
+      const reason = `Task capture failed: ${transportable.message.replace(/\s+/g, " ").trim()}`;
+      console.warn("Gardener task capture refused", { error: reason.slice(0, 500) });
+      this.#recordAudit(input.runId, "tool.failed", { tool: "repository.capture", reason });
+      await recordCompletionRefusal(this.ctx.storage, new Error(reason)).catch(() => undefined);
+      throw transportable;
     }
   }
 

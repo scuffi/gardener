@@ -60,6 +60,10 @@ describe("Actions task hard limits", () => {
       code: "invalid-outcome",
       message: "The model stopped without calling finish_task. It may have run out of output tokens; consider raising output-tokens",
     });
+    expect(hook("task_terminal_call_failed")).toEqual({
+      code: "invalid-outcome",
+      message: "The model called finish_task but the call failed, and the model stopped instead of fixing the cause and calling it again",
+    });
     expect(hook("task_has_multiple_terminal_outcomes")?.message).toBe("The model called finish_task more than once");
     expect(hook("task_tool_budget_exceeded")?.message).toBe("Task tool-call limit was exceeded");
     expect(hook("task_model_token_budget_exceeded")?.message).toBe("Task model-output limit was exceeded");

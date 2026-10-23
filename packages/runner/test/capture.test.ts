@@ -576,6 +576,50 @@ describe("WorkingTreeCapture hostile Git state after initialize", () => {
     await expect(capture.capture()).rejects.toThrow(/Git attributes changed during execution \(\.gitattributes\)/);
   }, GIT_TEST_TIMEOUT);
 
+  // `npm install` writes packages that ship their own .gitattributes under an
+  // ignored node_modules/; they govern nothing capture can see.
+  it("ignores a .gitattributes introduced in an ignored directory with no tracked files", async () => {
+    const { capture, workspace } = await fixture({ ".gitignore": "node_modules/\n", "a.txt": "a\n" });
+    await mkdir(path.join(workspace, "node_modules/pkg/nested"), { recursive: true });
+    await writeFile(path.join(workspace, "node_modules/pkg/.gitattributes"), "* filter=balloon\n");
+    await writeFile(path.join(workspace, "node_modules/pkg/nested/.gitattributes"), "* text eol=crlf\n");
+    await writeFile(path.join(workspace, "node_modules/pkg/index.js"), "x\n");
+    await writeFile(path.join(workspace, "a.txt"), "changed\n");
+
+    const result = await capture.capture();
+    expect(result.status).toBe("captured");
+    if (result.status === "captured") expect(result.manifest.files.map((file) => file.path)).toEqual(["a.txt"]);
+  }, GIT_TEST_TIMEOUT);
+
+  it("refuses a .gitattributes introduced in an ignored directory that holds a tracked file", async () => {
+    const { capture, workspace } = await fixture(
+      { ".gitignore": "vendor/\n", "vendor/kept.txt": "k\n", "a.txt": "a\n" },
+      { force: ["vendor/kept.txt"] },
+    );
+    await writeFile(path.join(workspace, "vendor/.gitattributes"), "* text eol=crlf\n");
+    await writeFile(path.join(workspace, "a.txt"), "changed\n");
+
+    await expect(capture.capture()).rejects.toThrow(/Git attributes changed during execution \(vendor\/\.gitattributes\)/);
+  }, GIT_TEST_TIMEOUT);
+
+  it("refuses a .gitattributes introduced in a directory that is not ignored", async () => {
+    const { capture, workspace } = await fixture({ ".gitignore": "node_modules/\n", "a.txt": "a\n" });
+    await mkdir(path.join(workspace, "fresh"), { recursive: true });
+    await writeFile(path.join(workspace, "fresh/.gitattributes"), "* text eol=crlf\n");
+    await writeFile(path.join(workspace, "fresh/new.txt"), "n\n");
+
+    await expect(capture.capture()).rejects.toThrow(/Git attributes changed during execution \(fresh\/\.gitattributes\)/);
+  }, GIT_TEST_TIMEOUT);
+
+  it("refuses a .gitattributes in a directory a negated pattern un-ignores", async () => {
+    const { capture, workspace } = await fixture({ ".gitignore": "build*/\n!build-keep/\n", "a.txt": "a\n" });
+    await mkdir(path.join(workspace, "build-keep"), { recursive: true });
+    await writeFile(path.join(workspace, "build-keep/.gitattributes"), "* text eol=crlf\n");
+    await writeFile(path.join(workspace, "a.txt"), "changed\n");
+
+    await expect(capture.capture()).rejects.toThrow(/Git attributes changed during execution \(build-keep\/\.gitattributes\)/);
+  }, GIT_TEST_TIMEOUT);
+
   it("refuses when a tracked .gitattributes file is edited after the snapshot", async () => {
     const { capture, workspace } = await fixture({ ".gitattributes": "*.big filter=lfs\n", "a.txt": "a\n" });
     await writeFile(path.join(workspace, ".gitattributes"), "*.big filter=none\n");
@@ -700,6 +744,8 @@ interface FixtureOptions {
   config?: Record<string, string>;
   /** Re-checkout tracked files so worktree bytes reflect declared attributes. */
   rehydrate?: boolean;
+  /** Paths to track even though they are ignored. */
+  force?: readonly string[];
 }
 
 async function fixture(
@@ -831,6 +877,7 @@ async function initializeRepository(
     await symlink(target, path.join(workspace, link));
   }
   await execFileAsync("git", ["-C", workspace, "add", "-A"], { env: environment });
+  if (options.force?.length) await execFileAsync("git", ["-C", workspace, "add", "-f", "--", ...options.force], { env: environment });
   await execFileAsync("git", ["-C", workspace, "commit", "-q", "-m", "base"], { env: environment });
   if (options.rehydrate !== true) return;
 

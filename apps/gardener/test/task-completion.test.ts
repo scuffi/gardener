@@ -225,6 +225,19 @@ describe("explaining a refused result", () => {
     });
   });
 
+  it("leads a failed finish_task with the capture refusal that failed it", async () => {
+    const storage = await dispatched();
+    await recordCompletionRefusal(storage, new Error("Task capture failed: Repository capture failed: Git index changed during execution"));
+    const explained = await explainRefusedCompletion(storage, failed("The model called finish_task but the call failed, and the model stopped instead of fixing the cause and calling it again") as never);
+    expect(explained).toMatchObject({
+      error: {
+        code: "invalid-outcome",
+        message: "The model reported a result, but Gardener could not record it: Task capture failed: Repository capture failed: Git index changed during execution. "
+          + "The model called finish_task but the call failed, and the model stopped instead of fixing the cause and calling it again",
+      },
+    });
+  });
+
   it("classifies a settlement that carries the finish hook's reason", async () => {
     const storage = await dispatched();
     await recordTaskSettlement(storage, {
@@ -261,7 +274,7 @@ describe("explaining a refused result", () => {
     const long = await dispatched();
     await recordCompletionRefusal(long, new Error(`Task candidate ${"x".repeat(1_000)}`));
     const bounded = await explainRefusedCompletion(long, failed("Flue task execution failed") as never) as { error: { message: string } };
-    expect(bounded.error.message.length).toBeLessThan(400);
+    expect(bounded.error.message.length).toBeLessThan(600);
   });
 
   it("keeps anything but the completion paths' own messages in the Worker logs", async () => {
