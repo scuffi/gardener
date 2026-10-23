@@ -1,0 +1,18 @@
+// The docs site: an assets-only Worker (no script) serving the VitePress build.
+// Build with `pnpm docs:build`; .github/workflows/docs.yml deploys it from main.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "gardener-docs",
+  "compatibility_date": "2026-09-02",
+  "assets": {
+    "directory": "./.vitepress/dist",
+    // VitePress emits /cli.html for /cli (cleanUrls) and its own 404.html.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // Wrangler creates the DNS record and certificate. The scuffi.dev zone must be on the
+  // deploying account.
+  "routes": [{ "pattern": "gardener.scuffi.dev", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false
+}

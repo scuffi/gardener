@@ -3,7 +3,7 @@
 One Gardener installation (a "workspace": one Worker and one D1 database) serves every repository
 you connect to it. New to Gardener? [Getting started](getting-started.md) walks through a first
 install. This guide covers starter tasks, day-to-day operation and upgrades. Releases are tagged,
-and [the changelog](../packages/cli/CHANGELOG.md) lists what each one changes.
+and [the changelog](https://github.com/scuffi/gardener/blob/main/packages/cli/CHANGELOG.md) lists what each one changes.
 
 ## Prerequisites
 

@@ -152,6 +152,10 @@ Gardener is pre-release.
 
 ## Documentation
 
+The docs are published at **[gardener.scuffi.dev](https://gardener.scuffi.dev/)**. For
+coding agents, [`llms.txt`](https://gardener.scuffi.dev/llms.txt) indexes every page and
+[`llms-full.txt`](https://gardener.scuffi.dev/llms-full.txt) is all of them in one file.
+
 - [Getting started](docs/getting-started.md): deploy Gardener and run your first task with `npx`
 - [Onboarding](docs/onboarding.md): connecting a repository, starter tasks, and upgrading between releases
 - [Creating tasks](docs/task-authoring.md): writing a task, and choosing its triggers, effects and limits

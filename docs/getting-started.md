@@ -69,7 +69,7 @@ curl -sL -o .gardener/tasks/triage/TASK.md \
 ```
 
 Open it to see what a task looks like: YAML frontmatter that states its trigger, tools, effects and
-limits, then the model's instructions. [`examples/tasks`](../examples/tasks) has two more starters,
+limits, then the model's instructions. [`examples/tasks`](https://github.com/scuffi/gardener/tree/main/examples/tasks) has two more starters,
 `pr-review` and `mention-reply`.
 
 Compile it:
