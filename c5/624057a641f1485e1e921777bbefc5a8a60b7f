@@ -1,0 +1,35 @@
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_b8afa884c523a0::t_603bb69a2241cc 214,222-279,346-349,382
+apps/gardener/src/task-runtime/task-completion.ts
+  s_b8afa884c523a0::t_4bcc1cd8c0718e 5,26,230,243-245,259
+apps/gardener/test/task-completion.test.ts
+  s_b8afa884c523a0::t_952d35d68b738b 228-240,277
+apps/gardener/test/task-flue-agent.test.ts
+  s_b8afa884c523a0::t_0d1205f6412b1d 429-431
+apps/gardener/test/task-limits.test.ts
+  s_b8afa884c523a0::t_c9beef40578475 63-66
+bridges/github/plan/dist/index.cjs
+  s_b8afa884c523a0::t_b2ec02a8246db7 44171-44174,44183-44216,44578-44594,44635,44654,45774-45785
+packages/runner/src/failure-advice.ts
+  s_b8afa884c523a0::t_a93dd747f7348f 44-55
+packages/runner/test/capture.test.ts
+  s_b8afa884c523a0::t_6ee65471870a97 579-622,747-748,880
+packages/runner/test/failure-advice.test.ts
+  s_b8afa884c523a0::t_4aced1534d034a 14-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c5624057a641f1485e1e921777bbefc5a8a60b7f",
+  "prompts": {},
+  "sessions": {
+    "s_b8afa884c523a0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16931-66f4-76ce-b7a9-7964c000c2f3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
