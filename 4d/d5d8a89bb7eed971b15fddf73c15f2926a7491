@@ -1,0 +1,71 @@
+.changeset/agent-voice.md
+  s_ab335dc1a1be36::t_449e1f81642cf0 1-9
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_6ce11858a29312::t_babe233dd0eb95 295,360,374,378,415,419,560-561
+apps/gardener/src/task-runtime/flue-agent.ts
+  s_230b8b7a287e37::t_fb29a7f6ad3fee 122-127,146,216,218,384
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_6ce11858a29312::t_27890c96c82226 211,213,450,455,457,476-477,527-529,539,586,590
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_230b8b7a287e37::t_b1785958e4c0bc 95,158
+apps/gardener/src/task-runtime/session-checks.ts
+  s_6ce11858a29312::t_127480108e6a32 89
+apps/gardener/src/task-runtime/session.ts
+  s_6ce11858a29312::t_49f7b0e75a666e 500,544,564,582,1590
+apps/gardener/test/task-effect-plan.test.ts
+  s_6ce11858a29312::t_aff07bec185802 448
+apps/gardener/test/task-flue-agent.test.ts
+  s_6ce11858a29312::t_cebe80c0adeceb 86,114-129,236
+apps/gardener/test/task-merge-base.test.ts
+  s_6ce11858a29312::t_7b553b4e6a0db7 189-192,286
+apps/gardener/test/task-messages.test.ts
+  s_ab335dc1a1be36::t_40708fca40b87c 124-126,190,220,222
+apps/gardener/test/task-runtime-framework.test.ts
+  s_6ce11858a29312::t_7c5987fd76ebcb 146,219-226,229
+apps/gardener/test/task-session-authority.test.ts
+  s_ab335dc1a1be36::t_6f64a92ce5f31c 183,212,230
+apps/gardener/test/task-session-proposals.test.ts
+  s_ab335dc1a1be36::t_a92e7bf8f56dcb 119,206,233
+docs/task-authoring.md
+  s_6ce11858a29312::t_0dad44fc2efe3d 35
+examples/tasks/mention-reply/TASK.md
+  s_6ce11858a29312::t_f3da9acdd0a2b5 40-41
+examples/tasks/triage/TASK.md
+  s_6ce11858a29312::t_b7c7c052dd7b5c 32-34
+packages/cli/src/project.ts
+  s_6ce11858a29312::t_6b31d4f68a96cd 154,191
+packages/cli/src/task-guide.md
+  s_6ce11858a29312::t_53ce8893b5208c 13-14,70-71,207,242,276-279,284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4dd5d8a89bb7eed971b15fddf73c15f2926a7491",
+  "prompts": {},
+  "sessions": {
+    "s_230b8b7a287e37": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17dbe-4401-72dd-a4c0-0e1e28f83bf8",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_6ce11858a29312": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17d3c-2653-7bb6-bcf6-d3c2ffa7aaee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_ab335dc1a1be36": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17db6-4c87-786a-b45d-61f57f433abd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
