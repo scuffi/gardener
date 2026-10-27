@@ -1,0 +1,43 @@
+.changeset/handle-aliases.md
+  s_6ce11858a29312::t_c6aca9d20156fc 1-5
+.gardener/gardener.json
+  s_6ce11858a29312::t_8d8c446f32368b 7
+.gardener/gardener.lock.json
+  s_6ce11858a29312::t_e11612a137520e 294,301,307-308
+.gardener/tasks/mention-reply/TASK.md
+  s_6ce11858a29312::t_5d2f4008e824ed 10,74
+.github/workflows/gardener-mention-reply.yml
+  s_6ce11858a29312::t_ceec72d07c7988 5,34,54
+bridges/github/sync/dist/index.cjs
+  s_6ce11858a29312::t_3f926612421434 29961-29963,29967,29969-29974,30047,30060-30066,30074-30084,30096-30099,30131
+docs/onboarding.md
+  s_6ce11858a29312::t_00cfa8529d2a7b 42-45
+docs/task-authoring.md
+  s_6ce11858a29312::t_8faf54b55c458d 86-87,90
+docs/task-reference.md
+  s_6ce11858a29312::t_efce20ce0625e2 31-32,103
+packages/cli/src/project.ts
+  s_6ce11858a29312::t_6144330cd771c0 28,50-51,64-70,78-88,111-116,384
+packages/cli/src/task-authoring.ts
+  s_6ce11858a29312::t_de07ef5ac91383 320-321,351,357-359,363,365-370
+packages/cli/src/task-guide.md
+  s_6ce11858a29312::t_dceabba8004175 20,119
+packages/cli/test/task-project.test.ts
+  s_6ce11858a29312::t_84762cb1915355 399-404,449-472
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6fbe5e29488c9d2973618b42f1711ecff9c00164",
+  "prompts": {},
+  "sessions": {
+    "s_6ce11858a29312": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17d3c-2653-7bb6-bcf6-d3c2ffa7aaee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
