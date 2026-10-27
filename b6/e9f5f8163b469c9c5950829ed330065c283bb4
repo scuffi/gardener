@@ -1,0 +1,107 @@
+apps/gardener/src/task-runtime/effect-plan.ts
+  s_618f973dc8f8bf::t_ce5f3345738d70 8-9,21,38,41-48,363,379-392,498-499,694,696-698,703-709,730-760,774,832-852
+apps/gardener/src/task-runtime/harness-adapter.ts
+  s_ab335dc1a1be36::t_dc40560f05452e 21-24,468-470,474,480-481,489-499,546-554
+apps/gardener/src/task-runtime/proposal-authority.ts
+  s_6ce11858a29312::t_0405cdd65d5907 9-11,17-18,20-22,27,84,86-148,189,203-211,213
+apps/gardener/src/task-runtime/session-checks.ts
+  s_618f973dc8f8bf::t_81b992ad26b67e 142-151,157-161,176-177,179
+apps/gardener/src/task-runtime/session.ts
+  s_618f973dc8f8bf::t_507a75399268b8 28,31,46,93-95,109,563-568,915-928,951-965,1063,1069-1087,1091-1130,1163-1165
+apps/gardener/src/task-runtime/task-bundles.ts
+  s_ab335dc1a1be36::t_515125581dccd7 52-71
+apps/gardener/src/task-runtime/task-lineage.ts
+  s_ab335dc1a1be36::t_e935728866d505 1-218
+apps/gardener/src/task-runtime/workflow-refs.ts
+  s_ab335dc1a1be36::t_02a6886da55060 91-96,100,105
+apps/gardener/test/task-lineage.test.ts
+  s_ab335dc1a1be36::t_5119ad3ee4266e 1-199
+apps/gardener/test/task-runs.test.ts
+  s_ab335dc1a1be36::t_7871178d6c0a1b 1-318
+apps/gardener/test/task-session-admission.test.ts
+  s_ab335dc1a1be36::t_748ec3e9ba66f6 15,43,56-89
+apps/gardener/test/task-trusted-starter.test.ts
+  s_ab335dc1a1be36::t_8034d7250da434 9,67,73-82,183-191
+apps/gardener/test/task-workflow-refs.test.ts
+  s_ab335dc1a1be36::t_c93ef2dc81b7a8 92-95,101,107-110
+docs/operations.md
+  s_ab335dc1a1be36::t_387c25f2d0a2fd 194-213
+docs/task-authoring.md
+  s_ab335dc1a1be36::t_8dfe934658b1f6 320-321,381-413,778
+docs/task-reference.md
+  s_ab335dc1a1be36::t_b2793c27397ecd 87,107,128,186,223-269,360-361,364-366
+packages/cli/src/project.ts
+  s_ab335dc1a1be36::t_cf61349e6ea2b5 15-16,364,380-381,412-414,773-858,864-866
+packages/cli/src/task-authoring.ts
+  s_ab335dc1a1be36::t_44562d0a9fb804 11-13,58-73,77-78,96-97,99-101,305,307-309,352
+packages/cli/src/task-guide.md
+  s_ab335dc1a1be36::t_ee1f0284172942 195-202
+packages/cli/test/docs.test.ts
+  s_ab335dc1a1be36::t_6287458999fb6e 69,139-140
+packages/cli/test/task-runs.test.ts
+  s_ab335dc1a1be36::t_ca7c866efd7c7d 1-119
+packages/contracts/src/index.ts
+  s_ab335dc1a1be36::t_dcd6288bcc8104 5
+packages/contracts/src/task-runs.ts
+  s_ab335dc1a1be36::t_718340a68f8a43 1-77
+packages/contracts/src/task.ts
+  s_ab335dc1a1be36::t_06a4a49a2605a5 29-37,272-281,375,379-380,382,384-385,407-411,413-418,543-557,568,588,673-679,1271-1282,1284-1286,1643-1670,2492-2579,2777-2790,2896-2903,3033-3042
+packages/contracts/test/messages-v1.test.ts
+  s_ab335dc1a1be36::t_322a28e33c3e77 62
+packages/contracts/test/task-runs-v1.test.ts
+  s_ab335dc1a1be36::t_a35507b17218c9 1-80
+packages/contracts/test/task-v1.test.ts
+  s_ab335dc1a1be36::t_e270953e0f25f1 132-133
+packages/protocol/src/schema.ts
+  s_ab335dc1a1be36::t_347125c9cc4832 626-654,691-695,700-701,706-708
+packages/protocol/test/effect-receipt.test.ts
+  s_ab335dc1a1be36::t_484ab486b9b566 284-318
+packages/provider-github/src/permissions.ts
+  s_ab335dc1a1be36::t_91f312069660a6 1,182-190,193-195,199
+packages/runner/src/effects-main.ts
+  s_ab335dc1a1be36::t_f3278a668df8ae 52,72-73,81,118,126-130,149-152,159,247,336-365,383-387,406,636,649,653-666
+packages/runner/src/failure-advice.ts
+  s_ab335dc1a1be36::t_5bbd89bdcb2751 38-43
+packages/runner/src/job-summary.ts
+  s_ab335dc1a1be36::t_c05834b2b4f6b2 17,104,110-114,129-130,138,141-142,158,189,225-239
+packages/runner/src/task-runs.ts
+  s_ab335dc1a1be36::t_7eb6d455c7a987 1-175
+packages/runner/test/effects-task-runs.test.ts
+  s_ab335dc1a1be36::t_b0a335bac3abd9 1-201
+scripts/check-cli-package.mjs
+  s_ab335dc1a1be36::t_36ab3ab447b3ec 19
+scripts/check-release-pins.mjs
+  s_ab335dc1a1be36::t_097182e3294133 157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b6e9f5f8163b469c9c5950829ed330065c283bb4",
+  "prompts": {},
+  "sessions": {
+    "s_618f973dc8f8bf": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0eca2-e51a-743b-b370-40560a15fc26",
+        "model": "claude-opus-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_6ce11858a29312": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17d3c-2653-7bb6-bcf6-d3c2ffa7aaee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    },
+    "s_ab335dc1a1be36": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a17db6-4c87-786a-b45d-61f57f433abd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
