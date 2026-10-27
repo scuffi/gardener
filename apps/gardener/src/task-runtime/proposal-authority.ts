@@ -92,7 +92,7 @@ export function messageProposalRefusal(
   if (!planCarries("messages", workflowRef)) return planCapabilityAdvice("message.send", workflowRef);
   const previous = earlier.find((step) => step.kind === MESSAGE_SEND_KIND);
   if (previous !== undefined) {
-    return `A run sends at most one message, and step ${previous.stepName} already proposed message.send`;
+    return `A run sends at most one message, and step ${previous.stepName} already sends one`;
   }
   return runTriggerScopeRefusal(request, proposal, earlier, taskEventBindingFromNormalizedEvent(request.event).resource);
 }
@@ -155,7 +155,7 @@ export function proposalAuthorityRefusal(
   // merge commit, so a run merges or makes ordinary commits, never both.
   const other = proposal.kind === "commit.create" ? "commit.merge_base" : proposal.kind === "commit.merge_base" ? "commit.create" : undefined;
   if (other !== undefined && earlier.some((step) => step.kind === other)) {
-    return `A run either merges the base branch (commit.merge_base) or makes ordinary commits (commit.create), not both; step ${earlier.find((step) => step.kind === other)!.stepName} already proposed ${other}`;
+    return `A run either merges the base branch (commit.merge_base) or makes ordinary commits (commit.create), not both; step ${earlier.find((step) => step.kind === other)!.stepName} already uses ${other}`;
   }
   // Told now, while the model can still change course, rather than when the
   // capture is admitted after its last turn and the plan can only fail.

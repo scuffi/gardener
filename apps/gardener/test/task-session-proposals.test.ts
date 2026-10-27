@@ -116,7 +116,7 @@ describe("durable ordered proposal ledger", () => {
   it("rejects a step name reused for a different effect", async () => {
     await record(storage, comment);
     await expect(record(storage, proposal({ ...comment, payload: { ...comment.payload, body: "Different." } })))
-      .rejects.toThrow(/Step name comment was already proposed with different content/);
+      .rejects.toThrow(/Step name comment was already used by a step with different content/);
     expect(await readProposalLedger(storage)).toHaveLength(1);
   });
 
@@ -203,7 +203,7 @@ describe("effect identity excludes the rationale", () => {
     const storage = new MemoryStorage();
     await record(storage, comment);
     await expect(record(storage, proposal({ ...reworded, payload: { ...comment.payload, body: "Other." } })))
-      .rejects.toThrow(/already proposed with different content/);
+      .rejects.toThrow(/already used by a step with different content/);
   });
 });
 
@@ -230,7 +230,7 @@ describe("shared tool budget", () => {
     await record(storage, comment);
     for (const body of ["one", "two", "three"]) {
       await expect(record(storage, proposal({ ...comment, payload: { ...comment.payload, body } })))
-        .rejects.toThrow(/already proposed with different content/);
+        .rejects.toThrow(/already used by a step with different content/);
     }
     expect(storage.entries.get(RUNNER_TOOL_COUNT_KEY)).toBe(1);
     expect(await readProposalLedger(storage)).toHaveLength(1);

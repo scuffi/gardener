@@ -86,7 +86,7 @@ export function assertCaptureAdmissible(
 /** A run captures the working tree exactly once, for exactly one consuming step. */
 export function assertSingleCaptureConsumer(consumers: readonly { stepName: string }[]): void {
   if (consumers.length === 0) {
-    throw new Error("No proposed step materializes repository changes, so there is nothing to capture");
+    throw new Error("No step materializes repository changes, so there is nothing to capture");
   }
   if (consumers.length > 1) {
     throw new Error(

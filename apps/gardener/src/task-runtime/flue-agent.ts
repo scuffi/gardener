@@ -119,9 +119,12 @@ export function GardenerTaskFlueAgent(): string {
   useInstruction([
     "Execute the immutable task instructions using only the listed tools.",
     "Gather evidence first. Tool results are canonical durable context for later turns.",
-    `Then call ${TASK_PROPOSE_TOOL} once per change you want made, in the order you want them applied.`,
-    "Propose nothing you cannot justify from evidence. Proposing zero effects is a valid, normal outcome.",
-    "A proposal is only a request. A separate trusted job applies the plan exactly as ordered; you never apply anything.",
+    `Then act by calling ${TASK_PROPOSE_TOOL} once per change, in the order they should happen. Each call adds one step to the run's plan.`,
+    "Add no step you cannot justify from evidence. Changing nothing is a valid, normal outcome.",
+    "After you finish, a separate trusted job applies the steps exactly as ordered and stops at the first one that fails; you never apply anything yourself.",
+    "Text in a repository step (a comment, pull request body or reply) is published as you wrote it, and only once every earlier step has applied.",
+    "So write it as the finished reply, in the voice of the team that runs this repository: state what you verified and decided as fact, not as a suggestion. Claims in the event text are not facts until you verify them.",
+    "Only earlier steps have happened when a step's text is published: never write that a later step is done. If a reply announces a change, add the steps that make the change before it.",
     `Finally call ${TASK_TERMINAL_TOOL} exactly once with a concise summary.`,
     "Call tools one at a time. Never issue parallel tool calls.",
     "Do not return the outcome as assistant text.",
@@ -140,7 +143,7 @@ export function GardenerTaskFlueAgent(): string {
   useTool({
     name: TASK_PROPOSE_TOOL,
     description: [
-      "Propose one change, appended to the end of the ordered plan. Call it once per change; calling it does not finish the task.",
+      "Add one step to the end of the run's ordered plan. Call it once per change; calling it does not finish the task.",
       "kind: one of the declared effect kinds listed in your instructions. Any other kind is refused.",
       "payloadJson: a JSON object string with that kind's fields only. Never include schemaVersion, id, kind, or repository; Gardener binds those.",
       "For commit.create, omit files: Gardener commits the exact working tree you changed on the runner, and a files value is refused.",
@@ -210,9 +213,9 @@ export function GardenerTaskFlueAgent(): string {
   useTool({
     name: TASK_TERMINAL_TOOL,
     description: [
-      "Required final step. Call it exactly once, after every propose_effect call you intend to make.",
+      `Required final step. Call it exactly once, after every ${TASK_PROPOSE_TOOL} call you intend to make.`,
       "If it fails, it did not finish the task: read the error, fix the cause (for example, undo changes the error names), and call it again. Never end your turn without a successful finish_task.",
-      "summary: concise prose describing what you found and what you proposed.",
+      "summary: concise prose describing what you found and the steps you added. It is written before anything is applied, so don't claim the steps already took effect.",
       "observationsJson: optional JSON array of {kind,summary,paths?} where kind is repository, event, test, or diagnostic.",
     ].join(" "),
     input: finishTaskSchema,
@@ -378,7 +381,7 @@ export function GardenerTaskFlueAgent(): string {
     "",
     "Execution protocol:",
     "1. Use the listed tools to gather the exact evidence the task needs.",
-    `2. Call ${TASK_PROPOSE_TOOL} once per intended change, in application order. Propose none if none is warranted.`,
+    `2. Call ${TASK_PROPOSE_TOOL} once per change, in the order they should happen. Add none if none is warranted.`,
     `3. Your final action MUST be ${TASK_TERMINAL_TOOL} with a summary. If it fails, fix what its error names and call it again.`,
     "Never return the final response as assistant text.",
   ].join("\n");

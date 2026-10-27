@@ -497,7 +497,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     // ordinary commit already proposed could never commit.
     const ordinary = (await readProposalLedger(this.ctx.storage)).find((step) => step.kind === "commit.create");
     if (ordinary !== undefined) {
-      throw new Error(`A run either merges the base branch or makes ordinary commits, not both; step ${ordinary.stepName} already proposed commit.create`);
+      throw new Error(`A run either merges the base branch or makes ordinary commits, not both; step ${ordinary.stepName} already uses commit.create`);
     }
   }
 
@@ -541,7 +541,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
 
   private async recordProposalChecked(input: TaskEffectProposalInvocationV1): Promise<TaskEffectProposalAckV1> {
     const sessionId = await this.ctx.storage.get<string>("session-id");
-    if (!sessionId || input.runId !== sessionId) throw new Error("Effect proposal is not bound to this runner session");
+    if (!sessionId || input.runId !== sessionId) throw new Error("This step is not bound to this runner session");
     const proposal = taskEffectProposalV1Schema.parse(input.proposal);
     const digest = await proposalDigest(input.runId, proposal);
     const recorded = await recordedProposalIndex(this.ctx.storage, digest);
@@ -561,7 +561,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
     // proposal behind it, or a proposal recorded without being charged, would
     // both be observable to a concurrent call.
     return this.ctx.storage.transaction(async (transaction) => {
-      await assertCaptureNotStarted(transaction, "The working tree capture has started; no further effect proposal may be admitted");
+      await assertCaptureNotStarted(transaction, "The working tree capture has started; no further step may be added");
       await assertProposalFitsLedger(transaction, proposal);
       return admitProposal(transaction, {
         proposal,
@@ -579,7 +579,7 @@ export class TaskRunnerSession extends DurableObject<Env> {
 
   async #listProposals(runId: string): Promise<readonly TaskEffectProposalV1[]> {
     const sessionId = await this.ctx.storage.get<string>("session-id");
-    if (!sessionId || runId !== sessionId) throw new Error("Effect proposals are not bound to this runner session");
+    if (!sessionId || runId !== sessionId) throw new Error("These steps are not bound to this runner session");
     return readProposalLedger(this.ctx.storage);
   }
 
@@ -1587,7 +1587,7 @@ function captureOutputBudget(
   })).byteLength;
   const remainingPlanBytes = EFFECT_TRANSPORT_MAX_BYTES - knownBytes - 64 * 1024;
   if (remainingPlanBytes < 1_024) {
-    throw new Error("The proposed plan leaves no transport budget for a repository capture manifest");
+    throw new Error("The plan leaves no transport budget for a repository capture manifest");
   }
   return Math.min(EFFECT_TRANSPORT_MAX_BYTES, remainingPlanBytes);
 }

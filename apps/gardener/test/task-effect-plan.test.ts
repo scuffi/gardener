@@ -445,7 +445,7 @@ describe("capture-dependent steps", () => {
   it("refuses a capture no step materializes", async () => {
     const request = await runRequest();
     await expect(buildTaskEffectPlan({ request, outcome: outcome(request, [comment]), capture }))
-      .rejects.toThrow(/no proposed step materializes/);
+      .rejects.toThrow(/no step materializes/);
   });
 
   it("refuses a capture taken against a different commit than the run planned", async () => {

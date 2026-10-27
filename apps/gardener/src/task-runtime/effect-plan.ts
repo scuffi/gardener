@@ -292,7 +292,7 @@ export async function admitProposal(
     return { stepName: proposal.stepName, index: settled, duplicate: true, totalProposed: count };
   }
   if (await storage.get<string>(`${PROPOSAL_STEP_PREFIX}${proposal.stepName}`) !== undefined) {
-    throw new Error(`Step name ${proposal.stepName} was already proposed with different content`);
+    throw new Error(`Step name ${proposal.stepName} was already used by a step with different content`);
   }
 
   const reservationKey = `${RUNNER_TOOL_RESERVATION_PREFIX}${digest}`;
@@ -357,7 +357,7 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
       // The plan schema cannot see the bundle, so declaration is checked
       // here, beside the operations'. The same rules as at proposal: one per
       // run, on a workflow whose apply sends messages, within scope.
-      if (!declared.has(proposal.kind)) throw new Error(`Task proposed the undeclared effect ${proposal.kind}`);
+      if (!declared.has(proposal.kind)) throw new Error(`A step uses the undeclared effect ${proposal.kind}`);
       const refusal = messageProposalRefusal(request, proposal, proposals);
       if (refusal !== undefined) throw new Error(refusal);
       proposals.push(proposal);
@@ -371,11 +371,11 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     if (scopeRefusal !== undefined) throw new Error(scopeRefusal);
     proposals.push(proposal);
     if (!declared.has(proposal.kind)) {
-      throw new Error(`Task proposed the undeclared effect ${proposal.kind}`);
+      throw new Error(`A step uses the undeclared effect ${proposal.kind}`);
     }
     const implied = impliedEffectKinds(proposal.kind, proposal.payload, proposal.references).find((kind) => !declared.has(kind));
     if (implied !== undefined) {
-      throw new Error(`Task proposed ${proposal.kind} with labels, which needs the undeclared effect ${implied}`);
+      throw new Error(`A step uses ${proposal.kind} with labels, which needs the undeclared effect ${implied}`);
     }
     // Capture-owned pointers are unconditional: a `commit.create` always
     // needs a capture, and the proposal contract has already refused any
@@ -412,11 +412,11 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   }
   if (materializing.length > 0 && capture === undefined) {
     throw new Error(
-      "A proposed step materializes repository changes but the run admitted no capture; Gardener will not invent commit contents",
+      "A step materializes repository changes but the run admitted no capture; Gardener will not invent commit contents",
     );
   }
   if (materializing.length === 0 && capture !== undefined) {
-    throw new Error("The run admitted a repository capture that no proposed step materializes");
+    throw new Error("The run admitted a repository capture that no step materializes");
   }
   // The capture's base commit is not re-checked here: the plan schema binds it
   // to the planning commit, so a drifted capture is rejected once, in the
@@ -557,8 +557,8 @@ export async function captureRecordFromResult(result: RunnerActionResultV1, base
   const envelope = runnerCaptureResultV1Schema.parse(parsed);
   if (envelope.status === "unchanged") {
     throw new Error(
-      "A proposed step commits repository changes but the working tree is unchanged; "
-      + "make the change with repository.exec before proposing a commit",
+      "A step commits repository changes but the working tree is unchanged; "
+      + "make the change with repository.exec before adding a commit step",
     );
   }
   const { ref, manifestJson } = envelope;

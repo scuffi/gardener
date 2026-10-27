@@ -83,7 +83,7 @@ describe("canonical task Flue agent", () => {
     const existing = proposals.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(proposal));
     if (existing >= 0) return { stepName: proposal.stepName, index: existing, duplicate: true, totalProposed: proposals.length };
     if (proposals.some((candidate) => candidate.stepName === proposal.stepName)) {
-      throw new Error(`Step name ${proposal.stepName} was already proposed with different content`);
+      throw new Error(`Step name ${proposal.stepName} was already used by a step with different content`);
     }
     proposals.push(proposal);
     return { stepName: proposal.stepName, index: proposals.length - 1, duplicate: false, totalProposed: proposals.length };
@@ -109,6 +109,22 @@ describe("canonical task Flue agent", () => {
     installGardenerTaskToolFacade({
       invoke, proposeEffect, listProposals, captureRepository, recordTaskCandidate, confirmTaskResult,
     } as never);
+  });
+
+  it("never frames the model's own work as a proposal", () => {
+    // Text the model writes is published as the repository's reply, so
+    // Gardener's own instructions must not teach it to write like a
+    // suggestion. The tool's name is the one exception.
+    const value = request();
+    flue.useInitialData.mockReturnValue({ request: value });
+    const protocol = GardenerTaskFlueAgent().replace(value.prompt, "");
+    // Gardener's own instructions, not the rendered untrusted event context.
+    const instructions = flue.useInstruction.mock.calls.map(([text]) => String(text)).filter((text) => !text.includes("<untrusted-context"));
+    const descriptions = flue.useTool.mock.calls.map(([definition]) => String((definition as { description: string }).description));
+    const own = [protocol, ...instructions, ...descriptions].join("\n").replaceAll("propose_effect", "");
+    expect(own).not.toMatch(/\bpropos/i);
+    expect(instructions.join("\n")).toContain("is published as you wrote it, and only once every earlier step has applied");
+    expect(instructions.join("\n")).toContain("never write that a later step is done");
   });
 
   it("mounts propose_effect, finish_task, and the durable runner tools", async () => {
@@ -217,7 +233,7 @@ describe("canonical task Flue agent", () => {
     await expect(propose.run({
       data: { ...data, payloadJson: JSON.stringify({ ...issuePreconditions, body: "Twice." }) },
       toolCallId: "call-2",
-    })).rejects.toThrow(/already proposed with different content/);
+    })).rejects.toThrow(/already used by a step with different content/);
   });
 
   it("refuses payload and reference text that is not a JSON object", async () => {

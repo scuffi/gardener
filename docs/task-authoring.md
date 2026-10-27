@@ -32,7 +32,7 @@ limits:
   input-tokens: 60000
   output-tokens: 16000
 ---
-Inspect the issue and repository evidence, then propose one concise issue comment.
+Inspect the issue and repository evidence, then comment once, concisely.
 ```
 
 ## Semantics

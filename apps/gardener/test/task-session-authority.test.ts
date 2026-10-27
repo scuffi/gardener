@@ -180,7 +180,7 @@ describe("effect plan binding to the effects hello", () => {
 });
 
 describe("capture-pending barrier", () => {
-  const proposalMessage = "The working tree capture has started; no further effect proposal may be admitted";
+  const proposalMessage = "The working tree capture has started; no further step may be added";
 
   it("admits proposals and actions while no capture has started", async () => {
     await expect(assertCaptureNotStarted(new MemoryStorage(), proposalMessage)).resolves.toBeUndefined();
@@ -209,7 +209,7 @@ describe("capture-pending barrier", () => {
   });
 
   it("captures only for exactly one consuming step", () => {
-    expect(() => assertSingleCaptureConsumer([])).toThrow("No proposed step materializes repository changes, so there is nothing to capture");
+    expect(() => assertSingleCaptureConsumer([])).toThrow("No step materializes repository changes, so there is nothing to capture");
     expect(() => assertSingleCaptureConsumer([{ stepName: "commit" }])).not.toThrow();
     expect(() => assertSingleCaptureConsumer([{ stepName: "one" }, { stepName: "two" }])).toThrow(
       "Steps one, two each materialize repository changes, but a run captures the working tree once",
@@ -227,7 +227,7 @@ describe("session wiring", () => {
     expect(source).toMatch(/const action = runnerActionV1Schema\.parse\(input\);\n[^\n]*\n    assertRunnerMayRequest\(action\);/);
     expect(source).toMatch(/assertEffectPlanBoundToHello\(request, identity\.hello\);/);
     expect(source).toMatch(/assertReportedEventMatchesOidc\(runnerEvent\.kind, identity\.hello\.eventName\);/);
-    expect(source).toMatch(/await assertCaptureNotStarted\(transaction, "The working tree capture has started; no further effect proposal may be admitted"\);/);
+    expect(source).toMatch(/await assertCaptureNotStarted\(transaction, "The working tree capture has started; no further step may be added"\);/);
     // invoke and reserveRunnerToolBudget both hold the action barrier.
     expect(source.match(/await assertCaptureNotStarted\(transaction, "The working tree capture has started; no further repository action may run"\);/g)).toHaveLength(2);
     expect(source).toMatch(/const current = await transaction\.get<AdmittedTaskCaptureV1>\(CAPTURE_KEY\);\n      if \(current\) return;\n(?:      \/\/[^\n]*\n)*      assertCaptureAdmissible\(\n        await transaction\.get<number>\(CAPTURE_GENERATION_KEY\) \?\? 0,\n        generation,\n        await transaction\.get<CapturePending>\(CAPTURE_PENDING_KEY\),\n        operationId,\n      \);/);
