@@ -2,7 +2,7 @@
 #
 # Source: .gardener/tasks/docs-review/TASK.md
 # Task: docs-review
-# Bundle: sha256:2cd2da714fc259b5b0c6b75bee6ef5b64295c122d43fba21c9a49de6e0f6e1e6
+# Bundle: sha256:2f63815afe20684a69f71a5ee79509e4faf1dcec98c5c58462d4d9dc4d674545
 # Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: "Gardener · Docs review"
@@ -40,5 +40,5 @@ jobs:
       task-id: "docs-review"
       task-name: "Docs review"
       task-source: ".gardener/tasks/docs-review/TASK.md"
-      task-bundle-hash: 2cd2da714fc259b5b0c6b75bee6ef5b64295c122d43fba21c9a49de6e0f6e1e6
+      task-bundle-hash: 2f63815afe20684a69f71a5ee79509e4faf1dcec98c5c58462d4d9dc4d674545
       plan-timeout-minutes: 30

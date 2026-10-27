@@ -30,7 +30,7 @@ limits:
 ---
 Keep this repository's examples working and up to date.
 
-1. If there is no `examples/` directory, propose nothing and finish.
+1. If there is no `examples/` directory, finish without adding steps.
 2. Run each example the way its README, or the repository's docs, say to. If an example cannot be
    run in this checkout (it needs secrets, a deployed service or an account), compare it with the
    code instead. In this repository, `examples/tasks/*/TASK.md` are starter Gardener tasks. Check
@@ -49,9 +49,9 @@ Keep this repository's examples working and up to date.
 3. Fix only what is broken or out of date: an example that fails to run, or uses a name, setting,
    path or API the code no longer has. Keep each fix as small as possible. Don't add examples,
    restyle them, or change anything outside `examples/`.
-4. If nothing needs fixing, propose nothing. If there are fixes, first check
+4. If nothing needs fixing, change nothing. If there are fixes, first check
    `GET /repos/{owner}/{repo}/pulls?state=open&per_page=100` for an open pull request whose head
-   branch starts with `gardener/examples-`. If there is one, propose nothing. Otherwise propose, in
+   branch starts with `gardener/examples-`. If there is one, change nothing. Otherwise add these steps, in
    order:
    - `branch.create` of `gardener/examples-<yyyy-mm-dd>` from the default branch's head;
    - one `commit.create` on it with every fixed file, and the message `Update examples`;

@@ -2,7 +2,7 @@
 #
 # Source: .gardener/tasks/examples-review/TASK.md
 # Task: examples-review
-# Bundle: sha256:5f95631886195aa3cbacad879fe3fa7379aec99288945041cb3c9d3b961828de
+# Bundle: sha256:83b3497f37a759d912838ce3b2cd5f91c11737fb8d2200f862f863778737769d
 # Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: "Gardener · Examples review"
@@ -40,5 +40,5 @@ jobs:
       task-id: "examples-review"
       task-name: "Examples review"
       task-source: ".gardener/tasks/examples-review/TASK.md"
-      task-bundle-hash: 5f95631886195aa3cbacad879fe3fa7379aec99288945041cb3c9d3b961828de
+      task-bundle-hash: 83b3497f37a759d912838ce3b2cd5f91c11737fb8d2200f862f863778737769d
       plan-timeout-minutes: 40
