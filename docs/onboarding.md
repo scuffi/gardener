@@ -39,8 +39,10 @@ done
 ```
 
 3. Mention tasks need a handle. Add `"handle": "<name>"` to `.gardener/gardener.json`, where
-   `<name>` is what people type after `@`. Pick a name that is **not** a real GitHub account
-   (`gh api users/<name>` should return 404); otherwise every mention also notifies that person.
+   `<name>` is what people type after `@`. Use a bot account you own, or a name **nobody** holds;
+   otherwise every mention also notifies that person. `gh api users/<name>` returning 404 is not
+   proof: suspended accounts also return 404 and keep their name. `"aliases": ["<other>"]` adds
+   more names that reach the same tasks.
 
    If the repository already has a `.github/workflows/gardener-sync.yml` that Gardener didn't
    generate, add `"syncWorkflow": "gardener-repo-sync.yml"` (any `gardener-*.yml` name) so the

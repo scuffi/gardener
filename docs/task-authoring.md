@@ -83,10 +83,11 @@ the comment on comment triggers, the review on `pull_request_review.submitted`, 
 issue, pull request or discussion body. Matching is case-insensitive and whole-handle, so
 `@gardener` does not match `@gardener-bot` or `me@gardener.dev`. A mention inside a code block
 or backticks still counts, although GitHub does not notify on it. Write `self` for the project's own
-handle, set as `handle` in `.gardener/gardener.json`:
+handle, set as `handle` in `.gardener/gardener.json`. `aliases` lists other handles that `self`
+also matches, for a second name people can type:
 
 ```json
-{ "schemaVersion": "gardener.project/v1", "target": "github-actions/v1", "handle": "my-bot", "release": { "workflowRef": "…" } }
+{ "schemaVersion": "gardener.project/v1", "target": "github-actions/v1", "handle": "my-bot", "aliases": ["my-other-bot"], "release": { "workflowRef": "…" } }
 ```
 
 `gardener generate` fails if a task mentions `self` and no handle is set. There is no default handle.

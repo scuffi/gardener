@@ -317,6 +317,8 @@ type AuthoredTrigger = z.output<typeof triggerAuthoringSchema>;
 export interface TaskCompileOptions {
   /** The project's own GitHub handle, which `mentions: [self]` resolves to. */
   handle?: string;
+  /** Other handles `mentions: [self]` also resolves to, after `handle`. */
+  aliases?: readonly string[];
 }
 
 function toContractTrigger(authored: AuthoredTrigger, options: TaskCompileOptions, sourceName: string): TaskTriggerV1 {
@@ -346,24 +348,27 @@ function normalizedAuthors(authors: "maintainers" | "any" | readonly string[]): 
 
 /**
  * Lowercased handles without `@`, in the order written, with `self` replaced by
- * the project handle. A handle the contract would refuse fails the build here,
+ * the project handle and then its aliases. A handle the contract would refuse fails the build here,
  * where the author can see which task and trigger it came from.
  */
 function resolveMentions(written: readonly string[], options: TaskCompileOptions, sourceName: string, kind: string): string[] {
   const handles: string[] = [];
   for (const entry of written) {
-    let handle = entry.startsWith("@") ? entry.slice(1) : entry;
-    if (handle === "self") {
+    const unprefixed = entry.startsWith("@") ? entry.slice(1) : entry;
+    let resolved = [unprefixed];
+    if (unprefixed === "self") {
       if (options.handle === undefined) {
         throw new Error(`${sourceName} ${kind} mentions self, but .gardener/gardener.json sets no handle`);
       }
-      handle = options.handle;
+      resolved = [options.handle, ...(options.aliases ?? [])];
     }
-    handle = handle.toLowerCase();
-    if (!githubHandleV1Schema.safeParse(handle).success) {
-      throw new Error(`${sourceName} ${kind} mentions ${entry}, which is not a GitHub handle`);
+    for (const candidate of resolved) {
+      const handle = candidate.toLowerCase();
+      if (!githubHandleV1Schema.safeParse(handle).success) {
+        throw new Error(`${sourceName} ${kind} mentions ${entry}, which is not a GitHub handle`);
+      }
+      if (!handles.includes(handle)) handles.push(handle);
     }
-    if (!handles.includes(handle)) handles.push(handle);
   }
   return handles;
 }

@@ -25,7 +25,7 @@ import {
   type GitHubActionsTaskPlanV1,
   type GitHubActionsTriggerBindingV1,
 } from "./actions-target.js";
-import { compileTaskSource, highImpactWarning, messageWarnings, modelWarning, type CompiledTask } from "./task-authoring.js";
+import { compileTaskSource, highImpactWarning, messageWarnings, modelWarning, type CompiledTask, type TaskCompileOptions } from "./task-authoring.js";
 import { renderTaskGuide, TASK_GUIDE_PATH } from "./task-guide.js";
 
 /** The most tasks one sync may carry (`syncRequestV1Schema`), so the most a project may hold. */
@@ -47,6 +47,8 @@ const syncWorkflowNameSchema = z.string().regex(
   "syncWorkflow must be a file name like gardener-repo-sync.yml",
 ).max(64, "syncWorkflow must be a file name of at most 64 characters");
 
+const projectHandleSchema = z.string().transform((value) => value.replace(/^@/, "").toLowerCase()).pipe(githubHandleV1Schema);
+
 const projectSchema = z.strictObject({
   schemaVersion: z.literal("gardener.project/v1"),
   target: z.literal(GITHUB_ACTIONS_TARGET),
@@ -59,7 +61,13 @@ const projectSchema = z.strictObject({
    * The GitHub handle people @mention to reach this project's tasks, such as a
    * bot account. `mentions: [self]` in a TASK.md resolves to it.
    */
-  handle: z.string().transform((value) => value.replace(/^@/, "").toLowerCase()).pipe(githubHandleV1Schema).optional(),
+  handle: projectHandleSchema.optional(),
+  /**
+   * Other handles that also reach this project's tasks. `mentions: [self]`
+   * matches `handle` and every alias. They only count for mentions: `handle`
+   * stays the project's own identity.
+   */
+  aliases: z.array(projectHandleSchema).min(1).max(10).optional(),
   /**
    * The file name of the generated sync workflow, when `gardener-sync.yml` is
    * taken. Gardener's own repository needs this: it publishes the reusable
@@ -67,6 +75,17 @@ const projectSchema = z.strictObject({
    * the reusable workflow, never the caller's file name.
    */
   syncWorkflow: syncWorkflowNameSchema.optional(),
+}).superRefine((project, context) => {
+  if (project.aliases === undefined) return;
+  if (project.handle === undefined) {
+    context.addIssue({ code: "custom", path: ["aliases"], message: "aliases needs a handle: set handle to the main one" });
+    return;
+  }
+  const seen = new Set([project.handle]);
+  for (const alias of project.aliases) {
+    if (seen.has(alias)) context.addIssue({ code: "custom", path: ["aliases"], message: `aliases repeats ${alias}` });
+    seen.add(alias);
+  }
 });
 
 type ProjectConfig = z.infer<typeof projectSchema>;
@@ -87,6 +106,12 @@ function parseProjectConfig(source: string): ProjectConfig {
       + (others.length === 0 ? "" : ` The file also has ${others.length} other error${others.length === 1 ? "" : "s"}: ${others.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`).join("; ")}`));
   }
   throw parsed.error;
+}
+
+/** What `mentions: [self]` resolves to: the handle, then its aliases. */
+function projectCompileOptions(project: ProjectConfig): TaskCompileOptions {
+  if (project.handle === undefined) return {};
+  return project.aliases === undefined ? { handle: project.handle } : { handle: project.handle, aliases: project.aliases };
 }
 
 function syncWorkflowPath(project: ProjectConfig): string {
@@ -356,7 +381,7 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
       throw new Error(`${relative(root, taskPath)} is ${taskStat.size} bytes; a TASK.md may be at most ${MAX_TASK_FILE_BYTES}`);
     }
     const source = relative(gardenerDirectory, taskPath).replaceAll("\\", "/");
-    const compiled = await compileTaskSource(await readFile(taskPath, "utf8"), source, project.handle === undefined ? {} : { handle: project.handle });
+    const compiled = await compileTaskSource(await readFile(taskPath, "utf8"), source, projectCompileOptions(project));
     if (taskIds.has(compiled.bundle.taskId)) throw new Error(`Duplicate task id: ${compiled.bundle.taskId}`);
     taskIds.add(compiled.bundle.taskId);
     const workflow = `.github/workflows/gardener-${workflowSlug(compiled.bundle.taskId)}.yml`;

@@ -17,7 +17,7 @@ that plan. Nothing outside the declaration is possible, whatever the instruction
 
 ```
 .gardener/
-  gardener.json            project settings (release pin, optional "handle"); edit only "handle"
+  gardener.json            project settings (release pin, optional "handle" and "aliases"); edit only those
   gardener.lock.json       generated; never edit
   SKILL.md                 this file; generated
   tasks/<dir>/TASK.md      one task per directory; the only files you write
@@ -116,7 +116,7 @@ Each trigger is `event:` plus optional filters. A task may use each event at mos
   `.labeled` triggers the label just added must also be one of them, so a later unrelated label
   does not start the task again: one listed label runs exactly once, N listed labels up to N times.
 - `mentions`: the text must @mention one of these handles. `self` means the `handle` in
-  `.gardener/gardener.json`, and `generate` fails if no handle is set.
+  `.gardener/gardener.json` and its `aliases`, and `generate` fails if no handle is set.
 - `authors`: who wrote the triggering text: `maintainers` (owner, members, collaborators, anyone
   with write access), `any`, or a list of logins that may include `maintainers`, such as
   `[maintainers, "devin-ai-integration[bot]"]`. It defaults to `maintainers` on comment and

@@ -396,6 +396,12 @@ describe("local Gardener project", () => {
     // self resolves to the project handle; @, case and repeats are normalised.
     expect((await triggers("trigger:\n  event: github.issue_comment.created\n  mentions: [self, '@OctoCat', octocat]", "garden-bot"))[0])
       .toMatchObject({ mentions: ["garden-bot", "octocat"] });
+    // self also resolves to the aliases, after the handle, without repeats.
+    expect((await compileTaskSource(TASK.replace(
+      "trigger:\n  event: github.issue.opened\n  labels-all:\n    - gardener-example",
+      "trigger:\n  event: github.issue_comment.created\n  mentions: [octocat, self, gnome-bot]",
+    ), "TASK.md", { handle: "garden-bot", aliases: ["gnome-bot"] })).bundle.triggers[0])
+      .toMatchObject({ mentions: ["octocat", "garden-bot", "gnome-bot"] });
     await expect(withTrigger("trigger:\n  event: github.issue_comment.created\n  mentions: [self]"))
       .rejects.toThrow(/mentions self, but .gardener\/gardener.json sets no handle/);
     await expect(withTrigger("trigger:\n  event: github.issue_comment.created\n  mentions: ['not a handle']"))
@@ -440,6 +446,30 @@ describe("local Gardener project", () => {
     // issue.opened keeps authors: any and no mention, so it adds no clauses.
     expect(workflow).toContain("(github.event_name == 'issues' && github.event.action == 'opened')");
     expect(workflow).toContain("  issue_comment:\n    types: [created, edited]");
+
+    // Aliases widen self in the prefilter too.
+    await writeFile(projectPath, JSON.stringify({ ...project, handle: "@Garden-Bot", aliases: ["@Gnome-Bot"] }));
+    const aliased = await readFile(join(root, (await buildProject({ repositoryRoot: root })).tasks[0]!.workflow), "utf8");
+    expect(aliased).toContain(
+      "(github.event_name == 'issue_comment' && github.event.action == 'created' && "
+      + "(contains(github.event.comment.body, '@garden-bot') || contains(github.event.comment.body, '@gnome-bot')))",
+    );
+  });
+
+  it("refuses aliases without a handle, or that repeat one", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gardener-project-aliases-"));
+    await initializeProject({ repositoryRoot: root, demos: false });
+    const projectPath = join(root, ".gardener/gardener.json");
+    const project = JSON.parse(await readFile(projectPath, "utf8")) as Record<string, unknown>;
+    const buildWith = async (settings: Record<string, unknown>) => {
+      await writeFile(projectPath, JSON.stringify({ ...project, ...settings }));
+      return buildProject({ repositoryRoot: root });
+    };
+    await expect(buildWith({ aliases: ["gnome-bot"] })).rejects.toThrow(/aliases needs a handle/);
+    await expect(buildWith({ handle: "garden-bot", aliases: ["Garden-Bot"] })).rejects.toThrow(/aliases repeats garden-bot/);
+    await expect(buildWith({ handle: "garden-bot", aliases: ["gnome-bot", "@gnome-bot"] })).rejects.toThrow(/aliases repeats gnome-bot/);
+    await expect(buildWith({ handle: "garden-bot", aliases: [] })).rejects.toThrow();
+    await expect(buildWith({ handle: "garden-bot", aliases: ["not a handle"] })).rejects.toThrow();
   });
 
   it("checks out the pull request head only for tasks that commit beyond gardener/**", async () => {

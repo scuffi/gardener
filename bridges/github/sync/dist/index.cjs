@@ -29958,18 +29958,21 @@ function normalizedAuthors(authors) {
 function resolveMentions(written, options, sourceName, kind) {
   const handles = [];
   for (const entry of written) {
-    let handle = entry.startsWith("@") ? entry.slice(1) : entry;
-    if (handle === "self") {
+    const unprefixed = entry.startsWith("@") ? entry.slice(1) : entry;
+    let resolved = [unprefixed];
+    if (unprefixed === "self") {
       if (options.handle === void 0) {
         throw new Error(`${sourceName} ${kind} mentions self, but .gardener/gardener.json sets no handle`);
       }
-      handle = options.handle;
+      resolved = [options.handle, ...options.aliases ?? []];
     }
-    handle = handle.toLowerCase();
-    if (!githubHandleV1Schema.safeParse(handle).success) {
-      throw new Error(`${sourceName} ${kind} mentions ${entry}, which is not a GitHub handle`);
+    for (const candidate of resolved) {
+      const handle = candidate.toLowerCase();
+      if (!githubHandleV1Schema.safeParse(handle).success) {
+        throw new Error(`${sourceName} ${kind} mentions ${entry}, which is not a GitHub handle`);
+      }
+      if (!handles.includes(handle)) handles.push(handle);
     }
-    if (!handles.includes(handle)) handles.push(handle);
   }
   return handles;
 }
@@ -30041,6 +30044,7 @@ var syncWorkflowNameSchema = external_exports.string().regex(
   /^gardener-[a-z0-9][a-z0-9-]*\.ya?ml$/,
   "syncWorkflow must be a file name like gardener-repo-sync.yml"
 ).max(64, "syncWorkflow must be a file name of at most 64 characters");
+var projectHandleSchema = external_exports.string().transform((value) => value.replace(/^@/, "").toLowerCase()).pipe(githubHandleV1Schema);
 var projectSchema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.project/v1"),
   target: external_exports.literal(GITHUB_ACTIONS_TARGET),
@@ -30053,7 +30057,13 @@ var projectSchema = external_exports.strictObject({
    * The GitHub handle people @mention to reach this project's tasks, such as a
    * bot account. `mentions: [self]` in a TASK.md resolves to it.
    */
-  handle: external_exports.string().transform((value) => value.replace(/^@/, "").toLowerCase()).pipe(githubHandleV1Schema).optional(),
+  handle: projectHandleSchema.optional(),
+  /**
+   * Other handles that also reach this project's tasks. `mentions: [self]`
+   * matches `handle` and every alias. They only count for mentions: `handle`
+   * stays the project's own identity.
+   */
+  aliases: external_exports.array(projectHandleSchema).min(1).max(10).optional(),
   /**
    * The file name of the generated sync workflow, when `gardener-sync.yml` is
    * taken. Gardener's own repository needs this: it publishes the reusable
@@ -30061,6 +30071,17 @@ var projectSchema = external_exports.strictObject({
    * the reusable workflow, never the caller's file name.
    */
   syncWorkflow: syncWorkflowNameSchema.optional()
+}).superRefine((project, context) => {
+  if (project.aliases === void 0) return;
+  if (project.handle === void 0) {
+    context.addIssue({ code: "custom", path: ["aliases"], message: "aliases needs a handle: set handle to the main one" });
+    return;
+  }
+  const seen = /* @__PURE__ */ new Set([project.handle]);
+  for (const alias of project.aliases) {
+    if (seen.has(alias)) context.addIssue({ code: "custom", path: ["aliases"], message: `aliases repeats ${alias}` });
+    seen.add(alias);
+  }
 });
 function parseProjectConfig(source) {
   const parsed = projectSchema.safeParse(JSON.parse(source));
@@ -30071,6 +30092,10 @@ function parseProjectConfig(source) {
     throw new Error(`.gardener/gardener.json sets ${unknown2.join(", ")}, which this Gardener release does not support. Upgrade Gardener: the CLI from npm, and this repository's pin with gardener upgrade.` + (others.length === 0 ? "" : ` The file also has ${others.length} other error${others.length === 1 ? "" : "s"}: ${others.map((issue2) => `${issue2.path.join(".") || "(root)"}: ${issue2.message}`).join("; ")}`));
   }
   throw parsed.error;
+}
+function projectCompileOptions(project) {
+  if (project.handle === void 0) return {};
+  return project.aliases === void 0 ? { handle: project.handle } : { handle: project.handle, aliases: project.aliases };
 }
 function syncWorkflowPath(project) {
   return project.syncWorkflow === void 0 ? SYNC_WORKFLOW : `.github/workflows/${project.syncWorkflow}`;
@@ -30103,7 +30128,7 @@ async function planProject(input2) {
       throw new Error(`${(0, import_node_path.relative)(root, taskPath)} is ${taskStat.size} bytes; a TASK.md may be at most ${MAX_TASK_FILE_BYTES}`);
     }
     const source = (0, import_node_path.relative)(gardenerDirectory, taskPath).replaceAll("\\", "/");
-    const compiled = await compileTaskSource(await (0, import_promises.readFile)(taskPath, "utf8"), source, project.handle === void 0 ? {} : { handle: project.handle });
+    const compiled = await compileTaskSource(await (0, import_promises.readFile)(taskPath, "utf8"), source, projectCompileOptions(project));
     if (taskIds.has(compiled.bundle.taskId)) throw new Error(`Duplicate task id: ${compiled.bundle.taskId}`);
     taskIds.add(compiled.bundle.taskId);
     const workflow = `.github/workflows/gardener-${workflowSlug(compiled.bundle.taskId)}.yml`;

@@ -28,7 +28,8 @@ produces. `generate` refuses to overwrite a workflow it did not write.
 | `schemaVersion` | yes | `gardener.project/v1`. |
 | `target` | yes | `github-actions/v1`, the only target. |
 | `release.workflowRef` | yes | The Gardener release this project uses: `scuffi/gardener/.github/workflows/gardener-task.yml@<commit>`. Set by `init` and moved by `upgrade`. |
-| `handle` | no | The GitHub handle people @mention to reach this project's tasks, without `@`. `mentions: [self]` resolves to it. Pick one that is not a real account (`gh api users/<name>` should return 404), or every mention also notifies that person. |
+| `handle` | no | The GitHub handle people @mention to reach this project's tasks, without `@`. `mentions: [self]` resolves to it. Use a bot account you own or a name nobody holds; someone else's account is notified by every mention. `gh api users/<name>` returning 404 is not proof a name is free: suspended accounts also return 404 and keep their name. Registering the account yourself is the only sure way. |
+| `aliases` | no | Other handles that also reach this project's tasks, up to 10, without `@`. `mentions: [self]` matches `handle` and every alias. Needs `handle`, and must not repeat it. Aliases only count for mentions; `handle` stays the project's own identity. |
 | `syncWorkflow` | no | The generated sync workflow's file name, when `gardener-sync.yml` is taken: a `gardener-*.yml` name of at most 64 characters. |
 
 A key this release does not know fails with a message to upgrade: the sync and check workflows run
@@ -99,7 +100,7 @@ declared. Using a filter a kind does not accept is a compile error.
 | Filter | Meaning |
 | --- | --- |
 | `labels-all` | Every listed label must be on the issue, pull request or discussion. Up to 20. On the three `.labeled` triggers, the label just added must also be one of them, so a later unrelated label doesn't start the task again. With N listed labels up to N events can match (one per listed label as it is added); with one label, exactly once. |
-| `mentions` | The text must @mention one of these handles; `self` is the project's `handle`. Whole-handle and case-insensitive. On comment triggers the text is the comment, on `pull_request_review.submitted` the review, otherwise the issue, pull request or discussion body. On an `.edited` trigger, only an edit that adds a mention counts. |
+| `mentions` | The text must @mention one of these handles; `self` is the project's `handle` and its `aliases`. Whole-handle and case-insensitive. On comment triggers the text is the comment, on `pull_request_review.submitted` the review, otherwise the issue, pull request or discussion body. On an `.edited` trigger, only an edit that adds a mention counts. |
 | `authors` | Who may have written the text: `maintainers`, `any`, or a list of logins that may include `maintainers`. `maintainers` is the owner, organization members and collaborators, or anyone with write or admin access. The default is `maintainers` for comment triggers, `pull_request_review.submitted`, and any trigger with `mentions`; otherwise `any`. |
 | `opened-by` | Exact logins that opened the thread the event belongs to, such as `["dependabot[bot]"]`. |
 | `branches` | Branch patterns a push must match. Required on `github.push`. |
