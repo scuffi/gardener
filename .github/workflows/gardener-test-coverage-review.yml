@@ -2,7 +2,7 @@
 #
 # Source: .gardener/tasks/test-coverage-review/TASK.md
 # Task: test-coverage-review
-# Bundle: sha256:92105114bb18ad59ac1bb198056702de3402446555b6cd2c55ed16c65a0368e0
+# Bundle: sha256:c8eba579e4066564629def7186de6fc416702d5545f1b67b474413dbb67a2d9e
 # Regenerate: gardener generate
 # Do not edit this workflow directly.
 name: "Gardener · Test coverage review"
@@ -34,11 +34,11 @@ jobs:
       issues: write
       pull-requests: read
       statuses: read
-    uses: scuffi/gardener/.github/workflows/gardener-task.yml@e927a2a726ef283e60d32ad09efa7c2aea0b47eb
+    uses: scuffi/gardener/.github/workflows/gardener-task.yml@0d02b66f47cc8802ba14a243dd827bf5555b3469
     with:
       runtime-url: ${{ vars.GARDENER_RUNTIME_URL }}
       task-id: "test-coverage-review"
       task-name: "Test coverage review"
       task-source: ".gardener/tasks/test-coverage-review/TASK.md"
-      task-bundle-hash: 92105114bb18ad59ac1bb198056702de3402446555b6cd2c55ed16c65a0368e0
+      task-bundle-hash: c8eba579e4066564629def7186de6fc416702d5545f1b67b474413dbb67a2d9e
       plan-timeout-minutes: 30
