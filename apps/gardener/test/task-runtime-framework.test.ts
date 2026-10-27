@@ -143,7 +143,7 @@ describe("canonical task runtime framework", () => {
       ["repository_exec", "workspace"],
     ]);
     expect(first.tools.some((tool) => tool.name.includes("github"))).toBe(false);
-    expect(first.prompt).toContain("Never claim a persistent effect occurred");
+    expect(first.prompt).toContain("Changes happen only through the steps you add, which a separate job applies after you finish.");
     expect(first.context?.[0]?.content).toContain("gardener.normalized-event/v1");
   });
 
@@ -216,9 +216,17 @@ describe("canonical task runtime framework", () => {
     expect(() => translateHarnessOutcome(input, completedHarnessOutcome(duplicated))).toThrow(/reused step name/);
   });
 
+  it("never frames the model's own work as a proposal", async () => {
+    // Text the model writes is published as the repository's reply, so the
+    // trusted prompt (Gardener's framing and the fixture task's body) must not
+    // teach it to write as if offering a suggestion. The tool's name is exempt.
+    const request = await createTaskHarnessRequest(await runRequest());
+    expect(request.prompt.replaceAll("propose_effect", "")).not.toMatch(/\bpropos/i);
+  });
+
   it("states this run's exact effect allowlist in the trusted prompt", async () => {
     const request = await createTaskHarnessRequest(await runRequest());
-    expect(request.prompt).toContain("Effect kinds this task is allowed to propose");
+    expect(request.prompt).toContain("Effect kinds this task may use, and no others:");
     expect(request.prompt).toContain("issue.comment.create");
     expect(request.prompt).toContain("Exact payloadJson contracts");
     expect(request.prompt).toContain('"expectedIssueUpdatedAt":{"type":"string","format":"date-time"}');

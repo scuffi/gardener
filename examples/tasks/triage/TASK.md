@@ -29,9 +29,9 @@ Triage the issue that triggered this run.
    search for similar open issues (`GET /search/issues` with `q=repo:{owner}/{repo} is:issue
    is:open` plus two or three key words from the title).
 2. Read repository files only if the issue is about specific code.
-3. Propose `issue.comment.create`: at most 80 words, summarising the problem and the likely area of
-   the code. If any open issue looks like a duplicate, link it. Do not promise a fix.
-4. Propose `issue.label.add` for at most two labels that already exist and clearly fit. Skip this
+3. Comment with `issue.comment.create` in at most 80 words, summarising the problem and the
+   likely area of the code. If any open issue looks like a duplicate, link it. Do not promise a fix.
+4. Add at most two labels that already exist and clearly fit, with `issue.label.add`. Skip this
    step if none fit; never invent a label.
 
 Then finish.

@@ -121,7 +121,9 @@ describe("message.send proposals", () => {
   it("are refused after the first in a run", async () => {
     const request = await runRequest();
     expect(proposalAuthorityRefusal(request, notify(1, "again"), [comment(), notify()]))
-      .toBe("A run sends at most one message, and step notify already proposed message.send");
+      .toBe("A run sends at most one message, and step notify already sends one");
+    // Refusals reach the model as tool results, so they must not use proposal voice either.
+    expect(proposalAuthorityRefusal(request, notify(1, "again"), [comment(), notify()])).not.toMatch(/\bpropos/i);
     expect(proposalAuthorityRefusal(request, comment("later"), [notify()])).toBeUndefined();
   });
 
@@ -185,7 +187,7 @@ describe("messages in the built plan", () => {
   it("re-check declaration, the one-message rule, scope and the pin", async () => {
     const undeclared = await runRequest({ effects: ["issue.comment.create"] });
     await expect(buildTaskEffectPlan({ request: undeclared, outcome: outcome(undeclared, [notify()]) }))
-      .rejects.toThrow("Task proposed the undeclared effect message.send");
+      .rejects.toThrow("A step uses the undeclared effect message.send");
     const request = await runRequest();
     await expect(buildTaskEffectPlan({ request, outcome: outcome(request, [notify(), notify(1, "again")]) }))
       .rejects.toThrow(/at most one message/);
@@ -215,9 +217,9 @@ describe("message.send in the prompt", () => {
       return (await createTaskHarnessRequest(request)).prompt;
     };
     expect(await limited(["issue.comment.create", "message.send"]))
-      .toContain("This task may propose at most 1 steps that change the repository, and one message.send in addition.");
+      .toContain("This task may add at most 1 steps that change the repository, and one message.send in addition.");
     const without = await limited(["issue.comment.create"]);
-    expect(without).toContain("This task may propose at most 1 steps.");
+    expect(without).toContain("This task may add at most 1 steps.");
     expect(without).not.toContain("message.send in addition");
   });
 });

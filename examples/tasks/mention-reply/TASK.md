@@ -37,7 +37,7 @@ Someone mentioned you in a comment. Read their comment and reply once, on the sa
 - If it needs a code change, say so; do not claim to have changed anything.
 - Never write the handle you were mentioned by.
 - If the comment is on a pull request and asks you to rebase or update it, read the pull request
-  with the provider API, then propose your reply followed by `pull_request.update_branch` with
-  `method` `rebase` (or `merge` if they ask to merge the base in), using its current head and base.
+  with the provider API, then reply and update it with `pull_request.update_branch`: `method`
+  `rebase` (or `merge` if they ask to merge the base in), with its current head and base.
 
 Then finish.

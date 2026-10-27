@@ -186,8 +186,10 @@ describe("commit.merge_base proposal authority", () => {
 
   it("never mixes a merge with ordinary commits", async () => {
     const request = await runRequest(commentEvent());
-    expect(proposalAuthorityRefusal(request, merge(), [ordinaryCommit], written)).toMatch(/not both; step commit already proposed commit.create/);
-    expect(proposalAuthorityRefusal(request, ordinaryCommit, [merge()])).toMatch(/not both; step merge already proposed commit.merge_base/);
+    expect(proposalAuthorityRefusal(request, merge(), [ordinaryCommit], written)).toMatch(/not both; step commit already uses commit.create/);
+    expect(proposalAuthorityRefusal(request, ordinaryCommit, [merge()])).toMatch(/not both; step merge already uses commit.merge_base/);
+    // Refusals reach the model as tool results, so they must not use proposal voice either.
+    expect(proposalAuthorityRefusal(request, merge(), [ordinaryCommit], written)).not.toMatch(/\bpropos/i);
   });
 
   it("keeps files and conflictedPaths for the capture", () => {
@@ -281,7 +283,7 @@ describe("merge guidance in the prompt", () => {
     expect(prompt).toContain("call repository.merge_base first, before changing anything");
     expect(prompt).toContain("Edit only the files it lists as conflictedFiles");
     expect(prompt).toContain("may only end up exactly as the base branch has it");
-    expect(prompt).toContain("propose commit.merge_base with exactly the values the tool returned (pullNumber, branch, expectedHeadSha, baseBranch, baseSha)");
+    expect(prompt).toContain("add a commit.merge_base step with exactly the values the tool returned (pullNumber, branch, expectedHeadSha, baseBranch, baseSha)");
     expect(prompt).toContain("Never run git merge, rebase, commit, reset, checkout or push, and never stage files");
     expect(prompt).toContain("A run either merges or makes ordinary commits");
     expect(prompt).toContain("do not start the pull request's checks");

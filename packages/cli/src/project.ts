@@ -151,7 +151,7 @@ limits:
 ---
 Inspect the issue and the repository's relevant conventions.
 
-Propose one concise issue comment containing:
+Comment once, concisely, with:
 
 1. The likely affected area.
 2. Missing reproduction information.
@@ -188,7 +188,7 @@ limits:
 ---
 Inspect the issue and the repository's documentation structure.
 
-Propose one concise issue comment containing:
+Comment once, concisely, with:
 
 1. The documentation files most likely involved.
 2. Related guidance already present in the repository.
