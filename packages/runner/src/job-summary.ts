@@ -14,6 +14,7 @@ import type { TaskEffectPlanV1 } from "@gardener/contracts";
 import type { RunnerEffectReceiptV1, RunnerTerminalV1 } from "@gardener/protocol";
 import { applyFailureAdvice, planFailureAdvice, splitFailureTrail } from "./failure-advice";
 import type { MessageOutcome } from "./messages";
+import type { TaskRunOutcome } from "./task-runs";
 
 export interface JobSummaryContext {
   /** `GITHUB_RUN_ID`. */
@@ -100,11 +101,16 @@ export function renderPlanJobSummary(input: {
         lines.push(`| ${index + 1} | ${code(operation.stepName)} | ${code(operation.kind)} | ${cell(operation.rationale)} |`);
       });
       lines.push("");
-    } else if (message === undefined) {
+    } else if (message === undefined && input.plan?.taskRuns === undefined) {
       lines.push("The model proposed no changes, so nothing is applied.", "");
     }
     if (message !== undefined) {
       lines.push(`The model proposed a message about ${subjectLabel(message.subject)}, which the **Apply exact task plan** job sends after the steps apply: ${cell(message.summary)}`, "");
+    }
+    const run = input.plan?.taskRuns?.[0];
+    if (run !== undefined) {
+      const on = "openedBy" in run.subject ? `the pull request step ${code(run.subject.openedBy)} opens` : subjectLabel(run.subject);
+      lines.push(`The model proposed starting task ${code(run.task)} on ${on}, which the **Apply exact task plan** job does once, after the steps apply.`, "");
     }
     lines.push(details("Model's summary (written by the model)", input.terminal.summary), "");
   }
@@ -120,6 +126,8 @@ export function renderApplyJobSummary(input: {
   error?: string;
   /** What became of the plan's message, when apply reached it. */
   message?: MessageOutcome;
+  /** What became of the plan's task run, when apply reached it. */
+  taskRun?: TaskRunOutcome;
   context?: JobSummaryContext;
 }): string {
   const lines: string[] = [];
@@ -127,8 +135,11 @@ export function renderApplyJobSummary(input: {
   const receipt = input.receipt;
   // A failed message fails the job, but the steps before it applied.
   const messageFailed = receipt?.status === "applied" && input.message?.receipt.status === "failed";
+  const taskRunUnknown = receipt?.status === "applied" && input.taskRun?.receipt.status === "dispatch_unknown" && input.taskRun.settled !== true;
   const heading = messageFailed
     ? "❌ Plan applied, message not sent"
+    : taskRunUnknown
+      ? "❌ Plan applied, task may not have started"
     : receipt?.status === "applied" && input.error === undefined
       ? "✅ Plan applied"
       : receipt?.status === "stopped"
@@ -144,7 +155,7 @@ export function renderApplyJobSummary(input: {
       `**What to do:** ${advice.todo}`,
       "",
     );
-  } else if (input.error !== undefined && receipt?.status !== "stopped" && !messageFailed) {
+  } else if (input.error !== undefined && receipt?.status !== "stopped" && !messageFailed && !taskRunUnknown) {
     lines.push(
       "**What happened:** the apply job stopped before finishing the plan.",
       "",
@@ -175,6 +186,7 @@ export function renderApplyJobSummary(input: {
     }
   }
   if (input.message !== undefined) lines.push(...messageLines(input.message), "");
+  if (input.taskRun !== undefined) lines.push(...taskRunLines(input.taskRun), "");
   lines.push(...footer(input.context, input.plan?.runId, false));
   return lines.join("\n");
 }
@@ -208,6 +220,21 @@ function messageLines(outcome: MessageOutcome): string[] {
         fenced("Error details", outcome.error ?? "the message could not be sent"),
       ];
   }
+}
+
+/** The task run's outcome. A dispatch is never retried, so an unknown one says how to recover by hand. */
+function taskRunLines(outcome: TaskRunOutcome): string[] {
+  const { receipt } = outcome;
+  const what = `Task ${code(receipt.task)} on ${subjectLabel(receipt.subject)}`;
+  if (outcome.settled) {
+    return [`**${what}** was ${receipt.status === "dispatched" ? "started" : "settled"} by an earlier attempt (${inline(receipt.status)}); it is never dispatched again.`];
+  }
+  if (receipt.status === "dispatched") return [`**${what}** started.`];
+  return [
+    `**${what}** may not have started, and Gardener never dispatches it twice. Check the repository's Actions runs for it; if it did not start, a maintainer can run it with **Run workflow**.`,
+    "",
+    fenced("Error details", outcome.error ?? "the dispatch's outcome is unknown"),
+  ];
 }
 
 function subjectLabel(subject: { kind: string; number?: number; issueNumber?: number; pullNumber?: number; discussionNumber?: number }): string {

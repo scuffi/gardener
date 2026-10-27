@@ -84,7 +84,7 @@ declared. Using a filter a kind does not accept is a compile error.
 | `github.pull_request_review_comment.created` | `labels-all`, `mentions`, `authors`, `opened-by` |
 | `github.pull_request_review_comment.edited` | `labels-all`, `mentions`, `authors`, `opened-by` |
 | `github.push` | `branches` (required) |
-| `github.workflow_dispatch` | none |
+| `github.workflow_dispatch` | `subject` |
 | `github.schedule` | `cron` (required) |
 | `github.discussion.created` | `labels-all`, `mentions`, `authors` |
 | `github.discussion.edited` | `labels-all`, `mentions`, `authors` |
@@ -104,6 +104,7 @@ declared. Using a filter a kind does not accept is a compile error.
 | `opened-by` | Exact logins that opened the thread the event belongs to, such as `["dependabot[bot]"]`. |
 | `branches` | Branch patterns a push must match. Required on `github.push`. |
 | `cron` | A five-field cron expression separated by single spaces, using only numbers, `*`, ranges, lists and steps: no names such as `MON`, and no `?`, `L`, `W`, `#` or `@daily`. Required on `github.schedule`. A task has at most one. |
+| `subject` | On `github.workflow_dispatch` only: `issue` or `pull_request`, offered as a manual run's target input whatever else the task triggers on. For a task whose only trigger is manual, such as one another task starts with [`task.run`](#starting-other-tasks). |
 
 Pull request events from forks never run, and `pull_request_target` cannot be declared. Manual runs
 ignore `labels-all`, `mentions` and `authors`.
@@ -124,7 +125,7 @@ never shown to the model or to commands.
 ## Effects
 
 `effects` lists the exact operations a task may propose, and `message.send` (see
-[Messages](#messages)). Each entry is a kind, a family glob, or a kind with options. Every declared effect is applied automatically, with no approval step.
+[Messages](#messages)) and `task.run` (see [Starting other tasks](#starting-other-tasks)). Each entry is a kind, a family glob, or a kind with options. Every declared effect is applied automatically, with no approval step.
 
 <!-- generated:families -->
 | Glob | Expands to |
@@ -182,6 +183,7 @@ A family glob grants every current and future member of its family. Prefer exact
 | `release.publish` | Publish a draft release. | `contents` | `draft`, `prerelease`, `releaseId`, `releaseUrl`, `tagName` |
 | `release.delete` | Delete a release. | `contents` | `releaseId`, `tagName` |
 | `message.send` | Post one message about an issue, pull request or discussion to the repository's chat space, after every other step applied. At most one per run. | none | none |
+| `task.run` | Start another task of this repository on this run's issue or pull request, or on a pull request the plan opens, after every other step applied. At most one per run, always the last step, never retried. | `actions` | none |
 <!-- /generated:effects -->
 
 A step can use an earlier step's outputs, either as a whole field or as `{{name}}` placeholders in
@@ -217,6 +219,53 @@ A plan's Google Chat message reaches the space at most once: each attempt carrie
 `409 ALREADY_EXISTS` refusal of a repeat counts as `sent`. Slack delivery is at least once: a rerun
 after a lost answer can post the message twice. An issue subject whose link is a pull request is
 recorded as `pull_request`.
+
+### Starting other tasks
+
+`task.run` starts another task of the same repository once every other step applied. Like
+`message.send` it is declared in `effects` but is not an operation. It always lists the tasks it may
+start:
+
+```yaml
+effects:
+  - issue.label.add
+  - task.run: { tasks: [fix] }
+```
+
+- The model names one listed task and a subject, and nothing else: no inputs, prompt, ref or
+  workflow. The subject is this run's own issue or pull request (`issueNumber` or `pullNumber`,
+  matched by kind and number), or a pull request an earlier `pull_request.open` or
+  `pull_request.open_draft` step of the plan opens, by referencing its `pullNumber`.
+- At most one per run, and it must be the last step. It is not counted by
+  `max-effect-operations` or `max-effect-bytes` and publishes no outputs.
+- When the model adds it, the Worker resolves the task against the repository's enabled tasks
+  (as last synced) and checks its workflow takes the subject as a dispatch input: a trigger on
+  issues or pull requests, or `github.workflow_dispatch` with `subject`. It checks again when apply
+  dispatches. The workflow is the target's generated `gardener-<id>.yml`, named by the Worker.
+- Apply dispatches that workflow on the default branch with one input, `issue` or `pull_request`,
+  so the started run reads its subject fresh. It records `dispatching` before calling GitHub and
+  never dispatches twice: a rerun after `dispatching` settles as `dispatch_unknown` without calling
+  GitHub, and the job fails so someone can check whether the task started and run it by hand.
+- The caller job of a task that declares it is granted `actions: write`. See
+  [SECURITY.md](../SECURITY.md#starting-other-tasks) for what else that allows.
+- `generate` refuses a target that is not a task of the project, the task itself, a target whose
+  workflow takes no input the task can name, a cycle of tasks starting each other, and a pin whose
+  apply predates `task.run` (0.1.20 or earlier).
+
+The started run is matched against a record the Worker wrote when apply reported `dispatching`.
+It inherits the chain's root starter decision, never a wider one, so a chain an outsider's issue
+started stays confined to that subject at every depth, and every run in it counts against the
+root author's `runs-per-author` (and each task's `runs`). A run started by a person or an event is
+depth 0; a run at depth 3 may not start another. A manual run dispatched by a bot that matches no
+record, or one that carries a `prompt`, fails before the model; a person's **Run workflow** is
+unaffected. See [Lineage](task-authoring.md#effect-scope) and
+[Bot dispatches](operations.md#bot-dispatches).
+
+| Status | Reason | Meaning |
+| --- | --- | --- |
+| `dispatching` | | Apply is about to call GitHub. Never retried from here. |
+| `dispatched` | | GitHub accepted the dispatch. |
+| `dispatch_unknown` | `dispatch_refused`, `dispatch_failed`, `interrupted` | GitHub refused it, the call failed, or an attempt stopped after `dispatching`. The job fails; it is not dispatched again. |
 
 ### Branches
 
@@ -308,11 +357,13 @@ Non-Cloudflare models need provider keys or Unified Billing on the installation'
 | Input | Offered when | Meaning |
 | --- | --- | --- |
 | `prompt` | always | Extra instructions for this run, up to 20,000 characters. |
-| `issue` | the task has an issue trigger | Issue number to run against. |
-| `pull_request` | the task has a pull request trigger | Pull request number to run against. |
+| `issue` | the task has an issue trigger, or `github.workflow_dispatch` with `subject: issue` | Issue number to run against. |
+| `pull_request` | the task has a pull request trigger, or `github.workflow_dispatch` with `subject: pull_request` | Pull request number to run against. |
 
 Give at most one target. Start a run from the workflow's **Run workflow** button or with
-`gh workflow run gardener-<id>.yml`.
+`gh workflow run gardener-<id>.yml`. A manual run is trusted when a person starts it; one a bot or
+App token dispatches is admitted only as a run another task started with `task.run`, and never
+takes a `prompt`.
 
 ## Reactions
 

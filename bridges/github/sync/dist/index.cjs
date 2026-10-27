@@ -27615,6 +27615,28 @@ function messageSubjectNumber(subject) {
   return subject.kind === "issue" ? subject.issueNumber : subject.kind === "pull_request" ? subject.pullNumber : subject.discussionNumber;
 }
 
+// ../contracts/src/task-runs.ts
+var TASK_RUN_KIND = "task.run";
+var TASK_RUN_MAX_DEPTH = 3;
+var TASK_RUN_MAX_TARGETS = 20;
+var taskIdPattern = /^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/;
+var taskRunTargetV1Schema = external_exports.string().regex(taskIdPattern, "expected a task id");
+function workflowSlug(taskId) {
+  return taskId.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function taskWorkflowPath(taskId) {
+  return `.github/workflows/gardener-${workflowSlug(taskId)}.yml`;
+}
+var TASK_WORKFLOW_PATH_PATTERN = /^\.github\/workflows\/gardener-[a-z0-9][a-z0-9-]*\.ya?ml$/;
+var subjectNumber2 = external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+var taskRunPayloadV1Schema = external_exports.strictObject({
+  task: taskRunTargetV1Schema.describe("The id of a task this task declares under task.run. Never this task itself."),
+  issueNumber: subjectNumber2.optional().describe("This run's own issue. Give exactly one of issueNumber and pullNumber."),
+  pullNumber: subjectNumber2.optional().describe(
+    "This run's own pull request, or omit it and fill /pullNumber by reference from an earlier pull_request.open step of this plan."
+  )
+});
+
 // ../contracts/src/branches.ts
 var branchWriteFields = {
   "branch.create": "branch",
@@ -27857,7 +27879,16 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
       "push branches must include at least one positive pattern"
     )
   }),
-  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") }),
+  external_exports.strictObject({
+    kind: external_exports.literal("github.workflow_dispatch"),
+    /**
+     * The resource a manual run is offered as a target, beside those the
+     * task's other triggers act on, so a task whose only trigger is manual (one
+     * another task starts with `task.run`) still takes an issue or pull
+     * request. Absent unless set, so other bundles hash as before.
+     */
+    subject: external_exports.enum(["issue", "pull_request"]).optional()
+  }),
   external_exports.strictObject({ kind: external_exports.literal("github.schedule"), cron: cronExpressionV1Schema }),
   authoredTrigger("github.discussion.created"),
   authoredTrigger("github.discussion.edited"),
@@ -27915,9 +27946,10 @@ function isLabeledTriggerKind(kind) {
 }
 function dispatchTargetKinds(triggers, options = {}) {
   const kinds = [...new Set(triggers.map((trigger) => trigger.kind))];
+  const subjects = new Set(triggers.flatMap((trigger) => "subject" in trigger && typeof trigger.subject === "string" ? [trigger.subject] : []));
   const targets = [];
-  if (kinds.some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
-  if (kinds.some((kind) => kind.startsWith("github.pull_request")) || options.pullRequestHead === true && kinds.some((kind) => kind.startsWith("github.issue_comment"))) {
+  if (kinds.some((kind) => kind.startsWith("github.issue")) || subjects.has("issue")) targets.push("issue");
+  if (kinds.some((kind) => kind.startsWith("github.pull_request")) || options.pullRequestHead === true && kinds.some((kind) => kind.startsWith("github.issue_comment")) || subjects.has("pull_request")) {
     targets.push("pull_request");
   }
   return targets;
@@ -27934,7 +27966,7 @@ var taskToolV1Schema = external_exports.enum([
    */
   "repository.merge_base"
 ]);
-var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND];
+var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND, TASK_RUN_KIND];
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
@@ -27996,12 +28028,20 @@ var taskModelIdSchema = external_exports.string().min(1).max(256).regex(/^[A-Za-
   "model path segments must be non-empty and cannot be . or .."
 ).refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
 var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branchPatternsSchema });
+var taskRunOptionsV1Schema = external_exports.strictObject({
+  tasks: external_exports.array(taskRunTargetV1Schema).min(1).max(TASK_RUN_MAX_TARGETS).superRefine((tasks, context) => {
+    if (tasks.some((task, index) => index > 0 && task <= tasks[index - 1])) {
+      context.addIssue({ code: "custom", message: "task.run tasks must be unique and sorted" });
+    }
+  })
+});
 var taskEffectOptionsMapV1Schema = external_exports.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
   "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
-  "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
+  "pull_request.open_draft": taskEffectOptionsV1Schema.optional(),
+  [TASK_RUN_KIND]: taskRunOptionsV1Schema.optional()
 });
 var taskBranchPatternsV1Schema = external_exports.strictObject({
   "branch.create": branchPatternsSchema.optional(),
@@ -28083,6 +28123,12 @@ var taskBundleV1Schema = external_exports.strictObject({
         context.addIssue({ code: "custom", path: ["effectOptions", kind], message: `options are given for ${kind}, which the task does not declare` });
       }
     }
+  }
+  if (bundle.effects.includes(TASK_RUN_KIND) && bundle.effectOptions?.[TASK_RUN_KIND] === void 0) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND], message: "task.run must list the tasks it may start" });
+  }
+  if (bundle.effectOptions?.[TASK_RUN_KIND]?.tasks.includes(bundle.taskId)) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND, "tasks"], message: `task ${bundle.taskId} may not start itself with task.run` });
   }
   const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
   if (new Set(triggerKinds).size !== triggerKinds.length) {
@@ -28514,8 +28560,23 @@ var taskRunRequestV1Schema = external_exports.strictObject({
    * before it existed still parses; absent means untrusted, which only
    * narrows the run's effect scope.
    */
-  starter: taskRunStarterV1Schema.optional()
+  starter: taskRunStarterV1Schema.optional(),
+  /**
+   * Present when another run started this one with `task.run`: the Worker
+   * matched the dispatch against the lineage record that run left, and the
+   * starter above is the chain's root decision, inherited, never upgraded.
+   * Absent for a run a person or an event started, which is depth 0.
+   */
+  lineage: external_exports.strictObject({
+    parentRunId: boundIdentifier,
+    depth: external_exports.number().int().min(1).max(TASK_RUN_MAX_DEPTH),
+    /** The root starter's OIDC `actor_id`: every run of the chain counts against their `runs-per-author`. */
+    rootAuthorId: githubNumericId
+  }).optional()
 }).superRefine((request, context) => {
+  if (request.lineage !== void 0 && request.starter === void 0) {
+    context.addIssue({ code: "custom", path: ["lineage"], message: "a started run carries the starter it inherited" });
+  }
   if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
     context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
   }
@@ -28728,6 +28789,31 @@ var taskEffectProposalV1Schema = external_exports.strictObject({
       for (const issue2 of parsed.error.issues) {
         context.addIssue({ code: "custom", path: ["payload", ...issue2.path.map(String)], message: `${encodeJsonPointer(issue2.path) || "payload"}: ${issue2.message}` });
       }
+    }
+    return;
+  }
+  if (proposal.kind === TASK_RUN_KIND) {
+    const parsed = taskRunPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue2 of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue2.path.map(String)], message: `${encodeJsonPointer(issue2.path) || "payload"}: ${issue2.message}` });
+      }
+    }
+    for (const pointer of Object.keys(proposal.references)) {
+      if (pointer !== "/pullNumber") {
+        context.addIssue({ code: "custom", path: ["references", pointer], message: "task.run takes only a /pullNumber reference" });
+      }
+    }
+    const reference = proposal.references["/pullNumber"];
+    if (reference !== void 0 && (isTemplateReference(reference) || reference.output !== "pullNumber")) {
+      context.addIssue({ code: "custom", path: ["references", "/pullNumber"], message: "task.run /pullNumber must be the pullNumber output of an earlier pull_request.open step, whole" });
+    }
+    if (parsed.success && taskRunSubjectFromProposal(parsed.data, proposal.references) === void 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "task.run needs exactly one subject: issueNumber, pullNumber, or /pullNumber by reference to an earlier pull_request.open step"
+      });
     }
     return;
   }
@@ -29132,6 +29218,42 @@ function messageTriggerScopeRefusal(subject, resource) {
   }
   return void 0;
 }
+var taskRunSubjectV1Schema = external_exports.union([
+  external_exports.strictObject({ kind: external_exports.literal("issue"), issueNumber: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), pullNumber: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), openedBy: taskStepNameV1Schema })
+]);
+function taskRunSubjectFromProposal(payload, references) {
+  const reference = references["/pullNumber"];
+  const named = [payload.issueNumber, payload.pullNumber, reference].filter((value) => value !== void 0);
+  if (named.length !== 1) return void 0;
+  if (payload.issueNumber !== void 0) return { kind: "issue", issueNumber: payload.issueNumber };
+  if (payload.pullNumber !== void 0) return { kind: "pull_request", pullNumber: payload.pullNumber };
+  return reference !== void 0 && !isTemplateReference(reference) && reference.output === "pullNumber" ? { kind: "pull_request", openedBy: reference.step } : void 0;
+}
+function taskRunSubjectRefusal(subject, resource, earlier) {
+  if ("openedBy" in subject) {
+    const kind = earlier.get(subject.openedBy);
+    return kind !== void 0 && createdResourceOutputs.pullNumber[kind] === "pullNumber" ? void 0 : `task.run may name a pull request by reference only from an earlier pull_request.open or pull_request.open_draft step of this plan, and "${subject.openedBy}" is not one`;
+  }
+  const number4 = subject.kind === "issue" ? subject.issueNumber : subject.pullNumber;
+  if (resource === null) {
+    return "task.run starts a task on this run's own issue or pull request, and nothing triggered this run; it may still name a pull request this plan opens";
+  }
+  if (resource.kind !== subject.kind || resource.number !== number4) {
+    return `task.run may start a task only on ${resourceLabel(resource)}, this run's own subject, or on a pull request this plan opens`;
+  }
+  return void 0;
+}
+var taskRunV1Schema = external_exports.strictObject({
+  task: taskRunTargetV1Schema,
+  workflowPath: external_exports.string().regex(TASK_WORKFLOW_PATH_PATTERN),
+  subject: taskRunSubjectV1Schema
+}).superRefine((run, context) => {
+  if (run.workflowPath !== taskWorkflowPath(run.task)) {
+    context.addIssue({ code: "custom", path: ["workflowPath"], message: `task ${run.task}'s workflow is ${taskWorkflowPath(run.task)}` });
+  }
+});
 var captureMaterializedPointers = {
   "commit.create": ["/files"],
   "commit.merge_base": ["/files", "/conflictedPaths"]
@@ -29195,6 +29317,19 @@ function referencedOutputType(reference, stepName, context, path, issues) {
 function taskStepIssues(step, context) {
   const issues = [];
   if (step.kind === MESSAGE_SEND_KIND) return issues;
+  if (step.kind === TASK_RUN_KIND) {
+    const reference = step.references["/pullNumber"];
+    if (reference !== void 0 && !isTemplateReference(reference)) {
+      const kind = context.earlier.get(reference.step);
+      if (kind === void 0 || createdResourceOutputs.pullNumber[kind] !== reference.output) {
+        issues.push({
+          path: ["references", "/pullNumber"],
+          message: `"${reference.step}" is not an earlier pull_request.open or pull_request.open_draft step of this plan`
+        });
+      }
+    }
+    return issues;
+  }
   const resolvedTypes = /* @__PURE__ */ new Map();
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -29289,6 +29424,14 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
    */
   messages: external_exports.array(messageV1Schema).min(1).max(1).optional(),
+  /**
+   * Tasks apply starts after every operation applied and the message, if any,
+   * was tried. At most one, and dispatched at most once: a rerun never
+   * dispatches again once apply reported it was about to. Absent for plans
+   * without one, so those hash as before, and always absent for task
+   * workflows whose apply predates it (see `planCarries`).
+   */
+  taskRuns: external_exports.array(taskRunV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -29401,6 +29544,14 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal });
     });
   }
+  const kindsByStep = new Map(plan.operations.map((operation) => [operation.stepName, operation.kind]));
+  plan.taskRuns?.forEach((run, index) => {
+    if (run.task === plan.taskId) {
+      context.addIssue({ code: "custom", path: ["taskRuns", index, "task"], message: `task ${plan.taskId} may not start itself` });
+    }
+    const refusal = taskRunSubjectRefusal(run.subject, plan.event.resource, kindsByStep);
+    if (refusal !== void 0) context.addIssue({ code: "custom", path: ["taskRuns", index, "subject"], message: refusal });
+  });
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
@@ -29589,8 +29740,10 @@ var MESSAGE_SEND_TOKEN_PERMISSIONS = Object.freeze([
   "pull-requests:read",
   "discussions:read"
 ]);
+var TASK_RUN_TOKEN_PERMISSIONS = Object.freeze(["actions:write"]);
 function effectApplyPermissions(kind) {
   if (kind === MESSAGE_SEND_KIND) return permissionsFromScopes(MESSAGE_SEND_TOKEN_PERMISSIONS);
+  if (kind === TASK_RUN_KIND) return permissionsFromScopes(TASK_RUN_TOKEN_PERMISSIONS);
   return operationApplyPermissions(kind);
 }
 
@@ -29752,9 +29905,19 @@ var effectWithOptionsSchema = external_exports.strictObject({
   kind: external_exports.enum(branchWriteKinds),
   branches: branchPatternsSchema
 });
-var effectEntrySchema = external_exports.union([effectSelectorSchema, effectWithOptionsSchema]);
+var taskRunEntrySchema = external_exports.strictObject({
+  [TASK_RUN_KIND]: external_exports.strictObject({
+    tasks: external_exports.array(taskRunTargetV1Schema).min(1).max(TASK_RUN_MAX_TARGETS)
+  })
+});
+var effectEntrySchema = external_exports.union([
+  effectSelectorSchema.refine((selector) => selector !== TASK_RUN_KIND, "task.run must list the tasks it may start: - task.run: { tasks: [<task id>] }"),
+  effectWithOptionsSchema,
+  taskRunEntrySchema
+]);
 function effectSelector(entry) {
-  return typeof entry === "string" ? entry : entry.kind;
+  if (typeof entry === "string") return entry;
+  return "kind" in entry ? entry.kind : TASK_RUN_KIND;
 }
 var PUSH_TRIGGER = "github.push";
 var SCHEDULE_TRIGGER = "github.schedule";
@@ -29769,8 +29932,13 @@ var triggerAuthoringSchema = external_exports.strictObject({
   ]).optional(),
   "opened-by": external_exports.array(external_exports.string().trim().min(1).max(60)).min(1).max(20).optional(),
   branches: external_exports.array(external_exports.string().trim().min(1).max(255)).min(1).max(20).optional(),
-  cron: external_exports.string().trim().min(1).max(100).optional()
+  cron: external_exports.string().trim().min(1).max(100).optional(),
+  /** On `github.workflow_dispatch` only: offer this target input whatever else the task triggers on. */
+  subject: external_exports.enum(["issue", "pull_request"]).optional()
 }).superRefine((trigger, context) => {
+  if (trigger.subject !== void 0 && trigger.event !== DISPATCH_TRIGGER) {
+    context.addIssue({ code: "custom", path: ["subject"], message: `subject is not supported by ${trigger.event}` });
+  }
   const reject = (key) => {
     if (trigger[key] !== void 0) {
       context.addIssue({ code: "custom", path: [key], message: `${key} is not supported by ${trigger.event}` });
@@ -29915,7 +30083,7 @@ var authoringSchema = external_exports.strictObject({
   }
 });
 function effectOptionsOf(entries) {
-  const optioned = entries.flatMap((entry) => typeof entry === "string" ? [] : [[entry.kind, { branches: [...entry.branches].sort() }]]);
+  const optioned = entries.flatMap((entry) => typeof entry === "string" ? [] : "kind" in entry ? [[entry.kind, { branches: [...entry.branches].sort() }]] : [[TASK_RUN_KIND, { tasks: [...new Set(entry[TASK_RUN_KIND].tasks)].sort() }]]);
   return optioned.length === 0 ? {} : { effectOptions: Object.fromEntries(optioned) };
 }
 var GLOB_KINDS_NEEDING_TOOL = /* @__PURE__ */ new Map([
@@ -29939,7 +30107,7 @@ function toContractTrigger(authored, options, sourceName) {
   const kind = authored.event;
   if (kind === PUSH_TRIGGER) return { kind, branches: authored.branches };
   if (kind === SCHEDULE_TRIGGER) return { kind, cron: authored.cron };
-  if (kind === DISPATCH_TRIGGER) return { kind };
+  if (kind === DISPATCH_TRIGGER) return authored.subject === void 0 ? { kind } : { kind, subject: authored.subject };
   const labelsAll = authored["labels-all"] ?? [];
   const openedBy = authored["opened-by"] === void 0 ? {} : { openedBy: normalizedLogins(authored["opened-by"]) };
   if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll, ...openedBy };
@@ -30106,7 +30274,7 @@ async function planProject(input2) {
     const compiled = await compileTaskSource(await (0, import_promises.readFile)(taskPath, "utf8"), source, project.handle === void 0 ? {} : { handle: project.handle });
     if (taskIds.has(compiled.bundle.taskId)) throw new Error(`Duplicate task id: ${compiled.bundle.taskId}`);
     taskIds.add(compiled.bundle.taskId);
-    const workflow = `.github/workflows/gardener-${workflowSlug(compiled.bundle.taskId)}.yml`;
+    const workflow = taskWorkflowPath(compiled.bundle.taskId);
     if (workflow === syncWorkflow) throw new Error(`Task ${compiled.bundle.taskId} would overwrite ${syncWorkflow}; rename it`);
     if (workflows.has(workflow)) throw new Error(`Multiple tasks generate ${workflow}`);
     workflows.add(workflow);
@@ -30122,6 +30290,8 @@ async function planProject(input2) {
     const refusal = pinnedWorkflowRefusal(task, project.release.workflowRef);
     if (refusal !== void 0) throw new Error(refusal);
   }
+  const taskRunRefusal = taskRunGraphRefusal(tasks);
+  if (taskRunRefusal !== void 0) throw new Error(taskRunRefusal);
   const lock = {
     schemaVersion: "gardener.lock/v1",
     target: {
@@ -30147,6 +30317,7 @@ async function planProject(input2) {
       return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];
     }),
     ...tasks.flatMap((task) => messageWarnings(task.bundle).map((warning) => `Task ${task.bundle.taskId} ${warning}`)),
+    ...tasks.filter((task) => declaresTaskRun(task)).map((task) => `Task ${task.bundle.taskId} declares task.run, so its workflow is granted actions: write for the whole run (apply and the reaction jobs, never planning). See SECURITY.md for what else that scope allows.`),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === void 0 ? [] : [`Task ${task.bundle.taskId} ${warning}`];
@@ -30359,9 +30530,70 @@ function definesChatWebhook(workflowRef) {
 function declaresMessages(task) {
   return task.bundle.effects.includes(MESSAGE_SEND_KIND);
 }
+var TASK_WORKFLOWS_WITHOUT_TASK_RUN = /* @__PURE__ */ new Set([
+  ...TASK_WORKFLOWS_WITHOUT_CHAT_WEBHOOK,
+  "e927a2a726ef283e60d32ad09efa7c2aea0b47eb",
+  "0d02b66f47cc8802ba14a243dd827bf5555b3469"
+]);
+function definesTaskRun(workflowRef) {
+  return !TASK_WORKFLOWS_WITHOUT_TASK_RUN.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+function declaresTaskRun(task) {
+  return task.bundle.effects.includes(TASK_RUN_KIND);
+}
+function taskRunNameableKinds(task) {
+  const kinds = new Set(dispatchTargetKinds(task.bundle.triggers, { pullRequestHead: checksOutPullRequestHead(task.bundle) }));
+  if (task.bundle.effects.includes("pull_request.open") || task.bundle.effects.includes("pull_request.open_draft")) kinds.add("pull_request");
+  return kinds;
+}
+function taskRunGraphRefusal(tasks) {
+  const byId = new Map(tasks.map((task) => [task.bundle.taskId, task]));
+  const targetsOf = (task) => task.bundle.effectOptions?.[TASK_RUN_KIND]?.tasks ?? [];
+  for (const task of tasks) {
+    const id = task.bundle.taskId;
+    const nameable = taskRunNameableKinds(task);
+    for (const targetId of targetsOf(task)) {
+      if (targetId === id) return `Task ${id} declares task.run on itself; a task may not start itself`;
+      const target = byId.get(targetId);
+      if (target === void 0) {
+        return `Task ${id} declares task.run on ${targetId}, which is not a task in .gardener/tasks; add it or remove it from task.run`;
+      }
+      const offered = dispatchTargetKinds(target.bundle.triggers, { pullRequestHead: checksOutPullRequestHead(target.bundle) });
+      if (!offered.some((kind) => nameable.has(kind))) {
+        const wanted = nameable.size === 0 ? "an issue or pull request" : [...nameable].map((kind) => kind === "issue" ? "an issue" : "a pull request").join(" or ");
+        return `Task ${id} declares task.run on ${targetId}, but ${targetId}'s workflow takes no input for ${wanted}, which is what ${id} can start it on. Give ${targetId} a matching trigger, or github.workflow_dispatch with subject: ${nameable.has("issue") ? "issue" : "pull_request"}`;
+      }
+    }
+  }
+  const state = /* @__PURE__ */ new Map();
+  const path = [];
+  const visit2 = (id) => {
+    if (state.get(id) === "done") return void 0;
+    if (state.get(id) === "visiting") return [...path.slice(path.indexOf(id)), id];
+    state.set(id, "visiting");
+    path.push(id);
+    for (const next of targetsOf(byId.get(id))) {
+      const cycle = visit2(next);
+      if (cycle !== void 0) return cycle;
+    }
+    path.pop();
+    state.set(id, "done");
+    return void 0;
+  };
+  for (const task of tasks) {
+    const cycle = visit2(task.bundle.taskId);
+    if (cycle !== void 0) {
+      return `Tasks ${cycle.join(" \u2192 ")} start each other with task.run; remove one so the chain ends. A chain is cut at depth 3 at runtime anyway, but a cycle is almost always a mistake`;
+    }
+  }
+  return void 0;
+}
 function pinnedWorkflowRefusal(task, workflowRef) {
   if (declaresMessages(task) && !definesChatWebhook(workflowRef)) {
     return `Task ${task.bundle.taskId} declares message.send, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
+  }
+  if (declaresTaskRun(task) && !definesTaskRun(workflowRef)) {
+    return `Task ${task.bundle.taskId} declares task.run, which this project's pinned Gardener workflow (${workflowRef}) cannot run: its apply step predates it. Run gardener upgrade to pin a release that can.`;
   }
   if (definesPullRequestHead(workflowRef)) return void 0;
   const commentHead = task.bundle.checkout === "pull-request-head" && !task.bundle.triggers.some((trigger) => pullRequestFamilyTriggerKindValues.includes(trigger.kind));
@@ -30475,9 +30707,6 @@ function yamlString(value) {
 }
 function yamlSingleQuoted(value) {
   return `'${value.replaceAll("'", "''")}'`;
-}
-function workflowSlug(taskId) {
-  return taskId.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 // src/sync-main.ts

@@ -191,6 +191,26 @@ one message per second per space; a burst of runs whose messages fail with `429`
 Chat remembers the id only while the message exists: if someone deletes it and the apply job is
 rerun, it can be posted again. To rotate the destination, replace the secret; to stop messages without changing tasks, delete it.
 
+## Bot dispatches
+
+From 0.1.21, a manual run (`workflow_dispatch`) whose actor is a bot, such as a GitHub App
+installation token or `github-actions[bot]`, is admitted only as a run another task started with
+`task.run`. One that matches no such request fails before the model with `lineage.unmatched`
+("Refused before the model: … dispatched by a bot …"), writes an `actions_task_audit` row, and
+changes nothing. This includes your own Apps and automation that dispatch Gardener workflows: run
+those through a person's token (a personal access token reads as that person and is trusted as a
+manual run), or have a Gardener task start the task with `task.run`. A bot dispatch that carries a
+`prompt` is refused even when it matches. A person's **Run workflow** is unaffected.
+
+A task that declares `task.run` has its caller job granted `actions: write`; `generate` warns about
+it. With that grant the job can also delete workflow runs, logs and artifacts, so for those
+repositories the Worker's `actions_task_audit` table, not the Actions logs, is the durable record. See
+[SECURITY.md](../SECURITY.md#starting-other-tasks).
+
+If apply reports a task run as `dispatch_unknown`, the job fails and Gardener will not dispatch it
+again. Check the target task's workflow runs; if it did not start, start it by hand with
+`gh workflow run gardener-<task>.yml -f issue=<n>` (or `-f pull_request=<n>`).
+
 ## Inspecting runs
 
 ```bash

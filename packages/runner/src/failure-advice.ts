@@ -35,6 +35,12 @@ export function planFailureAdvice(message: string, status: "failed" | "cancelled
       todo: `Raise \`limits.${key}\` in the task's TASK.md, or narrow its instructions so the model needs less.`,
     };
   }
+  if (message.startsWith("Refused before the model:") && message.includes("dispatched by a bot")) {
+    return {
+      what: "A bot dispatched this task, and no Gardener run's task.run started it, so Gardener refused the run before the model saw anything.",
+      todo: "If another Gardener task was meant to start it, its lineage record was not found: an operator should check the runtime's audit trail. Otherwise find what in this repository dispatches Gardener workflows with a bot or App token. A maintainer can start the task with **Run workflow**.",
+    };
+  }
   if (message.startsWith("Task execution exceeded its runtime deadline") || message.startsWith("Task runtime deadline expired")) {
     return {
       what: "The task ran out of time (`runtime-seconds`) before finishing, so nothing was changed.",

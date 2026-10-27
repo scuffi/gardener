@@ -5,6 +5,8 @@ import {
   messageFromSendPayload,
   messageSubjectNumber,
   messageSendPayloadV1Schema,
+  TASK_RUN_KIND,
+  taskRunFromProposal,
   operationOutputNames,
   operationOutputType,
   taskCaptureChangesDigestInput,
@@ -16,6 +18,7 @@ import {
   taskEventBindingFromNormalizedEvent,
   taskOutcomeV1Schema,
   type MessageV1,
+  type TaskRunV1,
   type TaskCaptureManifestV1,
   type TaskEffectPlanV1,
   type TaskEffectProposalV1,
@@ -32,9 +35,17 @@ import {
   type RunnerActionResultV1,
   type RunnerActionV1,
   type RunnerEffectReceiptV1,
+  type RunnerTaskRunReceiptV1,
 } from "@gardener/protocol";
 import { assertRunnerToolBudget } from "./task-limits";
-import { mergeBaseProposalRefusal, messageProposalRefusal, operationSteps, runEffectScope, runTriggerScopeRefusal } from "./proposal-authority";
+import {
+  mergeBaseProposalRefusal,
+  messageProposalRefusal,
+  operationSteps,
+  runEffectScope,
+  runTriggerScopeRefusal,
+  taskRunProposalRefusal,
+} from "./proposal-authority";
 import { planCarries } from "./workflow-refs";
 
 export type CompletedTaskOutcomeV1 = Extract<TaskOutcomeV1, { status: "completed" }>;
@@ -349,6 +360,7 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
   const materializing: string[] = [];
   const proposals: TaskEffectProposalV1[] = [];
   const messages: MessageV1[] = [];
+  const taskRuns: TaskRunV1[] = [];
   const resource = taskEventBindingFromNormalizedEvent(request.event).resource;
 
   for (const [index, candidate] of outcome.proposedEffects.entries()) {
@@ -362,6 +374,20 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
       if (refusal !== undefined) throw new Error(refusal);
       proposals.push(proposal);
       messages.push(messageFromSendPayload(messageSendPayloadV1Schema.parse(proposal.payload)));
+      continue;
+    }
+    if (proposal.kind === TASK_RUN_KIND) {
+      // The same rules as at proposal, and last: apply starts it only after
+      // everything else, so nothing proposed after it could ever be applied
+      // ahead of it. The target was resolved against the repository's enabled
+      // tasks when it was proposed, and is again when apply reports it is
+      // dispatching; the path comes from the task id, never from the model.
+      if (!declared.has(proposal.kind)) throw new Error(`A step uses the undeclared effect ${proposal.kind}`);
+      if (index !== outcome.proposedEffects.length - 1) throw new Error(`task.run must be the last step, and ${proposal.stepName} is not`);
+      const refusal = taskRunProposalRefusal(request, proposal, proposals);
+      if (refusal !== undefined) throw new Error(refusal);
+      proposals.push(proposal);
+      taskRuns.push(taskRunFromProposal(proposal));
       continue;
     }
     // Trigger scope, for every plan whether or not it carries `effectScope`,
@@ -469,6 +495,8 @@ export async function buildTaskEffectPlan(input: BuildTaskEffectPlanInput): Prom
     // Left out when there is none, so other plans stay byte-identical, and
     // never present for an older pin: `messageProposalRefusal` refused it.
     ...(messages.length === 0 ? {} : { messages }),
+    // The same, refused for an older pin by `taskRunProposalRefusal`.
+    ...(taskRuns.length === 0 ? {} : { taskRuns }),
     ...(capture === undefined ? {} : { capture: capture.manifest, changesSha256: capture.changesSha256 }),
     operations,
   });
@@ -663,16 +691,22 @@ export function assertMonotonicReceipt(existing: RunnerEffectReceiptV1, next: Ru
     plannedOperations: receipt.plannedOperations,
   });
   if (immutable(existing) !== immutable(next)) throw new Error("Effect receipt plan identity changed");
+  assertTaskRunTransition(existing.taskRuns?.[0], next.taskRuns?.[0]);
   if (existing.status === "applied") {
-    // Its operations are final. Only its message may still move, and only
-    // from untried or failed: sent, skipped and conflicted are final for the plan.
+    // Its operations are final. Only its message and task run may still move.
+    // The message only from untried or failed: sent, skipped and conflicted
+    // are final for the plan. The task run as `assertTaskRunTransition` says.
     if (next.status !== "applied" || canonicalJson(existing.operations) !== canonicalJson(next.operations)) {
       throw new Error("An applied effect receipt is terminal");
     }
     const before = existing.messages?.[0];
-    if (before !== undefined && before.status !== "failed") throw new Error("The effect receipt's message is already settled");
-    if (next.messages === undefined) {
-      throw new Error(before === undefined ? "An applied effect receipt is terminal" : "Effect receipt dropped its message");
+    const after = next.messages?.[0];
+    if (before !== undefined && before.status !== "failed" && canonicalJson(before) !== canonicalJson(after ?? null)) {
+      throw new Error("The effect receipt's message is already settled");
+    }
+    if (before !== undefined && after === undefined) throw new Error("Effect receipt dropped its message");
+    if (before === undefined && after === undefined && existing.taskRuns === undefined && next.taskRuns === undefined) {
+      throw new Error("An applied effect receipt is terminal");
     }
     return;
   }
@@ -693,6 +727,37 @@ export function assertMonotonicReceipt(existing: RunnerEffectReceiptV1, next: Ru
   }
 }
 
+/**
+ * The task run's receipt moves one way, and never back to a dispatch: absent,
+ * then `dispatching` (recorded before apply calls GitHub), then `dispatched`
+ * or `dispatch_unknown`, both final. A receipt cannot first appear settled,
+ * because the lineage record is written when `dispatching` is, and a dispatch
+ * without one would start a run nothing admits. Its task and subject never
+ * change. This is the opposite of a message, whose `failed` is retried: a
+ * dispatch whose outcome is unknown is never sent again.
+ */
+export function assertTaskRunTransition(
+  before: RunnerTaskRunReceiptV1 | undefined,
+  after: RunnerTaskRunReceiptV1 | undefined,
+): void {
+  if (before === undefined) {
+    if (after !== undefined && after.status !== "dispatching") {
+      throw new Error("A task run is recorded as dispatching before it is dispatched");
+    }
+    return;
+  }
+  if (after === undefined) throw new Error("Effect receipt dropped its task run");
+  if (after.task !== before.task || canonicalJson(after.subject) !== canonicalJson(before.subject)) {
+    throw new Error("Effect receipt changed its task run's task or subject");
+  }
+  if (before.status !== "dispatching" && canonicalJson(before) !== canonicalJson(after)) {
+    throw new Error("The effect receipt's task run is already settled and is never dispatched again");
+  }
+  if (before.status === "dispatching" && after.status === "dispatching" && canonicalJson(before) !== canonicalJson(after)) {
+    throw new Error("A dispatching task run settles only as dispatched or dispatch_unknown");
+  }
+}
+
 export function assertReceiptMatchesPlan(plan: TaskEffectPlanV1, receipt: RunnerEffectReceiptV1): void {
   if (receipt.bundleHash !== plan.bundleHash) {
     throw new Error("Effect receipt bundle hash does not match the planned bundle");
@@ -706,6 +771,7 @@ export function assertReceiptMatchesPlan(plan: TaskEffectPlanV1, receipt: Runner
     throw new Error("Effect receipt changes digest does not match the plan");
   }
   assertMessageReceiptsMatchPlan(plan, receipt);
+  assertTaskRunReceiptsMatchPlan(plan, receipt);
   receipt.operations.forEach((entry, index) => {
     const planned = plan.operations[index];
     if (planned === undefined) throw new Error(`Effect receipt records unplanned step ${entry.stepName}`);
@@ -760,6 +826,27 @@ function assertMessageReceiptsMatchPlan(plan: TaskEffectPlanV1, receipt: RunnerE
       || !kindMatches
       || entry.subject.number !== messageSubjectNumber(message.subject)) {
       throw new Error("Effect receipt records a message for another channel or subject than the plan's");
+    }
+  });
+}
+
+/**
+ * A task run receipt answers the plan's own task run: the same task and the
+ * same subject. A pull request the plan opened is the `pullNumber` output the
+ * receipt records for the step that opened it, so apply cannot name another.
+ */
+function assertTaskRunReceiptsMatchPlan(plan: TaskEffectPlanV1, receipt: RunnerEffectReceiptV1): void {
+  const received = receipt.taskRuns ?? [];
+  const planned = plan.taskRuns ?? [];
+  if (received.length > planned.length) throw new Error("Effect receipt records a task run the plan does not start");
+  received.forEach((entry, index) => {
+    const run = planned[index]!;
+    const subject = run.subject;
+    const number = "openedBy" in subject
+      ? receipt.operations.find((step) => step.stepName === subject.openedBy)?.outputs.pullNumber
+      : subject.kind === "issue" ? subject.issueNumber : subject.pullNumber;
+    if (entry.task !== run.task || entry.subject.kind !== subject.kind || entry.subject.number !== number) {
+      throw new Error("Effect receipt records a task run for another task or subject than the plan's");
     }
   });
 }

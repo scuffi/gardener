@@ -12,6 +12,8 @@ import {
   isAuthoredTriggerKind,
   isLabeledTriggerKind,
   MESSAGE_SEND_KIND,
+  TASK_RUN_KIND,
+  taskWorkflowPath,
   isEditedTriggerKind,
   maintainerAssociations,
   type AuthoredTriggerKindV1,
@@ -359,7 +361,7 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
     const compiled = await compileTaskSource(await readFile(taskPath, "utf8"), source, project.handle === undefined ? {} : { handle: project.handle });
     if (taskIds.has(compiled.bundle.taskId)) throw new Error(`Duplicate task id: ${compiled.bundle.taskId}`);
     taskIds.add(compiled.bundle.taskId);
-    const workflow = `.github/workflows/gardener-${workflowSlug(compiled.bundle.taskId)}.yml`;
+    const workflow = taskWorkflowPath(compiled.bundle.taskId);
     if (workflow === syncWorkflow) throw new Error(`Task ${compiled.bundle.taskId} would overwrite ${syncWorkflow}; rename it`);
     if (workflows.has(workflow)) throw new Error(`Multiple tasks generate ${workflow}`);
     workflows.add(workflow);
@@ -375,6 +377,8 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
     const refusal = pinnedWorkflowRefusal(task, project.release.workflowRef);
     if (refusal !== undefined) throw new Error(refusal);
   }
+  const taskRunRefusal = taskRunGraphRefusal(tasks);
+  if (taskRunRefusal !== undefined) throw new Error(taskRunRefusal);
 
   const lock = {
     schemaVersion: "gardener.lock/v1",
@@ -405,6 +409,9 @@ export async function planProject(input: { repositoryRoot: string }): Promise<Pr
       return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
     }),
     ...tasks.flatMap((task) => messageWarnings(task.bundle).map((warning) => `Task ${task.bundle.taskId} ${warning}`)),
+    ...tasks
+      .filter((task) => declaresTaskRun(task))
+      .map((task) => `Task ${task.bundle.taskId} declares task.run, so its workflow is granted actions: write for the whole run (apply and the reaction jobs, never planning). See SECURITY.md for what else that scope allows.`),
     ...tasks.flatMap((task) => {
       const warning = modelWarning(task.bundle.model);
       return warning === undefined ? [] : [`Task ${task.bundle.taskId} ${warning}`];
@@ -763,10 +770,99 @@ function declaresMessages(task: BuiltTask): boolean {
   return (task.bundle.effects as readonly string[]).includes(MESSAGE_SEND_KIND);
 }
 
+/**
+ * The task workflows of releases whose apply bridge cannot start a task
+ * (0.1.0–0.1.20): it parses plans strictly and would refuse every plan that
+ * carries `taskRuns`. The reusable workflow itself needs no change, since apply
+ * inherits the caller's `actions: write`. A fixed list for the same reason as
+ * the ones above; the runtime refuses the proposal on these pins too.
+ */
+const TASK_WORKFLOWS_WITHOUT_TASK_RUN = new Set([
+  ...TASK_WORKFLOWS_WITHOUT_CHAT_WEBHOOK,
+  "e927a2a726ef283e60d32ad09efa7c2aea0b47eb",
+  "0d02b66f47cc8802ba14a243dd827bf5555b3469",
+]);
+
+function definesTaskRun(workflowRef: string): boolean {
+  return !TASK_WORKFLOWS_WITHOUT_TASK_RUN.has(workflowRef.slice(workflowRef.lastIndexOf("@") + 1));
+}
+
+function declaresTaskRun(task: BuiltTask): boolean {
+  return (task.bundle.effects as readonly string[]).includes(TASK_RUN_KIND);
+}
+
+/** The subjects a task can start another on: its own issue or pull request, or a pull request it opens. */
+function taskRunNameableKinds(task: BuiltTask): Set<"issue" | "pull_request"> {
+  const kinds = new Set(dispatchTargetKinds(task.bundle.triggers, { pullRequestHead: checksOutPullRequestHead(task.bundle) }));
+  if (task.bundle.effects.includes("pull_request.open") || task.bundle.effects.includes("pull_request.open_draft")) kinds.add("pull_request");
+  return kinds;
+}
+
+/**
+ * Why the project's `task.run` declarations cannot work, or `undefined`. Each
+ * target must be another task of this project whose workflow takes, as a
+ * dispatch input, a subject the starting task can name, and the graph must
+ * have no cycle.
+ *
+ * An authoring check, never the authority: the Worker resolves every target
+ * against the repository's enabled tasks when the model proposes, and a
+ * chain's depth bounds it at runtime whatever this graph looks like, including
+ * a cycle closed by a maintainer's manual run between runs.
+ */
+function taskRunGraphRefusal(tasks: readonly BuiltTask[]): string | undefined {
+  const byId = new Map(tasks.map((task) => [task.bundle.taskId, task] as const));
+  const targetsOf = (task: BuiltTask) => task.bundle.effectOptions?.[TASK_RUN_KIND]?.tasks ?? [];
+  for (const task of tasks) {
+    const id = task.bundle.taskId;
+    const nameable = taskRunNameableKinds(task);
+    for (const targetId of targetsOf(task)) {
+      if (targetId === id) return `Task ${id} declares task.run on itself; a task may not start itself`;
+      const target = byId.get(targetId);
+      if (target === undefined) {
+        return `Task ${id} declares task.run on ${targetId}, which is not a task in .gardener/tasks; add it or remove it from task.run`;
+      }
+      const offered = dispatchTargetKinds(target.bundle.triggers, { pullRequestHead: checksOutPullRequestHead(target.bundle) });
+      if (!offered.some((kind) => nameable.has(kind))) {
+        const wanted = nameable.size === 0
+          ? "an issue or pull request"
+          : [...nameable].map((kind) => kind === "issue" ? "an issue" : "a pull request").join(" or ");
+        return `Task ${id} declares task.run on ${targetId}, but ${targetId}'s workflow takes no input for ${wanted}, which is what ${id} can start it on. `
+          + `Give ${targetId} a matching trigger, or github.workflow_dispatch with subject: ${nameable.has("issue") ? "issue" : "pull_request"}`;
+      }
+    }
+  }
+  // Depth-first in task order, so the reported cycle is stable.
+  const state = new Map<string, "visiting" | "done">();
+  const path: string[] = [];
+  const visit = (id: string): string[] | undefined => {
+    if (state.get(id) === "done") return undefined;
+    if (state.get(id) === "visiting") return [...path.slice(path.indexOf(id)), id];
+    state.set(id, "visiting");
+    path.push(id);
+    for (const next of targetsOf(byId.get(id)!)) {
+      const cycle = visit(next);
+      if (cycle !== undefined) return cycle;
+    }
+    path.pop();
+    state.set(id, "done");
+    return undefined;
+  };
+  for (const task of tasks) {
+    const cycle = visit(task.bundle.taskId);
+    if (cycle !== undefined) {
+      return `Tasks ${cycle.join(" → ")} start each other with task.run; remove one so the chain ends. A chain is cut at depth 3 at runtime anyway, but a cycle is almost always a mistake`;
+    }
+  }
+  return undefined;
+}
+
 /** Why this task cannot run on the pinned workflow, or `undefined` when it can. */
 function pinnedWorkflowRefusal(task: BuiltTask, workflowRef: string): string | undefined {
   if (declaresMessages(task) && !definesChatWebhook(workflowRef)) {
     return `Task ${task.bundle.taskId} declares message.send, which this project's pinned Gardener workflow (${workflowRef}) cannot run. Run gardener upgrade to pin a release that can.`;
+  }
+  if (declaresTaskRun(task) && !definesTaskRun(workflowRef)) {
+    return `Task ${task.bundle.taskId} declares task.run, which this project's pinned Gardener workflow (${workflowRef}) cannot run: its apply step predates it. Run gardener upgrade to pin a release that can.`;
   }
   if (definesPullRequestHead(workflowRef)) return undefined;
   // Older workflows check out a pull request head only for pull request
@@ -922,10 +1018,6 @@ function yamlString(value: string): string {
 /** GitHub expression string literal. Labels are constrained to a safe character set. */
 function yamlSingleQuoted(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
-}
-
-function workflowSlug(taskId: string): string {
-  return taskId.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 async function readPreviousLock(path: string): Promise<string[]> {

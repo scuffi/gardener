@@ -192,6 +192,14 @@ instructions ask for an effect that isn't declared, it can't happen.
   subject's labels (`regression`, `bug`, `enhancement`, `question`, `documentation`, else 🆕).
   Nothing is sent if the subject changed since the model read it. On Slack, a rerun after a lost
   answer can post twice; Google Chat never posts a plan's message twice.
+- `task.run` starts another task of this repository on the run's issue or pull request, or on a pull
+  request the plan opens, after every other step applied: `- task.run: { tasks: [fix] }`. List
+  every task it may start; the model picks one and the subject, nothing else. At most one per run,
+  always the last step, never retried. The started task inherits the first run's trust and counts against
+  the first author's `runs-per-author`; chains stop at depth 3. A task that only runs this way
+  declares `- event: github.workflow_dispatch` with `subject: issue` or `subject: pull_request`.
+  The task's job gets `actions: write`. `generate` refuses unknown targets, the task itself, and
+  cycles.
 
 ## Updating open pull requests
 

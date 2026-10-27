@@ -154,6 +154,7 @@ for (const [path, content] of reusable) {
 const detectors = {
   effectScope: (contracts) => contracts.includes("effectScope"),
   messages: (contracts) => /\bmessageV1Schema\b/.test(contracts),
+  taskRuns: (contracts) => /\btaskRunV1Schema\b/.test(contracts),
 };
 const refsSource = readFileSync("apps/gardener/src/task-runtime/workflow-refs.ts", "utf8");
 const arrays = new Map();

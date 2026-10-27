@@ -16,6 +16,7 @@ const required = [
   "package/assets/apps/gardener/migrations/0003_actions_repository_syncs.sql",
   "package/assets/apps/gardener/migrations/0004_actions_installation_gateway.sql",
   "package/assets/apps/gardener/migrations/0005_actions_task_run_admissions.sql",
+  "package/assets/apps/gardener/migrations/0006_actions_task_lineage.sql",
 ];
 for (const path of required) {
   if (!files.includes(path)) throw new Error(`CLI tarball is missing ${path}`);

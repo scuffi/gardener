@@ -125,6 +125,7 @@ The apply job has no checkout and runs no repository code. It performs these ste
 3. Have the Worker confirm the plan is the one it issued for this run.
 4. Execute each operation in order.
 5. Send the plan's message, if it has one, once every operation applied.
+6. Start the plan's task run, if it has one, after that, whatever became of the message.
 
 Every operation carries the GitHub state it was planned against. Depending on the operation, that
 can include:
@@ -188,6 +189,47 @@ leading list marker on the summary line is swapped for a lookalike. Bare IPv4 ad
 `localhost` are not defanged; neither product links them without a scheme. No code span is relied on, so the only link in a
 message is the one Gardener built to the subject. `#123` and `@login` stay as text; neither product
 turns them into a link or a mention in incoming-webhook text.
+
+### Starting other tasks
+
+A plan carries at most one task run: a target task id, the workflow path the Worker derived from it
+(`.github/workflows/gardener-<id>.yml`, never from the model), and a subject that is the run's own
+issue or pull request, or a pull request an earlier step of the same plan opens. The model supplies
+no inputs, prompt, ref or workflow. The Worker checks the target is declared, enrolled and enabled,
+and offers the subject as a dispatch input, both when the step is proposed and when apply reports
+`dispatching`; apply re-checks the path pattern and dispatches on the default branch it reads from
+the API, with exactly one input. It never dispatches twice.
+
+**Lineage.** A started run gains nothing from being started. Before apply calls GitHub, the Worker
+records the dispatch (target task, subject, the parent's frozen starter decision, root author and
+depth). A manual run whose actor is a bot is never trusted as a manual run: it must claim one of
+those records (same repository, task and subject, unconsumed, at most six hours old) in one atomic
+compare-and-swap, and inherits that record's decision, never a wider one, with the strictest record
+handed out first when several match. It is charged to the chain's root author, may not carry a
+`prompt`, and stops at depth 3. A re-run of the same workflow run finds the record it already
+claimed. A bot dispatch that claims nothing fails before the model, with an `actions_task_audit`
+row. Every matched run writes an audit row naming its parent run and depth. A person's manual run
+is unchanged: it still needs write access to start.
+
+**`actions: write`.** A task that declares `task.run` needs `actions: write` to dispatch. GitHub
+does not evaluate expressions in `permissions:`, and apply deliberately inherits the caller job's
+grant (its needs vary by task), so the grant cannot be scoped to the dispatch:
+
+- only tasks that declare `task.run` get it, and it is granted on the caller job, so apply,
+  `acknowledge` and `settle` all hold it for the duration of the run;
+- beyond dispatching, it permits cancelling, re-running and **deleting workflow runs, logs and
+  artifacts**, enabling and disabling workflows, and managing caches;
+- it is contained: the plan job pins a narrower static block, so the model and any
+  `repository.exec` command never hold it; apply is checkout-free and runs one pinned bridge against
+  a hash-bound plan; `acknowledge` and `settle` run fixed API calls;
+- the residual: the Actions run's own logs and artifacts are deletable by the same token that
+  applies effects, so for a repository that uses `task.run` the durable audit record is the Worker's
+  `actions_task_audit` table, not the Actions logs.
+
+The option not taken: a second reusable workflow, called by a second generated caller job with a
+static `permissions: { actions: write }`, taking the resolved task and subject from the first job's
+outputs. It achieves least privilege at the cost of a second pin, a second `job_workflow_ref` for
+the Worker to accept, outputs plumbing, and a dispatch outside the receipt flow.
 
 ## Known limitations
 

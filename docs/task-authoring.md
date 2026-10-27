@@ -317,7 +317,8 @@ can change it.
 
 A run's starter is **trusted** when the run is:
 
-- a schedule or a manual run, because starting one needs write access;
+- a schedule or a manual run started by a person, because starting one needs write access (a
+  manual run a bot dispatched is a run another task started; see [Starting other tasks](#starting-other-tasks));
 - a push, or a pull request's `synchronize` from a branch in this repository, by a person: both
   needed a push to this repository;
 - started by the author of the issue, pull request, comment, review or discussion that triggered
@@ -376,6 +377,39 @@ those patterns allow. The [run limits](#run-limits) bound how many.
 
 Projects pinned to 0.1.16 or earlier get the first two checks as soon as the runtime is upgraded;
 the check at apply arrives when the repository is upgraded too.
+
+### Starting other tasks
+
+A task can start another with `task.run`, for example a triage task that labels an issue and then
+starts `fix` on it:
+
+```yaml
+effects:
+  - issue.label.add
+  - task.run: { tasks: [fix] }
+```
+
+The started task's own triggers don't decide whether it runs: apply dispatches its workflow by hand,
+with the subject as the `issue` or `pull_request` input. A task that only ever runs that way can
+say which input it takes:
+
+```yaml
+triggers:
+  - event: github.workflow_dispatch
+    subject: pull_request
+```
+
+`generate` checks only that the target takes some kind of subject the starting task could name;
+the Worker checks the kind of the subject each step actually uses, so a project that passes
+`generate` can still have a `task.run` refused at runtime.
+
+A started run is not a fresh start. Gardener matches it to the run that asked for it and gives it
+that chain's **lineage**: the first run's starter decision (never a wider one), its root author,
+whose `runs-per-author` every run in the chain counts against, and a depth one more than its
+parent's. Depth 3 is the limit, so a chain is at most four runs long. A bot's manual run that
+matches no request, or that carries a `prompt`, is refused before the model; a person's manual run
+is not affected. See [Starting other tasks](task-reference.md#starting-other-tasks) for the exact
+rules.
 
 ### Branches
 
@@ -741,7 +775,7 @@ Start a manual run from the task's workflow in the repository's **Actions** tab 
 workflow**), or with `gh workflow run gardener-<task>.yml`.
 
 The form offers `prompt` (extra instructions), and `issue` or `pull_request` (a target) when the
-task has issue or pull request triggers. See [Manual runs](task-reference.md#manual-runs).
+task has issue or pull request triggers, or a `github.workflow_dispatch` trigger with `subject`. See [Manual runs](task-reference.md#manual-runs).
 
 With a target, the run sees that issue or pull request as if the event had come from it. Give at
 most one target. An `issue` number that is really a pull request is refused; use `pull_request`.

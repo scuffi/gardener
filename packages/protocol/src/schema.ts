@@ -624,6 +624,35 @@ export const runnerMessageReceiptV1Schema = z.strictObject({
 export type RunnerMessageReceiptV1 = z.infer<typeof runnerMessageReceiptV1Schema>;
 
 /**
+ * What became of the plan's task run, restated (task and resolved subject) so
+ * the runtime can check it answers the plan's own, mirroring the contracts'
+ * `TaskRunV1` without depending on it.
+ *
+ * Deliberately the opposite of a message: nothing here is retried. Apply
+ * records `dispatching` before it calls GitHub, and the runtime writes the
+ * lineage record the started run is matched against in the same step. After
+ * that the dispatch may or may not have happened, so it settles as
+ * `dispatched` (GitHub accepted it) or `dispatch_unknown` (GitHub refused it,
+ * the call failed, or an attempt stopped between the two) and is never sent
+ * again. A missed run is recoverable by a maintainer; a duplicate isn't.
+ */
+export const runnerTaskRunReceiptV1Schema = z.strictObject({
+  task: z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
+  subject: z.strictObject({
+    kind: z.enum(["issue", "pull_request"]),
+    number: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  }),
+  status: z.enum(["dispatching", "dispatched", "dispatch_unknown"]),
+  reason: z.enum(["dispatch_refused", "dispatch_failed", "interrupted"]).optional(),
+  attemptedAt: z.iso.datetime(),
+}).superRefine((receipt, context) => {
+  if ((receipt.status === "dispatch_unknown") !== (receipt.reason !== undefined)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "only a dispatch_unknown task run has a reason" });
+  }
+});
+export type RunnerTaskRunReceiptV1 = z.infer<typeof runnerTaskRunReceiptV1Schema>;
+
+/**
  * Receipt for one ordered plan application.
  *
  * Failure policy is stop-and-resume: the apply job halts on the first failed or
@@ -659,15 +688,23 @@ export const runnerEffectReceiptV1Schema = z.strictObject({
    * message has no operations, which is the one receipt with none.
    */
   messages: z.array(runnerMessageReceiptV1Schema).min(1).max(1).optional(),
+  /**
+   * The plan's task run, once apply reached it: like the message, only after
+   * every operation applied, so only on an applied receipt.
+   */
+  taskRuns: z.array(runnerTaskRunReceiptV1Schema).min(1).max(1).optional(),
 }).superRefine((receipt, context) => {
   if (receipt.plannedOperations > 0 && receipt.operations.length === 0) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a receipt for a plan with steps records at least one" });
   }
-  if (receipt.plannedOperations === 0 && receipt.messages === undefined) {
-    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message" });
+  if (receipt.plannedOperations === 0 && receipt.messages === undefined && receipt.taskRuns === undefined) {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message or task run" });
   }
   if (receipt.messages !== undefined && receipt.status !== "applied") {
     context.addIssue({ code: "custom", path: ["messages"], message: "a message is tried only after every step applied" });
+  }
+  if (receipt.taskRuns !== undefined && receipt.status !== "applied") {
+    context.addIssue({ code: "custom", path: ["taskRuns"], message: "a task run is started only after every step applied" });
   }
   const bytes = canonicalJsonByteLength(receipt);
   if (bytes === null) {

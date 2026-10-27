@@ -12,7 +12,7 @@ const runTask = source.slice(source.indexOf("  async runTask("), source.indexOf(
 
 describe("runTask admission wiring", () => {
   it("decides the starter for a fresh request only; a persisted request keeps what it has", () => {
-    expect(runTask).toContain(`    const request = existing
+    expect(runTask).toContain(`    let request = existing
       ? taskRunRequestV1Schema.parse(JSON.parse(existing.request_json))
       : withStarter(taskRunRequestV1Schema.parse(freshRequest), identity, runnerEvent);`);
     expect(source).toMatch(/trustedStarter\(\{\n\s+eventName: identity\.hello\.eventName,\n\s+actor: \{ id: identity\.actor\.actorId, login: identity\.actor\.actorLogin \},\n\s+event: request\.event,\n\s+actorPermission: event\.actorPermission,\n\s+\}\)/);
@@ -40,7 +40,7 @@ describe("runTask admission wiring", () => {
 
   it("counts the OIDC actor, exempts trusted starters from the per-author limit, and never stops a started run", () => {
     expect(runTask).toContain("if (!existing?.harness_submission_json) {");
-    expect(runTask).toContain("authorId: request.event.actor.id,");
+    expect(runTask).toContain("authorId: request.lineage?.rootAuthorId ?? request.event.actor.id,");
     expect(runTask).toContain("trusted: request.starter?.trusted === true,");
     expect(runTask).toContain("limits: request.bundle.limits,");
   });
@@ -52,5 +52,39 @@ describe("runTask admission wiring", () => {
     expect(skip).toContain("summary: admission.summary,");
     expect(skip).toContain("proposedEffects: [],");
     expect(skip).toContain(`}), bundleHash, { skipped: "rate_limit" });`);
+  });
+
+  it("matches a bot's dispatch against lineage before the request is stored, and fails it loudly without a match", () => {
+    const order = [
+      "withStarter(taskRunRequestV1Schema.parse(freshRequest), identity, runnerEvent)",
+      "if (!existing && isBotDispatch(identity.hello.eventName, identity.actor.actorLogin)) {",
+      "const match = await matchLineage(this.#db(), {",
+      "request = taskRunRequestV1Schema.parse({ ...request, starter: match.starter, lineage: match.lineage });",
+      "INSERT OR IGNORE INTO actions_task_runs",
+      "if (lineageRefusal !== undefined) {",
+      "'task.lineage_refused'",
+      "'task.lineage'",
+      "if (existing?.outcome_json)",
+      "const admission = await admitRun(this.#db(), {",
+    ].map((needle) => runTask.indexOf(needle));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
+    const refusal = runTask.slice(runTask.indexOf("if (lineageRefusal !== undefined) {"), runTask.indexOf("'task.lineage',"));
+    expect(refusal).toContain(`status: "failed",`);
+    expect(refusal).toContain(`code: "lineage.unmatched",`);
+    expect(refusal).toContain("reason: lineageRefusal,");
+  });
+
+  it("writes the lineage record before the receipt that says a task run is dispatching", () => {
+    const record = source.slice(source.indexOf("  async recordEffect("), source.indexOf("  async #taskRunTargetRefusal("));
+    const order = [
+      "assertTaskRunTransition(undefined, receipt.taskRuns?.[0])",
+      `if (dispatching?.status === "dispatching" && existing?.taskRuns === undefined) {`,
+      "taskRunTargetRefusal(dispatching.task, target, dispatching.subject.kind)",
+      "await recordLineage(this.#db(), lineageRecordFor(request, dispatching, new Date()));",
+      "UPDATE actions_task_runs SET effect_receipt_json=?",
+    ].map((needle) => record.indexOf(needle));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
   });
 });

@@ -89,18 +89,25 @@ describe("task workflows without plan capabilities", () => {
     }
   });
 
-  it.skipIf(tags.length === 0)("lists every earlier release's task workflow as lacking messages", () => {
+  // The newest capability, which no release before this one has. (It named
+  // `messages` until 0.1.18 shipped them; scripts/check-release-pins.mjs checks
+  // every capability against each tag's own contracts.)
+  it.skipIf(tags.length === 0)("lists every earlier release's task workflow as lacking task runs", () => {
     const released = new Set(releasedRefs);
     released.delete(current);
     expect(released.size).toBeGreaterThan(0);
     for (const ref of released) {
       expect(ref, `a release's DEFAULT_WORKFLOW_REF`).toMatch(/@[0-9a-f]{40}$/);
-      expect(planCarries("messages", ref!), `${ref} must be in TASK_WORKFLOWS_WITHOUT.messages`).toBe(false);
+      expect(planCarries("taskRuns", ref!), `${ref} must be in TASK_WORKFLOWS_WITHOUT.taskRuns`).toBe(false);
     }
   });
 
   it("only ever adds capabilities: each set contains the earlier one", () => {
     for (const sha of TASK_WORKFLOWS_WITHOUT.effectScope) expect(TASK_WORKFLOWS_WITHOUT.messages.has(sha)).toBe(true);
+    for (const sha of TASK_WORKFLOWS_WITHOUT.messages) expect(TASK_WORKFLOWS_WITHOUT.taskRuns.has(sha)).toBe(true);
+    // 0.1.19 (and 0.1.20, on the same workflow) shipped `messages` but not `taskRuns`.
+    expect(planCarries("messages", `scuffi/gardener/.github/workflows/gardener-task.yml@0d02b66f47cc8802ba14a243dd827bf5555b3469`)).toBe(true);
+    expect(planCarries("taskRuns", `scuffi/gardener/.github/workflows/gardener-task.yml@0d02b66f47cc8802ba14a243dd827bf5555b3469`)).toBe(false);
     // 0.1.17 shipped `effectScope` but not `messages`.
     expect(planCarries("effectScope", `scuffi/gardener/.github/workflows/gardener-task.yml@5c9c136ffd6b2e545f398dc413a60e04b66da406`)).toBe(true);
     expect(planCarries("messages", `scuffi/gardener/.github/workflows/gardener-task.yml@5c9c136ffd6b2e545f398dc413a60e04b66da406`)).toBe(false);

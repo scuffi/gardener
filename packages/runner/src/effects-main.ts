@@ -49,6 +49,7 @@ import {
 } from "./github-effects";
 import { addSecret, jobSummaryContext, renderApplyJobSummary, writeJobSummary } from "./job-summary";
 import { messageMayTarget, sendPlanMessage, type MessageOutcome } from "./messages";
+import { dispatchPlanTaskRun, type TaskRunOutcome } from "./task-runs";
 
 const inputToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
 delete process.env["INPUT_GITHUB-TOKEN"];
@@ -68,6 +69,8 @@ interface ApplyResult {
   outputs: ReadonlyMap<string, Readonly<Record<string, string | number | boolean | null>>>;
   /** What became of the plan's message, when it has one and every operation applied. */
   message?: MessageOutcome;
+  /** What became of the plan's task run, when it has one and every operation applied. */
+  taskRun?: TaskRunOutcome;
 }
 
 export async function runEffectsMain(): Promise<void> {
@@ -75,6 +78,7 @@ export async function runEffectsMain(): Promise<void> {
   let plan: TaskEffectPlanV1 | undefined;
   let receipt: RunnerEffectReceiptV1 | undefined;
   let message: MessageOutcome | undefined;
+  let taskRun: TaskRunOutcome | undefined;
   try {
     const artifactPath = core.getInput("artifact-path", { required: true });
     const expectedSha256 = core.getInput("expected-sha256", { required: true });
@@ -111,6 +115,7 @@ export async function runEffectsMain(): Promise<void> {
 
     receipt = result.receipt;
     message = result.message;
+    taskRun = result.taskRun;
     if (message?.receipt.status === "skipped") {
       core.notice(message.receipt.reason === "destination_unset"
         ? "Message not sent: GARDENER_CHAT_WEBHOOK is not set."
@@ -118,8 +123,11 @@ export async function runEffectsMain(): Promise<void> {
     }
     // Nothing after this write can throw, except a failed message, which the
     // catch summarises. A stopped plan is summarised by the catch too.
-    if (result.receipt.status === "applied" && message?.receipt.status !== "failed") {
-      await writeJobSummary(() => renderApplyJobSummary({ plan: plan!, receipt: receipt!, ...(message ? { message } : {}), context: jobSummaryContext() }));
+    const taskRunUnknown = taskRun?.receipt.status === "dispatch_unknown" && taskRun.settled !== true;
+    if (result.receipt.status === "applied" && message?.receipt.status !== "failed" && !taskRunUnknown) {
+      await writeJobSummary(() => renderApplyJobSummary({
+        plan: plan!, receipt: receipt!, ...(message ? { message } : {}), ...(taskRun ? { taskRun } : {}), context: jobSummaryContext(),
+      }));
     }
     core.setOutput("status", result.receipt.status);
     core.setOutput("completed-operations", String(result.receipt.operations.length));
@@ -138,12 +146,17 @@ export async function runEffectsMain(): Promise<void> {
       // The operations stand; rerunning the job tries the message again.
       throw new Error(`Message not sent: ${message.error ?? "it could not be sent"}`);
     }
+    if (taskRunUnknown) {
+      // Red, so someone looks: a rerun never dispatches again.
+      throw new Error(`Task ${taskRun!.receipt.task} may not have started: ${taskRun!.error ?? "the dispatch's outcome is unknown"}`);
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Gardener effect failed";
     await writeJobSummary(() => renderApplyJobSummary({
       ...(plan ? { plan } : {}),
       ...(receipt ? { receipt } : {}),
       ...(message ? { message } : {}),
+      ...(taskRun ? { taskRun } : {}),
       error: reason,
       context: jobSummaryContext(),
     }));
@@ -231,7 +244,7 @@ export async function applyOrderedPlan(input: {
       resumeIndex = index + 1;
     }
     if (input.prior.status === "applied") {
-      return settleMessage(input, completed, outputs);
+      return settleTaskRun(input, completed, await settleMessage(input, completed, outputs));
     }
   }
 
@@ -320,7 +333,36 @@ export async function applyOrderedPlan(input: {
     await input.record(progress);
   }
 
-  return settleMessage(input, completed, outputs);
+  return settleTaskRun(input, completed, await settleMessage(input, completed, outputs));
+}
+
+/**
+ * The applied receipt, with the plan's task run settled after the message,
+ * whatever became of the message: a chat outage must not keep the started task
+ * from running, and the message is retried on a rerun while the task run never
+ * is. See `dispatchPlanTaskRun` for the at-most-once flow.
+ */
+async function settleTaskRun(
+  input: Parameters<typeof applyOrderedPlan>[0],
+  completed: RunnerPlanStepReceiptV1[],
+  settled: ApplyResult,
+): Promise<ApplyResult> {
+  const { plan } = input;
+  if (plan.taskRuns === undefined || settled.receipt.status !== "applied") return settled;
+  let receipt = settled.receipt;
+  const taskRun = await dispatchPlanTaskRun({
+    plan,
+    operations: completed,
+    prior: input.prior?.status === "applied" ? input.prior.taskRuns?.[0] : undefined,
+    token: input.token,
+    deadlineAt: input.deadlineAt,
+    ...(input.fetch ? { fetch: input.fetch } : {}),
+    record: async (taskRunReceipt) => {
+      receipt = runnerEffectReceiptV1Schema.parse({ ...receipt, taskRuns: [taskRunReceipt] });
+      await input.record(receipt);
+    },
+  });
+  return taskRun === undefined ? settled : { ...settled, receipt, taskRun };
 }
 
 /**
@@ -338,7 +380,11 @@ async function settleMessage(
   const { plan } = input;
   const appliedPrior = input.prior?.status === "applied" ? input.prior : undefined;
   const withoutMessage = (): ApplyResult => ({
-    receipt: appliedPrior ?? effectReceipt(plan, input.artifactSha256, completed, "applied", null),
+    receipt: appliedPrior ?? (plan.operations.length === 0 && plan.taskRuns !== undefined
+      // A plan whose only effect is a task run: no receipt is valid until the
+      // task run's is in it, which `settleTaskRun` adds before anything is recorded.
+      ? unvalidatedAppliedReceipt(plan, input.artifactSha256)
+      : effectReceipt(plan, input.artifactSha256, completed, "applied", null)),
     outputs,
   });
   if (plan.messages === undefined) return withoutMessage();
@@ -357,7 +403,7 @@ async function settleMessage(
   if (message === undefined) return withoutMessage();
   // Settled only by the prior receipt's own message, so it stands unchanged.
   if (message.settled && appliedPrior !== undefined) return { receipt: appliedPrior, outputs, message };
-  const receipt = effectReceipt(plan, input.artifactSha256, completed, "applied", null, [message.receipt]);
+  const receipt = effectReceipt(plan, input.artifactSha256, completed, "applied", null, [message.receipt], appliedPrior?.taskRuns);
   await input.record(receipt);
   return { receipt, outputs, message };
 }
@@ -587,6 +633,7 @@ function effectReceipt(
   status: "running" | "applied" | "stopped",
   stoppedAtStep: string | null,
   messages?: RunnerEffectReceiptV1["messages"],
+  taskRuns?: RunnerEffectReceiptV1["taskRuns"],
 ): RunnerEffectReceiptV1 {
   return runnerEffectReceiptV1Schema.parse({
     schemaVersion: "gardener.runner.effect-receipt/v1",
@@ -599,7 +646,22 @@ function effectReceipt(
     stoppedAtStep,
     operations,
     ...(messages === undefined ? {} : { messages }),
+    ...(taskRuns === undefined ? {} : { taskRuns }),
   });
+}
+
+function unvalidatedAppliedReceipt(plan: TaskEffectPlanV1, artifactSha256: string): RunnerEffectReceiptV1 {
+  return {
+    schemaVersion: "gardener.runner.effect-receipt/v1",
+    planRunId: plan.runId,
+    bundleHash: plan.bundleHash,
+    artifactSha256,
+    ...(plan.changesSha256 ? { changesSha256: plan.changesSha256 } : {}),
+    plannedOperations: 0,
+    status: "applied",
+    stoppedAtStep: null,
+    operations: [],
+  };
 }
 
 function assertReceiptEnvelope(plan: TaskEffectPlanV1, artifactSha256: string, receipt: RunnerEffectReceiptV1): void {

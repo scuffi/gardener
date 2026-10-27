@@ -140,11 +140,25 @@ export interface StarterEvidence {
 const isBot = (login: string): boolean => login.endsWith("[bot]");
 
 /**
+ * A manual run started by a bot: `github-actions[bot]` when another Gardener
+ * run's apply dispatched it with the workflow token, or any App's token. It is
+ * admitted only through a lineage record (see `matchLineage`), never as a
+ * manual run, because dispatching no longer implies a person with write access.
+ */
+export function isBotDispatch(eventName: string, actorLogin: string): boolean {
+  return eventName === "workflow_dispatch" && isBot(actorLogin);
+}
+
+/**
  * Whether the person (or thing) that started this run is trusted, decided once
  * at admission and frozen in the request. Trusted runs may act anywhere their
  * declared effects allow; every other run is confined to what triggered it.
  *
- * 1. A schedule or manual run is trusted: dispatching needs write access.
+ * 1. A schedule, or a manual run a person started, is trusted: clicking
+ *    "Run workflow" needs write access. A bot's manual run is not: since
+ *    `task.run`, the workflow token can dispatch, so a dispatch proves nothing
+ *    about who caused it. Such a run is admitted only by the lineage record
+ *    the run that started it left, and inherits that chain's root decision.
  * 2. A push, or a `synchronize` whose head is in this repository, by anyone
  *    but a bot: producing it needed a push here. A bot is untrusted on
  *    purpose, because Dependabot's commits carry upstream release notes.
@@ -159,8 +173,10 @@ const isBot = (login: string): boolean => login.endsWith("[bot]");
 export function trustedStarter(evidence: StarterEvidence): TaskRunStarterV1 {
   const { eventName, actor, event } = evidence;
   if (eventName === "schedule") return { trusted: true, reason: "schedule" };
-  if (eventName === "workflow_dispatch") return { trusted: true, reason: "manual" };
+  // Gated on the actor, before the manual branch: a bot's dispatch never
+  // counts as a person's, whether or not it names a target.
   if (isBot(actor.login)) return { trusted: false, reason: "bot" };
+  if (eventName === "workflow_dispatch") return { trusted: true, reason: "manual" };
   if (eventName === "push") return { trusted: true, reason: "push" };
   if (event.kind === "github.pull_request.synchronize") {
     // Checked here, before the decision is frozen, rather than trusting the

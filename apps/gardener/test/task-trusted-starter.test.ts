@@ -6,7 +6,7 @@ import {
   type AuthorPermissionV1,
   type NormalizedEventV1,
 } from "@gardener/contracts";
-import { trustedStarter } from "../src/task-runtime/session-checks";
+import { isBotDispatch, trustedStarter } from "../src/task-runtime/session-checks";
 
 const REPOSITORY_ID = "1374842705";
 const maintainer = { id: "1", login: "maintainer" };
@@ -64,10 +64,20 @@ function decide(
 }
 
 describe("trusted starter", () => {
-  it("trusts schedules and manual runs whoever the actor is", () => {
+  it("trusts schedules whoever the actor is, and manual runs a person started", () => {
     expect(decide(event("github.schedule", { cron: "0 0 * * *" }), outsider)).toEqual({ trusted: true, reason: "schedule" });
     expect(decide(event("github.workflow_dispatch"), maintainer)).toEqual({ trusted: true, reason: "manual" });
     expect(decide(event("github.schedule", { cron: "0 0 * * *" }), dependabot)).toEqual({ trusted: true, reason: "schedule" });
+  });
+
+  it("never trusts a bot's manual run, with or without a target: task.run makes dispatching prove nothing", () => {
+    const actionsBot = { id: "41898282", login: "github-actions[bot]" };
+    expect(decide(event("github.workflow_dispatch"), actionsBot)).toEqual({ trusted: false, reason: "bot" });
+    expect(decide(event("github.workflow_dispatch", { issue: issue(outsider, "NONE") }), actionsBot)).toEqual({ trusted: false, reason: "bot" });
+    expect(decide(event("github.workflow_dispatch", { issue: issue(maintainer, "OWNER") }), { id: "7", login: "some-app[bot]" }))
+      .toEqual({ trusted: false, reason: "bot" });
+    // A person's click still takes the manual branch, target or not.
+    expect(decide(event("github.workflow_dispatch", { issue: issue(outsider, "NONE") }), maintainer)).toEqual({ trusted: true, reason: "manual" });
   });
 
   it("trusts a push by a person and not by a bot", () => {
@@ -168,5 +178,14 @@ describe("trusted starter", () => {
     for (const kind of Object.keys(eventNameByTriggerKind)) {
       expect(Object.hasOwn(starterSubject, kind)).toBe(!decidedByEvent.includes(kind));
     }
+  });
+});
+
+describe("isBotDispatch", () => {
+  it("is a bot's manual run only, which admission matches against lineage", () => {
+    expect(isBotDispatch("workflow_dispatch", "github-actions[bot]")).toBe(true);
+    expect(isBotDispatch("workflow_dispatch", "my-app[bot]")).toBe(true);
+    expect(isBotDispatch("workflow_dispatch", "maintainer")).toBe(false);
+    expect(isBotDispatch("issues", "github-actions[bot]")).toBe(false);
   });
 });
