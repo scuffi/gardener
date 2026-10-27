@@ -65,7 +65,7 @@ two of the repository's existing labels:
 ```bash
 mkdir -p .gardener/tasks/triage
 curl -sL -o .gardener/tasks/triage/TASK.md \
-  https://raw.githubusercontent.com/scuffi/gardener/v0.1.19/examples/tasks/triage/TASK.md
+  https://raw.githubusercontent.com/scuffi/gardener/v0.1.20/examples/tasks/triage/TASK.md
 ```
 
 Open it to see what a task looks like: YAML frontmatter that states its trigger, tools, effects and
