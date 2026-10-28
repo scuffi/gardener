@@ -18,6 +18,7 @@ import {
   buildTaskEffectPlan,
   type CompletedTaskOutcomeV1,
 } from "../src/task-runtime/effect-plan";
+import { createTaskHarnessRequest } from "../src/task-runtime/harness-adapter";
 import { proposalAuthorityRefusal, taskRunProposalRefusal, taskRunTargetRefusal } from "../src/task-runtime/proposal-authority";
 import { inspectRepositoryFixtureBundle } from "./fixture-bundle";
 
@@ -173,6 +174,37 @@ describe("task.run proposals", () => {
     const refusal = proposalAuthorityRefusal(await runRequest({ jobWorkflowRef: PIN_0_1_19 }), start({ task: "fix", issueNumber: 7 }), []);
     expect(refusal).toMatch(/^task\.run is not supported by this run's task workflow \(release 0d02b66f47cc\)/);
     expect(refusal).toContain("gardener upgrade --workspace <name>");
+  });
+});
+
+describe("task.run in the prompt", () => {
+  const prompt = async (options: Parameters<typeof runRequest>[0], maxEffectOperations?: number) => {
+    const request = await runRequest(options);
+    if (maxEffectOperations !== undefined) {
+      request.bundle.limits = { ...request.bundle.limits, maxEffectOperations };
+      request.bundleHash = await canonicalSha256(request.bundle);
+    }
+    return (await createTaskHarnessRequest(request)).prompt;
+  };
+
+  it("lists the tasks it may start, and says no step's text may claim the started task ran", async () => {
+    const text = await prompt({});
+    expect(text).toContain("task.run starts one of these tasks after every other step has applied: fix, fix-ready.");
+    expect(text).toContain("no step's text may say the started task has run.");
+    expect(text).not.toContain("task.run is not available in this run");
+  });
+
+  it("says the step limit leaves out the task run, alone and alongside a message", async () => {
+    expect(await prompt({ effects: ["issue.comment.create", "task.run"] }, 1))
+      .toContain("This task may add at most 1 steps that change the repository, and one task.run in addition.");
+    expect(await prompt({ effects: ["issue.comment.create", "message.send", "task.run"] }, 1))
+      .toContain("This task may add at most 1 steps that change the repository, and one message.send and one task.run in addition.");
+  });
+
+  it("withholds task.run from a run at the depth limit", async () => {
+    const text = await prompt({ lineage: { parentRunId: "run:fix:1", depth: 3, rootAuthorId: "42" } });
+    expect(text).toContain("task.run is not available in this run");
+    expect(text).not.toContain("task.run starts one of these tasks");
   });
 });
 

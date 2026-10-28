@@ -551,7 +551,7 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
       ? `task.run is not available in this run: another run started it, and a chain of started runs may be at most ${TASK_RUN_MAX_DEPTH} deep.`
       : `task.run starts one of these tasks after every other step has applied: ${tasks.join(", ")}. At most once per run, and it must be the last step you add. `
         + "Its subject is this run's own issue or pull request, or a pull request this plan opens, named by referencing that pull_request.open step's pullNumber. "
-        + "It carries no instructions: the started task reads the issue or pull request itself. It publishes no outputs.");
+        + "It carries no instructions: the started task reads the issue or pull request itself. It publishes no outputs, and no step's text may say the started task has run.");
   }
   if (effects.some((kind) => kind === "issue.create" || kind.endsWith(".label.add"))) {
     notes.push("Labels must already exist in the repository; Gardener never creates a label.");
