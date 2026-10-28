@@ -23,7 +23,7 @@
     "gardener": "dist/cli.js"
   },
   "dependencies": {
-    "wrangler": "4.151.1",
+    "wrangler": "4.152.0",
     "yaml": "2.9.1"
   },
   "scripts": {

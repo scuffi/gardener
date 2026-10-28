@@ -24,11 +24,11 @@
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
-    "@cloudflare/workers-types": "5.20261018.1",
+    "@cloudflare/workers-types": "5.20261025.1",
     "typescript": "7.0.2",
     "vitepress": "1.6.4",
     "vitepress-plugin-llms": "1.14.0",
     "vitest": "5.0.5",
-    "wrangler": "4.151.1"
+    "wrangler": "4.152.0"
   }
 }
