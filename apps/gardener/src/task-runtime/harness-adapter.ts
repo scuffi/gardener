@@ -18,6 +18,10 @@ import {
   operationProposalPayloadJsonSchema,
   MESSAGE_SEND_KIND,
   messageSendPayloadJsonSchema,
+  isPlanFieldEffectKind,
+  TASK_RUN_KIND,
+  TASK_RUN_MAX_DEPTH,
+  taskRunPayloadJsonSchema,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
   threadOpenerLogin,
@@ -461,25 +465,36 @@ function renderTaskPrompt(request: TaskRunRequestV1): string {
       "Exact payloadJson contracts for the declared kinds follow. Use these field names and JSON types exactly.",
       "Fields listed in required are mandatory unless referencesJson supplies that exact JSON pointer.",
       "Never add schemaVersion, id, repository, kind, commit.create files, or commit.merge_base files and conflictedPaths; trusted Gardener code owns them.",
-      ...request.bundle.effects.map((kind) => `  ${kind}: ${kind === MESSAGE_SEND_KIND ? messageSendPayloadJsonSchema() : operationProposalPayloadJsonSchema(kind)}`),
+      ...request.bundle.effects.map((kind) => `  ${kind}: ${kind === MESSAGE_SEND_KIND
+        ? messageSendPayloadJsonSchema()
+        : kind === TASK_RUN_KIND ? taskRunPayloadJsonSchema() : operationProposalPayloadJsonSchema(kind)}`),
       "",
       "Outputs each kind publishes once it runs, which later steps may use through referencesJson, whole or as {{placeholders}} in text (nullable outputs cannot fill a placeholder):",
       ...request.bundle.effects
-        .filter((kind): kind is OperationKind => kind !== MESSAGE_SEND_KIND)
+        .filter((kind): kind is OperationKind => !isPlanFieldEffectKind(kind))
         .map((kind) => `  ${kind}: ${Object.entries(operationOutputCatalog[kind]).map(([name, type]) => `${name} (${type})`).join(", ")}`),
     ]),
     ...effectGuidance(request),
     ...(limits.maxEffectOperations === undefined
       ? []
-      // A message is not counted by the step limit, so say so where it applies.
-      : [request.bundle.effects.includes(MESSAGE_SEND_KIND)
-        ? `This task may add at most ${limits.maxEffectOperations} steps that change the repository, and one message.send in addition.`
-        : `This task may add at most ${limits.maxEffectOperations} steps.`]),
+      // Neither a message nor a task run is counted by the step limit, so say so where it applies.
+      : [stepLimitNote(request.bundle.effects, limits.maxEffectOperations)]),
     "",
     `runId=${request.runId}`,
     `taskId=${request.bundle.taskId}`,
     `bundleHash=${request.bundleHash}`,
   ].join("\n");
+}
+
+/** The step limit, naming the plan-field effects it does not count. */
+function stepLimitNote(effects: readonly string[], maxEffectOperations: number): string {
+  const extras = [
+    ...(effects.includes(MESSAGE_SEND_KIND) ? ["one message.send"] : []),
+    ...(effects.includes(TASK_RUN_KIND) ? ["one task.run"] : []),
+  ];
+  return extras.length === 0
+    ? `This task may add at most ${maxEffectOperations} steps.`
+    : `This task may add at most ${maxEffectOperations} steps that change the repository, and ${extras.join(" and ")} in addition.`;
 }
 
 /** The branches a branch-writing kind may name, stated next to the kind. */
@@ -528,6 +543,15 @@ function effectGuidance(request: TaskRunRequestV1): string[] {
         + "So write the summary as one line of plain text: a summary with a newline, <, >, & or a backtick is refused, and other markup and link-like text (including file names such as server.ts) are replaced with lookalike characters. "
         + "Nothing is sent if the subject changed after you read its updatedAt.",
     );
+  }
+  if (effects.includes(TASK_RUN_KIND)) {
+    const tasks = request.bundle.effectOptions?.[TASK_RUN_KIND]?.tasks ?? [];
+    const depth = request.lineage?.depth ?? 0;
+    notes.push(depth >= TASK_RUN_MAX_DEPTH
+      ? `task.run is not available in this run: another run started it, and a chain of started runs may be at most ${TASK_RUN_MAX_DEPTH} deep.`
+      : `task.run starts one of these tasks after every other step has applied: ${tasks.join(", ")}. At most once per run, and it must be the last step you add. `
+        + "Its subject is this run's own issue or pull request, or a pull request this plan opens, named by referencing that pull_request.open step's pullNumber. "
+        + "It carries no instructions: the started task reads the issue or pull request itself. It publishes no outputs, and no step's text may say the started task has run.");
   }
   if (effects.some((kind) => kind === "issue.create" || kind.endsWith(".label.add"))) {
     notes.push("Labels must already exist in the repository; Gardener never creates a label.");

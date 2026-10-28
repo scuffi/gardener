@@ -26,6 +26,15 @@ import {
   messageV1Schema,
   type MessageV1,
 } from "./messages";
+import {
+  TASK_RUN_KIND,
+  TASK_RUN_MAX_DEPTH,
+  TASK_RUN_MAX_TARGETS,
+  TASK_WORKFLOW_PATH_PATTERN,
+  taskRunPayloadV1Schema,
+  taskRunTargetV1Schema,
+  taskWorkflowPath,
+} from "./task-runs";
 
 const identifier = z.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/);
 const boundIdentifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
@@ -260,7 +269,16 @@ export const taskTriggerV1Schema = z.discriminatedUnion("kind", [
       "push branches must include at least one positive pattern",
     ),
   }),
-  z.strictObject({ kind: z.literal("github.workflow_dispatch") }),
+  z.strictObject({
+    kind: z.literal("github.workflow_dispatch"),
+    /**
+     * The resource a manual run is offered as a target, beside those the
+     * task's other triggers act on, so a task whose only trigger is manual (one
+     * another task starts with `task.run`) still takes an issue or pull
+     * request. Absent unless set, so other bundles hash as before.
+     */
+    subject: z.enum(["issue", "pull_request"]).optional(),
+  }),
   z.strictObject({ kind: z.literal("github.schedule"), cron: cronExpressionV1Schema }),
   authoredTrigger("github.discussion.created"),
   authoredTrigger("github.discussion.edited"),
@@ -354,14 +372,17 @@ export type DispatchTargetKindV1 = typeof dispatchTargetKindValues[number];
  * asked about, so it can be run by hand against one too.
  */
 export function dispatchTargetKinds(
-  triggers: readonly { kind: TaskTriggerKindV1 }[],
+  triggers: readonly ({ kind: TaskTriggerKindV1 } | { kind: TaskTriggerKindV1; subject?: string })[],
   options: { readonly pullRequestHead?: boolean } = {},
 ): DispatchTargetKindV1[] {
   const kinds = [...new Set(triggers.map((trigger) => trigger.kind))];
+  // `github.workflow_dispatch: { subject }` offers that kind whatever else the task triggers on.
+  const subjects = new Set(triggers.flatMap((trigger) => "subject" in trigger && typeof trigger.subject === "string" ? [trigger.subject] : []));
   const targets: DispatchTargetKindV1[] = [];
-  if (kinds.some((kind) => kind.startsWith("github.issue"))) targets.push("issue");
+  if (kinds.some((kind) => kind.startsWith("github.issue")) || subjects.has("issue")) targets.push("issue");
   if (kinds.some((kind) => kind.startsWith("github.pull_request"))
-    || (options.pullRequestHead === true && kinds.some((kind) => kind.startsWith("github.issue_comment")))) {
+    || (options.pullRequestHead === true && kinds.some((kind) => kind.startsWith("github.issue_comment")))
+    || subjects.has("pull_request")) {
     targets.push("pull_request");
   }
   return targets;
@@ -383,12 +404,18 @@ export type TaskToolV1 = z.infer<typeof taskToolV1Schema>;
 
 /**
  * What a task may declare in `effects:` and the model may propose: every
- * persistent provider operation, plus `message.send`, which compiles to the
- * plan's `messages` rather than to an operation. Plan operations stay
- * `operationKindValues`, so a message can never be smuggled in as an
- * operation, and every effects-to-permissions path must handle it explicitly.
+ * persistent provider operation, plus `message.send` and `task.run`, which
+ * compile to the plan's `messages` and `taskRuns` rather than to operations.
+ * Plan operations stay `operationKindValues`, so neither can be smuggled in as
+ * an operation, and every effects-to-permissions path must handle both
+ * explicitly.
  */
-export const taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND] as const;
+export const taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND, TASK_RUN_KIND] as const;
+
+/** The declarable effects that are not operations: they have plan fields of their own. */
+export function isPlanFieldEffectKind(kind: string): kind is typeof MESSAGE_SEND_KIND | typeof TASK_RUN_KIND {
+  return kind === MESSAGE_SEND_KIND || kind === TASK_RUN_KIND;
+}
 export const taskEffectKindV1Schema = z.enum(taskEffectKindValues);
 export type TaskEffectKindV1 = z.infer<typeof taskEffectKindV1Schema>;
 
@@ -514,6 +541,21 @@ export const taskModelIdSchema = z.string().min(1).max(256)
 const taskEffectOptionsV1Schema = z.strictObject({ branches: branchPatternsSchema });
 
 /**
+ * The tasks a `task.run` may start, by id. Sorted and unique, so listing them
+ * in another order does not change the bundle hash. Whether each is enrolled
+ * and dispatchable is decided by the Worker when the model proposes, from the
+ * repository's live tasks, never from this list alone.
+ */
+export const taskRunOptionsV1Schema = z.strictObject({
+  tasks: z.array(taskRunTargetV1Schema).min(1).max(TASK_RUN_MAX_TARGETS).superRefine((tasks, context) => {
+    if (tasks.some((task, index) => index > 0 && task <= tasks[index - 1]!)) {
+      context.addIssue({ code: "custom", message: "task.run tasks must be unique and sorted" });
+    }
+  }),
+});
+export type TaskRunOptionsV1 = z.infer<typeof taskRunOptionsV1Schema>;
+
+/**
  * Options on declared effects. Only the kinds that write to a branch take any,
  * and a kind without an entry keeps its defaults.
  */
@@ -523,6 +565,7 @@ export const taskEffectOptionsMapV1Schema = z.strictObject({
   "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
   "pull_request.open_draft": taskEffectOptionsV1Schema.optional(),
+  [TASK_RUN_KIND]: taskRunOptionsV1Schema.optional(),
 });
 export type TaskEffectOptionsMapV1 = z.infer<typeof taskEffectOptionsMapV1Schema>;
 
@@ -542,7 +585,7 @@ export type TaskBranchPatternsV1 = z.infer<typeof taskBranchPatternsV1Schema>;
 /** The branch patterns a bundle grants each branch-writing kind it declares with options. */
 export function bundleBranchPatterns(bundle: Pick<TaskBundleV1, "effectOptions">): TaskBranchPatternsV1 | undefined {
   const entries = Object.entries(bundle.effectOptions ?? {})
-    .flatMap(([kind, options]) => options === undefined ? [] : [[kind, options.branches] as const]);
+    .flatMap(([kind, options]) => options === undefined || !("branches" in options) ? [] : [[kind, options.branches] as const]);
   return entries.length === 0 ? undefined : Object.fromEntries(entries) as TaskBranchPatternsV1;
 }
 
@@ -626,6 +669,13 @@ export const taskBundleV1Schema = z.strictObject({
         context.addIssue({ code: "custom", path: ["effectOptions", kind], message: `options are given for ${kind}, which the task does not declare` });
       }
     }
+  }
+  // `task.run` names what it may start; without the list it could start nothing.
+  if (bundle.effects.includes(TASK_RUN_KIND) && bundle.effectOptions?.[TASK_RUN_KIND] === undefined) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND], message: "task.run must list the tasks it may start" });
+  }
+  if (bundle.effectOptions?.[TASK_RUN_KIND]?.tasks.includes(bundle.taskId)) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND, "tasks"], message: `task ${bundle.taskId} may not start itself with task.run` });
   }
   const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
   if (new Set(triggerKinds).size !== triggerKinds.length) {
@@ -1218,7 +1268,22 @@ export const taskRunRequestV1Schema = z.strictObject({
    * narrows the run's effect scope.
    */
   starter: taskRunStarterV1Schema.optional(),
+  /**
+   * Present when another run started this one with `task.run`: the Worker
+   * matched the dispatch against the lineage record that run left, and the
+   * starter above is the chain's root decision, inherited, never upgraded.
+   * Absent for a run a person or an event started, which is depth 0.
+   */
+  lineage: z.strictObject({
+    parentRunId: boundIdentifier,
+    depth: z.number().int().min(1).max(TASK_RUN_MAX_DEPTH),
+    /** The root starter's OIDC `actor_id`: every run of the chain counts against their `runs-per-author`. */
+    rootAuthorId: githubNumericId,
+  }).optional(),
 }).superRefine((request, context) => {
+  if (request.lineage !== undefined && request.starter === undefined) {
+    context.addIssue({ code: "custom", path: ["lineage"], message: "a started run carries the starter it inherited" });
+  }
   if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
     context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
   }
@@ -1572,6 +1637,34 @@ export const taskEffectProposalV1Schema = z.strictObject({
       for (const issue of parsed.error.issues) {
         context.addIssue({ code: "custom", path: ["payload", ...issue.path.map(String)], message: `${encodeJsonPointer(issue.path) || "payload"}: ${issue.message}` });
       }
+    }
+    return;
+  }
+  if (proposal.kind === TASK_RUN_KIND) {
+    // Its own contract too: a task id and one subject, never free text. The
+    // only reference it takes is the pull request an earlier step opens,
+    // whole, so nothing from an earlier step's text can reach the dispatch.
+    const parsed = taskRunPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue.path.map(String)], message: `${encodeJsonPointer(issue.path) || "payload"}: ${issue.message}` });
+      }
+    }
+    for (const pointer of Object.keys(proposal.references)) {
+      if (pointer !== "/pullNumber") {
+        context.addIssue({ code: "custom", path: ["references", pointer], message: "task.run takes only a /pullNumber reference" });
+      }
+    }
+    const reference = proposal.references["/pullNumber"];
+    if (reference !== undefined && (isTemplateReference(reference) || reference.output !== "pullNumber")) {
+      context.addIssue({ code: "custom", path: ["references", "/pullNumber"], message: "task.run /pullNumber must be the pullNumber output of an earlier pull_request.open step, whole" });
+    }
+    if (parsed.success && taskRunSubjectFromProposal(parsed.data, proposal.references) === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "task.run needs exactly one subject: issueNumber, pullNumber, or /pullNumber by reference to an earlier pull_request.open step",
+      });
     }
     return;
   }
@@ -2396,6 +2489,94 @@ export function messageTriggerScopeRefusal(
   return undefined;
 }
 
+/**
+ * What a `task.run` starts its task on: this run's own issue or pull request,
+ * by number, or a pull request this plan opens, by the step that opens it.
+ * Apply resolves the last to that step's `pullNumber` output.
+ */
+export const taskRunSubjectV1Schema = z.union([
+  z.strictObject({ kind: z.literal("issue"), issueNumber: z.number().int().positive() }),
+  z.strictObject({ kind: z.literal("pull_request"), pullNumber: z.number().int().positive() }),
+  z.strictObject({ kind: z.literal("pull_request"), openedBy: taskStepNameV1Schema }),
+]);
+export type TaskRunSubjectV1 = z.infer<typeof taskRunSubjectV1Schema>;
+
+/**
+ * The subject a valid `task.run` payload and its references name, or
+ * `undefined` when they name none or more than one.
+ */
+export function taskRunSubjectFromProposal(
+  payload: z.infer<typeof taskRunPayloadV1Schema>,
+  references: Readonly<Record<string, TaskStepReferenceV1>>,
+): TaskRunSubjectV1 | undefined {
+  const reference = references["/pullNumber"];
+  const named = [payload.issueNumber, payload.pullNumber, reference].filter((value) => value !== undefined);
+  if (named.length !== 1) return undefined;
+  if (payload.issueNumber !== undefined) return { kind: "issue", issueNumber: payload.issueNumber };
+  if (payload.pullNumber !== undefined) return { kind: "pull_request", pullNumber: payload.pullNumber };
+  return reference !== undefined && !isTemplateReference(reference) && reference.output === "pullNumber"
+    ? { kind: "pull_request", openedBy: reference.step }
+    : undefined;
+}
+
+/**
+ * Why a `task.run` may not start a task on this subject, or `undefined`.
+ * Whoever started the run, the subject is the run's own issue or pull
+ * request, matched by kind and number, or a pull request an earlier step of
+ * this plan opens. Kind is exact: the started run receives the number as that
+ * kind's dispatch input, and refuses a pull request named as an issue.
+ */
+export function taskRunSubjectRefusal(
+  subject: TaskRunSubjectV1,
+  resource: TaskEventResourceV1 | null,
+  earlier: ReadonlyMap<string, OperationKind>,
+): string | undefined {
+  if ("openedBy" in subject) {
+    const kind = earlier.get(subject.openedBy);
+    return kind !== undefined && createdResourceOutputs.pullNumber[kind] === "pullNumber"
+      ? undefined
+      : `task.run may name a pull request by reference only from an earlier pull_request.open or pull_request.open_draft step of this plan, and "${subject.openedBy}" is not one`;
+  }
+  const number = subject.kind === "issue" ? subject.issueNumber : subject.pullNumber;
+  if (resource === null) {
+    return "task.run starts a task on this run's own issue or pull request, and nothing triggered this run; it may still name a pull request this plan opens";
+  }
+  if (resource.kind !== subject.kind || resource.number !== number) {
+    return `task.run may start a task only on ${resourceLabel(resource)}, this run's own subject, or on a pull request this plan opens`;
+  }
+  return undefined;
+}
+
+/**
+ * One task the apply job starts after every operation applied. The Worker
+ * resolved the target against the repository's enrolled tasks and wrote its
+ * workflow path; nothing here came from the model except the task id, which
+ * the task declared, and the subject, checked above. There is no input,
+ * prompt or ref: apply builds the dispatch from these fields alone.
+ */
+export const taskRunV1Schema = z.strictObject({
+  task: taskRunTargetV1Schema,
+  workflowPath: z.string().regex(TASK_WORKFLOW_PATH_PATTERN),
+  subject: taskRunSubjectV1Schema,
+}).superRefine((run, context) => {
+  if (run.workflowPath !== taskWorkflowPath(run.task)) {
+    context.addIssue({ code: "custom", path: ["workflowPath"], message: `task ${run.task}'s workflow is ${taskWorkflowPath(run.task)}` });
+  }
+});
+export type TaskRunV1 = z.infer<typeof taskRunV1Schema>;
+
+/**
+ * The plan's task run for a valid `task.run` proposal. The workflow path is
+ * derived from the task id by the same rule `generate` names files with; the
+ * Worker has already resolved the id against the repository's enabled tasks.
+ */
+export function taskRunFromProposal(proposal: Pick<TaskEffectProposalV1, "payload" | "references">): TaskRunV1 {
+  const payload = taskRunPayloadV1Schema.parse(proposal.payload);
+  const subject = taskRunSubjectFromProposal(payload, proposal.references);
+  if (subject === undefined) throw new Error("task.run needs exactly one subject");
+  return taskRunV1Schema.parse({ task: payload.task, workflowPath: taskWorkflowPath(payload.task), subject });
+}
+
 export function taskEventBindingFromNormalizedEvent(event: NormalizedEventV1): TaskEventBindingV1 {
   const base = {
     kind: event.kind,
@@ -2593,6 +2774,20 @@ export function taskStepIssues(
   const issues: TaskStepIssueV1[] = [];
   // A message is checked by its own payload contract and takes no references.
   if (step.kind === MESSAGE_SEND_KIND) return issues;
+  // A task run takes one reference, to a pull request an earlier step opened.
+  if (step.kind === TASK_RUN_KIND) {
+    const reference = step.references["/pullNumber"];
+    if (reference !== undefined && !isTemplateReference(reference)) {
+      const kind = context.earlier.get(reference.step);
+      if (kind === undefined || createdResourceOutputs.pullNumber[kind] !== reference.output) {
+        issues.push({
+          path: ["references", "/pullNumber"],
+          message: `"${reference.step}" is not an earlier pull_request.open or pull_request.open_draft step of this plan`,
+        });
+      }
+    }
+    return issues;
+  }
   const resolvedTypes = new Map<string, OperationOutputType>();
   const outputKey = (output: TaskStepOutputRefV1) => `${output.step}\u0000${output.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -2698,6 +2893,14 @@ export const taskEffectPlanV1Schema = z.strictObject({
    * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
    */
   messages: z.array(messageV1Schema).min(1).max(1).optional(),
+  /**
+   * Tasks apply starts after every operation applied and the message, if any,
+   * was tried. At most one, and dispatched at most once: a rerun never
+   * dispatches again once apply reported it was about to. Absent for plans
+   * without one, so those hash as before, and always absent for task
+   * workflows whose apply predates it (see `planCarries`).
+   */
+  taskRuns: z.array(taskRunV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -2827,6 +3030,16 @@ export const taskEffectPlanV1Schema = z.strictObject({
       if (refusal !== undefined) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal });
     });
   }
+  // Whatever the scope: a started task runs on this run's own subject or a
+  // pull request this plan opens, and never on this task itself.
+  const kindsByStep = new Map(plan.operations.map((operation) => [operation.stepName, operation.kind] as const));
+  plan.taskRuns?.forEach((run, index) => {
+    if (run.task === plan.taskId) {
+      context.addIssue({ code: "custom", path: ["taskRuns", index, "task"], message: `task ${plan.taskId} may not start itself` });
+    }
+    const refusal = taskRunSubjectRefusal(run.subject, plan.event.resource, kindsByStep);
+    if (refusal !== undefined) context.addIssue({ code: "custom", path: ["taskRuns", index, "subject"], message: refusal });
+  });
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });

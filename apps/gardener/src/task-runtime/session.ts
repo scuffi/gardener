@@ -25,8 +25,10 @@ import {
   type RunnerTerminalV1,
 } from "@gardener/protocol";
 import {
+  TASK_RUN_KIND,
   taskCheckoutSha,
   taskEffectProposalV1Schema,
+  taskRunFromProposal,
   taskOutcomeV1Schema,
   taskRunRequestV1Schema,
   type TaskEffectProposalV1,
@@ -41,6 +43,7 @@ import { transportableError } from "./transportable-error";
 import {
   admitProposal,
   assertMonotonicReceipt,
+  assertTaskRunTransition,
   assertProposalFitsLedger,
   assertReceiptMatchesPlan,
   buildTaskEffectPlan,
@@ -87,8 +90,9 @@ import {
   type TaskSubmissionRecord,
 } from "./task-completion";
 import { UntrustedWorkflowError, verifyActionsOidc, type VerifiedActionsIdentity } from "./github-oidc";
-import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle } from "./task-bundles";
-import { proposalAuthorityRefusal } from "./proposal-authority";
+import { assertEnrollmentAdmitsEvent, loadEnabledTaskBundle, loadEnabledTaskById } from "./task-bundles";
+import { proposalAuthorityRefusal, taskRunTargetRefusal } from "./proposal-authority";
+import { dispatchSubject, lineageRecordFor, matchLineage, recordLineage } from "./task-lineage";
 import { assertRunnerToolBudget, remainingTaskRuntime, RUNNER_TOOL_BUDGET_EXHAUSTED } from "./task-limits";
 import { instrumentD1 } from "./d1-diagnostics";
 import {
@@ -102,6 +106,7 @@ import {
   CAPTURE_KEY,
   CAPTURE_PENDING_KEY,
   consumeOidcTokenIn,
+  isBotDispatch,
   toolAction,
   trustedStarter,
   type CapturePending,
@@ -555,6 +560,12 @@ export class TaskRunnerSession extends DurableObject<Env> {
       writtenMerge: await this.ctx.storage.get<{ baseSha: string }>(WRITTEN_MERGE_KEY),
     });
     if (refusal !== undefined) throw new Error(refusal);
+    if (proposal.kind === TASK_RUN_KIND) {
+      // Resolved against the repository's enabled tasks now, while the model
+      // can still change course, and again when apply reports it is dispatching.
+      const targetRefusal = await this.#taskRunTargetRefusal(request, proposal);
+      if (targetRefusal !== undefined) throw new Error(targetRefusal);
+    }
     // Proposals are model tool calls and share the one declared tool budget
     // with repository reads, so a task cannot buy extra turns by proposing.
     // Charging and appending are one transaction: a budget spent without a
@@ -901,6 +912,20 @@ export class TaskRunnerSession extends DurableObject<Env> {
       : null;
     if (existing && canonicalJson(existing) === canonicalJson(receipt)) return existing;
     if (existing) assertMonotonicReceipt(existing, receipt);
+    else assertTaskRunTransition(undefined, receipt.taskRuns?.[0]);
+    const dispatching = receipt.taskRuns?.[0];
+    if (dispatching?.status === "dispatching" && existing?.taskRuns === undefined) {
+      // Apply calls GitHub only once this returns. The target is resolved
+      // again (a sync may have disabled it since planning), and the lineage
+      // record the started run is admitted by is written first, so a crash
+      // before the receipt below leaves a record no dispatch used, which
+      // expires, rather than a dispatch nothing admits.
+      const request = taskRunRequestV1Schema.parse(JSON.parse(row.request_json));
+      const target = await loadEnabledTaskById(this.#db(), request.event.repository.id, dispatching.task);
+      const refusal = taskRunTargetRefusal(dispatching.task, target, dispatching.subject.kind);
+      if (refusal !== undefined) throw new Error(refusal);
+      await recordLineage(this.#db(), lineageRecordFor(request, dispatching, new Date()));
+    }
 
     const previous = row.effect_receipt_json;
     const update = await this.#db().prepare(
@@ -921,6 +946,21 @@ export class TaskRunnerSession extends DurableObject<Env> {
     await this.#db().prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,'effect.progress',?)")
       .bind(receipt.planRunId, JSON.stringify(receipt)).run();
     return receipt;
+  }
+
+  /**
+   * Why the task a `task.run` names cannot be started, from the enrolled
+   * state: it must be an enabled task of this repository whose workflow takes
+   * the subject as a dispatch input. A pull request the plan opens is always
+   * a pull request subject.
+   */
+  async #taskRunTargetRefusal(
+    request: TaskRunRequestV1,
+    proposal: Pick<TaskEffectProposalV1, "payload" | "references">,
+  ): Promise<string | undefined> {
+    const run = taskRunFromProposal(proposal);
+    const target = await loadEnabledTaskById(this.#db(), request.event.repository.id, run.task);
+    return taskRunTargetRefusal(run.task, target, run.subject.kind);
   }
 
   private async effectPlanBinding(planRunId: string, artifactSha256: string): Promise<{
@@ -1020,15 +1060,74 @@ export class TaskRunnerSession extends DurableObject<Env> {
     // Who started the run is decided once, here, from the signed identity and
     // the event, and frozen in the request. A persisted request keeps what it
     // has; one admitted before starters existed has none, which means untrusted.
-    const request = existing
+    let request = existing
       ? taskRunRequestV1Schema.parse(JSON.parse(existing.request_json))
       : withStarter(taskRunRequestV1Schema.parse(freshRequest), identity, runnerEvent);
     if (request.runId !== identity.sessionId || request.bundleHash !== bundleHash) {
       throw new Error("Persisted task request does not match the authenticated run");
     }
+    // A bot's manual run is another run's `task.run`, or nothing Gardener
+    // admits. Decided once, like the starter: a persisted request keeps its
+    // decision. A match replaces the bot starter with the chain's root
+    // decision, which can only be as narrow or narrower than the root's.
+    let lineageRefusal: string | undefined;
+    if (!existing && isBotDispatch(identity.hello.eventName, identity.actor.actorLogin)) {
+      const match = await matchLineage(this.#db(), {
+        repositoryId: identity.enrollment.repository_id,
+        githubRunId: identity.hello.runId,
+        taskId: bundle.taskId,
+        event: request.event,
+        now: new Date(),
+      });
+      if (match.matched) {
+        request = taskRunRequestV1Schema.parse({ ...request, starter: match.starter, lineage: match.lineage });
+      } else {
+        lineageRefusal = match.reason;
+      }
+    }
     await this.#db().prepare(
       "INSERT OR IGNORE INTO actions_task_runs (id,repository_id,github_run_id,github_run_attempt,phase,bundle_hash,request_json,status) VALUES (?,?,?,?,?,?,?,'admitted')",
     ).bind(identity.sessionId, identity.enrollment.repository_id, identity.hello.runId, identity.hello.runAttempt, identity.hello.phase, bundleHash, JSON.stringify(request)).run();
+    if (lineageRefusal !== undefined) {
+      // Loud: either a lineage record was lost (a bug) or something else in
+      // the repository dispatched a Gardener task with a workflow or App
+      // token. The run fails before the model, with an audit row and a
+      // message the plan job's summary shows.
+      const subject = dispatchSubject(request.event);
+      await this.#db().prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,'task.lineage_refused',?)")
+        .bind(request.runId, JSON.stringify({
+          task: bundle.taskId,
+          subject: subject === undefined ? null : `${subject.kind}:${subject.number}`,
+          actor: identity.actor.actorLogin,
+          reason: lineageRefusal,
+        })).run();
+      return this.#settleAndPersist(request, taskOutcomeV1Schema.parse({
+        schemaVersion: "gardener.task-outcome/v1",
+        runId: request.runId,
+        taskId: request.bundle.taskId,
+        bundleHash: request.bundleHash,
+        status: "failed",
+        error: {
+          code: "lineage.unmatched",
+          message: `Refused before the model: ${lineageRefusal}. A run dispatched by a bot is admitted only as one another Gardener task started with task.run; `
+            + "start it by hand with Run workflow, or check what in this repository dispatches Gardener workflows with a bot token",
+          retryable: false,
+        },
+      }), bundleHash, { skipped: "lineage_unmatched" });
+    }
+    if (!existing && request.lineage !== undefined) {
+      // The chain, in the started run's own record: who started it and how deep it is.
+      const subject = dispatchSubject(request.event);
+      await this.#db().prepare("INSERT INTO actions_task_audit (run_id,event,detail_json) VALUES (?,'task.lineage',?)")
+        .bind(request.runId, JSON.stringify({
+          parentRunId: request.lineage.parentRunId,
+          depth: request.lineage.depth,
+          task: bundle.taskId,
+          subject: subject === undefined ? null : `${subject.kind}:${subject.number}`,
+          trusted: request.starter?.trusted === true,
+          reason: request.starter?.reason ?? null,
+        })).run();
+    }
     if (existing?.outcome_json) {
       return (await this.settleTerminal(request, taskOutcomeV1Schema.parse(JSON.parse(existing.outcome_json)))).terminal;
     }
@@ -1061,7 +1160,9 @@ export class TaskRunnerSession extends DurableObject<Env> {
         runId: request.runId,
         repositoryId: request.event.repository.id,
         taskId: request.bundle.taskId,
-        authorId: request.event.actor.id,
+        // A started run counts against the chain's root author, so an
+        // outsider's daily runs bound the whole tree they cause.
+        authorId: request.lineage?.rootAuthorId ?? request.event.actor.id,
         trusted: request.starter?.trusted === true,
         limits: request.bundle.limits,
         now: new Date(),

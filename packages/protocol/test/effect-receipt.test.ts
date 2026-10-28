@@ -281,3 +281,38 @@ describe("message receipts", () => {
     expect(parses({ plannedOperations: 0, operations: [], status: "running", messages: [message()] })).toBe(false);
   });
 });
+
+describe("task run receipts", () => {
+  const applied = (taskRuns: unknown, overrides: Record<string, unknown> = {}) => ({
+    schemaVersion: "gardener.runner.effect-receipt/v1",
+    planRunId: "run:1",
+    bundleHash: "a".repeat(64),
+    artifactSha256: "b".repeat(64),
+    plannedOperations: 0,
+    status: "applied",
+    stoppedAtStep: null,
+    operations: [],
+    taskRuns,
+    ...overrides,
+  });
+  const run = (status: string, reason?: string) => ({
+    task: "fix", subject: { kind: "issue", number: 7 }, status, ...(reason ? { reason } : {}), attemptedAt,
+  });
+
+  it("answer a plan whose only effect is a task run, with a reason exactly when the outcome is unknown", () => {
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatching")])).success).toBe(true);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatched")])).success).toBe(true);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatch_unknown", "interrupted")])).success).toBe(true);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatch_unknown")])).success).toBe(false);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatched", "dispatch_failed")])).success).toBe(false);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied(undefined)).success).toBe(false);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatching"), run("dispatching")])).success).toBe(false);
+  });
+
+  it("appear only once every step applied", () => {
+    const step = { stepName: "comment", receipt: operationReceipt() };
+    expect(runnerEffectReceiptV1Schema.safeParse(applied(undefined, { plannedOperations: 2, status: "running", operations: [step] })).success).toBe(true);
+    expect(runnerEffectReceiptV1Schema.safeParse(applied([run("dispatching")], { plannedOperations: 2, status: "running", operations: [step] })).error?.issues[0]?.message)
+      .toBe("a task run is started only after every step applied");
+  });
+});

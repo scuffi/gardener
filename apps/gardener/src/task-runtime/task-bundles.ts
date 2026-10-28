@@ -49,3 +49,23 @@ export function assertEnrollmentAdmitsEvent(
     throw new Error(`Task ${enrollment.taskId} is a draft, so it runs only by hand and cannot run on ${kind}`);
   }
 }
+
+/**
+ * The bundle of this repository's enabled task `taskId`, or `undefined` when
+ * there is none (never synced, disabled, or removed by a later sync) or its
+ * stored bundle is not one this runtime reads. `task.run` resolves its target
+ * here, from enrolled state, never from anything the plan or model says.
+ */
+export async function loadEnabledTaskById(
+  db: D1Database,
+  repositoryId: string,
+  taskId: string,
+): Promise<TaskBundleV1 | undefined> {
+  const row = await db.prepare(
+    "SELECT b.bundle_json FROM actions_repository_tasks rt JOIN actions_task_bundles b ON b.bundle_hash=rt.bundle_hash " +
+    "WHERE rt.repository_id=? AND rt.task_id=? AND rt.enabled=1 ORDER BY rt.updated_at DESC LIMIT 1",
+  ).bind(repositoryId, taskId).first<{ bundle_json: string }>();
+  if (!row) return undefined;
+  const parsed = taskBundleV1Schema.safeParse(JSON.parse(row.bundle_json));
+  return parsed.success && parsed.data.taskId === taskId ? parsed.data : undefined;
+}

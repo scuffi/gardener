@@ -59,7 +59,7 @@ describe("message.send vocabulary", () => {
   it("is declarable and proposable, but never an operation kind", () => {
     expect(taskEffectKindValues).toContain("message.send");
     expect(operationKindValues).not.toContain("message.send");
-    expect(taskEffectKindValues).toEqual([...operationKindValues, "message.send"]);
+    expect(taskEffectKindValues).toEqual([...operationKindValues, "message.send", "task.run"]);
     expect(taskEffectPlanOperationV1Schema.safeParse({
       stepName: "notify", operationId: "op_1", kind: "message.send", payload: payload(), references: {}, rationale: "r",
     }).success).toBe(false);

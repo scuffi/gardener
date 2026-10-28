@@ -66,6 +66,7 @@ const FILTER_PROBES = {
   "opened-by": "[probe]",
   branches: "[main]",
   cron: "\"0 3 * * 1\"",
+  subject: "issue",
 } as const;
 type Filter = keyof typeof FILTER_PROBES;
 const FILTERS = Object.keys(FILTER_PROBES) as Filter[];
@@ -135,6 +136,8 @@ function renderEffects(): string {
   }
   // Not an operation: no write scope and no outputs. See "Messages".
   rows.push("| `message.send` | Post one message about an issue, pull request or discussion to the repository's chat space, after every other step applied. At most one per run. | none | none |");
+  // Not an operation either: see "Starting other tasks".
+  rows.push("| `task.run` | Start another task of this repository on this run's issue or pull request, or on a pull request the plan opens, after every other step applied. At most one per run, always the last step, never retried. | `actions` | none |");
   return rows.join("\n");
 }
 

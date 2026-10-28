@@ -88,14 +88,21 @@ export const TASK_WORKFLOWS_WITHOUT: Readonly<Record<PlanCapability, ReadonlySet
     ...beforeEffectScope,
     "5c9c136ffd6b2e545f398dc413a60e04b66da406", // 0.1.17
   ];
+  // 0.1.0–0.1.20: no `taskRuns` (0.1.20 reused 0.1.19's workflow).
+  const beforeTaskRuns = [
+    ...beforeMessages,
+    "e927a2a726ef283e60d32ad09efa7c2aea0b47eb", // 0.1.18
+    "0d02b66f47cc8802ba14a243dd827bf5555b3469", // 0.1.19 and 0.1.20
+  ];
   return {
     effectScope: new Set(beforeEffectScope),
     messages: new Set(beforeMessages),
+    taskRuns: new Set(beforeTaskRuns),
   };
 })();
 
 /** The optional plan fields an older release's apply bridge may not accept. */
-export type PlanCapability = "effectScope" | "messages";
+export type PlanCapability = "effectScope" | "messages" | "taskRuns";
 
 /** Whether a plan for a run of this task workflow may carry the capability's field. */
 export function planCarries(capability: PlanCapability, jobWorkflowRef: string): boolean {

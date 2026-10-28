@@ -6,16 +6,25 @@ import {
   commitBaseRefusal,
   impliedEffectKinds,
   isBranchWriteKind,
+  checksOutPullRequestHead,
+  dispatchTargetKinds,
+  isPlanFieldEffectKind,
   MESSAGE_SEND_KIND,
   messageFromSendPayload,
   messageSendPayloadV1Schema,
   messageTriggerScopeRefusal,
   normalizedPullRequest,
+  TASK_RUN_KIND,
+  TASK_RUN_MAX_DEPTH,
   taskCheckoutSha,
+  taskRunPayloadV1Schema,
+  taskRunSubjectFromProposal,
+  taskRunSubjectRefusal,
   taskEventBindingFromNormalizedEvent,
   triggeringPullRequestRefusal,
   triggerScopeRefusal,
   type OperationKind,
+  type TaskBundleV1,
   type TaskEffectProposalV1,
   type TaskEventResourceV1,
   type TaskRunRequestV1,
@@ -72,9 +81,71 @@ export function runTriggerScopeRefusal(
   return refusal === undefined ? undefined : `${refusal} (confined because ${triggerScopeReason(request)})`;
 }
 
-/** The steps that become operations: a message is never an earlier step anything can reference. */
+/** The steps that become operations: a message or task run is never an earlier step anything can reference. */
 export function operationSteps<Step extends Pick<TaskEffectProposalV1, "kind">>(steps: readonly Step[]): Step[] {
-  return steps.filter((step) => step.kind !== MESSAGE_SEND_KIND);
+  return steps.filter((step) => !isPlanFieldEffectKind(step.kind));
+}
+
+/**
+ * Why this run may not start this task, or `undefined`, from what the request
+ * alone decides. The target must be one the task declared and not the task
+ * itself; one per run; not from a run already at the deepest a chain may go;
+ * on this run's own subject or a pull request this plan opens; and only on a
+ * task workflow whose apply step can dispatch, since an older one would refuse
+ * the whole plan. Whether the target is an enabled task of this repository
+ * that takes the subject is `taskRunTargetRefusal`, which needs its bundle.
+ */
+export function taskRunProposalRefusal(
+  request: Pick<TaskRunRequestV1, "bundle" | "event" | "lineage">,
+  proposal: TaskEffectProposalV1,
+  earlier: readonly Pick<TaskEffectProposalV1, "stepName" | "kind">[],
+): string | undefined {
+  const workflowRef = request.event.workflow.jobWorkflowRef;
+  if (!planCarries("taskRuns", workflowRef)) return planCapabilityAdvice("task.run", workflowRef);
+  const previous = earlier.find((step) => step.kind === TASK_RUN_KIND);
+  if (previous !== undefined) {
+    return `A run starts at most one task, and step ${previous.stepName} already starts one`;
+  }
+  const depth = request.lineage?.depth ?? 0;
+  if (depth >= TASK_RUN_MAX_DEPTH) {
+    return `task.run is refused: this run was started by another at depth ${depth}, and a chain of started runs may be at most ${TASK_RUN_MAX_DEPTH} deep`;
+  }
+  const payload = taskRunPayloadV1Schema.safeParse(proposal.payload);
+  // The proposal contract has already refused a malformed payload.
+  if (!payload.success) return "task.run payload is not a valid task run";
+  const { task } = payload.data;
+  if (task === request.bundle.taskId) return `task.run may not start task ${task} itself`;
+  const declared = request.bundle.effectOptions?.[TASK_RUN_KIND]?.tasks ?? [];
+  if (!declared.includes(task)) {
+    return `Task did not declare ${task} under task.run; it may start ${declared.length === 0 ? "no task" : declared.join(", ")}`;
+  }
+  const subject = taskRunSubjectFromProposal(payload.data, proposal.references);
+  if (subject === undefined) return "task.run needs exactly one subject";
+  const kinds = new Map(operationSteps(earlier).map((step) => [step.stepName, step.kind as OperationKind] as const));
+  return taskRunSubjectRefusal(subject, taskEventBindingFromNormalizedEvent(request.event).resource, kinds);
+}
+
+/**
+ * Why the repository's enabled task `taskId`, whose bundle is `target` (or
+ * `undefined` when there is no such enabled task), cannot be started on a
+ * subject of this kind. The Worker resolves the target from the enrolled
+ * tasks, never from the plan, and its generated workflow must offer the
+ * subject as a dispatch input or the started run would refuse it.
+ */
+export function taskRunTargetRefusal(
+  taskId: string,
+  target: Pick<TaskBundleV1, "taskId" | "triggers" | "effectOptions" | "checkout" | "effects"> | undefined,
+  subjectKind: "issue" | "pull_request",
+): string | undefined {
+  if (target === undefined || target.taskId !== taskId) {
+    return `task.run cannot start ${taskId}: it is not an enabled task of this repository. Commit it under .gardener/tasks and let the sync enrol it`;
+  }
+  const offered = dispatchTargetKinds(target.triggers, { pullRequestHead: checksOutPullRequestHead(target) });
+  if (!offered.includes(subjectKind)) {
+    const input = subjectKind === "issue" ? "an issue" : "a pull request";
+    return `task.run cannot start ${taskId} on ${input}: its workflow takes no ${subjectKind} input. Give it a trigger on ${subjectKind === "issue" ? "issues" : "pull requests"}, or github.workflow_dispatch with subject: ${subjectKind}`;
+  }
+  return undefined;
 }
 
 /**
@@ -115,7 +186,7 @@ export interface ProposalWorkspaceState {
  * apply check the same rules again; this is only the earliest of the three.
  */
 export function proposalAuthorityRefusal(
-  request: Pick<TaskRunRequestV1, "bundle" | "event" | "starter">,
+  request: Pick<TaskRunRequestV1, "bundle" | "event" | "starter" | "lineage">,
   proposal: TaskEffectProposalV1,
   earlier: readonly TaskEffectProposalV1[],
   /** Omitted only by callers that check no working-tree state (the plan rechecks it). */
@@ -129,9 +200,17 @@ export function proposalAuthorityRefusal(
   if (implied !== undefined) {
     return `Labels on ${proposal.kind} need the ${implied} effect, which the task did not declare`;
   }
-  // A message is not an operation: none of the operation rules below apply,
-  // and it has its own.
+  // A started task runs once everything else applied, and nothing can be
+  // proposed after it: a later step that failed would stop the plan with the
+  // dispatch already out, and an earlier one that failed must stop it before.
+  const taskRun = earlier.find((step) => step.kind === TASK_RUN_KIND);
+  if (taskRun !== undefined) {
+    return `task.run must be the last step, and step ${taskRun.stepName} already starts a task; add ${proposal.kind} before it`;
+  }
+  // A message or task run is not an operation: none of the operation rules
+  // below apply, and each has its own.
   if (proposal.kind === MESSAGE_SEND_KIND) return messageProposalRefusal(request, proposal, earlier);
+  if (proposal.kind === TASK_RUN_KIND) return taskRunProposalRefusal(request, proposal, earlier);
   if (isBranchWriteKind(proposal.kind)) {
     const field = branchWriteFields[proposal.kind];
     const branch = (proposal.payload as Record<string, unknown>)[field];

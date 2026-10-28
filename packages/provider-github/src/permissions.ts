@@ -1,4 +1,4 @@
-import { MESSAGE_SEND_KIND, operationKindValues, type OperationKind, type TaskEffectKindV1 } from "@gardener/contracts";
+import { MESSAGE_SEND_KIND, TASK_RUN_KIND, operationKindValues, type OperationKind, type TaskEffectKindV1 } from "@gardener/contracts";
 
 /**
  * GitHub Actions `permissions:` keys Gardener can derive, rendered in this
@@ -180,11 +180,22 @@ export const MESSAGE_SEND_TOKEN_PERMISSIONS: readonly GitHubPermissionScope[] = 
 ]);
 
 /**
+ * What apply needs to start another task: `actions: write`, to create a
+ * `workflow_dispatch` event for that task's workflow. Reading the default
+ * branch it dispatches on needs only the metadata access every token has.
+ * Granted only to tasks that declare `task.run`, and job-wide: see SECURITY.md
+ * for what else the scope allows and why it is contained.
+ */
+export const TASK_RUN_TOKEN_PERMISSIONS: readonly GitHubPermissionScope[] = Object.freeze(["actions:write"]);
+
+/**
  * Scopes the apply job needs for one declared effect. Every effects-to-
- * permissions path goes through here, so `message.send`, which is not an
- * operation, is handled explicitly rather than by indexing the operation map.
+ * permissions path goes through here, so `message.send` and `task.run`, which
+ * are not operations, are handled explicitly rather than by indexing the
+ * operation map.
  */
 export function effectApplyPermissions(kind: TaskEffectKindV1): GitHubPermissions {
   if (kind === MESSAGE_SEND_KIND) return permissionsFromScopes(MESSAGE_SEND_TOKEN_PERMISSIONS);
+  if (kind === TASK_RUN_KIND) return permissionsFromScopes(TASK_RUN_TOKEN_PERMISSIONS);
   return operationApplyPermissions(kind);
 }

@@ -1073,14 +1073,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path3 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path4 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path3 && path3[0] !== "/") {
-          path3 = `/${path3}`;
+        if (path4 && path4[0] !== "/") {
+          path4 = `/${path4}`;
         }
-        return new URL(`${origin}${path3}`);
+        return new URL(`${origin}${path4}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1531,39 +1531,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path: path4, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path3);
+        debuglog("sending request to %s %s/%s", method, origin, path4);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path: path4, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path3,
+          path4,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path: path4, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path3);
+        debuglog("trailers received from %s %s/%s", method, origin, path4);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path: path4, origin },
           error: error63
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path3,
+          path4,
           error63.message
         );
       });
@@ -1612,9 +1612,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path3, origin }
+            request: { method, path: path4, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path3);
+          debuglog("sending request to %s %s/%s", method, origin, path4);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1677,7 +1677,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request2 = class {
       constructor(origin, {
-        path: path3,
+        path: path4,
         method,
         body: body2,
         headers,
@@ -1692,11 +1692,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path3 !== "string") {
+        if (typeof path4 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path4[0] !== "/" && !(path4.startsWith("http://") || path4.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path3)) {
+        } else if (invalidPathRegex.test(path4)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1762,7 +1762,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path3, query) : path3;
+        this.path = query ? buildURL(path4, query) : path4;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6391,7 +6391,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path3, host, upgrade, blocking, reset } = request;
+      const { method, path: path4, host, upgrade, blocking, reset } = request;
       let { body: body2, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util.isFormDataLike(body2)) {
@@ -6466,7 +6466,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path3} HTTP/1.1\r
+      let header = `${method} ${path4} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6992,7 +6992,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path4, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body: body2 } = request;
       if (upgrade) {
         util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -7059,7 +7059,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path3;
+      headers[HTTP2_HEADER_PATH] = path4;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
@@ -7412,9 +7412,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path3 = search ? `${pathname}${search}` : pathname;
+        const path4 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path3;
+        this.opts.path = path4;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8649,10 +8649,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path3 = "/",
+          path: path4 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path3;
+        opts.path = origin + path4;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -10624,20 +10624,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path3) {
-      if (typeof path3 !== "string") {
-        return path3;
+    function safeUrl(path4) {
+      if (typeof path4 !== "string") {
+        return path4;
       }
-      const pathSegments = path3.split("?");
+      const pathSegments = path4.split("?");
       if (pathSegments.length !== 2) {
-        return path3;
+        return path4;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path3, method, body: body2, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path3);
+    function matchKey(mockDispatch2, { path: path4, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path4);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10659,7 +10659,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path4 }) => matchValue(safeUrl(path4), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10697,9 +10697,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path3, method, body: body2, headers, query } = opts;
+      const { path: path4, method, body: body2, headers, query } = opts;
       return {
-        path: path3,
+        path: path4,
         method,
         body: body2,
         headers,
@@ -11162,10 +11162,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path4, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path3,
+            Path: path4,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -16046,9 +16046,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path3) {
-      for (let i = 0; i < path3.length; ++i) {
-        const code2 = path3.charCodeAt(i);
+    function validateCookiePath(path4) {
+      for (let i = 0; i < path4.length; ++i) {
+        const code2 = path4.charCodeAt(i);
         if (code2 < 32 || // exclude CTLs (0-31)
         code2 > 126 || // exclude DEL and non-ascii
         code2 === 59) {
@@ -18890,11 +18890,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path3 = opts.path;
+          let path4 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path3 = `/${path3}`;
+            path4 = `/${path4}`;
           }
-          url2 = new URL(util.parseOrigin(url2).origin + path3);
+          url2 = new URL(util.parseOrigin(url2).origin + path4);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -20304,7 +20304,7 @@ function getIDToken(aud) {
 // src/effects-main.ts
 var import_node_crypto4 = require("node:crypto");
 var import_promises3 = require("node:fs/promises");
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -21123,10 +21123,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path4) {
+  if (!path4)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path4.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -21466,11 +21466,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path4, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path4);
     return iss;
   });
 }
@@ -21932,16 +21932,16 @@ function flattenError(error63, mapper = (issue3) => issue3.message) {
 }
 function formatError(error63, mapper = (issue3) => issue3.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error64, path3 = []) => {
+  const processError = (error64, path4 = []) => {
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path4, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else {
-        const fullpath = [...path3, ...issue3.path];
+        const fullpath = [...path4, ...issue3.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue3));
         } else {
@@ -21980,17 +21980,17 @@ function formatError(error63, mapper = (issue3) => issue3.message) {
 }
 function treeifyError(error63, mapper = (issue3) => issue3.message) {
   const result = { errors: [] };
-  const processError = (error64, path3 = []) => {
+  const processError = (error64, path4 = []) => {
     var _a3;
     for (const issue3 of error64.issues) {
       if (issue3.code === "invalid_union" && issue3.errors.length) {
-        issue3.errors.map((issues) => processError({ issues }, [...path3, ...issue3.path]));
+        issue3.errors.map((issues) => processError({ issues }, [...path4, ...issue3.path]));
       } else if (issue3.code === "invalid_key") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else if (issue3.code === "invalid_element") {
-        processError({ issues: issue3.issues }, [...path3, ...issue3.path]);
+        processError({ issues: issue3.issues }, [...path4, ...issue3.path]);
       } else {
-        const fullpath = [...path3, ...issue3.path];
+        const fullpath = [...path4, ...issue3.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue3));
           continue;
@@ -22029,8 +22029,8 @@ function treeifyError(error63, mapper = (issue3) => issue3.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path3) {
+  const path4 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path4) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -39168,13 +39168,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path3 = ref.slice(1).split("/").filter(Boolean);
-  if (path3.length === 0) {
+  const path4 = ref.slice(1).split("/").filter(Boolean);
+  if (path4.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path3[0] === defsKey) {
-    const key = path3[1] === void 0 ? void 0 : decodeJSONPointerSegment(path3[1]);
+  if (path4[0] === defsKey) {
+    const key = path4[1] === void 0 ? void 0 : decodeJSONPointerSegment(path4[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -40102,7 +40102,7 @@ var branchNameSchema = external_exports.string().trim().min(1).max(255).refine(i
 var operationIdSchema = external_exports.string().regex(/^[A-Za-z0-9:_-]{1,255}$/);
 var COMMIT_FILE_LIMIT = 1e3;
 var commitFilePathSchema = external_exports.string().min(1).max(1024).refine(
-  (path3) => !path3.startsWith("/") && !path3.endsWith("/") && !path3.includes("\\") && path3.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "invalid repository path"
 );
 var commitFileSchema = external_exports.object({
@@ -40543,6 +40543,28 @@ function messageSubjectNumber(subject2) {
   return subject2.kind === "issue" ? subject2.issueNumber : subject2.kind === "pull_request" ? subject2.pullNumber : subject2.discussionNumber;
 }
 
+// ../contracts/src/task-runs.ts
+var TASK_RUN_KIND = "task.run";
+var TASK_RUN_MAX_DEPTH = 3;
+var TASK_RUN_MAX_TARGETS = 20;
+var taskIdPattern = /^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/;
+var taskRunTargetV1Schema = external_exports.string().regex(taskIdPattern, "expected a task id");
+function workflowSlug(taskId) {
+  return taskId.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function taskWorkflowPath(taskId) {
+  return `.github/workflows/gardener-${workflowSlug(taskId)}.yml`;
+}
+var TASK_WORKFLOW_PATH_PATTERN = /^\.github\/workflows\/gardener-[a-z0-9][a-z0-9-]*\.ya?ml$/;
+var subjectNumber2 = external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+var taskRunPayloadV1Schema = external_exports.strictObject({
+  task: taskRunTargetV1Schema.describe("The id of a task this task declares under task.run. Never this task itself."),
+  issueNumber: subjectNumber2.optional().describe("This run's own issue. Give exactly one of issueNumber and pullNumber."),
+  pullNumber: subjectNumber2.optional().describe(
+    "This run's own pull request, or omit it and fill /pullNumber by reference from an earlier pull_request.open step of this plan."
+  )
+});
+
 // ../contracts/src/branches.ts
 var branchWriteFields = {
   "branch.create": "branch",
@@ -40647,7 +40669,7 @@ var sha1 = external_exports.string().regex(/^[a-f0-9]{40}$/);
 var sha256 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var repositoryFullName = external_exports.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).max(201);
 var relativePath = external_exports.string().min(1).max(1024).refine(
-  (path3) => !path3.startsWith("/") && !path3.endsWith("/") && !path3.includes("\\") && path3.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
+  (path4) => !path4.startsWith("/") && !path4.endsWith("/") && !path4.includes("\\") && path4.split("/").every((component) => component.length > 0 && component !== "." && component !== ".."),
   "expected a normalized repository-relative POSIX path"
 );
 var taskLabelFilterV1Schema = external_exports.array(external_exports.string().trim().min(1).max(100)).max(20).default([]);
@@ -40784,7 +40806,16 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
       "push branches must include at least one positive pattern"
     )
   }),
-  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") }),
+  external_exports.strictObject({
+    kind: external_exports.literal("github.workflow_dispatch"),
+    /**
+     * The resource a manual run is offered as a target, beside those the
+     * task's other triggers act on, so a task whose only trigger is manual (one
+     * another task starts with `task.run`) still takes an issue or pull
+     * request. Absent unless set, so other bundles hash as before.
+     */
+    subject: external_exports.enum(["issue", "pull_request"]).optional()
+  }),
   external_exports.strictObject({ kind: external_exports.literal("github.schedule"), cron: cronExpressionV1Schema }),
   authoredTrigger("github.discussion.created"),
   authoredTrigger("github.discussion.edited"),
@@ -40844,7 +40875,7 @@ var taskToolV1Schema = external_exports.enum([
    */
   "repository.merge_base"
 ]);
-var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND];
+var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND, TASK_RUN_KIND];
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
@@ -40906,12 +40937,20 @@ var taskModelIdSchema = external_exports.string().min(1).max(256).regex(/^[A-Za-
   "model path segments must be non-empty and cannot be . or .."
 ).refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
 var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branchPatternsSchema });
+var taskRunOptionsV1Schema = external_exports.strictObject({
+  tasks: external_exports.array(taskRunTargetV1Schema).min(1).max(TASK_RUN_MAX_TARGETS).superRefine((tasks, context) => {
+    if (tasks.some((task, index) => index > 0 && task <= tasks[index - 1])) {
+      context.addIssue({ code: "custom", message: "task.run tasks must be unique and sorted" });
+    }
+  })
+});
 var taskEffectOptionsMapV1Schema = external_exports.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
   "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
-  "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
+  "pull_request.open_draft": taskEffectOptionsV1Schema.optional(),
+  [TASK_RUN_KIND]: taskRunOptionsV1Schema.optional()
 });
 var taskBranchPatternsV1Schema = external_exports.strictObject({
   "branch.create": branchPatternsSchema.optional(),
@@ -40993,6 +41032,12 @@ var taskBundleV1Schema = external_exports.strictObject({
         context.addIssue({ code: "custom", path: ["effectOptions", kind], message: `options are given for ${kind}, which the task does not declare` });
       }
     }
+  }
+  if (bundle.effects.includes(TASK_RUN_KIND) && bundle.effectOptions?.[TASK_RUN_KIND] === void 0) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND], message: "task.run must list the tasks it may start" });
+  }
+  if (bundle.effectOptions?.[TASK_RUN_KIND]?.tasks.includes(bundle.taskId)) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND, "tasks"], message: `task ${bundle.taskId} may not start itself with task.run` });
   }
   const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
   if (new Set(triggerKinds).size !== triggerKinds.length) {
@@ -41399,8 +41444,23 @@ var taskRunRequestV1Schema = external_exports.strictObject({
    * before it existed still parses; absent means untrusted, which only
    * narrows the run's effect scope.
    */
-  starter: taskRunStarterV1Schema.optional()
+  starter: taskRunStarterV1Schema.optional(),
+  /**
+   * Present when another run started this one with `task.run`: the Worker
+   * matched the dispatch against the lineage record that run left, and the
+   * starter above is the chain's root decision, inherited, never upgraded.
+   * Absent for a run a person or an event started, which is depth 0.
+   */
+  lineage: external_exports.strictObject({
+    parentRunId: boundIdentifier,
+    depth: external_exports.number().int().min(1).max(TASK_RUN_MAX_DEPTH),
+    /** The root starter's OIDC `actor_id`: every run of the chain counts against their `runs-per-author`. */
+    rootAuthorId: githubNumericId
+  }).optional()
 }).superRefine((request, context) => {
+  if (request.lineage !== void 0 && request.starter === void 0) {
+    context.addIssue({ code: "custom", path: ["lineage"], message: "a started run carries the starter it inherited" });
+  }
   if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
     context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
   }
@@ -41594,8 +41654,8 @@ var taskStepReferencesV1Schema = external_exports.record(taskPayloadPointerV1Sch
 function decodeJsonPointer(pointer) {
   return pointer.split("/").slice(1).map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
 }
-function encodeJsonPointer(path3) {
-  return path3.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
+function encodeJsonPointer(path4) {
+  return path4.map((segment) => `/${String(segment).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
 }
 var taskEffectProposalV1Schema = external_exports.strictObject({
   stepName: taskStepNameV1Schema,
@@ -41613,6 +41673,31 @@ var taskEffectProposalV1Schema = external_exports.strictObject({
       for (const issue3 of parsed.error.issues) {
         context.addIssue({ code: "custom", path: ["payload", ...issue3.path.map(String)], message: `${encodeJsonPointer(issue3.path) || "payload"}: ${issue3.message}` });
       }
+    }
+    return;
+  }
+  if (proposal.kind === TASK_RUN_KIND) {
+    const parsed = taskRunPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue3 of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue3.path.map(String)], message: `${encodeJsonPointer(issue3.path) || "payload"}: ${issue3.message}` });
+      }
+    }
+    for (const pointer of Object.keys(proposal.references)) {
+      if (pointer !== "/pullNumber") {
+        context.addIssue({ code: "custom", path: ["references", pointer], message: "task.run takes only a /pullNumber reference" });
+      }
+    }
+    const reference = proposal.references["/pullNumber"];
+    if (reference !== void 0 && (isTemplateReference(reference) || reference.output !== "pullNumber")) {
+      context.addIssue({ code: "custom", path: ["references", "/pullNumber"], message: "task.run /pullNumber must be the pullNumber output of an earlier pull_request.open step, whole" });
+    }
+    if (parsed.success && taskRunSubjectFromProposal(parsed.data, proposal.references) === void 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "task.run needs exactly one subject: issueNumber, pullNumber, or /pullNumber by reference to an earlier pull_request.open step"
+      });
     }
     return;
   }
@@ -41775,8 +41860,8 @@ var protectedCapturePaths = [
   ".github/dependabot.yaml",
   "docs/CODEOWNERS"
 ];
-function isProtectedCapturePath(path3) {
-  const normalized = path3.toLowerCase();
+function isProtectedCapturePath(path4) {
+  const normalized = path4.toLowerCase();
   if (protectedCapturePaths.some((protectedPath) => normalized === protectedPath.toLowerCase())) return true;
   return protectedCapturePathPrefixes.some((prefix) => {
     const lowered = prefix.toLowerCase();
@@ -42051,6 +42136,42 @@ function messageTriggerScopeRefusal(subject2, resource) {
   }
   return void 0;
 }
+var taskRunSubjectV1Schema = external_exports.union([
+  external_exports.strictObject({ kind: external_exports.literal("issue"), issueNumber: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), pullNumber: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), openedBy: taskStepNameV1Schema })
+]);
+function taskRunSubjectFromProposal(payload, references) {
+  const reference = references["/pullNumber"];
+  const named = [payload.issueNumber, payload.pullNumber, reference].filter((value) => value !== void 0);
+  if (named.length !== 1) return void 0;
+  if (payload.issueNumber !== void 0) return { kind: "issue", issueNumber: payload.issueNumber };
+  if (payload.pullNumber !== void 0) return { kind: "pull_request", pullNumber: payload.pullNumber };
+  return reference !== void 0 && !isTemplateReference(reference) && reference.output === "pullNumber" ? { kind: "pull_request", openedBy: reference.step } : void 0;
+}
+function taskRunSubjectRefusal(subject2, resource, earlier) {
+  if ("openedBy" in subject2) {
+    const kind = earlier.get(subject2.openedBy);
+    return kind !== void 0 && createdResourceOutputs.pullNumber[kind] === "pullNumber" ? void 0 : `task.run may name a pull request by reference only from an earlier pull_request.open or pull_request.open_draft step of this plan, and "${subject2.openedBy}" is not one`;
+  }
+  const number4 = subject2.kind === "issue" ? subject2.issueNumber : subject2.pullNumber;
+  if (resource === null) {
+    return "task.run starts a task on this run's own issue or pull request, and nothing triggered this run; it may still name a pull request this plan opens";
+  }
+  if (resource.kind !== subject2.kind || resource.number !== number4) {
+    return `task.run may start a task only on ${resourceLabel(resource)}, this run's own subject, or on a pull request this plan opens`;
+  }
+  return void 0;
+}
+var taskRunV1Schema = external_exports.strictObject({
+  task: taskRunTargetV1Schema,
+  workflowPath: external_exports.string().regex(TASK_WORKFLOW_PATH_PATTERN),
+  subject: taskRunSubjectV1Schema
+}).superRefine((run, context) => {
+  if (run.workflowPath !== taskWorkflowPath(run.task)) {
+    context.addIssue({ code: "custom", path: ["workflowPath"], message: `task ${run.task}'s workflow is ${taskWorkflowPath(run.task)}` });
+  }
+});
 function taskEventBindingFromNormalizedEvent(event) {
   const base = {
     kind: event.kind,
@@ -42125,15 +42246,15 @@ var taskEffectPlanOperationV1Schema = external_exports.strictObject({
   rationale: external_exports.string().trim().min(1).max(5e3)
 });
 var EFFECT_TRANSPORT_MAX_BYTES = 4 * 1024 * 1024;
-function referencedOutputType(reference, stepName2, context, path3, issues) {
+function referencedOutputType(reference, stepName2, context, path4, issues) {
   if (reference.step === stepName2) {
-    issues.push({ path: path3, message: "a step cannot reference its own output" });
+    issues.push({ path: path4, message: "a step cannot reference its own output" });
     return void 0;
   }
   const targetKind = context.earlier.get(reference.step);
   if (targetKind === void 0) {
     issues.push({
-      path: path3,
+      path: path4,
       message: context.later?.has(reference.step) ? `step "${reference.step}" does not run before this step` : `unknown step "${reference.step}"`
     });
     return void 0;
@@ -42141,7 +42262,7 @@ function referencedOutputType(reference, stepName2, context, path3, issues) {
   const outputType = operationOutputType(targetKind, reference.output);
   if (outputType === void 0) {
     issues.push({
-      path: path3,
+      path: path4,
       message: `${targetKind} does not publish a scalar output named "${reference.output}"; it publishes ${operationOutputNames(targetKind).map((name2) => `"${name2}"`).join(", ")}`
     });
   }
@@ -42150,15 +42271,28 @@ function referencedOutputType(reference, stepName2, context, path3, issues) {
 function taskStepIssues(step, context) {
   const issues = [];
   if (step.kind === MESSAGE_SEND_KIND) return issues;
+  if (step.kind === TASK_RUN_KIND) {
+    const reference = step.references["/pullNumber"];
+    if (reference !== void 0 && !isTemplateReference(reference)) {
+      const kind = context.earlier.get(reference.step);
+      if (kind === void 0 || createdResourceOutputs.pullNumber[kind] !== reference.output) {
+        issues.push({
+          path: ["references", "/pullNumber"],
+          message: `"${reference.step}" is not an earlier pull_request.open or pull_request.open_draft step of this plan`
+        });
+      }
+    }
+    return issues;
+  }
   const resolvedTypes = /* @__PURE__ */ new Map();
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
     for (const { placeholder, output: reference_ } of referenceOutputs(reference)) {
-      const path3 = placeholder === void 0 ? ["references", pointer] : ["references", pointer, "placeholders", placeholder];
-      const outputType = referencedOutputType(reference_, step.stepName, context, path3, issues);
+      const path4 = placeholder === void 0 ? ["references", pointer] : ["references", pointer, "placeholders", placeholder];
+      const outputType = referencedOutputType(reference_, step.stepName, context, path4, issues);
       if (outputType === void 0) continue;
       if (placeholder !== void 0 && outputType === "nullableGithubId") {
-        issues.push({ path: path3, message: `"${reference_.output}" may be null and cannot fill a placeholder` });
+        issues.push({ path: path4, message: `"${reference_.output}" may be null and cannot fill a placeholder` });
         continue;
       }
       resolvedTypes.set(outputKey(reference_), outputType);
@@ -42244,6 +42378,14 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
    */
   messages: external_exports.array(messageV1Schema).min(1).max(1).optional(),
+  /**
+   * Tasks apply starts after every operation applied and the message, if any,
+   * was tried. At most one, and dispatched at most once: a rerun never
+   * dispatches again once apply reported it was about to. Absent for plans
+   * without one, so those hash as before, and always absent for task
+   * workflows whose apply predates it (see `planCarries`).
+   */
+  taskRuns: external_exports.array(taskRunV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -42356,6 +42498,14 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       if (refusal !== void 0) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal });
     });
   }
+  const kindsByStep = new Map(plan.operations.map((operation) => [operation.stepName, operation.kind]));
+  plan.taskRuns?.forEach((run, index) => {
+    if (run.task === plan.taskId) {
+      context.addIssue({ code: "custom", path: ["taskRuns", index, "task"], message: `task ${plan.taskId} may not start itself` });
+    }
+    const refusal = taskRunSubjectRefusal(run.subject, plan.event.resource, kindsByStep);
+    if (refusal !== void 0) context.addIssue({ code: "custom", path: ["taskRuns", index, "subject"], message: refusal });
+  });
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
@@ -42908,6 +43058,20 @@ var runnerMessageReceiptV1Schema = external_exports.strictObject({
     context.addIssue({ code: "custom", path: ["transport"], message: "only a skipped message has no transport" });
   }
 });
+var runnerTaskRunReceiptV1Schema = external_exports.strictObject({
+  task: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(["issue", "pull_request"]),
+    number: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  }),
+  status: external_exports.enum(["dispatching", "dispatched", "dispatch_unknown"]),
+  reason: external_exports.enum(["dispatch_refused", "dispatch_failed", "interrupted"]).optional(),
+  attemptedAt: external_exports.iso.datetime()
+}).superRefine((receipt, context) => {
+  if (receipt.status === "dispatch_unknown" !== (receipt.reason !== void 0)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "only a dispatch_unknown task run has a reason" });
+  }
+});
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
   planRunId: identifier2,
@@ -42935,16 +43099,24 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
    * applied, so only on an applied receipt. A plan whose only effect is a
    * message has no operations, which is the one receipt with none.
    */
-  messages: external_exports.array(runnerMessageReceiptV1Schema).min(1).max(1).optional()
+  messages: external_exports.array(runnerMessageReceiptV1Schema).min(1).max(1).optional(),
+  /**
+   * The plan's task run, once apply reached it: like the message, only after
+   * every operation applied, so only on an applied receipt.
+   */
+  taskRuns: external_exports.array(runnerTaskRunReceiptV1Schema).min(1).max(1).optional()
 }).superRefine((receipt, context) => {
   if (receipt.plannedOperations > 0 && receipt.operations.length === 0) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a receipt for a plan with steps records at least one" });
   }
-  if (receipt.plannedOperations === 0 && receipt.messages === void 0) {
-    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message" });
+  if (receipt.plannedOperations === 0 && receipt.messages === void 0 && receipt.taskRuns === void 0) {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message or task run" });
   }
   if (receipt.messages !== void 0 && receipt.status !== "applied") {
     context.addIssue({ code: "custom", path: ["messages"], message: "a message is tried only after every step applied" });
+  }
+  if (receipt.taskRuns !== void 0 && receipt.status !== "applied") {
+    context.addIssue({ code: "custom", path: ["taskRuns"], message: "a task run is started only after every step applied" });
   }
   const bytes = canonicalJsonByteLength2(receipt);
   if (bytes === null) {
@@ -43159,8 +43331,8 @@ var streamImpl = {
   createReadableStreamHook: streamNotLoaded
 };
 var StubHook = class {
-  stream(path3, args) {
-    let hook = this.call(path3, args);
+  stream(path4, args) {
+    let hook = this.call(path4, args);
     let pulled;
     try {
       pulled = hook.pull();
@@ -43185,15 +43357,15 @@ var ErrorStubHook = class extends StubHook {
     super();
     this.error = error63;
   }
-  call(path3, args) {
+  call(path4, args) {
     args.dispose();
     return this;
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return this;
   }
-  get(path3) {
+  get(path4) {
     return this;
   }
   dup() {
@@ -43215,8 +43387,8 @@ var ErrorStubHook = class extends StubHook {
   }
 };
 var DISPOSED_HOOK = new ErrorStubHook(/* @__PURE__ */ new Error("Attempted to use RPC stub after it has been disposed."));
-var doCall = (hook, path3, params) => {
-  return hook.call(path3, params);
+var doCall = (hook, path4, params) => {
+  return hook.call(path4, params);
 };
 function withCallInterceptor(interceptor, callback) {
   let oldValue = doCall;
@@ -43811,10 +43983,10 @@ var RpcPayload = class RpcPayload2 {
     }
   }
 };
-function followPath(value, parent, path3, owner) {
-  for (let i = 0; i < path3.length; i++) {
+function followPath(value, parent, path4, owner) {
+  for (let i = 0; i < path4.length; i++) {
     parent = value;
-    let part = path3[i];
+    let part = path4[i];
     if (part in Object.prototype) {
       value = void 0;
       continue;
@@ -43840,7 +44012,7 @@ function followPath(value, parent, path3, owner) {
         let { hook, pathIfPromise } = unwrapStubAndPath(value);
         return {
           hook,
-          remainingPath: pathIfPromise ? pathIfPromise.concat(path3.slice(i)) : path3.slice(i)
+          remainingPath: pathIfPromise ? pathIfPromise.concat(path4.slice(i)) : path4.slice(i)
         };
       }
       case "writable":
@@ -43867,8 +44039,8 @@ function followPath(value, parent, path3, owner) {
       case "unsupported":
         if (i === 0) throw new TypeError(`RPC stub points at a non-serializable type.`);
         else {
-          let prefix = path3.slice(0, i).join(".");
-          let remainder = path3.slice(0, i).join(".");
+          let prefix = path4.slice(0, i).join(".");
+          let remainder = path4.slice(0, i).join(".");
           throw new TypeError(`'${prefix}' is not a serializable type, so property ${remainder} cannot be accessed.`);
         }
       default:
@@ -43889,11 +44061,11 @@ function followPath(value, parent, path3, owner) {
   };
 }
 var ValueStubHook = class extends StubHook {
-  call(path3, args) {
+  call(path4, args) {
     let followResult;
     try {
       let { value, owner } = this.getValue();
-      followResult = followPath(value, void 0, path3, owner);
+      followResult = followPath(value, void 0, path4, owner);
     } catch (err) {
       args.dispose();
       return new ErrorStubHook(err);
@@ -43901,18 +44073,18 @@ var ValueStubHook = class extends StubHook {
     if (followResult.hook) return followResult.hook.call(followResult.remainingPath, args);
     if (typeof followResult.value != "function") {
       args.dispose();
-      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path3.join(".")}' is not a function.`));
+      return new ErrorStubHook(/* @__PURE__ */ new TypeError(`'${path4.join(".")}' is not a function.`));
     }
     return new PromiseStubHook(args.deliverCall(followResult.value, followResult.parent).then((payload) => {
       return new PayloadStubHook(payload);
     }));
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     try {
       let followResult;
       try {
         let { value, owner } = this.getValue();
-        followResult = followPath(value, void 0, path3, owner);
+        followResult = followPath(value, void 0, path4, owner);
       } catch (err) {
         for (let cap of captures) cap.dispose();
         throw err;
@@ -43923,14 +44095,14 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  get(path3) {
+  get(path4) {
     try {
       let { value, owner } = this.getValue();
-      if (path3.length === 0 && owner === null) {
+      if (path4.length === 0 && owner === null) {
         if (value instanceof Object && "then" in value) return this.dup();
         throw new Error("Can't dup an RpcTarget stub as a promise.");
       }
-      let followResult = followPath(value, void 0, path3, owner);
+      let followResult = followPath(value, void 0, path4, owner);
       if (followResult.hook) return followResult.hook.get(followResult.remainingPath);
       return new PayloadStubHook(RpcPayload.deepCopyFrom(followResult.value, followResult.parent, followResult.owner));
     } catch (err) {
@@ -44049,28 +44221,28 @@ var PromiseStubHook = class PromiseStubHook2 extends StubHook {
       return res;
     });
   }
-  call(path3, args) {
+  call(path4, args) {
     args.ensureDeepCopied();
-    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path3, args), (err) => {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path4, args), (err) => {
       args.dispose();
       throw err;
     }));
   }
-  stream(path3, args) {
+  stream(path4, args) {
     args.ensureDeepCopied();
-    return { promise: this.promise.then((hook) => hook.stream(path3, args).promise, (err) => {
+    return { promise: this.promise.then((hook) => hook.stream(path4, args).promise, (err) => {
       args.dispose();
       throw err;
     }) };
   }
-  map(path3, captures, instructions) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path3, captures, instructions), (err) => {
+  map(path4, captures, instructions) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path4, captures, instructions), (err) => {
       for (let cap of captures) cap.dispose();
       throw err;
     }));
   }
-  get(path3) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path3)));
+  get(path4) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path4)));
   }
   dup() {
     if (this.resolution) return this.resolution.dup();
@@ -44710,23 +44882,23 @@ var Evaluator = class Evaluator2 {
           };
           if (value.length == 2) if (isPromise) return addStub(hook.get([]));
           else return addStub(hook.dup());
-          let path3 = value[2];
-          if (!(path3 instanceof Array)) break;
-          if (!path3.every((part) => {
+          let path4 = value[2];
+          if (!(path4 instanceof Array)) break;
+          if (!path4.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
-          if (value.length == 3) return addStub(hook.get(path3));
+          if (value.length == 3) return addStub(hook.get(path4));
           let args = value[3];
           if (!(args instanceof Array)) break;
           args = new Evaluator2(this.importer).evaluateWithDepth([args], depth);
-          return addStub(hook.call(path3, args));
+          return addStub(hook.call(path4, args));
         }
         case "remap": {
           if (value.length !== 5 || typeof value[1] !== "number" || !(value[2] instanceof Array) || !(value[3] instanceof Array) || !(value[4] instanceof Array)) break;
           let hook = this.importer.getExport(value[1]);
           if (!hook) throw new Error(`no such entry on exports table: ${value[1]}`);
-          let path3 = value[2];
-          if (!path3.every((part) => {
+          let path4 = value[2];
+          if (!path4.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
           let captures = value[3].map((cap) => {
@@ -44739,7 +44911,7 @@ var Evaluator = class Evaluator2 {
             }
           });
           let instructions = value[4];
-          let promise2 = new RpcPromise$1(hook.map(path3, captures, instructions), []);
+          let promise2 = new RpcPromise$1(hook.map(path4, captures, instructions), []);
           this.promises.push({
             promise: promise2,
             parent,
@@ -44923,7 +45095,7 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
     ++entry.localRefcount;
     this.entry = entry;
   }
-  collectPath(path3) {
+  collectPath(path4) {
     return this;
   }
   getEntry() {
@@ -44938,27 +45110,27 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
       throw err;
     }
   }
-  call(path3, args) {
+  call(path4, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.call(path3, args);
-    else return entry.session.sendCall(entry.importId, path3, args);
+    if (entry.resolution) return entry.resolution.call(path4, args);
+    else return entry.session.sendCall(entry.importId, path4, args);
   }
-  stream(path3, args) {
+  stream(path4, args) {
     let entry = this.getEntryTakingOwnership(() => args.dispose());
-    if (entry.resolution) return entry.resolution.stream(path3, args);
-    else return entry.session.sendStream(entry.importId, path3, args);
+    if (entry.resolution) return entry.resolution.stream(path4, args);
+    else return entry.session.sendStream(entry.importId, path4, args);
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     let entry = this.getEntryTakingOwnership(() => {
       for (let cap of captures) cap.dispose();
     });
-    if (entry.resolution) return entry.resolution.map(path3, captures, instructions);
-    else return entry.session.sendMap(entry.importId, path3, captures, instructions);
+    if (entry.resolution) return entry.resolution.map(path4, captures, instructions);
+    else return entry.session.sendMap(entry.importId, path4, captures, instructions);
   }
-  get(path3) {
+  get(path4) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.get(path3);
-    else return entry.session.sendCall(entry.importId, path3);
+    if (entry.resolution) return entry.resolution.get(path4);
+    else return entry.session.sendCall(entry.importId, path4);
   }
   dup() {
     return new RpcImportHook2(false, this.getEntry());
@@ -45214,7 +45386,7 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id, path3, args) {
+  sendCall(id, path4, args) {
     if (this.abortReason) {
       args?.dispose();
       throw this.abortReason;
@@ -45222,7 +45394,7 @@ var RpcSessionImpl = class {
     let value = [
       "pipeline",
       id,
-      path3
+      path4
     ];
     if (args) {
       let devalue;
@@ -45239,7 +45411,7 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id, path3, args) {
+  sendStream(id, path4, args) {
     if (this.abortReason) {
       args.dispose();
       throw this.abortReason;
@@ -45247,7 +45419,7 @@ var RpcSessionImpl = class {
     let value = [
       "pipeline",
       id,
-      path3
+      path4
     ];
     let devalue;
     try {
@@ -45276,7 +45448,7 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id, path3, captures, instructions) {
+  sendMap(id, path4, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
@@ -45284,7 +45456,7 @@ var RpcSessionImpl = class {
     let value = [
       "remap",
       id,
-      path3,
+      path4,
       captures.map((hook) => {
         let importId = this.getImport(hook);
         if (importId !== void 0) return ["import", importId];
@@ -45554,18 +45726,18 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject2, path3) {
+  constructor(subject2, path4) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
       subject: currentMapBuilder.capture(subject2),
-      path: path3
+      path: path4
     };
     else this.context = {
       parent: void 0,
       captures: [],
       subject: subject2,
-      path: path3
+      path: path4
     };
     currentMapBuilder = this;
   }
@@ -45594,24 +45766,24 @@ var MapBuilder = class {
       return new MapVariableHook(this.context.parent, this.context.parent.instructions.length);
     } else return this.context.subject.map(this.context.path, this.context.captures, this.instructions);
   }
-  pushCall(hook, path3, params) {
+  pushCall(hook, path4, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
     let subject2 = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject2,
-      path3,
+      path4,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
-  pushGet(hook, path3) {
+  pushGet(hook, path4) {
     let subject2 = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject2,
-      path3
+      path4
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
@@ -45645,8 +45817,8 @@ var MapBuilder = class {
   onSendError(error63) {
   }
 };
-mapImpl.sendMap = (hook, path3, func) => {
-  let builder = new MapBuilder(hook, path3);
+mapImpl.sendMap = (hook, path4, func) => {
+  let builder = new MapBuilder(hook, path4);
   let result;
   try {
     result = RpcPayload.fromAppReturn(withCallInterceptor(builder.pushCall.bind(builder), () => {
@@ -45678,16 +45850,16 @@ var MapVariableHook = class extends StubHook {
   }
   dispose() {
   }
-  get(path3) {
-    if (path3.length == 0) return this;
-    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path3);
+  get(path4) {
+    if (path4.length == 0) return this;
+    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path4);
     else throwMapperBuilderUseError();
   }
-  call(path3, args) {
+  call(path4, args) {
     args.dispose();
     throwMapperBuilderUseError();
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     throwMapperBuilderUseError();
   }
@@ -45792,11 +45964,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
     if (this.state) return this.state;
     else throw new Error("Attempted to use a WritableStreamStubHook after it was disposed.");
   }
-  call(path3, args) {
+  call(path4, args) {
     try {
       let state = this.getState();
-      if (path3.length !== 1 || typeof path3[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
-      const method = path3[0];
+      if (path4.length !== 1 || typeof path4[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
+      const method = path4[0];
       if (method !== "write" && method !== "close" && method !== "abort") throw new Error(`Unknown WritableStream method: ${method}`);
       if (method === "close" || method === "abort") state.closed = true;
       return new PromiseStubHook((method === "write" ? args.deliverStreamWrite(state.writer) : args.deliverCall(state.writer[method], state.writer)).then((payload) => new PayloadStubHook(payload)));
@@ -45805,11 +45977,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a WritableStream"));
   }
-  get(path3) {
+  get(path4) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a WritableStream stub"));
   }
   dup() {
@@ -46002,15 +46174,15 @@ var ReadableStreamStubHook = class ReadableStreamStubHook2 extends StubHook {
     this.state = state;
     if (dupFrom) ++state.refcount;
   }
-  call(path3, args) {
+  call(path4, args) {
     args.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot call methods on a ReadableStream stub"));
   }
-  map(path3, captures, instructions) {
+  map(path4, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a ReadableStream"));
   }
-  get(path3) {
+  get(path4) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a ReadableStream stub"));
   }
   dup() {
@@ -46730,6 +46902,7 @@ var MESSAGE_SEND_TOKEN_PERMISSIONS = Object.freeze([
   "pull-requests:read",
   "discussions:read"
 ]);
+var TASK_RUN_TOKEN_PERMISSIONS = Object.freeze(["actions:write"]);
 
 // src/github-effects.ts
 var DEFAULT_API_BASE_URL = "https://api.github.com";
@@ -46865,7 +47038,7 @@ var GitHubApi = class {
    * method-based classification, because a GraphQL mutation and a GraphQL query
    * are both HTTP POSTs.
    */
-  async raw(path3, init = {}, mutating = isMutatingMethod(init.method)) {
+  async raw(path4, init = {}, mutating = isMutatingMethod(init.method)) {
     if (mutating) this.#mutated = true;
     const remaining = this.#deadline - this.#clock().getTime();
     if (remaining <= 0) {
@@ -46875,7 +47048,7 @@ var GitHubApi = class {
         true
       );
     }
-    const response = await this.#fetch(`${this.#baseUrl}${path3}`, {
+    const response = await this.#fetch(`${this.#baseUrl}${path4}`, {
       ...init,
       headers: {
         authorization: `Bearer ${this.#token}`,
@@ -46892,8 +47065,8 @@ var GitHubApi = class {
     return this.#lastRequestId === void 0 ? { response } : { response, requestId: this.#lastRequestId };
   }
   /** Performs a request and throws a classified error for any non-2xx status. */
-  async rest(path3, label, init = {}) {
-    const { response, requestId: requestId2 } = await this.raw(path3, init);
+  async rest(path4, label, init = {}) {
+    const { response, requestId: requestId2 } = await this.raw(path4, init);
     if (!response.ok) throw await httpError(response, label, requestId2);
     if (response.status === 204) {
       await response.body?.cancel();
@@ -46902,8 +47075,8 @@ var GitHubApi = class {
     return { status: response.status, data: await response.json(), ...requestId2 === void 0 ? {} : { requestId: requestId2 } };
   }
   /** Performs a request, returning `null` for 404 instead of throwing. */
-  async restOptional(path3, label, init = {}) {
-    const { response, requestId: requestId2 } = await this.raw(path3, init);
+  async restOptional(path4, label, init = {}) {
+    const { response, requestId: requestId2 } = await this.raw(path4, init);
     if (response.status === 404) {
       await response.body?.cancel();
       return null;
@@ -46920,11 +47093,11 @@ var GitHubApi = class {
    * `link` rel="next" marker and falls back to a short-page check, with a hard
    * page ceiling so a hostile or enormous collection cannot hang the job.
    */
-  async findPaginated(path3, label, matches, envelopeKey, recentPages) {
+  async findPaginated(path4, label, matches, envelopeKey, recentPages) {
     const pages = recentPages ?? this.#maxPages;
     for (let page = 1; page <= pages; page++) {
-      const separator = path3.includes("?") ? "&" : "?";
-      const { response, requestId: requestId2 } = await this.raw(`${path3}${separator}per_page=100&page=${page}`);
+      const separator = path4.includes("?") ? "&" : "?";
+      const { response, requestId: requestId2 } = await this.raw(`${path4}${separator}per_page=100&page=${page}`);
       if (!response.ok) throw await httpError(response, label, requestId2);
       const payload = await response.json();
       const data = envelopeKey === void 0 ? payload : record2(payload) ? payload[envelopeKey] : void 0;
@@ -47041,13 +47214,13 @@ function headChainedByThisPlan(pull, head, planned, chainedHeads) {
   const headRepo = record2(pull.head.repo) ? pull.head.repo.id : void 0;
   const baseRepo = record2(pull.base.repo) ? pull.base.repo.id : void 0;
   if (headRepo === void 0 || headRepo !== baseRepo) return false;
-  const path3 = [];
+  const path4 = [];
   for (const chained of chainedHeads) {
     if (chained.branch !== pull.head.ref) continue;
-    if (path3.length === 0) path3.push(chained.from, chained.to);
-    else if (chained.from === path3.at(-1)) path3.push(chained.to);
+    if (path4.length === 0) path4.push(chained.from, chained.to);
+    else if (chained.from === path4.at(-1)) path4.push(chained.to);
   }
-  return head !== planned && path3.includes(head) && path3.includes(planned);
+  return head !== planned && path4.includes(head) && path4.includes(planned);
 }
 function assertPullState(scope, pull, expected, check2 = "exact") {
   if (pull.state !== expected.expectedState) {
@@ -48889,7 +49062,8 @@ function renderApplyJobSummary(input2) {
   const task = taskLabel(input2.plan?.taskName ?? input2.context?.taskName);
   const receipt = input2.receipt;
   const messageFailed = receipt?.status === "applied" && input2.message?.receipt.status === "failed";
-  const heading = messageFailed ? "\u274C Plan applied, message not sent" : receipt?.status === "applied" && input2.error === void 0 ? "\u2705 Plan applied" : receipt?.status === "stopped" ? "\u274C Plan stopped" : "\u274C Apply failed";
+  const taskRunUnknown = receipt?.status === "applied" && input2.taskRun?.receipt.status === "dispatch_unknown" && input2.taskRun.settled !== true;
+  const heading = messageFailed ? "\u274C Plan applied, message not sent" : taskRunUnknown ? "\u274C Plan applied, task may not have started" : receipt?.status === "applied" && input2.error === void 0 ? "\u2705 Plan applied" : receipt?.status === "stopped" ? "\u274C Plan stopped" : "\u274C Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
   const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : void 0;
   if (stopping?.receipt.error) {
@@ -48900,7 +49074,7 @@ function renderApplyJobSummary(input2) {
       `**What to do:** ${advice.todo}`,
       ""
     );
-  } else if (input2.error !== void 0 && receipt?.status !== "stopped" && !messageFailed) {
+  } else if (input2.error !== void 0 && receipt?.status !== "stopped" && !messageFailed && !taskRunUnknown) {
     lines.push(
       "**What happened:** the apply job stopped before finishing the plan.",
       "",
@@ -48931,6 +49105,7 @@ function renderApplyJobSummary(input2) {
     }
   }
   if (input2.message !== void 0) lines.push(...messageLines(input2.message), "");
+  if (input2.taskRun !== void 0) lines.push(...taskRunLines(input2.taskRun), "");
   lines.push(...footer(input2.context, input2.plan?.runId, false));
   return lines.join("\n");
 }
@@ -48955,6 +49130,19 @@ function messageLines(outcome) {
         fenced("Error details", outcome.error ?? "the message could not be sent")
       ];
   }
+}
+function taskRunLines(outcome) {
+  const { receipt } = outcome;
+  const what = `Task ${code(receipt.task)} on ${subjectLabel(receipt.subject)}`;
+  if (outcome.settled) {
+    return [`**${what}** was ${receipt.status === "dispatched" ? "started" : "settled"} by an earlier attempt (${inline(receipt.status)}); it is never dispatched again.`];
+  }
+  if (receipt.status === "dispatched") return [`**${what}** started.`];
+  return [
+    `**${what}** may not have started, and Gardener never dispatches it twice. Check the repository's Actions runs for it; if it did not start, a maintainer can run it with **Run workflow**.`,
+    "",
+    fenced("Error details", outcome.error ?? "the dispatch's outcome is unknown")
+  ];
 }
 function subjectLabel(subject2) {
   const number4 = subject2.number ?? subject2.issueNumber ?? subject2.pullNumber ?? subject2.discussionNumber;
@@ -49206,8 +49394,8 @@ async function readMessageSubject(input2) {
         labels: discussion.labels?.nodes
       };
     } else {
-      const path3 = input2.subject.kind === "issue" ? `issues/${input2.subject.issueNumber}` : `pulls/${input2.subject.pullNumber}`;
-      const response = await (input2.fetch ?? fetch)(`${repoPath}/${path3}`, { headers, redirect: "error", signal });
+      const path4 = input2.subject.kind === "issue" ? `issues/${input2.subject.issueNumber}` : `pulls/${input2.subject.pullNumber}`;
+      const response = await (input2.fetch ?? fetch)(`${repoPath}/${path4}`, { headers, redirect: "error", signal });
       if (!response.ok) return null;
       const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES3);
       if (body2.truncated) return null;
@@ -49319,6 +49507,108 @@ function subjectName(subject2) {
   return subject2.kind === "issue" ? `Issue #${number4}` : subject2.kind === "pull_request" ? `Pull request #${number4}` : `Discussion #${number4}`;
 }
 
+// src/task-runs.ts
+var import_node_path2 = __toESM(require("node:path"), 1);
+var GITHUB_TIMEOUT_MS2 = 1e4;
+var MAX_RESPONSE_BYTES4 = 1024 * 1024;
+function taskRunSubject(run, operations) {
+  const subject2 = run.subject;
+  if ("openedBy" in subject2) {
+    const opened = operations.find((step) => step.stepName === subject2.openedBy);
+    const number4 = opened?.outputs.pullNumber;
+    if (opened === void 0 || opened.receipt.status !== "succeeded" && opened.receipt.status !== "skipped" || typeof number4 !== "number" || !Number.isSafeInteger(number4) || number4 < 1) {
+      throw new Error(`task.run names the pull request step ${subject2.openedBy} opened, which recorded no pull request number`);
+    }
+    return { kind: "pull_request", number: number4 };
+  }
+  return subject2.kind === "issue" ? { kind: "issue", number: subject2.issueNumber } : { kind: "pull_request", number: subject2.pullNumber };
+}
+function taskRunDispatchRequest(run, subject2, defaultBranch) {
+  if (!TASK_WORKFLOW_PATH_PATTERN.test(run.workflowPath) || run.workflowPath !== taskWorkflowPath(run.task)) {
+    throw new Error(`task.run refuses to dispatch ${run.workflowPath}: it is not task ${run.task}'s Gardener workflow`);
+  }
+  const inputs = subject2.kind === "issue" ? { issue: String(subject2.number) } : { pull_request: String(subject2.number) };
+  return { workflowFile: import_node_path2.default.posix.basename(run.workflowPath), body: { ref: defaultBranch, inputs } };
+}
+async function dispatchPlanTaskRun(input2) {
+  const run = input2.plan.taskRuns?.[0];
+  if (run === void 0) return void 0;
+  const now = input2.now ?? (() => /* @__PURE__ */ new Date());
+  const prior = input2.prior;
+  if (prior !== void 0 && prior.status !== "dispatching") return { receipt: prior, settled: true };
+  if (prior !== void 0) {
+    const unknown2 = { ...prior, status: "dispatch_unknown", reason: "interrupted" };
+    await input2.record(unknown2);
+    return { receipt: unknown2, error: "an earlier attempt stopped after reporting the dispatch, so it is not sent again" };
+  }
+  const subject2 = taskRunSubject(run, input2.operations);
+  const repository = input2.plan.repository.fullName;
+  const fetchImpl = input2.fetch ?? fetch;
+  const remaining = () => Math.min(GITHUB_TIMEOUT_MS2, Math.max(1e3, input2.deadlineAt - now().getTime()));
+  const defaultBranch = await readDefaultBranch(repository, input2.token, fetchImpl, AbortSignal.timeout(remaining()));
+  const request = taskRunDispatchRequest(run, subject2, defaultBranch);
+  const dispatching = { task: run.task, subject: subject2, status: "dispatching", attemptedAt: now().toISOString() };
+  await input2.record(dispatching);
+  let outcome;
+  try {
+    const response = await fetchImpl(
+      `https://api.github.com/repos/${repositoryPath(repository)}/actions/workflows/${encodeURIComponent(request.workflowFile)}/dispatches`,
+      {
+        method: "POST",
+        headers: { ...githubHeaders(input2.token), "content-type": "application/json" },
+        body: JSON.stringify(request.body),
+        redirect: "error",
+        signal: AbortSignal.timeout(remaining())
+      }
+    );
+    await response.body?.cancel().catch(() => void 0);
+    outcome = response.status === 204 || response.status === 200 ? { receipt: { ...dispatching, status: "dispatched" } } : {
+      receipt: { ...dispatching, status: "dispatch_unknown", reason: "dispatch_refused" },
+      error: `GitHub refused the dispatch of ${request.workflowFile} (HTTP ${response.status})`
+    };
+  } catch {
+    outcome = {
+      receipt: { ...dispatching, status: "dispatch_unknown", reason: "dispatch_failed" },
+      error: `the dispatch of ${request.workflowFile} did not complete, so whether it started is unknown`
+    };
+  }
+  await input2.record(outcome.receipt);
+  return outcome;
+}
+async function readDefaultBranch(repository, token, fetchImpl, signal) {
+  const response = await fetchImpl(`https://api.github.com/repos/${repositoryPath(repository)}`, {
+    headers: githubHeaders(token),
+    redirect: "error",
+    signal
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => void 0);
+    throw new Error(`task.run could not read ${repository}'s default branch (HTTP ${response.status}); nothing was dispatched, so a rerun tries again`);
+  }
+  const text = await response.text();
+  if (text.length > MAX_RESPONSE_BYTES4) throw new Error("task.run could not read the repository: the response is too large");
+  const branch = JSON.parse(text).default_branch;
+  if (typeof branch !== "string" || branch.length === 0 || branch.length > 255) {
+    throw new Error("task.run could not read the repository's default branch; nothing was dispatched, so a rerun tries again");
+  }
+  return branch;
+}
+function repositoryPath(repository) {
+  const parts = repository.split("/");
+  if (parts.length !== 2 || parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new Error("Plan repository name is invalid");
+  }
+  return parts.map(encodeURIComponent).join("/");
+}
+function githubHeaders(token) {
+  return {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${token}`,
+    "user-agent": "gardener-runner",
+    "x-github-api-version": "2022-11-28"
+  };
+}
+
 // src/effects-main.ts
 var inputToken = process.env["INPUT_GITHUB-TOKEN"]?.trim() ?? "";
 delete process.env["INPUT_GITHUB-TOKEN"];
@@ -49330,6 +49620,7 @@ async function runEffectsMain() {
   let plan;
   let receipt;
   let message;
+  let taskRun;
   try {
     const artifactPath = getInput("artifact-path", { required: true });
     const expectedSha256 = getInput("expected-sha256", { required: true });
@@ -49362,11 +49653,19 @@ async function runEffectsMain() {
     });
     receipt = result.receipt;
     message = result.message;
+    taskRun = result.taskRun;
     if (message?.receipt.status === "skipped") {
       notice(message.receipt.reason === "destination_unset" ? "Message not sent: GARDENER_CHAT_WEBHOOK is not set." : "Message not sent: GARDENER_CHAT_WEBHOOK is not a supported incoming-webhook URL.");
     }
-    if (result.receipt.status === "applied" && message?.receipt.status !== "failed") {
-      await writeJobSummary(() => renderApplyJobSummary({ plan, receipt, ...message ? { message } : {}, context: jobSummaryContext() }));
+    const taskRunUnknown = taskRun?.receipt.status === "dispatch_unknown" && taskRun.settled !== true;
+    if (result.receipt.status === "applied" && message?.receipt.status !== "failed" && !taskRunUnknown) {
+      await writeJobSummary(() => renderApplyJobSummary({
+        plan,
+        receipt,
+        ...message ? { message } : {},
+        ...taskRun ? { taskRun } : {},
+        context: jobSummaryContext()
+      }));
     }
     setOutput("status", result.receipt.status);
     setOutput("completed-operations", String(result.receipt.operations.length));
@@ -49384,12 +49683,16 @@ async function runEffectsMain() {
     if (message?.receipt.status === "failed") {
       throw new Error(`Message not sent: ${message.error ?? "it could not be sent"}`);
     }
+    if (taskRunUnknown) {
+      throw new Error(`Task ${taskRun.receipt.task} may not have started: ${taskRun.error ?? "the dispatch's outcome is unknown"}`);
+    }
   } catch (error63) {
     const reason = error63 instanceof Error ? error63.message : "Gardener effect failed";
     await writeJobSummary(() => renderApplyJobSummary({
       ...plan ? { plan } : {},
       ...receipt ? { receipt } : {},
       ...message ? { message } : {},
+      ...taskRun ? { taskRun } : {},
       error: reason,
       context: jobSummaryContext()
     }));
@@ -49440,7 +49743,7 @@ async function applyOrderedPlan(input2) {
       resumeIndex = index + 1;
     }
     if (input2.prior.status === "applied") {
-      return settleMessage(input2, completed, outputs);
+      return settleTaskRun(input2, completed, await settleMessage(input2, completed, outputs));
     }
   }
   for (let index = resumeIndex; index < plan.operations.length; index += 1) {
@@ -49520,13 +49823,31 @@ async function applyOrderedPlan(input2) {
     const progress = effectReceipt(plan, input2.artifactSha256, completed, status, null);
     await input2.record(progress);
   }
-  return settleMessage(input2, completed, outputs);
+  return settleTaskRun(input2, completed, await settleMessage(input2, completed, outputs));
+}
+async function settleTaskRun(input2, completed, settled) {
+  const { plan } = input2;
+  if (plan.taskRuns === void 0 || settled.receipt.status !== "applied") return settled;
+  let receipt = settled.receipt;
+  const taskRun = await dispatchPlanTaskRun({
+    plan,
+    operations: completed,
+    prior: input2.prior?.status === "applied" ? input2.prior.taskRuns?.[0] : void 0,
+    token: input2.token,
+    deadlineAt: input2.deadlineAt,
+    ...input2.fetch ? { fetch: input2.fetch } : {},
+    record: async (taskRunReceipt) => {
+      receipt = runnerEffectReceiptV1Schema.parse({ ...receipt, taskRuns: [taskRunReceipt] });
+      await input2.record(receipt);
+    }
+  });
+  return taskRun === void 0 ? settled : { ...settled, receipt, taskRun };
 }
 async function settleMessage(input2, completed, outputs) {
   const { plan } = input2;
   const appliedPrior = input2.prior?.status === "applied" ? input2.prior : void 0;
   const withoutMessage = () => ({
-    receipt: appliedPrior ?? effectReceipt(plan, input2.artifactSha256, completed, "applied", null),
+    receipt: appliedPrior ?? (plan.operations.length === 0 && plan.taskRuns !== void 0 ? unvalidatedAppliedReceipt(plan, input2.artifactSha256) : effectReceipt(plan, input2.artifactSha256, completed, "applied", null)),
     outputs
   });
   if (plan.messages === void 0) return withoutMessage();
@@ -49542,7 +49863,7 @@ async function settleMessage(input2, completed, outputs) {
   });
   if (message === void 0) return withoutMessage();
   if (message.settled && appliedPrior !== void 0) return { receipt: appliedPrior, outputs, message };
-  const receipt = effectReceipt(plan, input2.artifactSha256, completed, "applied", null, [message.receipt]);
+  const receipt = effectReceipt(plan, input2.artifactSha256, completed, "applied", null, [message.receipt], appliedPrior?.taskRuns);
   await input2.record(receipt);
   return { receipt, outputs, message };
 }
@@ -49705,7 +50026,7 @@ function validateRecordedOutputs(kind, value) {
 function runnerStepReceipt(stepName2, receipt, outputs, resourceVersion) {
   return { stepName: stepName2, receipt, outputs, ...resourceVersion ? { resourceVersion } : {} };
 }
-function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep, messages) {
+function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep, messages, taskRuns) {
   return runnerEffectReceiptV1Schema.parse({
     schemaVersion: "gardener.runner.effect-receipt/v1",
     planRunId: plan.runId,
@@ -49716,8 +50037,22 @@ function effectReceipt(plan, artifactSha256, operations, status, stoppedAtStep, 
     status,
     stoppedAtStep,
     operations,
-    ...messages === void 0 ? {} : { messages }
+    ...messages === void 0 ? {} : { messages },
+    ...taskRuns === void 0 ? {} : { taskRuns }
   });
+}
+function unvalidatedAppliedReceipt(plan, artifactSha256) {
+  return {
+    schemaVersion: "gardener.runner.effect-receipt/v1",
+    planRunId: plan.runId,
+    bundleHash: plan.bundleHash,
+    artifactSha256,
+    ...plan.changesSha256 ? { changesSha256: plan.changesSha256 } : {},
+    plannedOperations: 0,
+    status: "applied",
+    stoppedAtStep: null,
+    operations: []
+  };
 }
 function assertReceiptEnvelope(plan, artifactSha256, receipt) {
   if (receipt.planRunId !== plan.runId || receipt.bundleHash !== plan.bundleHash || receipt.artifactSha256 !== artifactSha256 || receipt.plannedOperations !== plan.operations.length || receipt.changesSha256 !== plan.changesSha256) {
@@ -49825,10 +50160,10 @@ async function prepareCapture(plan, directory) {
   return { directory };
 }
 function captureReader(directory) {
-  const content = import_node_path2.default.join(directory, "content");
+  const content = import_node_path3.default.join(directory, "content");
   return async ({ sha256: sha2563, sizeBytes }) => {
     if (!/^[a-f0-9]{64}$/.test(sha2563)) throw new Error("Captured content digest is invalid");
-    const bytes = await (0, import_promises3.readFile)(import_node_path2.default.join(content, sha2563));
+    const bytes = await (0, import_promises3.readFile)(import_node_path3.default.join(content, sha2563));
     if (bytes.byteLength !== sizeBytes) throw new Error("Captured content size changed after verification");
     const digest = (0, import_node_crypto4.createHash)("sha256").update(bytes).digest("hex");
     if (!equalDigest(digest, sha2563)) throw new Error("Captured content changed after verification");

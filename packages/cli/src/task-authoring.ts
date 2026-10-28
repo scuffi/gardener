@@ -8,6 +8,9 @@ import {
   githubHandleV1Schema,
   isAuthoredTriggerKind,
   MESSAGE_SEND_KIND,
+  TASK_RUN_KIND,
+  TASK_RUN_MAX_TARGETS,
+  taskRunTargetV1Schema,
   operationCatalog,
   runLimitIssue,
   taskBundleV1Schema,
@@ -52,11 +55,27 @@ const effectWithOptionsSchema = z.strictObject({
   branches: branchPatternsSchema,
 });
 
-const effectEntrySchema = z.union([effectSelectorSchema, effectWithOptionsSchema]);
+/**
+ * `- task.run: { tasks: [fix] }`: the tasks this one may start. Always with
+ * its list, since a bare `task.run` could start nothing; written as the
+ * design names it, a one-key map, rather than `kind:`.
+ */
+const taskRunEntrySchema = z.strictObject({
+  [TASK_RUN_KIND]: z.strictObject({
+    tasks: z.array(taskRunTargetV1Schema).min(1).max(TASK_RUN_MAX_TARGETS),
+  }),
+});
+
+const effectEntrySchema = z.union([
+  effectSelectorSchema.refine((selector) => selector !== TASK_RUN_KIND, "task.run must list the tasks it may start: - task.run: { tasks: [<task id>] }"),
+  effectWithOptionsSchema,
+  taskRunEntrySchema,
+]);
 type EffectEntry = z.infer<typeof effectEntrySchema>;
 
 function effectSelector(entry: EffectEntry): string {
-  return typeof entry === "string" ? entry : entry.kind;
+  if (typeof entry === "string") return entry;
+  return "kind" in entry ? entry.kind : TASK_RUN_KIND;
 }
 
 const PUSH_TRIGGER = "github.push";
@@ -74,7 +93,12 @@ const triggerAuthoringSchema = z.strictObject({
   "opened-by": z.array(z.string().trim().min(1).max(60)).min(1).max(20).optional(),
   branches: z.array(z.string().trim().min(1).max(255)).min(1).max(20).optional(),
   cron: z.string().trim().min(1).max(100).optional(),
+  /** On `github.workflow_dispatch` only: offer this target input whatever else the task triggers on. */
+  subject: z.enum(["issue", "pull_request"]).optional(),
 }).superRefine((trigger, context) => {
+  if (trigger.subject !== undefined && trigger.event !== DISPATCH_TRIGGER) {
+    context.addIssue({ code: "custom", path: ["subject"], message: `subject is not supported by ${trigger.event}` });
+  }
   const reject = (key: "labels-all" | "mentions" | "authors" | "opened-by" | "branches" | "cron") => {
     if (trigger[key] !== undefined) {
       context.addIssue({ code: "custom", path: [key], message: `${key} is not supported by ${trigger.event}` });
@@ -278,9 +302,11 @@ export interface CompiledTask {
  * sorted so listing them in another order does not change the bundle hash.
  */
 function effectOptionsOf(entries: readonly EffectEntry[]): { effectOptions?: TaskBundleV1["effectOptions"] } {
-  const optioned = entries.flatMap((entry) => typeof entry === "string"
+  const optioned = entries.flatMap((entry): (readonly [string, unknown])[] => typeof entry === "string"
     ? []
-    : [[entry.kind, { branches: [...entry.branches].sort() }] as const]);
+    : "kind" in entry
+      ? [[entry.kind, { branches: [...entry.branches].sort() }] as const]
+      : [[TASK_RUN_KIND, { tasks: [...new Set(entry[TASK_RUN_KIND].tasks)].sort() }] as const]);
   return optioned.length === 0 ? {} : { effectOptions: Object.fromEntries(optioned) as TaskBundleV1["effectOptions"] };
 }
 
@@ -323,7 +349,7 @@ function toContractTrigger(authored: AuthoredTrigger, options: TaskCompileOption
   const kind = authored.event as TaskTriggerKindV1;
   if (kind === PUSH_TRIGGER) return { kind, branches: authored.branches! };
   if (kind === SCHEDULE_TRIGGER) return { kind, cron: authored.cron! };
-  if (kind === DISPATCH_TRIGGER) return { kind };
+  if (kind === DISPATCH_TRIGGER) return authored.subject === undefined ? { kind } : { kind, subject: authored.subject };
   const labelsAll = authored["labels-all"] ?? [];
   const openedBy = authored["opened-by"] === undefined ? {} : { openedBy: normalizedLogins(authored["opened-by"]) };
   if (!isAuthoredTriggerKind(kind)) return { kind, labelsAll, ...openedBy } as TaskTriggerV1;

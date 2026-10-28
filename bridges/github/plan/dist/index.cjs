@@ -40531,6 +40531,28 @@ function messageSubjectNumber(subject) {
   return subject.kind === "issue" ? subject.issueNumber : subject.kind === "pull_request" ? subject.pullNumber : subject.discussionNumber;
 }
 
+// ../contracts/src/task-runs.ts
+var TASK_RUN_KIND = "task.run";
+var TASK_RUN_MAX_DEPTH = 3;
+var TASK_RUN_MAX_TARGETS = 20;
+var taskIdPattern = /^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/;
+var taskRunTargetV1Schema = external_exports.string().regex(taskIdPattern, "expected a task id");
+function workflowSlug(taskId) {
+  return taskId.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function taskWorkflowPath(taskId) {
+  return `.github/workflows/gardener-${workflowSlug(taskId)}.yml`;
+}
+var TASK_WORKFLOW_PATH_PATTERN = /^\.github\/workflows\/gardener-[a-z0-9][a-z0-9-]*\.ya?ml$/;
+var subjectNumber2 = external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+var taskRunPayloadV1Schema = external_exports.strictObject({
+  task: taskRunTargetV1Schema.describe("The id of a task this task declares under task.run. Never this task itself."),
+  issueNumber: subjectNumber2.optional().describe("This run's own issue. Give exactly one of issueNumber and pullNumber."),
+  pullNumber: subjectNumber2.optional().describe(
+    "This run's own pull request, or omit it and fill /pullNumber by reference from an earlier pull_request.open step of this plan."
+  )
+});
+
 // ../contracts/src/branches.ts
 var branchWriteFields = {
   "branch.create": "branch",
@@ -40773,7 +40795,16 @@ var taskTriggerV1Schema = external_exports.discriminatedUnion("kind", [
       "push branches must include at least one positive pattern"
     )
   }),
-  external_exports.strictObject({ kind: external_exports.literal("github.workflow_dispatch") }),
+  external_exports.strictObject({
+    kind: external_exports.literal("github.workflow_dispatch"),
+    /**
+     * The resource a manual run is offered as a target, beside those the
+     * task's other triggers act on, so a task whose only trigger is manual (one
+     * another task starts with `task.run`) still takes an issue or pull
+     * request. Absent unless set, so other bundles hash as before.
+     */
+    subject: external_exports.enum(["issue", "pull_request"]).optional()
+  }),
   external_exports.strictObject({ kind: external_exports.literal("github.schedule"), cron: cronExpressionV1Schema }),
   authoredTrigger("github.discussion.created"),
   authoredTrigger("github.discussion.edited"),
@@ -40833,7 +40864,7 @@ var taskToolV1Schema = external_exports.enum([
    */
   "repository.merge_base"
 ]);
-var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND];
+var taskEffectKindValues = [...operationKindValues, MESSAGE_SEND_KIND, TASK_RUN_KIND];
 var taskEffectKindV1Schema = external_exports.enum(taskEffectKindValues);
 var networkHostPattern = external_exports.string().regex(
   /^(?:\*\.)?(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
@@ -40895,12 +40926,20 @@ var taskModelIdSchema = external_exports.string().min(1).max(256).regex(/^[A-Za-
   "model path segments must be non-empty and cannot be . or .."
 ).refine((id) => !id.startsWith("cloudflare/"), "model must not start with cloudflare/; name the model as AI Gateway does, e.g. openai/gpt-5.1");
 var taskEffectOptionsV1Schema = external_exports.strictObject({ branches: branchPatternsSchema });
+var taskRunOptionsV1Schema = external_exports.strictObject({
+  tasks: external_exports.array(taskRunTargetV1Schema).min(1).max(TASK_RUN_MAX_TARGETS).superRefine((tasks, context) => {
+    if (tasks.some((task, index) => index > 0 && task <= tasks[index - 1])) {
+      context.addIssue({ code: "custom", message: "task.run tasks must be unique and sorted" });
+    }
+  })
+});
 var taskEffectOptionsMapV1Schema = external_exports.strictObject({
   "branch.create": taskEffectOptionsV1Schema.optional(),
   "commit.create": taskEffectOptionsV1Schema.optional(),
   "commit.merge_base": taskEffectOptionsV1Schema.optional(),
   "pull_request.open": taskEffectOptionsV1Schema.optional(),
-  "pull_request.open_draft": taskEffectOptionsV1Schema.optional()
+  "pull_request.open_draft": taskEffectOptionsV1Schema.optional(),
+  [TASK_RUN_KIND]: taskRunOptionsV1Schema.optional()
 });
 var taskBranchPatternsV1Schema = external_exports.strictObject({
   "branch.create": branchPatternsSchema.optional(),
@@ -40982,6 +41021,12 @@ var taskBundleV1Schema = external_exports.strictObject({
         context.addIssue({ code: "custom", path: ["effectOptions", kind], message: `options are given for ${kind}, which the task does not declare` });
       }
     }
+  }
+  if (bundle.effects.includes(TASK_RUN_KIND) && bundle.effectOptions?.[TASK_RUN_KIND] === void 0) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND], message: "task.run must list the tasks it may start" });
+  }
+  if (bundle.effectOptions?.[TASK_RUN_KIND]?.tasks.includes(bundle.taskId)) {
+    context.addIssue({ code: "custom", path: ["effectOptions", TASK_RUN_KIND, "tasks"], message: `task ${bundle.taskId} may not start itself with task.run` });
   }
   const triggerKinds = bundle.triggers.map((trigger) => trigger.kind);
   if (new Set(triggerKinds).size !== triggerKinds.length) {
@@ -41388,8 +41433,23 @@ var taskRunRequestV1Schema = external_exports.strictObject({
    * before it existed still parses; absent means untrusted, which only
    * narrows the run's effect scope.
    */
-  starter: taskRunStarterV1Schema.optional()
+  starter: taskRunStarterV1Schema.optional(),
+  /**
+   * Present when another run started this one with `task.run`: the Worker
+   * matched the dispatch against the lineage record that run left, and the
+   * starter above is the chain's root decision, inherited, never upgraded.
+   * Absent for a run a person or an event started, which is depth 0.
+   */
+  lineage: external_exports.strictObject({
+    parentRunId: boundIdentifier,
+    depth: external_exports.number().int().min(1).max(TASK_RUN_MAX_DEPTH),
+    /** The root starter's OIDC `actor_id`: every run of the chain counts against their `runs-per-author`. */
+    rootAuthorId: githubNumericId
+  }).optional()
 }).superRefine((request, context) => {
+  if (request.lineage !== void 0 && request.starter === void 0) {
+    context.addIssue({ code: "custom", path: ["lineage"], message: "a started run carries the starter it inherited" });
+  }
   if (Date.parse(request.deadlineAt) <= Date.parse(request.admittedAt)) {
     context.addIssue({ code: "custom", path: ["deadlineAt"], message: "deadline must follow admission" });
   }
@@ -41602,6 +41662,31 @@ var taskEffectProposalV1Schema = external_exports.strictObject({
       for (const issue3 of parsed.error.issues) {
         context.addIssue({ code: "custom", path: ["payload", ...issue3.path.map(String)], message: `${encodeJsonPointer(issue3.path) || "payload"}: ${issue3.message}` });
       }
+    }
+    return;
+  }
+  if (proposal.kind === TASK_RUN_KIND) {
+    const parsed = taskRunPayloadV1Schema.safeParse(proposal.payload);
+    if (!parsed.success) {
+      for (const issue3 of parsed.error.issues) {
+        context.addIssue({ code: "custom", path: ["payload", ...issue3.path.map(String)], message: `${encodeJsonPointer(issue3.path) || "payload"}: ${issue3.message}` });
+      }
+    }
+    for (const pointer of Object.keys(proposal.references)) {
+      if (pointer !== "/pullNumber") {
+        context.addIssue({ code: "custom", path: ["references", pointer], message: "task.run takes only a /pullNumber reference" });
+      }
+    }
+    const reference = proposal.references["/pullNumber"];
+    if (reference !== void 0 && (isTemplateReference(reference) || reference.output !== "pullNumber")) {
+      context.addIssue({ code: "custom", path: ["references", "/pullNumber"], message: "task.run /pullNumber must be the pullNumber output of an earlier pull_request.open step, whole" });
+    }
+    if (parsed.success && taskRunSubjectFromProposal(parsed.data, proposal.references) === void 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "task.run needs exactly one subject: issueNumber, pullNumber, or /pullNumber by reference to an earlier pull_request.open step"
+      });
     }
     return;
   }
@@ -42040,6 +42125,42 @@ function messageTriggerScopeRefusal(subject, resource) {
   }
   return void 0;
 }
+var taskRunSubjectV1Schema = external_exports.union([
+  external_exports.strictObject({ kind: external_exports.literal("issue"), issueNumber: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), pullNumber: external_exports.number().int().positive() }),
+  external_exports.strictObject({ kind: external_exports.literal("pull_request"), openedBy: taskStepNameV1Schema })
+]);
+function taskRunSubjectFromProposal(payload, references) {
+  const reference = references["/pullNumber"];
+  const named = [payload.issueNumber, payload.pullNumber, reference].filter((value) => value !== void 0);
+  if (named.length !== 1) return void 0;
+  if (payload.issueNumber !== void 0) return { kind: "issue", issueNumber: payload.issueNumber };
+  if (payload.pullNumber !== void 0) return { kind: "pull_request", pullNumber: payload.pullNumber };
+  return reference !== void 0 && !isTemplateReference(reference) && reference.output === "pullNumber" ? { kind: "pull_request", openedBy: reference.step } : void 0;
+}
+function taskRunSubjectRefusal(subject, resource, earlier) {
+  if ("openedBy" in subject) {
+    const kind = earlier.get(subject.openedBy);
+    return kind !== void 0 && createdResourceOutputs.pullNumber[kind] === "pullNumber" ? void 0 : `task.run may name a pull request by reference only from an earlier pull_request.open or pull_request.open_draft step of this plan, and "${subject.openedBy}" is not one`;
+  }
+  const number4 = subject.kind === "issue" ? subject.issueNumber : subject.pullNumber;
+  if (resource === null) {
+    return "task.run starts a task on this run's own issue or pull request, and nothing triggered this run; it may still name a pull request this plan opens";
+  }
+  if (resource.kind !== subject.kind || resource.number !== number4) {
+    return `task.run may start a task only on ${resourceLabel(resource)}, this run's own subject, or on a pull request this plan opens`;
+  }
+  return void 0;
+}
+var taskRunV1Schema = external_exports.strictObject({
+  task: taskRunTargetV1Schema,
+  workflowPath: external_exports.string().regex(TASK_WORKFLOW_PATH_PATTERN),
+  subject: taskRunSubjectV1Schema
+}).superRefine((run, context) => {
+  if (run.workflowPath !== taskWorkflowPath(run.task)) {
+    context.addIssue({ code: "custom", path: ["workflowPath"], message: `task ${run.task}'s workflow is ${taskWorkflowPath(run.task)}` });
+  }
+});
 var captureMaterializedPointers = {
   "commit.create": ["/files"],
   "commit.merge_base": ["/files", "/conflictedPaths"]
@@ -42103,6 +42224,19 @@ function referencedOutputType(reference, stepName2, context, path5, issues) {
 function taskStepIssues(step, context) {
   const issues = [];
   if (step.kind === MESSAGE_SEND_KIND) return issues;
+  if (step.kind === TASK_RUN_KIND) {
+    const reference = step.references["/pullNumber"];
+    if (reference !== void 0 && !isTemplateReference(reference)) {
+      const kind = context.earlier.get(reference.step);
+      if (kind === void 0 || createdResourceOutputs.pullNumber[kind] !== reference.output) {
+        issues.push({
+          path: ["references", "/pullNumber"],
+          message: `"${reference.step}" is not an earlier pull_request.open or pull_request.open_draft step of this plan`
+        });
+      }
+    }
+    return issues;
+  }
   const resolvedTypes = /* @__PURE__ */ new Map();
   const outputKey = (output2) => `${output2.step}\0${output2.output}`;
   for (const [pointer, reference] of Object.entries(step.references)) {
@@ -42197,6 +42331,14 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
    * `maxEffectOperations` or `maxEffectBytes`, which bound repository writes.
    */
   messages: external_exports.array(messageV1Schema).min(1).max(1).optional(),
+  /**
+   * Tasks apply starts after every operation applied and the message, if any,
+   * was tried. At most one, and dispatched at most once: a rerun never
+   * dispatches again once apply reported it was about to. Absent for plans
+   * without one, so those hash as before, and always absent for task
+   * workflows whose apply predates it (see `planCarries`).
+   */
+  taskRuns: external_exports.array(taskRunV1Schema).min(1).max(1).optional(),
   /** Present only when a step materializes repository changes at apply time. */
   capture: taskCaptureManifestV1Schema.optional(),
   /** Digest of the changes artifact the capture manifest describes. */
@@ -42309,6 +42451,14 @@ var taskEffectPlanV1Schema = external_exports.strictObject({
       if (refusal2 !== void 0) context.addIssue({ code: "custom", path: ["messages", index, "subject"], message: refusal2 });
     });
   }
+  const kindsByStep = new Map(plan.operations.map((operation) => [operation.stepName, operation.kind]));
+  plan.taskRuns?.forEach((run, index) => {
+    if (run.task === plan.taskId) {
+      context.addIssue({ code: "custom", path: ["taskRuns", index, "task"], message: `task ${plan.taskId} may not start itself` });
+    }
+    const refusal2 = taskRunSubjectRefusal(run.subject, plan.event.resource, kindsByStep);
+    if (refusal2 !== void 0) context.addIssue({ code: "custom", path: ["taskRuns", index, "subject"], message: refusal2 });
+  });
   const kinds = plan.operations.map((operation) => operation.kind);
   if (kinds.filter((kind) => kind === "commit.merge_base").length > 1) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a plan may hold at most one commit.merge_base" });
@@ -42861,6 +43011,20 @@ var runnerMessageReceiptV1Schema = external_exports.strictObject({
     context.addIssue({ code: "custom", path: ["transport"], message: "only a skipped message has no transport" });
   }
 });
+var runnerTaskRunReceiptV1Schema = external_exports.strictObject({
+  task: external_exports.string().regex(/^[a-z0-9](?:[a-z0-9._-]{0,158}[a-z0-9])?$/),
+  subject: external_exports.strictObject({
+    kind: external_exports.enum(["issue", "pull_request"]),
+    number: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  }),
+  status: external_exports.enum(["dispatching", "dispatched", "dispatch_unknown"]),
+  reason: external_exports.enum(["dispatch_refused", "dispatch_failed", "interrupted"]).optional(),
+  attemptedAt: external_exports.iso.datetime()
+}).superRefine((receipt, context) => {
+  if (receipt.status === "dispatch_unknown" !== (receipt.reason !== void 0)) {
+    context.addIssue({ code: "custom", path: ["reason"], message: "only a dispatch_unknown task run has a reason" });
+  }
+});
 var runnerEffectReceiptV1Schema = external_exports.strictObject({
   schemaVersion: external_exports.literal("gardener.runner.effect-receipt/v1"),
   planRunId: identifier2,
@@ -42888,16 +43052,24 @@ var runnerEffectReceiptV1Schema = external_exports.strictObject({
    * applied, so only on an applied receipt. A plan whose only effect is a
    * message has no operations, which is the one receipt with none.
    */
-  messages: external_exports.array(runnerMessageReceiptV1Schema).min(1).max(1).optional()
+  messages: external_exports.array(runnerMessageReceiptV1Schema).min(1).max(1).optional(),
+  /**
+   * The plan's task run, once apply reached it: like the message, only after
+   * every operation applied, so only on an applied receipt.
+   */
+  taskRuns: external_exports.array(runnerTaskRunReceiptV1Schema).min(1).max(1).optional()
 }).superRefine((receipt, context) => {
   if (receipt.plannedOperations > 0 && receipt.operations.length === 0) {
     context.addIssue({ code: "custom", path: ["operations"], message: "a receipt for a plan with steps records at least one" });
   }
-  if (receipt.plannedOperations === 0 && receipt.messages === void 0) {
-    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message" });
+  if (receipt.plannedOperations === 0 && receipt.messages === void 0 && receipt.taskRuns === void 0) {
+    context.addIssue({ code: "custom", path: ["messages"], message: "a receipt for a plan without steps answers its message or task run" });
   }
   if (receipt.messages !== void 0 && receipt.status !== "applied") {
     context.addIssue({ code: "custom", path: ["messages"], message: "a message is tried only after every step applied" });
+  }
+  if (receipt.taskRuns !== void 0 && receipt.status !== "applied") {
+    context.addIssue({ code: "custom", path: ["taskRuns"], message: "a task run is started only after every step applied" });
   }
   const bytes = canonicalJsonByteLength2(receipt);
   if (bytes === null) {
@@ -45765,6 +45937,12 @@ function planFailureAdvice(message3, status = "failed") {
       todo: `Raise \`limits.${key}\` in the task's TASK.md, or narrow its instructions so the model needs less.`
     };
   }
+  if (message3.startsWith("Refused before the model:") && message3.includes("dispatched by a bot")) {
+    return {
+      what: "A bot dispatched this task, and no Gardener run's task.run started it, so Gardener refused the run before the model saw anything.",
+      todo: "If another Gardener task was meant to start it, its lineage record was not found: an operator should check the runtime's audit trail. Otherwise find what in this repository dispatches Gardener workflows with a bot or App token. A maintainer can start the task with **Run workflow**."
+    };
+  }
   if (message3.startsWith("Task execution exceeded its runtime deadline") || message3.startsWith("Task runtime deadline expired")) {
     return {
       what: "The task ran out of time (`runtime-seconds`) before finishing, so nothing was changed.",
@@ -45882,11 +46060,16 @@ function renderPlanJobSummary(input2) {
         lines.push(`| ${index + 1} | ${code(operation.stepName)} | ${code(operation.kind)} | ${cell(operation.rationale)} |`);
       });
       lines.push("");
-    } else if (message3 === void 0) {
+    } else if (message3 === void 0 && input2.plan?.taskRuns === void 0) {
       lines.push("The model proposed no changes, so nothing is applied.", "");
     }
     if (message3 !== void 0) {
       lines.push(`The model proposed a message about ${subjectLabel(message3.subject)}, which the **Apply exact task plan** job sends after the steps apply: ${cell(message3.summary)}`, "");
+    }
+    const run = input2.plan?.taskRuns?.[0];
+    if (run !== void 0) {
+      const on = "openedBy" in run.subject ? `the pull request step ${code(run.subject.openedBy)} opens` : subjectLabel(run.subject);
+      lines.push(`The model proposed starting task ${code(run.task)} on ${on}, which the **Apply exact task plan** job does once, after the steps apply.`, "");
     }
     lines.push(details("Model's summary (written by the model)", input2.terminal.summary), "");
   }
