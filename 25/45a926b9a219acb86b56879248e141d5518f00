@@ -1,0 +1,29 @@
+.changeset/issue-close-reason.md
+  s_9c404162980aee::t_07244d737bd56c 1-5
+bridges/github/apply/dist/index.cjs
+  s_9c404162980aee::t_b377eac0f9841b 40144-40148,47467,47470,47472
+bridges/github/plan/dist/index.cjs
+  s_9c404162980aee::t_d6d3b9593ea979 40132-40136
+bridges/github/sync/dist/index.cjs
+  s_9c404162980aee::t_92ba91981212c6 27216-27220
+docs/task-reference.md
+  s_9c404162980aee::t_3ba987c5d8c50b 152
+packages/cli/test/docs.test.ts
+  s_9c404162980aee::t_3d30332bfdecc8 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2545a926b9a219acb86b56879248e141d5518f00",
+  "prompts": {},
+  "sessions": {
+    "s_9c404162980aee": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a187d6-b96d-7910-965b-4c26a653aaab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
