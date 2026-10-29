@@ -149,7 +149,7 @@ A family glob grants every current and future member of its family. Prefer exact
 | `issue.label.remove` | Remove a label from an issue. | `issues` | `issueNumber`, `label` |
 | `issue.comment.create` | Comment on an issue. | `issues` | `commentId`, `commentUrl`, `issueNumber` |
 | `issue.comment.update` | Edit a comment on an issue. | `issues` | `commentId`, `commentUrl`, `issueNumber` |
-| `issue.close` | Close an issue. | `issues` | `issueNumber`, `issueUrl`, `state` |
+| `issue.close` | Close an issue, as completed or not planned (`reason`). | `issues` | `issueNumber`, `issueUrl`, `state` |
 | `issue.reopen` | Reopen an issue. | `issues` | `issueNumber`, `issueUrl`, `state` |
 | `issue.assignee.add` | Assign someone to an issue. | `issues` | `assigneeId`, `assigneeLogin`, `issueNumber` |
 | `issue.assignee.remove` | Unassign someone from an issue. | `issues` | `assigneeId`, `assigneeLogin`, `issueNumber` |

@@ -116,7 +116,11 @@ const operationOptions = [
   issueBase.extend({ kind: z.literal("issue.label.remove"), label: labelName }).strict(),
   issueBase.extend({ kind: z.literal("issue.comment.create"), body }).strict(),
   issueBase.extend({ kind: z.literal("issue.comment.update"), ...commentUpdate }).strict(),
-  issueBase.extend({ kind: z.literal("issue.close"), expectedIssueState: z.literal("open") }).strict(),
+  /**
+   * GitHub's `state_reason`: `completed` (done or fixed) or `not_planned`
+   * (won't fix, obsolete, stale). Omitted, GitHub records `completed`.
+   */
+  issueBase.extend({ kind: z.literal("issue.close"), expectedIssueState: z.literal("open"), reason: z.enum(["completed", "not_planned"]).optional() }).strict(),
   issueBase.extend({ kind: z.literal("issue.reopen"), expectedIssueState: z.literal("closed") }).strict(),
   issueBase.extend({ kind: z.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
   issueBase.extend({ kind: z.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),

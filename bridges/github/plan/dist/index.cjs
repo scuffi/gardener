@@ -40129,7 +40129,11 @@ var operationOptions = [
   issueBase.extend({ kind: external_exports.literal("issue.label.remove"), label: labelName }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.comment.create"), body }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.comment.update"), ...commentUpdate }).strict(),
-  issueBase.extend({ kind: external_exports.literal("issue.close"), expectedIssueState: external_exports.literal("open") }).strict(),
+  /**
+   * GitHub's `state_reason`: `completed` (done or fixed) or `not_planned`
+   * (won't fix, obsolete, stale). Omitted, GitHub records `completed`.
+   */
+  issueBase.extend({ kind: external_exports.literal("issue.close"), expectedIssueState: external_exports.literal("open"), reason: external_exports.enum(["completed", "not_planned"]).optional() }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.reopen"), expectedIssueState: external_exports.literal("closed") }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.assignee.add"), assigneeId: githubNumericIdSchema }).strict(),
   issueBase.extend({ kind: external_exports.literal("issue.assignee.remove"), assigneeId: githubNumericIdSchema }).strict(),

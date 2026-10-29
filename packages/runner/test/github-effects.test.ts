@@ -1599,6 +1599,35 @@ describe("executor guards", () => {
 /* Draft transitions and helpers                                               */
 /* -------------------------------------------------------------------------- */
 
+describe("issue close reasons", () => {
+  const notPlanned = operationSchema.parse({ ...issueBase, id: "op-issue-close-np", kind: "issue.close", expectedIssueState: "open", reason: "not_planned" });
+
+  it("sends the reason as GitHub's state_reason", async () => {
+    const { receipt, calls } = await run(notPlanned, [
+      get(`${REPO}/issues/5`, OPEN_ISSUE),
+      send("PATCH", `${REPO}/issues/5`, { ...OPEN_ISSUE, state: "closed", state_reason: "not_planned" }),
+    ]);
+    expect(receipt.status, JSON.stringify(receipt.error)).toBe("succeeded");
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ state: "closed", state_reason: "not_planned" });
+  });
+
+  it("sends no state_reason when the reason is omitted", async () => {
+    const { calls } = await run(scenarioFor("issue.close").operation, scenarioFor("issue.close").apply);
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ state: "closed" });
+  });
+
+  it("fails when GitHub closes the issue with a different reason", async () => {
+    const { receipt } = await run(notPlanned, [
+      get(`${REPO}/issues/5`, OPEN_ISSUE),
+      send("PATCH", `${REPO}/issues/5`, { ...OPEN_ISSUE, state: "closed", state_reason: "completed" }),
+    ]);
+    expect(receipt.status).toBe("conflicted");
+    expect(receipt.error?.code).toBe("issue_state_not_applied");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
 describe("draft transitions", () => {
   const readyForReview = operationSchema.parse({
     ...pullBase,

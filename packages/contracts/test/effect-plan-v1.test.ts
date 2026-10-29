@@ -252,6 +252,13 @@ describe("effect proposals", () => {
     expect(pullUpdate.properties).toHaveProperty("title");
     expect(pullUpdate.properties).toHaveProperty("draft");
 
+    const issueClose = JSON.parse(operationProposalPayloadJsonSchema("issue.close")) as {
+      properties: Record<string, { enum?: string[] }>;
+      required: string[];
+    };
+    expect(issueClose.properties.reason?.enum).toEqual(["completed", "not_planned"]);
+    expect(issueClose.required).not.toContain("reason");
+
     const commit = JSON.parse(operationProposalPayloadJsonSchema("commit.create")) as {
       properties: Record<string, unknown>;
       required: string[];
@@ -451,6 +458,15 @@ describe("effect proposals", () => {
 describe("probeOperationShape", () => {
   it("reports nothing for a complete payload", () => {
     expect(probeOperationShape({ kind: "issue.close", payload: payloadFor("issue.close") })).toEqual([]);
+  });
+
+  it("accepts only GitHub's close reasons", () => {
+    for (const reason of ["completed", "not_planned"]) {
+      expect(probeOperationShape({ kind: "issue.close", payload: { ...payloadFor("issue.close"), reason } })).toEqual([]);
+    }
+    for (const reason of ["duplicate", "reopened", "wontfix"]) {
+      expect(probeOperationShape({ kind: "issue.close", payload: { ...payloadFor("issue.close"), reason } })).not.toEqual([]);
+    }
   });
 
   it("reports the exact failing pointer", () => {

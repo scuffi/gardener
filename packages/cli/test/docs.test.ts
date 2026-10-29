@@ -23,7 +23,7 @@ const EFFECT_DESCRIPTIONS: Record<OperationKind, string> = {
   "issue.label.remove": "Remove a label from an issue.",
   "issue.comment.create": "Comment on an issue.",
   "issue.comment.update": "Edit a comment on an issue.",
-  "issue.close": "Close an issue.",
+  "issue.close": "Close an issue, as completed or not planned (`reason`).",
   "issue.reopen": "Reopen an issue.",
   "issue.assignee.add": "Assign someone to an issue.",
   "issue.assignee.remove": "Unassign someone from an issue.",

@@ -1042,11 +1042,12 @@ async function executeIssueState(scope: ExecutionScope, operation: IssueStateOpe
     return { kind: operation.kind, issueNumber: operation.issueNumber, state: desired, issueUrl: htmlUrl(issue) };
   }
   assertIssueState(scope, issue, operation.expectedIssueState, operation.expectedIssueUpdatedAt);
+  const reason = operation.kind === "issue.close" ? operation.reason : undefined;
   const { data } = await scope.api.rest(`${scope.repoPath}/issues/${operation.issueNumber}`, "Issue state mutation", {
     method: "PATCH",
-    body: JSON.stringify({ state: desired }),
+    body: JSON.stringify(reason ? { state: desired, state_reason: reason } : { state: desired }),
   });
-  if (!record(data) || data.state !== desired) {
+  if (!record(data) || data.state !== desired || (reason !== undefined && data.state_reason !== reason)) {
     throw conflict("issue_state_not_applied", "GitHub did not apply the exact issue state");
   }
   return { kind: operation.kind, issueNumber: operation.issueNumber, state: desired, issueUrl: htmlUrl(data) };
