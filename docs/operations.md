@@ -205,7 +205,7 @@ manual run), or have a Gardener task start the task with `task.run`. A bot dispa
 A task that declares `task.run` has its caller job granted `actions: write`; `generate` warns about
 it. With that grant the job can also delete workflow runs, logs and artifacts, so for those
 repositories the Worker's `actions_task_audit` table, not the Actions logs, is the durable record. See
-[SECURITY.md](../SECURITY.md#starting-other-tasks).
+[SECURITY.md](https://github.com/scuffi/gardener/blob/main/SECURITY.md#starting-other-tasks).
 
 If apply reports a task run as `dispatch_unknown`, the job fails and Gardener will not dispatch it
 again. Check the target task's workflow runs; if it did not start, start it by hand with

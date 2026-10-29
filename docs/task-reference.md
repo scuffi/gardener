@@ -247,7 +247,7 @@ effects:
   never dispatches twice: a rerun after `dispatching` settles as `dispatch_unknown` without calling
   GitHub, and the job fails so someone can check whether the task started and run it by hand.
 - The caller job of a task that declares it is granted `actions: write`. See
-  [SECURITY.md](../SECURITY.md#starting-other-tasks) for what else that allows.
+  [SECURITY.md](https://github.com/scuffi/gardener/blob/main/SECURITY.md#starting-other-tasks) for what else that allows.
 - `generate` refuses a target that is not a task of the project, the task itself, a target whose
   workflow takes no input the task can name, a cycle of tasks starting each other, and a pin whose
   apply predates `task.run` (0.1.20 or earlier).
