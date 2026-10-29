@@ -1,0 +1,19 @@
+packages/cli/src/project.ts
+  s_9c404162980aee::t_abd2cb40dea8c0 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bf65430bd3d85c3f93ab2378ca209bee6ae44c94",
+  "prompts": {},
+  "sessions": {
+    "s_9c404162980aee": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a187d6-b96d-7910-965b-4c26a653aaab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "scuffi <aferguson@cloudflare.com>"
+    }
+  }
+}
