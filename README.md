@@ -1,186 +1,193 @@
 <p align="center">
-   <img width="600" height="210" alt="gardener-background" src="https://github.com/user-attachments/assets/d310ae94-fa13-42cb-a9e1-6e59fcc2c3a8" />
+   <img width="600" height="210" alt="Gardener" src="https://github.com/user-attachments/assets/d310ae94-fa13-42cb-a9e1-6e59fcc2c3a8" />
 </p>
 
+<h3 align="center">Your repositories, tended.</h3>
 
-Gardener runs AI maintenance tasks on your GitHub repositories from GitHub Actions. You describe a
-task in a Markdown file: when it runs, what it may read, and exactly which changes it may make. A
-model does the work inside the task's limits, and a separate job applies only the changes the task
-allows.
+<p align="center">
+  AI maintainers for GitHub that can triage issues, answer @mentions, merge Dependabot PRs and
+  catch stale docs, without ever holding a write token.
+</p>
 
-Everything runs in your own accounts: a Cloudflare Worker with Workers AI and D1, plus Actions
-workflows in your repository. There is no GitHub App, webhook, personal access token, or stored
-GitHub secret.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@scuffi/gardener"><img alt="npm" src="https://img.shields.io/npm/v/@scuffi/gardener?color=2f9e5f&label=npm"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2f9e5f"></a>
+  <a href="https://gardener.scuffi.dev/"><img alt="Docs" src="https://img.shields.io/badge/docs-gardener.scuffi.dev-2f9e5f"></a>
+  <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-orange">
+</p>
 
-## How it works
+<p align="center">
+  <a href="https://gardener.scuffi.dev/getting-started"><b>Get started</b></a> ·
+  <a href="https://gardener.scuffi.dev/task-authoring">Write a task</a> ·
+  <a href="https://gardener.scuffi.dev/task-reference">Reference</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
 
-Each task compiles to a GitHub workflow with two jobs:
+---
 
-1. **Plan.** The workflow checks out the repository with a read-only token. It then opens a
-   session to your Gardener Worker, authenticated with GitHub OIDC. The model inspects the
-   repository through the task's declared tools and proposes effects. The Worker validates each
-   proposal and returns an exact, hash-bound effect plan.
-2. **Apply.** A second job, with no checkout, downloads the plan and verifies its hash with the
-   Worker. It then performs each operation in order using the job's `GITHUB_TOKEN`. It
-   re-checks GitHub state before every write, stops at the first failure, and records a receipt
-   for each step.
+Each Gardener task is one Markdown file. It sets what event starts the task, what the model may
+read, and the exact list of changes it may make, followed by instructions in plain English. The
+task compiles to a GitHub Actions workflow, and the model runs on a Cloudflare Worker in your own
+account. A separate job makes the changes, and only the ones the task declared.
 
-The model never holds a write-capable token, and the job holding the write token never runs
-repository code.
-
-## Quick start
-
-You need Node.js 24+, `npx wrangler login` and `gh auth login`, and a repository whose Actions can
-use this repository's reusable workflows (see [Prerequisites](docs/operations.md#prerequisites)).
-Tasks that open pull requests also need **Allow GitHub Actions to create and approve pull
-requests**, in the repository's **Settings → Actions → General**. New repositories have it off.
-
-From a checkout of your repository's default branch:
+## Get it running
 
 ```bash
 npx @scuffi/gardener yolo --workspace my-gardener --repository my-org/my-repo --demos
 ```
 
-`yolo` does five things:
+Run this from a checkout of your default branch. In one go, it:
 
 1. scaffolds `.gardener/` with two demo tasks;
-2. compiles them and generates their workflows;
-3. deploys the Worker and D1 database to your Cloudflare account;
+2. compiles them into `.github/workflows/`;
+3. deploys the Worker and its D1 database to your Cloudflare account;
 4. enrolls the repository;
-5. verifies the installation.
+5. checks that the install works.
 
-It is safe to rerun after an interruption. It never commits, so review and push the generated files
-yourself:
+It's safe to rerun, and it never commits:
 
 ```bash
-git add .gardener .github/workflows
-git commit -m "Add Gardener"
-git push
+git add .gardener .github/workflows && git commit -m "Add Gardener" && git push
 ```
 
-Open an issue labeled `gardener-bug` to run the bug-intake demo.
+Then open an issue labeled `gardener-bug`. Gardener reacts with 👀 while it works and 🚀 once its
+comment lands.
 
-[Getting started](docs/getting-started.md) walks through the same steps one at a time, with a
-starter task.
+You'll need Node.js 24+, `npx wrangler login` and `gh auth login`.
+[Getting started](https://gardener.scuffi.dev/getting-started) covers the rest, plus a
+step-by-step version that takes about ten minutes.
 
-## Writing a task
+## What will you grow?
+
+These are the tasks that maintain this repository. Copy one into `.gardener/tasks/` and adapt it.
+
+| | Task | What it does | Runs |
+| --- | --- | --- | --- |
+| 🐛 | [Triage](.gardener/tasks/triage/TASK.md) | Labels new issues with existing labels, links likely duplicates, closes empty or invalid ones | issue opened |
+| 💬 | [Mention reply](.gardener/tasks/mention-reply/TASK.md) | A maintainer mentions the bot and it does what was asked: answers, reviews, pushes a fix, opens a PR | on mention |
+| 🤖 | [Dependabot merge](.gardener/tasks/dependabot-merge/TASK.md) | Merges Dependabot PRs whose checks all passed, flags the rest for a person | every 4 hours |
+| 📚 | [Docs review](.gardener/tasks/docs-review/TASK.md) | Reads the docs against the code and opens one issue listing what's out of date | Mondays |
+| 🧪 | [Examples review](.gardener/tasks/examples-review/TASK.md) | Runs the examples and opens a draft PR fixing the ones that broke | Mondays |
+| 🔍 | [Test coverage review](.gardener/tasks/test-coverage-review/TASK.md) | Finds important behaviour with no tests and opens an issue about it | Mondays |
+
+## A task is one file
 
 ```markdown
 ---
 schema: gardener.task/v1
-id: bug-intake
-name: Bug intake
-description: Helps issue authors provide actionable bug reports.
+id: triage
+name: Triage
+description: Summarises new issues, points out likely duplicates, and applies existing labels.
 trigger:
   event: github.issue.opened
-  labels-all: [gardener-bug]
-tools:
-  - repository.list_files
-  - repository.read_file
-effects:
-  - issue.comment.create
-network:
-  default: deny
-  allow: []
-  deny: []
-limits:
-  runtime-seconds: 300
-  max-turns: 16
-  max-tool-calls: 12
-  input-tokens: 60000
-  output-tokens: 16000
+tools: [repository.list_files, repository.read_file, provider.api.read]
+effects: [issue.comment.create, issue.label.add]
+network: { default: deny, allow: [], deny: [] }
+limits: { runtime-seconds: 300, max-turns: 12, max-tool-calls: 16, input-tokens: 80000, output-tokens: 16000 }
 ---
-Read the issue and the relevant code. If the report is missing reproduction steps, expected
-behaviour, or version information, post one comment asking for exactly what is missing.
+Triage the issue that triggered this run. Search for similar open issues, then comment with a
+short summary, link any likely duplicate, and add up to two existing labels that fit.
 ```
 
-Save it as `.gardener/tasks/bug-intake/TASK.md`, run `npx @scuffi/gardener generate`, then commit
-and push: the sync workflow enrolls it.
+Save it as `.gardener/tasks/triage/TASK.md`, run `npx @scuffi/gardener generate`, and push.
 
-Coding agents can read `.gardener/SKILL.md`, which `init` and `generate` write: a complete guide to
-the task format, in the CLI's own version.
+`effects` does real work here. The model can propose only these two kinds of change, and the
+generated workflow asks GitHub for only the token permissions they need. Whatever ends up in the
+prompt, this task can't close an issue or push a commit.
 
-Tasks can respond to 29 kinds of issue, pull request, discussion, push, schedule, and manual
-events. They can use 36 kinds of GitHub operation, including:
+Don't want to write YAML? `init` drops a `.gardener/SKILL.md` into your repo that teaches coding
+agents the whole task format, so you can ask yours for "a task that labels stale PRs every Friday".
 
-- labels and comments;
-- reviews, and replies and resolves in review threads;
-- branches and commits;
-- draft pull requests and merges;
-- check reruns;
-- releases.
+## What tasks can do
 
-The GitHub token permissions in each generated workflow are derived from the task's declared
-effects. See [Creating tasks](docs/task-authoring.md) and the [task reference](docs/task-reference.md).
+- **React to 29 kinds of event**: issues, pull requests, reviews, review comments, discussions,
+  pushes, cron schedules and manual runs. You can narrow each trigger by label, by author
+  (`authors: maintainers`) or by who's mentioned.
+- **Make 36 kinds of change**: comments, labels, assignees, reviews, replying to and resolving
+  review threads, branches, commits, opening PRs and drafts, merges, check reruns and releases.
+- **Use the model you want**: Workers AI by default (`@cf/zai-org/glm-5.3`), or set
+  `model: anthropic/…` or `model: openai/…` per task, routed through
+  [AI Gateway](https://gardener.scuffi.dev/operations#ai-gateway).
+- **Stay on budget**: each run has caps on runtime, turns, tool calls and tokens. Each task can also
+  cap how often it runs: outsiders get 3 runs a day by default, and a run over the cap is skipped
+  before the model is called.
+- **Post to chat**: `message.send` pings Slack or Google Chat.
+- **Leave a paper trail**: `gardener runs view` prints every step of a run, the receipt for each
+  change it made, and the audit log. `gardener repository disable` blocks every task in a repo
+  immediately.
 
-## Security model
+## Why it's safe to give it write access
 
-- **Authentication.** The Worker accepts a session only with a fresh GitHub OIDC token. The token
-  must match all of the following:
-  - the enrolled repository and owner IDs;
-  - the run and attempt;
-  - the event, ref, and commit;
-  - a GitHub-hosted runner;
-  - the exact reusable-workflow commit.
-- **Task integrity.** Task definitions are stored in D1 by SHA-256. Each run loads the enrolled
-  hash and recomputes it.
-- **Model limits.** The model can only propose operations the task declares. It cannot add
-  commit contents or idempotency markers. Gardener derives both itself.
-- **Fork pull requests** never run, and `pull_request_target` is not supported.
-- **Apply safety.** Operations carry the GitHub state they expect. Apply stops rather than
-  overwrite a change made after planning.
+Every task compiles to a workflow with two jobs, and no job ever gets both the model and a
+write token.
 
-See [Security](SECURITY.md) and [Architecture](docs/architecture.md) for details.
-
-## Status and limitations
-
-Gardener is pre-release.
-
-- **Live testing is narrow.** Only the issue-comment path has been tested end to end against real
-  GitHub. The other triggers and operations pass the test suite but are not yet proven live.
-- **Effects apply automatically.** There is no human approval step, so a task that declares
-  `pull_request.merge` or `release.delete` can do those things unattended. Declare the narrowest
-  effects you can.
-- **`repository.exec` has unrestricted network access.** It runs task-chosen commands with the
-  runner's normal egress. Do not use it on sensitive private code.
-- **Install from npm.** The CLI is published as `@scuffi/gardener`, and `deploy` uses the runtime
-  bundled in the package. Repositories call the reusable workflows in this repository, pinned to
-  the release's commit.
-- **Cloudflare Access.** If Access protects every `workers.dev` hostname on your account,
-  `deploy` needs a `CLOUDFLARE_API_TOKEN` scoped to Access Apps and Policies. It uses this to add a
-  bypass for the runtime hostname only.
-
-## Documentation
-
-The docs are published at **[gardener.scuffi.dev](https://gardener.scuffi.dev/)**. For
-coding agents, [`llms.txt`](https://gardener.scuffi.dev/llms.txt) indexes every page and
-[`llms-full.txt`](https://gardener.scuffi.dev/llms-full.txt) is all of them in one file.
-
-- [Getting started](docs/getting-started.md): deploy Gardener and run your first task with `npx`
-- [Onboarding](docs/onboarding.md): connecting a repository, starter tasks, and upgrading between releases
-- [Creating tasks](docs/task-authoring.md): writing a task, and choosing its triggers, effects and limits
-- [Task reference](docs/task-reference.md): every task key, trigger, tool, effect and limit, and the project files
-- [CLI reference](docs/cli.md): every command and option
-- [Operations](docs/operations.md): deploying, upgrading, and the kill switch
-- [Architecture](docs/architecture.md): components, data, and the plan/apply protocol
-- [Security](SECURITY.md): trust boundaries and how to report a vulnerability
-- [Contributing](CONTRIBUTING.md): issues, and the [collaborator guide](COLLABORATORS.md)
-
-## Development
-
-```bash
-pnpm install
-pnpm check   # typecheck, tests, builds, package and bridge checks, deploy dry run, versions
+```mermaid
+flowchart LR
+    E([GitHub event]) --> P["Plan job<br/><sub>read-only token</sub>"]
+    P <-->|"OIDC session"| W["Your Worker<br/><sub>model + validation</sub>"]
+    P -->|"hash-bound plan"| A["Apply job<br/><sub>write token, no checkout</sub>"]
+    A --> G([GitHub])
 ```
 
-| Path | Contents |
+- **Plan** checks out the repo with a read-only token. The model looks around using only the tools
+  the task declares and proposes changes. The Worker validates each proposal and returns an exact
+  plan, bound to a hash.
+- **Apply** never checks out or runs repository code. It verifies the plan's hash with the Worker,
+  then makes each change in order. Before each write it checks that GitHub still looks the way it
+  did at planning time. If something has moved, it stops rather than overwrite it.
+
+A few more properties:
+
+- **Strangers can't redirect it.** Who started a run decides where the run may act, and Gardener
+  works that out from GitHub-signed data before the model sees anything. Runs started by outsiders,
+  bots or forked branches can touch only the issue or PR that triggered them, and they can never
+  merge or approve a PR they opened.
+- **Nothing to leak.** There's no GitHub App, webhook, personal access token or stored GitHub
+  secret. Each session needs a fresh GitHub OIDC token, pinned to the repository, the run, the
+  commit and the exact reusable-workflow commit.
+- **It runs on your accounts.** The Worker, the database and the model bill run on your
+  Cloudflare account. The workflows live in your repo.
+
+The full threat model is in [SECURITY.md](SECURITY.md), and the protocol is in
+[Architecture](https://gardener.scuffi.dev/architecture).
+
+## Heads up: it's early
+
+Gardener is pre-release, so keep these in mind:
+
+- **No approval step.** Declared effects apply automatically. If a task declares
+  `pull_request.merge`, it will merge. Declare the narrowest effects you can.
+- **`repository.exec` has normal network access.** It runs commands with the runner's usual
+  internet access. Keep it away from sensitive private code.
+- **Limited live testing.** Only the issue-comment path has been tested end to end against real
+  GitHub. Everything else passes the test suite but hasn't been proven live yet.
+
+## Docs
+
+Everything else is at **[gardener.scuffi.dev](https://gardener.scuffi.dev/)**.
+
+| Page | What's in it |
 | --- | --- |
-| `apps/gardener` | Cloudflare Worker runtime |
-| `packages/cli` | `gardener` CLI and task compiler |
-| `packages/runner` | GitHub bridge source; built into `bridges/github` |
-| `packages/contracts` | Task, event, and operation schemas |
-| `packages/protocol` | Cap'n Web session protocol |
+| [Getting started](https://gardener.scuffi.dev/getting-started) | Deploy and run your first task |
+| [Onboarding](https://gardener.scuffi.dev/onboarding) | Connecting repositories, starter tasks, upgrading |
+| [Creating tasks](https://gardener.scuffi.dev/task-authoring) | Choosing triggers, effects, limits and effect scope |
+| [Task reference](https://gardener.scuffi.dev/task-reference) | Every key, trigger, tool, effect and limit |
+| [CLI reference](https://gardener.scuffi.dev/cli) | Every command and flag |
+| [Operations](https://gardener.scuffi.dev/operations) | Deploying, Cloudflare Access, AI Gateway, spend caps, kill switch |
+| [Architecture](https://gardener.scuffi.dev/architecture) | Components, data, and the plan/apply protocol |
+
+Coding agents can read the docs as [`llms.txt`](https://gardener.scuffi.dev/llms.txt) or
+[`llms-full.txt`](https://gardener.scuffi.dev/llms-full.txt).
+
+## Contributing
+
+Issues and ideas are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). If you're working on
+Gardener itself, the [collaborator guide](COLLABORATORS.md) covers setup, the repo layout and
+`pnpm check`.
+
+To report a vulnerability, use GitHub's private vulnerability reporting, as described in
+[SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE). Go grow something.
