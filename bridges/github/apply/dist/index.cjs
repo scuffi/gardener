@@ -18969,6 +18969,7 @@ var require_undici = __commonJS({
 var effects_main_exports = {};
 __export(effects_main_exports, {
   CheckoutBindingError: () => CheckoutBindingError,
+  UnrecordedEffectError: () => UnrecordedEffectError,
   applyEventBinding: () => applyEventBinding,
   applyOrderedPlan: () => applyOrderedPlan,
   checkoutBindingHolds: () => checkoutBindingHolds,
@@ -46532,6 +46533,146 @@ async function fetchCurrentPullRequest(input2) {
     return null;
   }
 }
+var COMMIT_SHA = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i;
+async function fetchGitCommit(input2) {
+  if (!input2.token || !COMMIT_SHA.test(input2.sha)) return null;
+  if (!REPOSITORY.test(input2.repository) || input2.repository.split("/").some((part) => part === "." || part === "..")) return null;
+  try {
+    const response = await (input2.fetch ?? fetch)(
+      `https://api.github.com/repos/${input2.repository.split("/").map(encodeURIComponent).join("/")}/git/commits/${input2.sha.toLowerCase()}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${input2.token}`,
+          "user-agent": "gardener-runner",
+          "x-github-api-version": "2022-11-28"
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS)
+      }
+    );
+    if (!response.ok) return null;
+    const body2 = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+    if (body2.truncated) return null;
+    const value = JSON.parse(body2.text);
+    if (typeof value.sha !== "string" || typeof value.message !== "string" || !Array.isArray(value.parents)) return null;
+    const parents = [];
+    for (const parent of value.parents) {
+      if (typeof parent?.sha !== "string" || !COMMIT_SHA.test(parent.sha)) return null;
+      parents.push(parent.sha.toLowerCase());
+    }
+    return { sha: value.sha.toLowerCase(), message: value.message, parents };
+  } catch {
+    return null;
+  }
+}
+
+// src/effects-session.ts
+var EffectsSessionLostError = class extends Error {
+  constructor(message, options) {
+    super(message, options);
+    this.name = "EffectsSessionLostError";
+  }
+};
+var EFFECTS_MAX_RECONNECTS = 4;
+var CALL_TIMEOUT_MS = 3e4;
+var ReconnectingEffectsSession = class {
+  #connect;
+  #maxReconnects;
+  #callTimeoutMs;
+  #delay;
+  #onReconnect;
+  #live;
+  #closed = false;
+  constructor(options) {
+    this.#connect = options.connect;
+    this.#maxReconnects = options.maxReconnects ?? EFFECTS_MAX_RECONNECTS;
+    this.#callTimeoutMs = options.callTimeoutMs ?? CALL_TIMEOUT_MS;
+    this.#delay = options.delay ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+    this.#onReconnect = options.onReconnect;
+  }
+  priorEffectReceipt(planRunId, artifactSha256) {
+    return this.#call((session) => session.priorEffectReceipt(planRunId, artifactSha256));
+  }
+  recordEffect(receipt) {
+    return this.#call((session) => session.recordEffect(receipt));
+  }
+  [Symbol.dispose]() {
+    this.#closed = true;
+    this.#live?.connection.dispose();
+    this.#live = void 0;
+  }
+  async #call(invoke) {
+    let lastError;
+    for (let attempt = 0; attempt <= this.#maxReconnects; attempt += 1) {
+      if (attempt > 0) {
+        this.#onReconnect?.(attempt, lastError);
+        await this.#delay(Math.min(5e3, 500 * 2 ** (attempt - 1)));
+      }
+      if (this.#closed) throw new Error("The Gardener effects session is closed");
+      let live;
+      try {
+        live = await this.#open();
+      } catch (error63) {
+        lastError = error63;
+        continue;
+      }
+      try {
+        return await this.#withTimeout(live, invoke(live.connection.session));
+      } catch (error63) {
+        if (live.broken === void 0) throw error63;
+        lastError = live.broken.error;
+        this.#drop(live);
+      }
+    }
+    throw new EffectsSessionLostError(
+      `Lost the connection to the Gardener runtime and could not reconnect after ${this.#maxReconnects} attempts: ${errorMessage(lastError)}`,
+      { cause: lastError }
+    );
+  }
+  /** The current connection, or a new one when there is none or it broke while idle. */
+  async #open() {
+    if (this.#live !== void 0 && this.#live.broken === void 0) return this.#live;
+    if (this.#live !== void 0) this.#drop(this.#live);
+    const connection = await this.#connect();
+    const live = { connection, broken: void 0 };
+    connection.onBroken((error63) => {
+      live.broken ??= { error: error63 };
+    });
+    this.#live = live;
+    return live;
+  }
+  /**
+   * A call with no answer in time is treated as a broken connection: a peer
+   * that vanished without closing leaves the socket open, and the call would
+   * otherwise wait until the job's own timeout.
+   */
+  async #withTimeout(live, call) {
+    let timer;
+    const timeout = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => {
+        const error63 = new Error(`The Gardener runtime did not answer within ${Math.round(this.#callTimeoutMs / 1e3)}s`);
+        live.broken ??= { error: error63 };
+        reject(error63);
+      }, this.#callTimeoutMs);
+    });
+    try {
+      return await Promise.race([call, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  #drop(live) {
+    try {
+      live.connection.dispose();
+    } catch {
+    }
+    if (this.#live === live) this.#live = void 0;
+  }
+};
+function errorMessage(error63) {
+  return error63 instanceof Error ? error63.message : String(error63);
+}
 
 // src/dispatch-target.ts
 var REPOSITORY2 = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -46979,6 +47120,12 @@ ${marker}`);
 }
 function commitMarker(operationId, operationHash) {
   return `${COMMIT_MARKER_PREFIX} ${operationId}:${operationHash}`;
+}
+function commitMarkerOperationId(line) {
+  const prefix = `${COMMIT_MARKER_PREFIX} `;
+  if (!line.startsWith(prefix)) return void 0;
+  const marked = /^(.+):[a-f0-9]{64}$/.exec(line.slice(prefix.length));
+  return marked?.[1];
 }
 function encodeSegment(value, label) {
   if (value === "" || value === "." || value === "..") {
@@ -49071,7 +49218,18 @@ function renderApplyJobSummary(input2) {
   const heading = messageFailed ? "\u274C Plan applied, message not sent" : taskRunUnknown ? "\u274C Plan applied, task may not have started" : receipt?.status === "applied" && input2.error === void 0 ? "\u2705 Plan applied" : receipt?.status === "stopped" ? "\u274C Plan stopped" : "\u274C Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
   const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : void 0;
-  if (stopping?.receipt.error) {
+  const unrecorded = input2.unrecorded ?? [];
+  if (unrecorded.length > 0 && input2.error !== void 0) {
+    const steps = unrecorded.map(code).join(", ");
+    lines.push(
+      `**What happened:** ${unrecorded.length === 1 ? "step" : "steps"} ${steps} applied, but Gardener could not record ${unrecorded.length === 1 ? "it" : "them"}, so the apply job stopped there.`,
+      "",
+      "**What to do:** Re-run failed jobs, not all jobs. The apply job picks up the same plan, recognises what already applied, and finishes the rest.",
+      "",
+      fenced("Error details", input2.error),
+      ""
+    );
+  } else if (stopping?.receipt.error) {
     const advice = applyFailureAdvice(stopping.receipt.error.code);
     lines.push(
       `**What happened:** step ${code(stopping.stepName)} (${code(stopping.receipt.kind)}) did not apply. ${advice.what}`,
@@ -49624,6 +49782,7 @@ async function runEffectsMain() {
   let connection;
   let plan;
   let receipt;
+  let unrecorded;
   let message;
   let taskRun;
   try {
@@ -49642,8 +49801,16 @@ async function runEffectsMain() {
     if (!equalDigest(actualSha256, expectedSha256)) throw new Error("Effect artifact digest mismatch");
     plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
     await assertApplyBindings(plan, token);
-    connection = await connectEffectsSession(runtimeUrl, plan.bundleHash);
-    const prior = await connection.session.priorEffectReceipt(plan.runId, actualSha256);
+    const bundleHash = plan.bundleHash;
+    connection = new ReconnectingEffectsSession({
+      connect: () => connectEffectsSession(runtimeUrl, bundleHash),
+      onReconnect: (attempt, error63) => {
+        warning(`Gardener runtime connection lost; reconnecting (${attempt}/${EFFECTS_MAX_RECONNECTS}): ${errorText(error63)}`);
+      }
+    });
+    const session = connection;
+    const prior = await session.priorEffectReceipt(plan.runId, actualSha256);
+    let recorded = prior;
     const captureDirectory = getInput("capture-artifact-path").trim();
     const capture = await prepareCapture(plan, captureDirectory);
     const result = await applyOrderedPlan({
@@ -49654,7 +49821,14 @@ async function runEffectsMain() {
       prior,
       destination: chatWebhook,
       ...capture ? { captureDirectory: capture.directory } : {},
-      record: (receipt2) => connection.session.recordEffect(receipt2)
+      record: async (next) => {
+        try {
+          recorded = await session.recordEffect(next);
+          return recorded;
+        } catch (error63) {
+          throw UnrecordedEffectError.wrap(next, recorded, error63);
+        }
+      }
     });
     receipt = result.receipt;
     message = result.message;
@@ -49693,9 +49867,14 @@ async function runEffectsMain() {
     }
   } catch (error63) {
     const reason = error63 instanceof Error ? error63.message : "Gardener effect failed";
+    if (error63 instanceof UnrecordedEffectError) {
+      receipt = error63.receipt;
+      unrecorded = error63.steps.map((step) => step.stepName);
+    }
     await writeJobSummary(() => renderApplyJobSummary({
       ...plan ? { plan } : {},
       ...receipt ? { receipt } : {},
+      ...unrecorded ? { unrecorded } : {},
       ...message ? { message } : {},
       ...taskRun ? { taskRun } : {},
       error: reason,
@@ -49703,9 +49882,32 @@ async function runEffectsMain() {
     }));
     setFailed(reason);
   } finally {
-    connection?.root[Symbol.dispose]();
+    connection?.[Symbol.dispose]();
   }
 }
+var UnrecordedEffectError = class _UnrecordedEffectError extends Error {
+  receipt;
+  steps;
+  constructor(receipt, steps, cause) {
+    const applied = steps.map((step) => step.receipt.resourceUrl ? `${step.stepName} (${step.receipt.resourceUrl})` : step.stepName);
+    super(
+      `${steps.length === 1 ? "Step" : "Steps"} ${applied.join(", ")} applied, but Gardener could not record ${steps.length === 1 ? "it" : "them"}: ${errorText(cause).replace(/\.+$/, "")}. Re-run failed jobs to finish the plan.`,
+      { cause }
+    );
+    this.name = "UnrecordedEffectError";
+    this.receipt = receipt;
+    this.steps = steps;
+  }
+  /** The error to report when `receipt` could not be recorded; `cause` itself when it records nothing new on GitHub. */
+  static wrap(receipt, recorded, cause) {
+    const steps = receipt.operations.filter((step, index) => {
+      if (step.receipt.status !== "succeeded") return false;
+      const known = recorded?.operations[index];
+      return known === void 0 || known.receipt.status !== "succeeded" || known.receipt.operationId !== step.receipt.operationId;
+    });
+    return steps.length === 0 ? cause : new _UnrecordedEffectError(receipt, steps, cause);
+  }
+};
 async function applyOrderedPlan(input2) {
   const { plan } = input2;
   const ownerAndName = plan.repository.fullName.split("/");
@@ -50123,10 +50325,25 @@ async function checkoutBindingHolds(plan, raw, read) {
   if (current.headRepoId === null || current.headRepoId !== current.baseRepoId || current.baseRepoId !== plan.repository.id) {
     throw new CheckoutBindingError(`pull request #${resource.number} is not from this repository`);
   }
-  if (current.headSha !== checkoutSha) {
+  if (current.headSha !== checkoutSha && !await headPushedByPlan(plan, current.headSha, checkoutSha, read)) {
     throw new CheckoutBindingError(`pull request #${resource.number} is at ${current.headSha}, not the checked-out ${checkoutSha}`);
   }
   return true;
+}
+async function headPushedByPlan(plan, headSha, checkoutSha, read) {
+  const commitSteps = new Set(plan.operations.filter((step) => step.kind === "commit.create" || step.kind === "commit.merge_base").map((step) => step.operationId));
+  if (commitSteps.size === 0) return false;
+  const commit = await fetchGitCommit({
+    repository: read.repository,
+    sha: headSha,
+    token: read.token,
+    ...read.fetch ? { fetch: read.fetch } : {}
+  });
+  if (commit === null || commit.sha !== headSha.toLowerCase() || commit.parents[0] !== checkoutSha.toLowerCase()) return false;
+  return commit.message.split(/\r?\n/).some((line) => {
+    const operationId = commitMarkerOperationId(line);
+    return operationId !== void 0 && commitSteps.has(operationId);
+  });
 }
 async function applyEventBinding(input2) {
   const target = dispatchTargetRequest(input2.eventName, input2.raw);
@@ -50182,7 +50399,11 @@ async function connectEffectsSession(runtimeUrl, bundleHash) {
   const hello = helloFromOidcToken(oidcToken, bundleHash, "effects");
   const root = newWebSocketRpcSession(sessionSocketUrl(runtimeUrl, hello, "effects"));
   const session = root.authenticate(hello, oidcToken, new EffectsRunnerApi());
-  return { root, session };
+  return {
+    session,
+    onBroken: (callback) => root.onRpcBroken(callback),
+    dispose: () => root[Symbol.dispose]()
+  };
 }
 var EffectsRunnerApi = class extends RpcTarget {
   execute(_action) {
@@ -50195,6 +50416,9 @@ var EffectsRunnerApi = class extends RpcTarget {
     return Promise.resolve();
   }
 };
+function errorText(error63) {
+  return error63 instanceof Error ? error63.message : String(error63);
+}
 function safeClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -50217,6 +50441,7 @@ void runEffectsMain();
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   CheckoutBindingError,
+  UnrecordedEffectError,
   applyEventBinding,
   applyOrderedPlan,
   checkoutBindingHolds,

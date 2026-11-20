@@ -24,27 +24,45 @@ const core = vi.hoisted(() => ({
   setOutput: vi.fn(),
   setFailed: vi.fn(),
   setSecret: vi.fn(),
+  warning: vi.fn(),
   recordEffect: vi.fn(async (receipt: RunnerEffectReceiptV1) => receipt),
   priorEffectReceipt: vi.fn(async () => null as RunnerEffectReceiptV1 | null),
+  /** Every runtime connection apply opened, in order. */
+  sockets: [] as Array<{ broken: Array<(error: unknown) => void>; dispose: () => void }>,
 }));
+
+/**
+ * Breaks the newest runtime connection as Cap'n Web does: the broken
+ * callbacks run before the pending call rejects with the same error.
+ */
+function dropConnection(error = new Error("WebSocket connection failed.")): Error {
+  for (const callback of core.sockets.at(-1)?.broken ?? []) callback(error);
+  return error;
+}
 
 vi.mock("@actions/core", () => ({
   getInput: (name: string) => core.inputs.get(name) ?? "",
   setOutput: core.setOutput,
   setFailed: core.setFailed,
   setSecret: core.setSecret,
+  warning: core.warning,
   getIDToken: vi.fn(async () => "oidc-token"),
 }));
 
 vi.mock("capnweb", () => ({
   RpcTarget: class {},
-  newWebSocketRpcSession: vi.fn(() => ({
-    authenticate: () => ({
-      recordEffect: core.recordEffect,
-      priorEffectReceipt: core.priorEffectReceipt,
-    }),
-    [Symbol.dispose]: vi.fn(),
-  })),
+  newWebSocketRpcSession: vi.fn(() => {
+    const socket = { broken: [] as Array<(error: unknown) => void>, dispose: vi.fn() };
+    core.sockets.push(socket);
+    return {
+      authenticate: () => ({
+        recordEffect: core.recordEffect,
+        priorEffectReceipt: core.priorEffectReceipt,
+      }),
+      onRpcBroken: (callback: (error: unknown) => void) => { socket.broken.push(callback); },
+      [Symbol.dispose]: socket.dispose,
+    };
+  }),
 }));
 
 vi.mock("../src/context", () => ({
@@ -145,8 +163,10 @@ beforeEach(() => {
   core.setOutput.mockClear();
   core.setFailed.mockClear();
   core.setSecret.mockClear();
+  core.warning.mockClear();
   core.recordEffect.mockClear();
   core.priorEffectReceipt.mockClear();
+  core.sockets.length = 0;
   process.env.GITHUB_RUN_ATTEMPT = "1";
 });
 
@@ -335,6 +355,55 @@ describe("ordered effect application", () => {
         await expect(effects.checkoutBindingHolds(commentPlan, { issue: { number: 7 } }, reader(respond)), label)
           .rejects.toThrow(effects.CheckoutBindingError);
       }
+    });
+
+    describe("after an earlier attempt pushed this plan's commit", () => {
+      const pushed = "5".repeat(40);
+      const base = "2".repeat(40);
+      const marker = (id: string) => `Gardener-Operation: ${id}:${"9".repeat(64)}`;
+      // Only the fields the binding reads; the plan schema itself is covered elsewhere.
+      const withMerge = {
+        ...commentPlan,
+        operations: [{ ...commentStep("merge", "op_merge"), kind: "commit.merge_base" as const, payload: {} }],
+      };
+      const routed = (commit: unknown, status = 200) => {
+        const fetch = vi.fn(async (input: string | URL | Request) => String(input).endsWith(`/git/commits/${pushed}`)
+          ? new Response(JSON.stringify(commit), { status })
+          : Response.json(pull({ head: { sha: pushed, ref: "feature", repo: { id: 123 } } })));
+        return { repository: "owner/repo", token: "apply-token", fetch };
+      };
+      const commit = (overrides: Record<string, unknown> = {}) => ({
+        sha: pushed, message: `Merge main\n\n${marker("op_merge")}`, parents: [{ sha: head }, { sha: base }], ...overrides,
+      });
+
+      it("accepts a head carrying one of its commit steps' markers on the checked-out head", async () => {
+        const read = routed(commit());
+        expect(await effects.checkoutBindingHolds(withMerge, { issue: { number: 7 } }, read)).toBe(true);
+        expect(String(read.fetch.mock.calls[1]![0])).toBe(`https://api.github.com/repos/owner/repo/git/commits/${pushed}`);
+      });
+
+      it("refuses any other moved head", async () => {
+        const cases: Array<[string, ReturnType<typeof routed>]> = [
+          ["another operation's marker", routed(commit({ message: `Merge main\n\n${marker("op_other")}` }))],
+          ["a marker without its hash", routed(commit({ message: "Merge main\n\nGardener-Operation: op_merge" }))],
+          ["a marker inside a line", routed(commit({ message: `Merge main ${marker("op_merge")}` }))],
+          ["no marker", routed(commit({ message: "Merge main" }))],
+          ["built on another commit", routed(commit({ parents: [{ sha: base }, { sha: head }] }))],
+          ["a commit answered for another sha", routed(commit({ sha: "6".repeat(40) }))],
+          ["an unreadable commit", routed(commit(), 404)],
+          ["a malformed commit", routed({ sha: pushed, message: marker("op_merge") })],
+        ];
+        for (const [label, read] of cases) {
+          await expect(effects.checkoutBindingHolds(withMerge, { issue: { number: 7 } }, read), label)
+            .rejects.toThrow(`pull request #7 is at ${pushed}, not the checked-out ${head}`);
+        }
+      });
+
+      it("never reads the head commit for a plan with no commit step", async () => {
+        const read = routed(commit());
+        await expect(effects.checkoutBindingHolds(commentPlan, { issue: { number: 7 } }, read)).rejects.toThrow(effects.CheckoutBindingError);
+        expect(read.fetch).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
@@ -1438,15 +1507,16 @@ describe("applying a merge commit end to end", () => {
     });
   }
 
-  function github(options: { pullHead?: string; compare?: string } = {}) {
+  function github(options: { pullHead?: string; branchHead?: string; compare?: string; extra?: Array<[string, string, unknown]> } = {}) {
     const calls: Array<{ method: string; path: string; body: unknown }> = [];
     const pull = {
       number: 7, state: "open", updated_at: "2026-09-17T12:00:00Z",
       head: { sha: options.pullHead ?? HEAD, ref: "feature", repo: { id: 123 } }, base: { ref: "main", sha: BASE_TIP, repo: { id: 123 } },
     };
     const routes: Array<[string, string, unknown]> = [
+      ...(options.extra ?? []),
       ["GET", "/repos/owner/repo/pulls/7", pull],
-      ["GET", "/repos/owner/repo/git/ref/heads/feature", { object: { sha: HEAD } }],
+      ["GET", "/repos/owner/repo/git/ref/heads/feature", { object: { sha: options.branchHead ?? HEAD } }],
       ["GET", `/repos/owner/repo/compare/${BASE_TIP}...main?per_page=1`, { status: options.compare ?? "ahead" }],
       ["GET", "/repos/owner/repo", { default_branch: "main" }],
       ["GET", `/repos/owner/repo/git/commits/${HEAD}`, { tree: { sha: PARENT_TREE } }],
@@ -1471,7 +1541,11 @@ describe("applying a merge commit end to end", () => {
     files: Record<string, string>,
     conflictedPaths: string[],
     options: Parameters<typeof github>[0] = {},
-    setup: { omitCaptureInput?: boolean; alter?: (directory: string, manifest: TaskCaptureManifestV1) => Promise<void> } = {},
+    setup: {
+      omitCaptureInput?: boolean;
+      alter?: (directory: string, manifest: TaskCaptureManifestV1) => Promise<void>;
+      environment?: Partial<typeof ENVIRONMENT>;
+    } = {},
   ) {
     const capture = await artifact(files, conflictedPaths);
     const value = mergePlan(capture.manifest, capture.changesSha256);
@@ -1479,7 +1553,7 @@ describe("applying a merge commit end to end", () => {
     const bytes = Buffer.from(JSON.stringify(value));
     await writeFile(path.join(directory, "effect.json"), bytes);
     await writeFile(path.join(directory, "event.json"), JSON.stringify(RAW_EVENT));
-    Object.assign(process.env, ENVIRONMENT, { GITHUB_EVENT_PATH: path.join(directory, "event.json") });
+    Object.assign(process.env, ENVIRONMENT, setup.environment, { GITHUB_EVENT_PATH: path.join(directory, "event.json") });
     core.inputs.set("artifact-path", path.join(directory, "effect.json"));
     core.inputs.set("expected-sha256", createHash("sha256").update(bytes).digest("hex"));
     core.inputs.set("github-token", "token");
@@ -1508,6 +1582,81 @@ describe("applying a merge commit end to end", () => {
     expect(calls.find((call) => call.method === "POST" && call.path.endsWith("/git/commits"))?.body)
       .toMatchObject({ parents: [HEAD, BASE_TIP] });
     expect(calls.at(-1)).toMatchObject({ method: "PATCH", body: { sha: NEW_COMMIT, force: false } });
+  });
+
+  it("reconnects and records the merge when the runtime connection drops after the push", async () => {
+    core.recordEffect.mockImplementationOnce(async () => { throw dropConnection(); });
+    const { calls, failure, receipts } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"]);
+    expect(failure).toBeUndefined();
+    // Pushed once, then the same receipt sent again on a second connection.
+    expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1);
+    expect(core.sockets).toHaveLength(2);
+    expect(core.sockets[0]!.dispose).toHaveBeenCalled();
+    expect(receipts).toHaveLength(2);
+    expect(receipts[1]).toEqual(receipts[0]);
+    expect(receipts[1]).toMatchObject({ status: "applied" });
+    expect(core.warning).toHaveBeenCalledWith("Gardener runtime connection lost; reconnecting (1/4): WebSocket connection failed.");
+  });
+
+  it("names the pushed merge and asks for a re-run of failed jobs when the runtime cannot take its receipt", async () => {
+    core.recordEffect.mockImplementationOnce(async () => { throw new Error("Effect receipt persistence conflict"); });
+    const { calls, failure } = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"]);
+    expect(failure).toBe(
+      `Step merge (https://github.com/owner/repo/commit/${NEW_COMMIT}) applied, but Gardener could not record it: `
+        + "Effect receipt persistence conflict. Re-run failed jobs to finish the plan.",
+    );
+    expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1);
+    // The runtime answered, so the call is not repeated on a new connection.
+    expect(core.sockets).toHaveLength(1);
+    expect(core.warning).not.toHaveBeenCalled();
+  });
+
+  it("reports a lost runtime connection once the reconnects run out", async () => {
+    core.recordEffect.mockImplementation(async () => { throw dropConnection(); });
+    try {
+      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      let settled = false;
+      const pending = applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"]).finally(() => { settled = true; });
+      // Backoff between reconnects, interleaved with the run's real file reads.
+      while (!settled) {
+        await vi.advanceTimersByTimeAsync(500);
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      const { calls, failure } = await pending;
+      expect(failure).toBe(
+        `Step merge (https://github.com/owner/repo/commit/${NEW_COMMIT}) applied, but Gardener could not record it: `
+          + "Lost the connection to the Gardener runtime and could not reconnect after 4 attempts: WebSocket connection failed. "
+          + "Re-run failed jobs to finish the plan.",
+      );
+      expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1);
+      expect(core.sockets).toHaveLength(5);
+    } finally {
+      vi.useRealTimers();
+      core.recordEffect.mockImplementation(async (receipt: RunnerEffectReceiptV1) => receipt);
+    }
+  });
+
+  it("lets a re-run of the failed job adopt the merge its first attempt pushed, then finish the plan", async () => {
+    core.recordEffect.mockImplementationOnce(async () => { throw new Error("Effect receipt persistence conflict"); });
+    const first = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"]);
+    expect(first.failure).toMatch(/Re-run failed jobs to finish the plan\.$/);
+    const message = (first.calls.find((call) => call.method === "POST" && call.path.endsWith("/git/commits"))?.body as { message: string }).message;
+    expect(message).toMatch(/\nGardener-Operation: op_merge:[a-f0-9]{64}$/);
+
+    // The pushed merge is now the pull request head, and the runtime has no receipt for it.
+    const pushed = { sha: NEW_COMMIT, message, tree: { sha: NEW_TREE }, parents: [{ sha: HEAD }, { sha: BASE_TIP }] };
+    const rerun = await applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"], {
+      pullHead: NEW_COMMIT,
+      branchHead: NEW_COMMIT,
+      extra: [
+        ["GET", `/repos/owner/repo/git/commits/${NEW_COMMIT}`, pushed],
+        ["GET", "/repos/owner/repo/commits?sha=feature&per_page=100&page=1", [{ sha: NEW_COMMIT, commit: { message, tree: { sha: NEW_TREE } }, parents: pushed.parents }]],
+      ],
+    }, { environment: { GITHUB_RUN_ATTEMPT: "2" } });
+    expect(rerun.failure).toBeUndefined();
+    expect(rerun.calls.filter((call) => call.method !== "GET")).toEqual([]);
+    expect(rerun.receipts.at(-1)).toMatchObject({ status: "applied" });
+    expect(rerun.receipts.at(-1)?.operations[0]?.outputs).toMatchObject({ commitSha: NEW_COMMIT, treeSha: NEW_TREE });
   });
 
   it("refuses before the session when the pull request moved since planning", async () => {

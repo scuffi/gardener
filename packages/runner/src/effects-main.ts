@@ -25,7 +25,6 @@ import {
 import {
   EFFECT_TRANSPORT_MAX_BYTES,
   runnerEffectReceiptV1Schema,
-  type AuthenticatedSessionCapability,
   type PublicSessionCapability,
   type RunnerActionResultV1,
   type RunnerActionV1,
@@ -33,14 +32,21 @@ import {
   type RunnerEffectReceiptV1,
   type RunnerPlanStepReceiptV1,
 } from "@gardener/protocol";
-import { RpcTarget, newWebSocketRpcSession, type RpcStub } from "capnweb";
+import { RpcTarget, newWebSocketRpcSession } from "capnweb";
 import { verifyCaptureArtifact } from "./capture";
 import { helloFromOidcToken, sessionSocketUrl } from "./context";
-import { fetchCurrentPullRequest } from "./current-head";
+import { fetchCurrentPullRequest, fetchGitCommit } from "./current-head";
+import {
+  EFFECTS_MAX_RECONNECTS,
+  ReconnectingEffectsSession,
+  type EffectsCalls,
+  type EffectsConnection,
+} from "./effects-session";
 import { fetchDispatchTarget } from "./dispatch-target";
 import { dispatchTargetRequest, normalizeGitHubEvent } from "./event";
 import {
   canonicalOperationHash,
+  commitMarkerOperationId,
   executeActionsOperation,
   resourceVersionKey,
   type ChainedHead,
@@ -59,11 +65,6 @@ const chatWebhook = process.env["INPUT_CHAT-WEBHOOK"]?.trim() ?? "";
 delete process.env["INPUT_CHAT-WEBHOOK"];
 if (chatWebhook !== "") addSecret(chatWebhook);
 
-interface EffectsSession {
-  root: ReturnType<typeof newWebSocketRpcSession<PublicSessionCapability>>;
-  session: RpcStub<AuthenticatedSessionCapability>;
-}
-
 interface ApplyResult {
   receipt: RunnerEffectReceiptV1;
   outputs: ReadonlyMap<string, Readonly<Record<string, string | number | boolean | null>>>;
@@ -74,9 +75,10 @@ interface ApplyResult {
 }
 
 export async function runEffectsMain(): Promise<void> {
-  let connection: EffectsSession | undefined;
+  let connection: ReconnectingEffectsSession | undefined;
   let plan: TaskEffectPlanV1 | undefined;
   let receipt: RunnerEffectReceiptV1 | undefined;
+  let unrecorded: readonly string[] | undefined;
   let message: MessageOutcome | undefined;
   let taskRun: TaskRunOutcome | undefined;
   try {
@@ -97,8 +99,16 @@ export async function runEffectsMain(): Promise<void> {
     plan = taskEffectPlanV1Schema.parse(JSON.parse(bytes.toString("utf8")));
     await assertApplyBindings(plan, token);
 
-    connection = await connectEffectsSession(runtimeUrl, plan.bundleHash);
-    const prior = await connection.session.priorEffectReceipt(plan.runId, actualSha256);
+    const bundleHash = plan.bundleHash;
+    connection = new ReconnectingEffectsSession({
+      connect: () => connectEffectsSession(runtimeUrl, bundleHash),
+      onReconnect: (attempt, error) => {
+        core.warning(`Gardener runtime connection lost; reconnecting (${attempt}/${EFFECTS_MAX_RECONNECTS}): ${errorText(error)}`);
+      },
+    });
+    const session = connection;
+    const prior = await session.priorEffectReceipt(plan.runId, actualSha256);
+    let recorded = prior;
 
     const captureDirectory = core.getInput("capture-artifact-path").trim();
     const capture = await prepareCapture(plan, captureDirectory);
@@ -110,7 +120,14 @@ export async function runEffectsMain(): Promise<void> {
       prior,
       destination: chatWebhook,
       ...(capture ? { captureDirectory: capture.directory } : {}),
-      record: (receipt) => connection!.session.recordEffect(receipt),
+      record: async (next) => {
+        try {
+          recorded = await session.recordEffect(next);
+          return recorded;
+        } catch (error) {
+          throw UnrecordedEffectError.wrap(next, recorded, error);
+        }
+      },
     });
 
     receipt = result.receipt;
@@ -152,9 +169,14 @@ export async function runEffectsMain(): Promise<void> {
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Gardener effect failed";
+    if (error instanceof UnrecordedEffectError) {
+      receipt = error.receipt;
+      unrecorded = error.steps.map((step) => step.stepName);
+    }
     await writeJobSummary(() => renderApplyJobSummary({
       ...(plan ? { plan } : {}),
       ...(receipt ? { receipt } : {}),
+      ...(unrecorded ? { unrecorded } : {}),
       ...(message ? { message } : {}),
       ...(taskRun ? { taskRun } : {}),
       error: reason,
@@ -162,7 +184,41 @@ export async function runEffectsMain(): Promise<void> {
     }));
     core.setFailed(reason);
   } finally {
-    connection?.root[Symbol.dispose]();
+    connection?.[Symbol.dispose]();
+  }
+}
+
+/**
+ * A receipt the runtime did not take, naming the steps it records that
+ * applied on GitHub since the last receipt it did take. Those steps stand,
+ * and a re-run of the failed apply job recognises them: every step reconciles
+ * against what it already wrote, and a commit step adopts the commit it
+ * pushed (see `checkoutBindingHolds`).
+ */
+export class UnrecordedEffectError extends Error {
+  readonly receipt: RunnerEffectReceiptV1;
+  readonly steps: readonly RunnerPlanStepReceiptV1[];
+
+  private constructor(receipt: RunnerEffectReceiptV1, steps: readonly RunnerPlanStepReceiptV1[], cause: unknown) {
+    const applied = steps.map((step) => step.receipt.resourceUrl ? `${step.stepName} (${step.receipt.resourceUrl})` : step.stepName);
+    super(
+      `${steps.length === 1 ? "Step" : "Steps"} ${applied.join(", ")} applied, but Gardener could not record ${steps.length === 1 ? "it" : "them"}: `
+        + `${errorText(cause).replace(/\.+$/, "")}. Re-run failed jobs to finish the plan.`,
+      { cause },
+    );
+    this.name = "UnrecordedEffectError";
+    this.receipt = receipt;
+    this.steps = steps;
+  }
+
+  /** The error to report when `receipt` could not be recorded; `cause` itself when it records nothing new on GitHub. */
+  static wrap(receipt: RunnerEffectReceiptV1, recorded: RunnerEffectReceiptV1 | null, cause: unknown): unknown {
+    const steps = receipt.operations.filter((step, index) => {
+      if (step.receipt.status !== "succeeded") return false;
+      const known = recorded?.operations[index];
+      return known === undefined || known.receipt.status !== "succeeded" || known.receipt.operationId !== step.receipt.operationId;
+    });
+    return steps.length === 0 ? cause : new UnrecordedEffectError(receipt, steps, cause);
   }
 }
 
@@ -714,12 +770,13 @@ export class CheckoutBindingError extends Error {
  * A pull request event's own payload names the head, which is compared
  * directly. A comment on a pull request or a manual run naming one carries no
  * head, so the pull request the plan is bound to is read now: it must be
- * open, from this repository, with the recorded head. That path fails
- * closed: an unreadable pull request, any other state, a fork or another head
- * throws {@link CheckoutBindingError}; it never answers `true`.
+ * open, from this repository, with the recorded head, or with a commit this
+ * plan pushed on it (see {@link headPushedByPlan}). That path fails closed:
+ * an unreadable pull request, any other state, a fork or another head throws
+ * {@link CheckoutBindingError}; it never answers `true`.
  */
 export async function checkoutBindingHolds(
-  plan: Pick<TaskEffectPlanV1, "provenance" | "event" | "repository">,
+  plan: Pick<TaskEffectPlanV1, "provenance" | "event" | "repository" | "operations">,
   raw: unknown,
   read: { repository: string; token: string; fetch?: typeof fetch },
 ): Promise<boolean> {
@@ -751,10 +808,48 @@ export async function checkoutBindingHolds(
   if (current.headRepoId === null || current.headRepoId !== current.baseRepoId || current.baseRepoId !== plan.repository.id) {
     throw new CheckoutBindingError(`pull request #${resource.number} is not from this repository`);
   }
-  if (current.headSha !== checkoutSha) {
+  if (current.headSha !== checkoutSha && !(await headPushedByPlan(plan, current.headSha, checkoutSha, read))) {
     throw new CheckoutBindingError(`pull request #${resource.number} is at ${current.headSha}, not the checked-out ${checkoutSha}`);
   }
   return true;
+}
+
+/**
+ * Whether `headSha` is a commit one of this plan's own commit steps pushed
+ * onto the checked-out head: its first parent is `checkoutSha` and its
+ * message carries that step's operation marker.
+ *
+ * Only an earlier attempt of this run leaves the head there, when apply
+ * pushed and then failed before the runtime recorded the step. A re-run of
+ * the failed job must get past this check to finish the plan; the commit step
+ * itself then adopts the commit only on its exact marker and parents, and
+ * every later step is still checked against the head that commit left.
+ *
+ * One commit is enough: every commit step must build on the capture base,
+ * which is the checked-out head, so no plan can push a second commit on top
+ * of its first.
+ */
+async function headPushedByPlan(
+  plan: Pick<TaskEffectPlanV1, "operations" | "repository">,
+  headSha: string,
+  checkoutSha: string,
+  read: { repository: string; token: string; fetch?: typeof fetch },
+): Promise<boolean> {
+  const commitSteps = new Set(plan.operations
+    .filter((step) => step.kind === "commit.create" || step.kind === "commit.merge_base")
+    .map((step) => step.operationId));
+  if (commitSteps.size === 0) return false;
+  const commit = await fetchGitCommit({
+    repository: read.repository,
+    sha: headSha,
+    token: read.token,
+    ...(read.fetch ? { fetch: read.fetch } : {}),
+  });
+  if (commit === null || commit.sha !== headSha.toLowerCase() || commit.parents[0] !== checkoutSha.toLowerCase()) return false;
+  return commit.message.split(/\r?\n/).some((line) => {
+    const operationId = commitMarkerOperationId(line);
+    return operationId !== undefined && commitSteps.has(operationId);
+  });
 }
 
 /**
@@ -820,20 +915,32 @@ function captureReader(directory: string): NonNullable<GitHubEffectsContext["rea
   };
 }
 
-async function connectEffectsSession(runtimeUrl: string, bundleHash: string): Promise<EffectsSession> {
+/**
+ * One authenticated effects connection. Each needs its own OIDC token: the
+ * runtime accepts every token once.
+ */
+async function connectEffectsSession(runtimeUrl: string, bundleHash: string): Promise<EffectsConnection> {
   const audience = new URL(runtimeUrl).origin;
   const oidcToken = await core.getIDToken(audience);
   addSecret(oidcToken);
   const hello = helloFromOidcToken(oidcToken, bundleHash, "effects");
   const root = newWebSocketRpcSession<PublicSessionCapability>(sessionSocketUrl(runtimeUrl, hello, "effects"));
-  const session = root.authenticate(hello, oidcToken, new EffectsRunnerApi());
-  return { root, session };
+  const session: EffectsCalls = root.authenticate(hello, oidcToken, new EffectsRunnerApi());
+  return {
+    session,
+    onBroken: (callback) => root.onRpcBroken(callback),
+    dispose: () => root[Symbol.dispose](),
+  };
 }
 
 class EffectsRunnerApi extends RpcTarget implements RunnerCapability {
   execute(_action: RunnerActionV1): Promise<RunnerActionResultV1> { return Promise.reject(new Error("Effects job cannot execute planning actions")); }
   result(_operationId: string): Promise<RunnerActionResultV1 | null> { return Promise.resolve(null); }
   cancel(_operationId: string): Promise<void> { return Promise.resolve(); }
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function safeClone(value: unknown): unknown {
