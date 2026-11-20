@@ -1614,7 +1614,9 @@ describe("applying a merge commit end to end", () => {
   it("reports a lost runtime connection once the reconnects run out", async () => {
     core.recordEffect.mockImplementation(async () => { throw dropConnection(); });
     try {
-      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      // Both, or each answered call's 30s timeout survives its clearTimeout and
+      // fires once the loop below has advanced far enough on a slow runner.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       let settled = false;
       const pending = applyMerge({ "src/a.ts": "resolved\n" }, ["src/a.ts"]).finally(() => { settled = true; });
       // Backoff between reconnects, interleaved with the run's real file reads.
