@@ -124,6 +124,8 @@ export function renderApplyJobSummary(input: {
   receipt?: RunnerEffectReceiptV1;
   /** Set when apply failed outside a step (bindings, digest, connection). */
   error?: string;
+  /** Steps that applied on GitHub but that the runtime never recorded. */
+  unrecorded?: readonly string[];
   /** What became of the plan's message, when apply reached it. */
   message?: MessageOutcome;
   /** What became of the plan's task run, when apply reached it. */
@@ -147,7 +149,18 @@ export function renderApplyJobSummary(input: {
         : "❌ Apply failed";
   lines.push(`## Gardener${task}: ${heading}`, "");
   const stopping = receipt?.status === "stopped" ? receipt.operations.find((step) => step.receipt.error) : undefined;
-  if (stopping?.receipt.error) {
+  const unrecorded = input.unrecorded ?? [];
+  if (unrecorded.length > 0 && input.error !== undefined) {
+    const steps = unrecorded.map(code).join(", ");
+    lines.push(
+      `**What happened:** ${unrecorded.length === 1 ? "step" : "steps"} ${steps} applied, but Gardener could not record ${unrecorded.length === 1 ? "it" : "them"}, so the apply job stopped there.`,
+      "",
+      "**What to do:** Re-run failed jobs, not all jobs. The apply job picks up the same plan, recognises what already applied, and finishes the rest.",
+      "",
+      fenced("Error details", input.error),
+      "",
+    );
+  } else if (stopping?.receipt.error) {
     const advice = applyFailureAdvice(stopping.receipt.error.code);
     lines.push(
       `**What happened:** step ${code(stopping.stepName)} (${code(stopping.receipt.kind)}) did not apply. ${advice.what}`,

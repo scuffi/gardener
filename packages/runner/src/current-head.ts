@@ -121,6 +121,58 @@ export async function fetchCurrentPullRequest(input: {
   }
 }
 
+/** The fields of `GET /repos/{owner}/{repo}/git/commits/{sha}` apply reads. */
+export interface GitCommit {
+  sha: string;
+  message: string;
+  /** Parent shas in order, lowercased. */
+  parents: string[];
+}
+
+const COMMIT_SHA = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i;
+
+/**
+ * Reads one commit through the Git database API, which answers without the
+ * diff `GET /commits/{sha}` carries. Null when it cannot be read or parsed.
+ */
+export async function fetchGitCommit(input: {
+  repository: string;
+  sha: string;
+  token: string;
+  fetch?: typeof fetch;
+}): Promise<GitCommit | null> {
+  if (!input.token || !COMMIT_SHA.test(input.sha)) return null;
+  if (!REPOSITORY.test(input.repository) || input.repository.split("/").some((part) => part === "." || part === "..")) return null;
+  try {
+    const response = await (input.fetch ?? fetch)(
+      `https://api.github.com/repos/${input.repository.split("/").map(encodeURIComponent).join("/")}/git/commits/${input.sha.toLowerCase()}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${input.token}`,
+          "user-agent": "gardener-runner",
+          "x-github-api-version": "2022-11-28",
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      },
+    );
+    if (!response.ok) return null;
+    const body = await readBoundedBody(response, MAX_RESPONSE_BYTES);
+    if (body.truncated) return null;
+    const value = JSON.parse(body.text) as { sha?: unknown; message?: unknown; parents?: unknown };
+    if (typeof value.sha !== "string" || typeof value.message !== "string" || !Array.isArray(value.parents)) return null;
+    const parents: string[] = [];
+    for (const parent of value.parents as Array<{ sha?: unknown } | null>) {
+      if (typeof parent?.sha !== "string" || !COMMIT_SHA.test(parent.sha)) return null;
+      parents.push(parent.sha.toLowerCase());
+    }
+    return { sha: value.sha.toLowerCase(), message: value.message, parents };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The event with `checkoutSha` set to the pull request head the workflow
  * checked out, once that head is confirmed.

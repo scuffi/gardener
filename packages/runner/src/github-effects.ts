@@ -312,6 +312,18 @@ function commitMarker(operationId: string, operationHash: string): string {
 }
 
 /**
+ * The operation id a commit message line marks, when the line is exactly a
+ * {@link commitMarker}. An id may itself contain `:`, so the hash is read from
+ * the end.
+ */
+export function commitMarkerOperationId(line: string): string | undefined {
+  const prefix = `${COMMIT_MARKER_PREFIX} `;
+  if (!line.startsWith(prefix)) return undefined;
+  const marked = /^(.+):[a-f0-9]{64}$/.exec(line.slice(prefix.length));
+  return marked?.[1];
+}
+
+/**
  * Encodes one URL path segment, refusing any value that would change the shape
  * of the request path rather than fill a slot in it.
  *
