@@ -48,7 +48,7 @@ function step(stepName: string, kind: string, status: "succeeded" | "skipped" | 
   };
 }
 
-function receipt(status: "applied" | "stopped", operations: ReturnType<typeof step>[], stoppedAtStep: string | null = null) {
+function receipt(status: "applied" | "stopped" | "running", operations: ReturnType<typeof step>[], stoppedAtStep: string | null = null) {
   return { status, operations, stoppedAtStep, plannedOperations: 2 } as unknown as RunnerEffectReceiptV1;
 }
 
@@ -138,6 +138,24 @@ describe("apply job summary", () => {
     expect(markdown).toContain("<details><summary>Error from fix: branch_head_changed</summary>\n\n```text\nThe branch moved since planning.\n```");
     // The step error already explains the stop; the bridge error is not repeated.
     expect(markdown).not.toContain("apply bridge stopped");
+  });
+
+  it("sends a step that applied but was never recorded to a re-run of the failed job", () => {
+    const error = "Step fix (https://github.com/o/r/commit/abc) applied, but Gardener could not record it: WebSocket connection failed.";
+    const markdown = renderApplyJobSummary({
+      plan,
+      receipt: receipt("running", [step("fix", "commit.create", "succeeded", { resourceUrl: "https://github.com/o/r/commit/abc" })]),
+      unrecorded: ["fix"],
+      error,
+      context,
+    });
+    expect(markdown).toContain("## Gardener · pr-review-fix: ❌ Apply failed");
+    expect(markdown).toContain("**What happened:** step `fix` applied, but Gardener could not record it, so the apply job stopped there.");
+    expect(markdown).toContain("**What to do:** Re-run failed jobs, not all jobs.");
+    expect(markdown).toContain("1 of 2 steps ran.");
+    expect(markdown).toContain("| 1 | `fix` | `commit.create` | ✅ applied | [open](https://github.com/o/r/commit/abc) |");
+    expect(markdown).toContain(`\`\`\`text\n${error}\n\`\`\``);
+    expect(markdown).not.toContain("Re-run all jobs");
   });
 
   it("shows an error raised before any step ran", () => {
