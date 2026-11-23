@@ -3,6 +3,12 @@
 Each release is a git tag (`vX.Y.Z`) and the matching `@scuffi/gardener` version on npm. To move a
 connected repository to a release, follow [Upgrading](../../docs/onboarding.md#upgrading).
 
+## 0.1.23 (2026-11-23)
+
+### Patch Changes
+
+- 90fad0d: The apply job now reconnects to the Gardener runtime when its connection drops, and sends the step it just recorded again, instead of failing after a step had already applied on GitHub. If it still cannot record a step, the job names the steps that applied and says to re-run failed jobs, and that re-run now finishes the plan: a pull request whose head is a commit the same plan pushed no longer fails the checkout check, so the commit step adopts that commit and the later steps run.
+
 ## 0.1.22 (2026-10-29)
 
 ### Patch Changes
