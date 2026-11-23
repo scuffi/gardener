@@ -149,7 +149,7 @@ jobs:
           ref: ${{ steps.head.outputs.sha }}
       - name: Run Gardener task
         id: gardener
-        uses: scuffi/gardener/bridges/github/plan@90fad0d910918e5b093da087a4f86619d7826c31
+        uses: scuffi/gardener/bridges/github/plan@1daff1eeb844e24f7121d85b66f52a3aec800850
         with:
           runtime-url: ${{ inputs.runtime-url }}
           task-bundle-hash: ${{ inputs.task-bundle-hash }}
