@@ -51,8 +51,8 @@ importers:
         specifier: 0.12.0
         version: 0.12.0
       jose:
-        specifier: 6.2.17
-        version: 6.2.17
+        specifier: 6.2.18
+        version: 6.2.18
       valibot:
         specifier: 1.5.0
         version: 1.5.0(typescript@7.0.2)
@@ -2769,6 +2769,9 @@ packages:
 
   jose@6.2.17:
     resolution: {integrity: sha512-wOuK9V1yujQFH5S0ZWmLcDZN7+IKh9bUCC2ZPCf2HDlol3WWHy+PPyNjEI75FXRLMp3vDKQcupP59xhVU95hcg==}
+
+  jose@6.2.18:
+    resolution: {integrity: sha512-doV4thUwgkrycJH4yLeqwTGIIZphHl+pk7CPReuMIhYhncmgzdko85MaCG4YQFTxqMFr1/oEH32tZuKKovcDEg==}
 
   js-base64@3.9.3:
     resolution: {integrity: sha512-uwYQp+VJ38FVvtim6qNbit6e9uT6dwWQ4Y1+H9TxhW5hcHjpHwoxlR0nMpqUmIFOmu4VqMxwdJA88gIVuZJQ/g==}
@@ -6676,6 +6679,8 @@ snapshots:
   jju@1.4.0: {}
 
   jose@6.2.17: {}
+
+  jose@6.2.18: {}
 
   js-base64@3.9.3: {}
 
