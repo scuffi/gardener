@@ -48,8 +48,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
       capnweb:
-        specifier: 0.12.0
-        version: 0.12.0
+        specifier: 0.13.1
+        version: 0.13.1
       jose:
         specifier: 6.2.18
         version: 6.2.18
@@ -144,8 +144,8 @@ importers:
   packages/protocol:
     dependencies:
       capnweb:
-        specifier: 0.12.0
-        version: 0.12.0
+        specifier: 0.13.1
+        version: 0.13.1
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -188,8 +188,8 @@ importers:
         specifier: workspace:*
         version: link:../provider-github
       capnweb:
-        specifier: 0.12.0
-        version: 0.12.0
+        specifier: 0.13.1
+        version: 0.13.1
     devDependencies:
       '@types/node':
         specifier: 26.6.6
@@ -2246,8 +2246,8 @@ packages:
   caniuse-lite@1.0.30001810:
     resolution: {integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==}
 
-  capnweb@0.12.0:
-    resolution: {integrity: sha512-jgZ/LMtMVTi+RVlooIslH78Gg23XbDTdvcLghWx3oz17D6u5GuJARt+uhZk/wcTo+f81eeabfnow4d3zLBj+JQ==}
+  capnweb@0.13.1:
+    resolution: {integrity: sha512-JEE/MYKv41blYv5MGGzKiT3DT4qz00AQ+NsmPSdVFVSKuy2/ggUI4aDGJO+jEvAXNXuZURoxo7hCfx+VKbM32g==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -2766,9 +2766,6 @@ packages:
 
   jju@1.4.0:
     resolution: {integrity: sha512-8wb9Yw966OSxApiCt0K3yNJL8pnNeIv+OEq2YMidz4FKP6nonSRoOXc80iXY4JaN2FC11B9qsNmDsm+ZOfMROA==}
-
-  jose@6.2.17:
-    resolution: {integrity: sha512-wOuK9V1yujQFH5S0ZWmLcDZN7+IKh9bUCC2ZPCf2HDlol3WWHy+PPyNjEI75FXRLMp3vDKQcupP59xhVU95hcg==}
 
   jose@6.2.18:
     resolution: {integrity: sha512-doV4thUwgkrycJH4yLeqwTGIIZphHl+pk7CPReuMIhYhncmgzdko85MaCG4YQFTxqMFr1/oEH32tZuKKovcDEg==}
@@ -5360,7 +5357,7 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
-      jose: 6.2.17
+      jose: 6.2.18
       pkce-challenge: 5.0.1
       zod: 4.6.7
 
@@ -5381,7 +5378,7 @@ snapshots:
       express: 5.2.1(supports-color@10.2.2)
       express-rate-limit: 8.7.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2)
       hono: 4.13.8
-      jose: 6.2.17
+      jose: 6.2.18
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -6104,7 +6101,7 @@ snapshots:
 
   caniuse-lite@1.0.30001810: {}
 
-  capnweb@0.12.0: {}
+  capnweb@0.13.1: {}
 
   ccount@2.0.1: {}
 
@@ -6677,8 +6674,6 @@ snapshots:
     optional: true
 
   jju@1.4.0: {}
-
-  jose@6.2.17: {}
 
   jose@6.2.18: {}
 
