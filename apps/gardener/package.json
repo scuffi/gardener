@@ -11,8 +11,8 @@
     "db:migrate:local": "wrangler d1 migrations apply gardener-runtime --local"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "1.4.0",
-    "@flue/runtime": "2.3.0",
+    "@earendil-works/pi-ai": "1.6.0",
+    "@flue/runtime": "2.3.1",
     "@gardener/contracts": "workspace:*",
     "@gardener/core": "workspace:*",
     "@gardener/protocol": "workspace:*",
@@ -23,7 +23,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.69.1",
     "@cloudflare/workers-types": "5.20261115.1",
-    "@flue/vite": "2.3.0",
+    "@flue/vite": "2.3.1",
     "@types/node": "26.6.6",
     "typescript": "7.0.2",
     "vite": "8.3.8",
